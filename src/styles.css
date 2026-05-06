@@ -1,0 +1,450 @@
+:root {
+  color: #e8f4ff;
+  background: #030712;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: geometricPrecision;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+button {
+  border: 1px solid rgba(145, 205, 255, 0.34);
+  border-radius: 6px;
+  background: rgba(10, 24, 42, 0.88);
+  color: #e8f4ff;
+  min-height: 38px;
+  padding: 0 14px;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled),
+button.active {
+  border-color: rgba(107, 215, 255, 0.9);
+  background: rgba(18, 68, 104, 0.92);
+}
+
+button:disabled {
+  opacity: 0.48;
+  cursor: not-allowed;
+}
+
+button.primary {
+  border-color: rgba(255, 193, 103, 0.78);
+  background: linear-gradient(180deg, #e9893a, #a94c21);
+  color: #0d1117;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: clamp(3rem, 7vw, 6.7rem);
+  line-height: 0.95;
+  letter-spacing: 0;
+}
+
+h2 {
+  font-size: 1.7rem;
+  letter-spacing: 0;
+}
+
+h3 {
+  font-size: 1rem;
+  letter-spacing: 0;
+}
+
+.eyebrow {
+  color: #80d6ff;
+  font-size: 0.78rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.menu-screen {
+  width: 100%;
+  min-height: 100%;
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: center;
+  padding: min(8vw, 88px);
+}
+
+.menu-copy {
+  width: min(680px, 92vw);
+  display: grid;
+  gap: 22px;
+}
+
+.menu-summary {
+  max-width: 560px;
+  color: #bcd2e4;
+  font-size: 1.1rem;
+  line-height: 1.6;
+}
+
+.menu-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.menu-actions.compact {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.game-shell,
+.flight-canvas {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: #030712;
+}
+
+.flight-canvas canvas {
+  display: block;
+}
+
+.dock-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 18%;
+  transform: translateX(-50%);
+  padding: 9px 14px;
+  border: 1px solid rgba(128, 214, 255, 0.42);
+  border-radius: 6px;
+  background: rgba(3, 10, 20, 0.72);
+  color: #dff6ff;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.hud-overlay-art {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0.18;
+  mix-blend-mode: screen;
+}
+
+.hud-panel {
+  position: absolute;
+  width: min(360px, 32vw);
+  padding: 14px;
+  border: 1px solid rgba(112, 191, 245, 0.3);
+  border-radius: 8px;
+  background: rgba(3, 10, 20, 0.68);
+  backdrop-filter: blur(10px);
+  display: grid;
+  gap: 8px;
+}
+
+.hud-panel p,
+.asset-sheet p,
+.market-row span,
+.mission-card p,
+.ship-card p {
+  color: #adc3d6;
+  line-height: 1.45;
+}
+
+.hud-top-left {
+  top: 18px;
+  left: 18px;
+}
+
+.hud-top-right {
+  top: 18px;
+  right: 18px;
+}
+
+.hud-target {
+  top: 50%;
+  right: 18px;
+  transform: translateY(-50%);
+}
+
+.hud-bottom-left {
+  left: 18px;
+  bottom: 62px;
+}
+
+.hud-bottom-right {
+  right: 18px;
+  bottom: 62px;
+  pointer-events: auto;
+}
+
+.quick-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.cargo-ribbon {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  max-width: 76vw;
+  overflow: hidden;
+}
+
+.cargo-ribbon span {
+  white-space: nowrap;
+  border: 1px solid rgba(128, 214, 255, 0.25);
+  border-radius: 999px;
+  background: rgba(5, 16, 28, 0.72);
+  padding: 6px 10px;
+  color: #d7ecff;
+  font-size: 0.82rem;
+}
+
+.bar {
+  display: grid;
+  grid-template-columns: 56px 1fr 70px;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.78rem;
+}
+
+.bar div {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.bar i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+
+.bar-cyan i {
+  background: #66daf9;
+}
+
+.bar-green i {
+  background: #74e08d;
+}
+
+.bar-orange i {
+  background: #f7b95a;
+}
+
+.bar-red i {
+  background: #ff6270;
+}
+
+.modal-screen {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 30px;
+  background: rgba(2, 7, 15, 0.62);
+  backdrop-filter: blur(8px);
+  z-index: 20;
+}
+
+.static-screen {
+  position: fixed;
+}
+
+.modal-panel {
+  width: min(520px, 94vw);
+  max-height: 88vh;
+  overflow: auto;
+  display: grid;
+  gap: 16px;
+  border: 1px solid rgba(128, 214, 255, 0.32);
+  border-radius: 8px;
+  background: rgba(5, 13, 27, 0.92);
+  padding: 24px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.45);
+}
+
+.modal-panel.wide {
+  width: min(1180px, 96vw);
+}
+
+.station-screen {
+  min-height: 100%;
+  overflow: auto;
+  padding: 24px;
+  background:
+    linear-gradient(rgba(3, 7, 18, 0.88), rgba(3, 7, 18, 0.96)),
+    url("/assets/generated/nebula-bg.webp") center/cover fixed;
+}
+
+.station-header,
+.screen-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+
+.station-actions,
+.tab-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.tab-row {
+  margin-bottom: 18px;
+}
+
+.station-body {
+  border: 1px solid rgba(128, 214, 255, 0.22);
+  border-radius: 8px;
+  background: rgba(4, 12, 24, 0.76);
+  padding: 18px;
+  min-height: 68vh;
+}
+
+.split-layout {
+  display: grid;
+  grid-template-columns: minmax(220px, 320px) 1fr;
+  gap: 22px;
+  align-items: start;
+}
+
+.asset-sheet {
+  display: grid;
+  gap: 12px;
+}
+
+.asset-sheet img {
+  width: 100%;
+  border-radius: 8px;
+  border: 1px solid rgba(128, 214, 255, 0.24);
+}
+
+.table-panel,
+.lounge {
+  display: grid;
+  gap: 14px;
+}
+
+.market-list,
+.mission-list {
+  display: grid;
+  gap: 8px;
+}
+
+.market-row {
+  display: grid;
+  grid-template-columns: 1fr 110px 72px 72px;
+  gap: 10px;
+  align-items: center;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 8px 0;
+}
+
+.market-row div {
+  display: grid;
+  gap: 2px;
+}
+
+.ship-grid,
+.system-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.ship-card,
+.mission-card,
+.system-node {
+  border: 1px solid rgba(128, 214, 255, 0.22);
+  border-radius: 8px;
+  background: rgba(8, 21, 38, 0.72);
+  padding: 14px;
+  display: grid;
+  gap: 10px;
+}
+
+.system-node.current {
+  border-color: rgba(255, 193, 103, 0.74);
+}
+
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.stat-grid span {
+  border: 1px solid rgba(128, 214, 255, 0.18);
+  border-radius: 6px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.galaxy.embedded .modal-panel {
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+@media (max-width: 900px) {
+  body {
+    overflow: auto;
+  }
+
+  .hud-panel {
+    width: calc(50vw - 26px);
+  }
+
+  .hud-target {
+    display: none;
+  }
+
+  .split-layout,
+  .market-row {
+    grid-template-columns: 1fr;
+  }
+
+  .station-header,
+  .screen-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
