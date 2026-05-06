@@ -506,6 +506,158 @@ h3 {
   color: #d8efff;
 }
 
+.equipment-trigger {
+  position: relative;
+}
+
+button.equipment-trigger {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+.equipment-icon-trigger {
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  outline: 1px solid transparent;
+  transition: outline-color 160ms ease, transform 160ms ease, filter 160ms ease;
+}
+
+.equipment-chip-trigger {
+  cursor: pointer;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.equipment-icon-trigger:hover,
+.equipment-icon-trigger:focus-visible,
+.equipment-chip-trigger:hover,
+.equipment-chip-trigger:focus-visible,
+.equipment-card:hover,
+.equipment-card:focus-visible {
+  outline-color: rgba(117, 232, 255, 0.78);
+  border-color: rgba(117, 232, 255, 0.72);
+  background: rgba(18, 68, 104, 0.36);
+  box-shadow: 0 0 22px rgba(84, 201, 255, 0.2), inset 0 0 18px rgba(117, 232, 255, 0.08);
+  transform: translateY(-1px);
+}
+
+.equipment-card {
+  cursor: pointer;
+  outline: 1px solid transparent;
+  transition: border-color 160ms ease, background 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.equipment-popover {
+  position: fixed;
+  z-index: 45;
+  width: min(360px, calc(100vw - 24px));
+  max-height: min(430px, calc(100vh - 24px));
+  overflow: auto;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(116, 224, 255, 0.58);
+  border-radius: 8px;
+  color: #e8f4ff;
+  background:
+    linear-gradient(180deg, rgba(7, 23, 40, 0.96), rgba(2, 8, 17, 0.96)),
+    repeating-linear-gradient(180deg, rgba(116, 224, 255, 0.08) 0, rgba(116, 224, 255, 0.08) 1px, transparent 1px, transparent 7px);
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.5), 0 0 34px rgba(82, 204, 255, 0.22), inset 0 0 28px rgba(82, 204, 255, 0.1);
+}
+
+.equipment-popover::before,
+.equipment-popover::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.equipment-popover::before {
+  inset: 7px;
+  border: 1px solid rgba(128, 214, 255, 0.14);
+  border-radius: 6px;
+}
+
+.equipment-popover::after {
+  right: 12px;
+  bottom: 10px;
+  width: 76px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(255, 193, 103, 0.82));
+}
+
+.equipment-popover-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.equipment-popover-header div {
+  min-width: 0;
+}
+
+.equipment-popover-header span {
+  color: #ffc167;
+  font-size: 0.68rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.equipment-popover-header h3 {
+  margin-top: 2px;
+  font-size: 1.2rem;
+}
+
+.equipment-popover-header p,
+.equipment-popover > p {
+  color: #bcd2e4;
+  line-height: 1.45;
+}
+
+.equipment-popover-close {
+  width: 32px;
+  min-height: 32px;
+  padding: 0;
+  border-color: rgba(255, 193, 103, 0.56);
+  color: #ffc167;
+  background: rgba(18, 24, 34, 0.74);
+}
+
+.equipment-effect {
+  border-left: 2px solid rgba(255, 193, 103, 0.8);
+  padding-left: 10px;
+  color: #e8f4ff;
+}
+
+.equipment-stat-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
+  gap: 8px;
+}
+
+.equipment-stat-row span {
+  display: grid;
+  gap: 2px;
+  min-height: 58px;
+  border: 1px solid rgba(128, 214, 255, 0.2);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.045);
+  padding: 8px;
+  color: #9db7c9;
+  font-size: 0.76rem;
+}
+
+.equipment-stat-row b {
+  color: #e8f4ff;
+  font-size: 1rem;
+}
+
 .reputation-panel {
   display: grid;
   gap: 10px;
@@ -592,6 +744,16 @@ h3 {
     overflow: auto;
   }
 
+  .station-screen {
+    height: auto;
+    min-height: 100%;
+    overflow: auto;
+  }
+
+  .station-body {
+    overflow: visible;
+  }
+
   .hud-panel {
     width: calc(50vw - 26px);
   }
@@ -610,5 +772,22 @@ h3 {
   .screen-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+}
+
+@media (max-width: 720px) {
+  .equipment-popover {
+    inset: auto 12px 12px 12px;
+    width: auto;
+    max-height: 62vh;
+  }
+
+  .hangar-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .equipment-strip {
+    flex-direction: row;
+    flex-wrap: wrap;
   }
 }

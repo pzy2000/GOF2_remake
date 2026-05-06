@@ -10,6 +10,7 @@ export interface VelocityIntegrationInput {
   delta: number;
   acceleration?: number;
   damping?: number;
+  afterburnerMultiplier?: number;
 }
 
 export function integrateVelocity({
@@ -20,9 +21,10 @@ export function integrateVelocity({
   afterburning,
   delta,
   acceleration = 3.2,
-  damping = 0.82
+  damping = 0.82,
+  afterburnerMultiplier = 1.88
 }: VelocityIntegrationInput): Vec3 {
-  const boostMultiplier = afterburning ? 1.88 : 1;
+  const boostMultiplier = afterburning ? afterburnerMultiplier : 1;
   const desired = scale(forward, maxSpeed * clamp(targetThrottle, 0, 1) * boostMultiplier);
   const follow = 1 - Math.exp(-acceleration * delta);
   const steered = [

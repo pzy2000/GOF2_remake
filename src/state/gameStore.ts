@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { commodities, commodityById, missionTemplates, shipById, ships, stationById, stations, systemById, systems, weapons } from "../data/world";
+import { commodities, commodityById, equipmentById, missionTemplates, shipById, ships, stationById, stations, systemById, systems } from "../data/world";
 import type {
   AssetManifest,
   AsteroidEntity,
@@ -7,6 +7,7 @@ import type {
   CargoHold,
   CommodityId,
   ConvoyEntity,
+  EquipmentId,
   FlightEntity,
   FlightInput,
   LootEntity,
@@ -64,6 +65,22 @@ import {
 } from "../systems/missions";
 import { deleteSave as deleteSaveSlot, getLatestSaveSlotId, readSave, readSaveSlots, writeSave } from "../systems/save";
 import { audioSystem } from "../systems/audio";
+import {
+  getActivePrimaryWeapon,
+  getActiveSecondaryWeapon,
+  getEffectiveShipStats,
+  getEquipmentEffects,
+  getWeaponCooldown,
+  hasMiningBeam,
+  installEquipment,
+  createPlayerShipLoadout,
+  MINING_COOLDOWN_SECONDS,
+  MINING_ENERGY_DRAIN_PER_SECOND,
+  MINING_MIN_ENERGY,
+  MINING_YIELD_PER_CYCLE,
+  normalizePlayerEquipmentStats,
+  STATION_INTERACTION_RANGE
+} from "../systems/equipment";
 
 const emptyInput: FlightInput = {
   throttleUp: false,
@@ -86,12 +103,13 @@ const oreCycle: CommodityId[] = ["iron", "titanium", "cesogen", "gold", "voidgla
 
 function createInitialPlayer(): PlayerState {
   const starter = shipById["sparrow-mk1"];
+  const stats = getEffectiveShipStats(starter.stats, starter.equipment);
   return {
     shipId: starter.id,
-    stats: starter.stats,
-    hull: starter.stats.hull,
-    shield: starter.stats.shield,
-    energy: starter.stats.energy,
+    stats,
+    hull: stats.hull,
+    shield: stats.shield,
+    energy: stats.energy,
     credits: 1500,
     cargo: { "basic-food": 3, "drinking-water": 2 },
     equipment: starter.equipment,
@@ -473,7 +491,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       currentSystemId: save.currentSystemId,
       currentStationId: save.currentStationId,
       gameClock: save.gameClock,
-      player: save.player,
+      player: normalizePlayerEquipmentStats(save.player),
       activeMissions: save.activeMissions,
       completedMissionIds: save.completedMissionIds,
       failedMissionIds: save.failedMissionIds,
@@ -725,6 +743,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
 
     let player = state.player;
+    const equipmentEffects = getEquipmentEffects(player.equipment);
+    const primaryWeapon = getActivePrimaryWeapon(player.equipment);
+    const secondaryWeapon = getActiveSecondaryWeapon(player.equipment);
     const pitch = clamp(player.rotation[0] + dy * 0.0022 * player.stats.handling, -1.15, 1.15);
     const yaw = player.rotation[1] - dx * 0.0022 * player.stats.handling;
     const roll = clamp(player.rotation[2] + (input.rollLeft ? 1 : 0) * delta * 2.4 - (input.rollRight ? 1 : 0) * delta * 2.4, -0.9, 0.9) * 0.94;
@@ -739,7 +760,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       afterburning,
       delta,
       acceleration: afterburning ? 4.6 : 2.85,
-      damping: throttle <= 0.02 ? 0.55 : 0.82
+      damping: throttle <= 0.02 ? 0.55 : 0.82,
+      afterburnerMultiplier: equipmentEffects.afterburnerMultiplier
     });
     player = {
       ...player,
@@ -747,9 +769,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
       throttle,
       velocity,
       position: add(player.position, scale(velocity, delta)),
-      energy: clamp(player.energy + delta * 16 - (afterburning ? delta * 58 : 0), 0, player.stats.energy)
+      energy: clamp(
+        player.energy + delta * equipmentEffects.energyRegenPerSecond - (afterburning ? delta * equipmentEffects.afterburnerEnergyDrain : 0),
+        0,
+        player.stats.energy
+      )
     };
     player = regenerateShield(player, player.stats.shield, now, delta, 8);
+    if (equipmentEffects.hullRegenPerSecond > 0 && now - player.lastDamageAt >= equipmentEffects.hullRegenDelay && player.hull < player.stats.hull) {
+      player = { ...player, hull: clamp(player.hull + equipmentEffects.hullRegenPerSecond * delta, 0, player.stats.hull) };
+    }
 
     let runtime: RuntimeState = {
       ...state.runtime,
@@ -796,7 +825,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
       .map((asteroid) => ({ asteroid, dist: distance(player.position, asteroid.position) }))
       .sort((a, b) => a.dist - b.dist)[0];
 
-    const miningActive = !!(input.firePrimary && nearestAsteroid && nearestAsteroid.dist < 360 && player.energy > 5);
+    const miningRange = equipmentById["mining-beam"].weapon?.range ?? 360;
+    const miningActive = !!(
+      input.firePrimary &&
+      hasMiningBeam(player.equipment) &&
+      nearestAsteroid &&
+      nearestAsteroid.dist < miningRange &&
+      player.energy > MINING_MIN_ENERGY
+    );
     if (miningActive && nearestAsteroid) {
       audioSystem.play("mining");
       const cargoAvailable = Math.max(0, player.stats.cargoCapacity - getOccupiedCargo(player.cargo, state.activeMissions));
@@ -829,7 +865,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
               return { ...asteroid, miningProgress: progress };
             }
 
-            const chunk = Math.min(2, asteroid.amount);
+            const chunk = Math.min(MINING_YIELD_PER_CYCLE, asteroid.amount);
             const result = addCargoWithinCapacity(player, asteroid.resource, chunk, state.activeMissions);
             if (result.collected <= 0) {
               miningMessage = "Cargo hold full.";
@@ -856,41 +892,41 @@ export const useGameStore = create<GameStore>((set, get) => ({
           }),
           message: miningMessage
         };
-        player = { ...player, energy: clamp(player.energy - delta * 12, 0, player.stats.energy) };
-        primaryCooldown = Math.max(primaryCooldown, 0.08);
+        player = { ...player, energy: clamp(player.energy - delta * MINING_ENERGY_DRAIN_PER_SECOND, 0, player.stats.energy) };
+        primaryCooldown = Math.max(primaryCooldown, MINING_COOLDOWN_SECONDS);
       }
-    } else if (input.firePrimary && primaryCooldown <= 0 && player.energy >= (weapons["pulse-laser"]?.energyCost ?? 0)) {
+    } else if (input.firePrimary && primaryWeapon && primaryCooldown <= 0 && player.energy >= primaryWeapon.energyCost) {
       runtime.projectiles.push({
         id: projectileId("laser"),
         owner: "player",
         kind: "laser",
         position: add(player.position, scale(forward, 16)),
         direction: target ? normalize(sub(target.position, player.position)) : forward,
-        speed: weapons["pulse-laser"]?.speed ?? 720,
-        damage: weapons["pulse-laser"]?.damage ?? 16,
-        life: 1.4,
+        speed: primaryWeapon.speed,
+        damage: primaryWeapon.damage,
+        life: primaryWeapon.speed > 0 ? primaryWeapon.range / primaryWeapon.speed : 1.4,
         targetId: target?.id
       });
       audioSystem.play("laser");
-      player = { ...player, energy: player.energy - (weapons["pulse-laser"]?.energyCost ?? 5) };
-      primaryCooldown = weapons["pulse-laser"]?.cooldown ?? 0.18;
+      player = { ...player, energy: player.energy - primaryWeapon.energyCost };
+      primaryCooldown = getWeaponCooldown(primaryWeapon, player.equipment);
     }
 
-    if (input.fireSecondary && secondaryCooldown <= 0 && player.missiles > 0) {
+    if (input.fireSecondary && secondaryWeapon && secondaryCooldown <= 0 && player.missiles > 0) {
       runtime.projectiles.push({
         id: projectileId("missile"),
         owner: "player",
         kind: "missile",
         position: add(player.position, scale(forward, 18)),
         direction: target ? normalize(sub(target.position, player.position)) : forward,
-        speed: weapons["homing-missile"]?.speed ?? 360,
-        damage: weapons["homing-missile"]?.damage ?? 72,
-        life: 3.6,
+        speed: secondaryWeapon.speed,
+        damage: secondaryWeapon.damage,
+        life: secondaryWeapon.speed > 0 ? secondaryWeapon.range / secondaryWeapon.speed : 3.6,
         targetId: target?.id
       });
       audioSystem.play("missile");
       player = { ...player, missiles: player.missiles - 1 };
-      secondaryCooldown = weapons["homing-missile"]?.cooldown ?? 1.2;
+      secondaryCooldown = getWeaponCooldown(secondaryWeapon, player.equipment);
     }
 
     const pirates = runtime.enemies.filter((ship) => ship.role === "pirate" && ship.hull > 0 && ship.deathTimer === undefined);
@@ -1202,6 +1238,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
   interact: () => {
     const state = get();
+    const equipmentEffects = getEquipmentEffects(state.player.equipment);
     const station = stations
       .filter((candidate) => candidate.systemId === state.currentSystemId)
       .map((candidate) => ({ station: candidate, dist: distance(state.player.position, candidate.position) }))
@@ -1210,7 +1247,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       .filter((salvage) => !salvage.recovered)
       .map((salvage) => ({ salvage, dist: distance(salvage.position, state.player.position) }))
       .sort((a, b) => a.dist - b.dist)[0];
-    if (nearSalvage && nearSalvage.dist < 110) {
+    if (nearSalvage && nearSalvage.dist < equipmentEffects.salvageInteractionRange) {
       const activeMissions = state.activeMissions.map((mission) =>
         mission.id === nearSalvage.salvage.missionId ? markSalvageRecovered(mission) : mission
       );
@@ -1242,7 +1279,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       audioSystem.play("loot");
       return;
     }
-    const nearLoot = state.runtime.loot.filter((loot) => distance(loot.position, state.player.position) < 90);
+    const nearLoot = state.runtime.loot.filter((loot) => distance(loot.position, state.player.position) < equipmentEffects.lootInteractionRange);
     if (nearLoot.length > 0) {
       let player = state.player;
       const collectedIds = new Set<string>();
@@ -1264,7 +1301,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       if (collected > 0) audioSystem.play("loot");
       return;
     }
-    if (station && station.dist < 260) {
+    if (station && station.dist < STATION_INTERACTION_RANGE) {
       get().dockAt(station.station.id);
       return;
     }
@@ -1426,24 +1463,27 @@ export const useGameStore = create<GameStore>((set, get) => ({
       set({ runtime: { ...state.runtime, message: "Not enough credits for that ship." } });
       return;
     }
-    set({
-      player: {
+    const player = createPlayerShipLoadout(
+      {
         ...state.player,
         credits: state.player.credits - ship.price,
-        ownedShips: [...state.player.ownedShips, shipId],
-        shipId: ship.id,
-        stats: ship.stats,
-        hull: ship.stats.hull,
-        shield: ship.stats.shield,
-        energy: ship.stats.energy,
-        equipment: ship.equipment
+        ownedShips: [...state.player.ownedShips, shipId]
       },
+      ship
+    );
+    set({
+      player,
       runtime: { ...state.runtime, message: `${ship.name} purchased and equipped.` }
     });
   },
   craftEquipment: (equipmentId) => {
     const state = get();
-    if (state.player.equipment.includes(equipmentId as never)) {
+    if (!(equipmentId in equipmentById)) {
+      set({ runtime: { ...state.runtime, message: "Unknown equipment blueprint." } });
+      return;
+    }
+    const typedEquipmentId = equipmentId as EquipmentId;
+    if (state.player.equipment.includes(typedEquipmentId)) {
       set({ runtime: { ...state.runtime, message: "Equipment already installed." } });
       return;
     }
@@ -1453,7 +1493,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       return;
     }
     set({
-      player: { ...state.player, credits: state.player.credits - cost, equipment: [...state.player.equipment, equipmentId as never] },
+      player: installEquipment({ ...state.player, credits: state.player.credits - cost }, typedEquipmentId),
       runtime: { ...state.runtime, message: `Crafted ${equipmentId.replace("-", " ")}.` }
     });
   },

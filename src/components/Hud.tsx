@@ -1,6 +1,7 @@
 import { commodities, stationById, stations, systemById, useGameStore } from "../state/gameStore";
 import { commodityById, factionNames } from "../data/world";
 import { getOccupiedCargo } from "../systems/economy";
+import { getEquipmentEffects, hasMiningBeam } from "../systems/equipment";
 import { getMissionDeadlineRemaining } from "../systems/missions";
 import { distance } from "../systems/math";
 
@@ -30,6 +31,7 @@ export function Hud() {
   const gameClock = useGameStore((state) => state.gameClock);
   const saveGame = useGameStore((state) => state.saveGame);
   const setScreen = useGameStore((state) => state.setScreen);
+  const equipmentEffects = getEquipmentEffects(player.equipment);
   const nearestStation = stations
     .filter((station) => station.systemId === currentSystem.id)
     .map((station) => ({ station, dist: distance(player.position, station.position) }))
@@ -109,9 +111,9 @@ export function Hud() {
             );
           })
         )}
-        {nearestMine && nearestMine.dist < 390 ? (
+        {nearestMine && nearestMine.dist < equipmentEffects.miningHudRange ? (
           <p>
-            Mining vein: {commodityById[nearestMine.asteroid.resource].name} · {Math.round(nearestMine.asteroid.miningProgress * 100)}% · {Math.round(nearestMine.dist)}m
+            {hasMiningBeam(player.equipment) ? "Mining vein" : "Detected vein"}: {commodityById[nearestMine.asteroid.resource].name} · {Math.round(nearestMine.asteroid.miningProgress * 100)}% · {Math.round(nearestMine.dist)}m
           </p>
         ) : null}
       </section>

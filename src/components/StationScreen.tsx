@@ -1,5 +1,7 @@
+import { useEffect, useRef, useState } from "react";
+import type { CSSProperties, FocusEvent, KeyboardEvent, MouseEvent as ReactMouseEvent, MutableRefObject, ReactNode } from "react";
 import { commodities, shipById, ships, stationById, systemById, useGameStore } from "../state/gameStore";
-import { commodityById, factionNames, missionTemplates, weapons } from "../data/world";
+import { commodityById, equipmentById, equipmentName, factionNames, missionTemplates } from "../data/world";
 import { canCompleteMission, getMissionDeadlineRemaining } from "../systems/missions";
 import {
   canBuyCommodityAtStation,
@@ -15,10 +17,164 @@ import { GalaxyMap } from "./GalaxyMap";
 import { AtlasIcon } from "./AtlasIcon";
 import { SaveSlotsPanel } from "./SaveSlotsPanel";
 import { getCommodityIcon, getEquipmentIcon, getFactionIcon } from "../data/iconAtlas";
-import type { CargoHold, CommodityId, EquipmentId, StationTab } from "../types/game";
+import type { AssetManifest, CargoHold, CommodityId, EquipmentId, StationTab } from "../types/game";
 
 const tabs: StationTab[] = ["Market", "Hangar", "Shipyard", "Mission Board", "Blueprint Workshop", "Lounge", "Galaxy Map"];
 const craftable: EquipmentId[] = ["plasma-cannon", "shield-booster", "cargo-expansion", "scanner", "targeting-computer"];
+
+type EquipmentPopoverMode = "preview" | "pinned";
+
+interface EquipmentPopoverState {
+  id: EquipmentId;
+  status: string;
+  mode: EquipmentPopoverMode;
+  rect: DOMRect;
+}
+
+function useEquipmentPopover() {
+  const [popover, setPopover] = useState<EquipmentPopoverState | null>(null);
+  const popoverRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    function handleKeyDown(event: globalThis.KeyboardEvent) {
+      if (event.key === "Escape") setPopover(null);
+    }
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target as Element | null;
+      if (!target || !popover || popover.mode !== "pinned") return;
+      if (popoverRef.current?.contains(target) || target.closest(".equipment-trigger")) return;
+      setPopover(null);
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("pointerdown", handlePointerDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [popover]);
+
+  function open(id: EquipmentId, status: string, mode: EquipmentPopoverMode, element: HTMLElement) {
+    setPopover({ id, status, mode, rect: element.getBoundingClientRect() });
+  }
+
+  function preview(id: EquipmentId, status: string, element: HTMLElement) {
+    if (popover?.mode === "pinned") return;
+    open(id, status, "preview", element);
+  }
+
+  function clearPreview() {
+    setPopover((current) => (current?.mode === "preview" ? null : current));
+  }
+
+  function togglePinned(id: EquipmentId, status: string, element: HTMLElement) {
+    setPopover((current) =>
+      current?.id === id && current.mode === "pinned" ? null : { id, status, mode: "pinned", rect: element.getBoundingClientRect() }
+    );
+  }
+
+  function getTriggerProps(id: EquipmentId, status: string) {
+    return {
+      onMouseEnter: (event: ReactMouseEvent<HTMLElement>) => preview(id, status, event.currentTarget),
+      onMouseLeave: clearPreview,
+      onFocus: (event: FocusEvent<HTMLElement>) => preview(id, status, event.currentTarget),
+      onBlur: clearPreview,
+      onClick: (event: ReactMouseEvent<HTMLElement>) => togglePinned(id, status, event.currentTarget),
+      onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          togglePinned(id, status, event.currentTarget);
+        }
+      },
+      "aria-describedby": popover?.id === id ? "equipment-popover" : undefined
+    };
+  }
+
+  return { popover, popoverRef, getTriggerProps, close: () => setPopover(null) };
+}
+
+function getPopoverStyle(rect: DOMRect): CSSProperties {
+  if (window.innerWidth <= 720) return {};
+  const width = 360;
+  const gap = 14;
+  const edge = 12;
+  const preferredLeft = rect.right + gap;
+  const fallbackLeft = rect.left - width - gap;
+  const left = preferredLeft + width <= window.innerWidth - edge ? preferredLeft : Math.max(edge, fallbackLeft);
+  const top = Math.min(Math.max(edge, rect.top - 18), Math.max(edge, window.innerHeight - 430));
+  return { left, top };
+}
+
+function EquipmentPopover({
+  popover,
+  manifest,
+  popoverRef,
+  onClose
+}: {
+  popover: EquipmentPopoverState | null;
+  manifest: AssetManifest;
+  popoverRef: MutableRefObject<HTMLElement | null>;
+  onClose: () => void;
+}) {
+  if (!popover) return null;
+  const equipment = equipmentById[popover.id];
+  return (
+    <aside
+      id="equipment-popover"
+      className={`equipment-popover ${popover.mode === "pinned" ? "pinned" : ""}`}
+      style={getPopoverStyle(popover.rect)}
+      ref={popoverRef}
+      role="dialog"
+      aria-label={`${equipment.name} equipment details`}
+    >
+      <div className="equipment-popover-header">
+        <AtlasIcon icon={getEquipmentIcon(equipment.id)} manifest={manifest} size={58} showTitle={false} />
+        <div>
+          <span>{popover.status}</span>
+          <h3>{equipment.name}</h3>
+          <p>{equipment.category} · {equipment.role}</p>
+        </div>
+        {popover.mode === "pinned" ? (
+          <button className="equipment-popover-close" onClick={onClose} aria-label="Close equipment details">
+            X
+          </button>
+        ) : null}
+      </div>
+      <p>{equipment.description}</p>
+      <p className="equipment-effect">{equipment.effect}</p>
+      <div className="equipment-stat-row">
+        {equipment.displayStats.map((stat) => (
+          <span key={`${equipment.id}-${stat.label}`}>
+            <b>{stat.value}</b>
+            {stat.label}
+          </span>
+        ))}
+      </div>
+    </aside>
+  );
+}
+
+function EquipmentTrigger({
+  children,
+  className,
+  equipmentId,
+  getTriggerProps,
+  status
+}: {
+  children: ReactNode;
+  className: string;
+  equipmentId: EquipmentId;
+  getTriggerProps: ReturnType<typeof useEquipmentPopover>["getTriggerProps"];
+  status: string;
+}) {
+  return (
+    <button type="button" className={`equipment-trigger ${className}`} {...getTriggerProps(equipmentId, status)}>
+      {children}
+    </button>
+  );
+}
 
 export function StationScreen() {
   const currentStationId = useGameStore((state) => state.currentStationId);
@@ -115,36 +271,59 @@ function HangarTab() {
   const player = useGameStore((state) => state.player);
   const activeMissions = useGameStore((state) => state.activeMissions);
   const repairAndRefill = useGameStore((state) => state.repairAndRefill);
+  const equipmentPopover = useEquipmentPopover();
   return (
-    <div className="hangar-layout">
-      <aside className="equipment-strip">
-        {player.equipment.map((item) => (
-          <AtlasIcon key={item} icon={getEquipmentIcon(item)} manifest={manifest} size={54} />
-        ))}
-      </aside>
-      <div>
-        <h2>Hangar</h2>
-        <p>{shipById[player.shipId].name} · {shipById[player.shipId].role}</p>
-        <div className="stat-grid">
-          <span>Hull {Math.round(player.hull)}/{player.stats.hull}</span>
-          <span>Shield {Math.round(player.shield)}/{player.stats.shield}</span>
-          <span>Energy {Math.round(player.energy)}/{player.stats.energy}</span>
-          <span>Cargo {getOccupiedCargo(player.cargo, activeMissions)}/{player.stats.cargoCapacity}</span>
-          <span>Primary slots {player.stats.primarySlots}</span>
-          <span>Secondary slots {player.stats.secondarySlots}</span>
-        </div>
-        <h3>Installed Equipment</h3>
-        <div className="icon-chip-row">
+    <>
+      <div className="hangar-layout">
+        <aside className="equipment-strip">
           {player.equipment.map((item) => (
-            <span className="icon-chip" key={item}>
-              <AtlasIcon icon={getEquipmentIcon(item)} manifest={manifest} size={30} />
-              {equipmentName(item)}
-            </span>
+            <EquipmentTrigger
+              className="equipment-icon-trigger"
+              equipmentId={item}
+              getTriggerProps={equipmentPopover.getTriggerProps}
+              key={item}
+              status="Installed"
+            >
+              <AtlasIcon icon={getEquipmentIcon(item)} manifest={manifest} size={54} showTitle={false} />
+            </EquipmentTrigger>
           ))}
+        </aside>
+        <div>
+          <h2>Hangar</h2>
+          <p>{shipById[player.shipId].name} · {shipById[player.shipId].role}</p>
+          <div className="stat-grid">
+            <span>Hull {Math.round(player.hull)}/{player.stats.hull}</span>
+            <span>Shield {Math.round(player.shield)}/{player.stats.shield}</span>
+            <span>Energy {Math.round(player.energy)}/{player.stats.energy}</span>
+            <span>Cargo {getOccupiedCargo(player.cargo, activeMissions)}/{player.stats.cargoCapacity}</span>
+            <span>Primary slots {player.stats.primarySlots}</span>
+            <span>Secondary slots {player.stats.secondarySlots}</span>
+          </div>
+          <h3>Installed Equipment</h3>
+          <div className="icon-chip-row">
+            {player.equipment.map((item) => (
+              <EquipmentTrigger
+                className="icon-chip equipment-chip-trigger"
+                equipmentId={item}
+                getTriggerProps={equipmentPopover.getTriggerProps}
+                key={item}
+                status="Installed"
+              >
+                <AtlasIcon icon={getEquipmentIcon(item)} manifest={manifest} size={30} showTitle={false} />
+                {equipmentName(item)}
+              </EquipmentTrigger>
+            ))}
+          </div>
+          <button className="primary" onClick={repairAndRefill}>Repair Hull and Refill Missiles</button>
         </div>
-        <button className="primary" onClick={repairAndRefill}>Repair Hull and Refill Missiles</button>
       </div>
-    </div>
+      <EquipmentPopover
+        manifest={manifest}
+        onClose={equipmentPopover.close}
+        popover={equipmentPopover.popover}
+        popoverRef={equipmentPopover.popoverRef}
+      />
+    </>
   );
 }
 
@@ -240,22 +419,46 @@ function BlueprintTab() {
   const manifest = useGameStore((state) => state.assetManifest);
   const player = useGameStore((state) => state.player);
   const craftEquipment = useGameStore((state) => state.craftEquipment);
+  const equipmentPopover = useEquipmentPopover();
   return (
-    <div>
+    <>
+      <div>
         <h2>Blueprint Workshop</h2>
         <div className="ship-grid">
-          {craftable.map((id) => (
-            <article className="ship-card" key={id}>
-              <AtlasIcon icon={getEquipmentIcon(id)} manifest={manifest} size={52} />
-              <h3>{equipmentName(id)}</h3>
-              <p>{weapons[id]?.kind ?? "utility"} upgrade · prototype fabrication</p>
-              <button disabled={player.equipment.includes(id)} onClick={() => craftEquipment(id)}>
-                {player.equipment.includes(id) ? "Installed" : "Craft"}
-              </button>
-            </article>
-          ))}
+          {craftable.map((id) => {
+            const installed = player.equipment.includes(id);
+            return (
+              <article
+                className="ship-card equipment-card equipment-trigger"
+                key={id}
+                role="button"
+                tabIndex={0}
+                {...equipmentPopover.getTriggerProps(id, installed ? "Installed" : "Craftable")}
+              >
+                <AtlasIcon icon={getEquipmentIcon(id)} manifest={manifest} size={52} showTitle={false} />
+                <h3>{equipmentName(id)}</h3>
+                <p>{equipmentById[id].category} upgrade · prototype fabrication</p>
+                <button
+                  disabled={installed}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    craftEquipment(id);
+                  }}
+                >
+                  {installed ? "Installed" : "Craft"}
+                </button>
+              </article>
+            );
+          })}
         </div>
-    </div>
+      </div>
+      <EquipmentPopover
+        manifest={manifest}
+        onClose={equipmentPopover.close}
+        popover={equipmentPopover.popover}
+        popoverRef={equipmentPopover.popoverRef}
+      />
+    </>
   );
 }
 
@@ -287,21 +490,4 @@ function formatCargo(cargo: CargoHold): string {
   return Object.entries(cargo)
     .map(([id, amount]) => `${amount} ${commodityById[id as CommodityId].name}`)
     .join(", ");
-}
-
-function equipmentName(id: EquipmentId | string): string {
-  return {
-    "pulse-laser": "Pulse Laser",
-    "plasma-cannon": "Plasma Cannon",
-    "homing-missile": "Homing Missile",
-    "mining-beam": "Mining Beam",
-    "shield-booster": "Shield Booster",
-    "cargo-expansion": "Cargo Expansion",
-    "afterburner": "Afterburner",
-    "scanner": "Scanner",
-    "armor-plating": "Armor Plating",
-    "energy-reactor": "Energy Reactor",
-    "repair-drone": "Repair Drone",
-    "targeting-computer": "Targeting Computer"
-  }[id] ?? id;
 }

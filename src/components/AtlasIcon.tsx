@@ -8,6 +8,7 @@ interface AtlasIconProps {
   manifest: AssetManifest;
   size?: number;
   className?: string;
+  showTitle?: boolean;
 }
 
 const atlasPath = {
@@ -16,7 +17,7 @@ const atlasPath = {
   faction: "factionEmblems"
 } as const;
 
-export function AtlasIcon({ icon, manifest, size = 44, className = "" }: AtlasIconProps) {
+export function AtlasIcon({ icon, manifest, size = 44, className = "", showTitle = true }: AtlasIconProps) {
   const style = {
     "--icon-size": `${size}px`,
     backgroundImage: `url(${manifest[atlasPath[icon.atlas]]})`,
@@ -24,5 +25,13 @@ export function AtlasIcon({ icon, manifest, size = 44, className = "" }: AtlasIc
     backgroundSize: getAtlasBackgroundSize(icon.columns, icon.rows)
   } as CSSProperties;
 
-  return <span className={`atlas-icon atlas-icon-${icon.atlas} ${className}`.trim()} style={style} role="img" aria-label={icon.label} title={icon.label} />;
+  return (
+    <span
+      className={`atlas-icon atlas-icon-${icon.atlas} ${className}`.trim()}
+      style={style}
+      role="img"
+      aria-label={icon.label}
+      title={showTitle ? icon.label : undefined}
+    />
+  );
 }

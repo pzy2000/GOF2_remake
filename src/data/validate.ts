@@ -1,8 +1,9 @@
 import type { CommodityId, EquipmentId, FactionId } from "../types/game";
 import { commodities, commodityById } from "./commodities";
+import { equipmentById, equipmentList } from "./equipment";
 import { factionNames } from "./factions";
 import { missionTemplates } from "./missions";
-import { ships, weapons } from "./ships";
+import { ships } from "./ships";
 import { stationById, stations, systemById, systems } from "./systems";
 
 export interface ContentValidationResult {
@@ -27,7 +28,7 @@ function hasCommodity(id: string): id is CommodityId {
 }
 
 function hasEquipment(id: string): id is EquipmentId {
-  return id in weapons || ships.some((ship) => ship.equipment.includes(id as EquipmentId));
+  return id in equipmentById;
 }
 
 export function validateContentData(): ContentValidationResult {
@@ -38,6 +39,7 @@ export function validateContentData(): ContentValidationResult {
   requireUnique(stations.map((item) => item.id), "station", errors);
   requireUnique(systems.map((item) => item.id), "system", errors);
   requireUnique(missionTemplates.map((item) => item.id), "mission", errors);
+  requireUnique(equipmentList.map((item) => item.id), "equipment", errors);
 
   for (const ship of ships) {
     for (const equipmentId of ship.equipment) {

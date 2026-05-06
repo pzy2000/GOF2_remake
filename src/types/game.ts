@@ -166,6 +166,35 @@ export interface WeaponDefinition {
   kind: "primary" | "secondary" | "utility";
 }
 
+export interface EquipmentDisplayStat {
+  label: string;
+  value: string;
+}
+
+export interface EquipmentModifiers {
+  stats?: Partial<Pick<ShipStats, "hull" | "shield" | "energy" | "cargoCapacity">>;
+  afterburnerMultiplier?: number;
+  afterburnerEnergyDrain?: number;
+  energyRegenBonus?: number;
+  hullRegenPerSecond?: number;
+  hullRegenDelay?: number;
+  scannerRangeBonus?: number;
+  miningHudRangeBonus?: number;
+  weaponCooldownMultiplier?: number;
+}
+
+export interface EquipmentDefinition {
+  id: EquipmentId;
+  name: string;
+  category: "Primary Weapon" | "Secondary Weapon" | "Utility" | "Defense" | "Engineering";
+  role: string;
+  description: string;
+  effect: string;
+  displayStats: EquipmentDisplayStat[];
+  modifiers?: EquipmentModifiers;
+  weapon?: WeaponDefinition;
+}
+
 export interface CommodityDefinition {
   id: CommodityId;
   name: string;
