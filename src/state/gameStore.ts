@@ -20,6 +20,18 @@ import type {
 import { fallbackAssetManifest } from "../systems/assets";
 import { add, clamp, distance, forwardFromRotation, normalize, orbitPoint, rightFromRotation, scale, sub } from "../systems/math";
 import { applyDamage, regenerateShield } from "../systems/combat";
+import {
+  canPirateFire,
+  getMiningProgressIncrement,
+  getOreColor,
+  getOreHardness,
+  getOreRarity,
+  getPirateLoadout,
+  getPirateSpawnCount,
+  getPirateSpawnPosition,
+  STARTER_GRACE_SECONDS
+} from "../systems/difficulty";
+import { integrateVelocity } from "../systems/flight";
 import { buyCommodity, getCargoUsed, sellCommodity } from "../systems/economy";
 import { createInitialReputation, updateReputation } from "../systems/reputation";
 import { acceptMission as acceptMissionPure, canCompleteMission, cloneMissionTemplates, completeMission as completeMissionPure } from "../systems/missions";
@@ -89,19 +101,21 @@ function createShipEntity(id: string, role: FlightEntity["role"], position: Vec3
 
 function createRuntimeForSystem(systemId: string): RuntimeState {
   const system = systemById[systemId];
-  const pirateCount = Math.max(1, Math.round(1 + system.risk * 4));
+  const pirateCount = getPirateSpawnCount(systemId, system.risk);
   const asteroids: AsteroidEntity[] = Array.from({ length: systemId === "kuro-belt" ? 16 : 10 }, (_, index) => ({
     id: `${systemId}-asteroid-${index}`,
     resource: oreCycle[index % oreCycle.length],
     position: orbitPoint(index + system.risk * 10, 240 + index * 22),
     radius: 20 + (index % 4) * 7,
     amount: 4 + (index % 5) * 2,
-    miningProgress: 0
+    miningProgress: 0,
+    rarity: getOreRarity(oreCycle[index % oreCycle.length]),
+    hardness: getOreHardness(oreCycle[index % oreCycle.length])
   }));
   return {
     enemies: [
       ...Array.from({ length: pirateCount }, (_, index) =>
-        createShipEntity(`${systemId}-pirate-${index}`, "pirate", [Math.sin(index + 1) * 220, 35 * (index % 2), -310 - index * 120])
+        createShipEntity(`${systemId}-pirate-${index}`, "pirate", getPirateSpawnPosition(systemId, index))
       ),
       createShipEntity(`${systemId}-patrol-0`, "patrol", [-190, 55, -360]),
       createShipEntity(`${systemId}-trader-0`, "trader", [180, -25, -430])
@@ -109,9 +123,11 @@ function createRuntimeForSystem(systemId: string): RuntimeState {
     asteroids,
     loot: [],
     projectiles: [],
+    effects: [],
     destroyedPirates: 0,
     mined: {},
     clock: 0,
+    graceUntil: STARTER_GRACE_SECONDS,
     message: "Flight systems online."
   };
 }
@@ -267,25 +283,50 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const yaw = player.rotation[1] - dx * 0.0022 * player.stats.handling;
     const roll = clamp(player.rotation[2] + (input.rollLeft ? 1 : 0) * delta * 2.4 - (input.rollRight ? 1 : 0) * delta * 2.4, -0.9, 0.9) * 0.94;
     const throttle = clamp(player.throttle + (input.throttleUp ? delta * 0.55 : 0) - (input.throttleDown ? delta * 0.75 : 0), 0, 1);
-    const boost = input.afterburner && player.energy > 2 ? 1.65 : 1;
+    const afterburning = input.afterburner && player.energy > 12 && throttle > 0.08;
     const forward = forwardFromRotation([pitch, yaw, roll]);
-    const speed = player.stats.speed * throttle * boost;
-    const velocity = scale(forward, speed);
+    const velocity = integrateVelocity({
+      currentVelocity: player.velocity,
+      forward,
+      targetThrottle: throttle,
+      maxSpeed: player.stats.speed,
+      afterburning,
+      delta,
+      acceleration: afterburning ? 4.6 : 2.85,
+      damping: throttle <= 0.02 ? 0.55 : 0.82
+    });
     player = {
       ...player,
       rotation: [pitch, yaw, roll],
       throttle,
       velocity,
       position: add(player.position, scale(velocity, delta)),
-      energy: clamp(player.energy + delta * 18 - (boost > 1 ? delta * 25 : 0), 0, player.stats.energy)
+      energy: clamp(player.energy + delta * 16 - (afterburning ? delta * 58 : 0), 0, player.stats.energy)
     };
     player = regenerateShield(player, player.stats.shield, now, delta, 8);
 
     let runtime: RuntimeState = {
       ...state.runtime,
       clock: now,
-      enemies: state.runtime.enemies.map((ship) => ({ ...ship, fireCooldown: ship.fireCooldown - delta })),
+      enemies: state.runtime.enemies.map((ship) => ({
+        ...ship,
+        fireCooldown: ship.fireCooldown - delta,
+        deathTimer: ship.deathTimer === undefined ? undefined : ship.deathTimer - delta
+      })),
+      loot: state.runtime.loot.map((loot) => ({
+        ...loot,
+        position: add(loot.position, scale(loot.velocity, delta)),
+        velocity: scale(loot.velocity, Math.pow(0.08, delta))
+      })),
       projectiles: state.runtime.projectiles.map((projectile) => ({ ...projectile, life: projectile.life - delta })),
+      effects: state.runtime.effects
+        .map((effect) => ({
+          ...effect,
+          life: effect.life - delta,
+          position: add(effect.position, scale(effect.velocity ?? [0, 0, 0], delta)),
+          endPosition: effect.endPosition ? add(effect.endPosition, scale(effect.velocity ?? [0, 0, 0], delta)) : undefined
+        }))
+        .filter((effect) => effect.life > 0),
       message: state.runtime.message
     };
     let primaryCooldown = Math.max(0, state.primaryCooldown - delta);
@@ -299,22 +340,47 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     const miningActive = input.firePrimary && nearestAsteroid && nearestAsteroid.dist < 360 && player.energy > 5;
     if (miningActive) {
+      runtime.effects.push({
+        id: projectileId("mining-beam"),
+        kind: "mining-beam",
+        position: add(player.position, scale(forward, 12)),
+        endPosition: nearestAsteroid.asteroid.position,
+        color: getOreColor(nearestAsteroid.asteroid.resource),
+        label: commodityById[nearestAsteroid.asteroid.resource].name,
+        size: 1,
+        life: 0.12,
+        maxLife: 0.12
+      });
       runtime = {
         ...runtime,
         asteroids: runtime.asteroids.map((asteroid) => {
           if (asteroid.id !== nearestAsteroid.asteroid.id) return asteroid;
-          const progress = asteroid.miningProgress + delta * 0.75;
+          const progress = asteroid.miningProgress + getMiningProgressIncrement(asteroid.resource, delta);
           if (progress < 1) return { ...asteroid, miningProgress: progress };
           const chunk = Math.min(2, asteroid.amount);
+          const popDirection = normalize(sub(add(asteroid.position, [asteroid.radius, 10, asteroid.radius * 0.25]), player.position));
           runtime.loot.push({
             id: projectileId("ore"),
             commodityId: asteroid.resource,
             amount: chunk,
-            position: add(asteroid.position, [asteroid.radius * 0.6, 0, 0])
+            position: add(asteroid.position, [asteroid.radius * 0.6, 0, 0]),
+            velocity: scale(popDirection, 46 + 12 / asteroid.hardness),
+            rarity: asteroid.rarity
+          });
+          runtime.effects.push({
+            id: projectileId("ore-pop"),
+            kind: "hit",
+            position: add(asteroid.position, [asteroid.radius * 0.6, 0, 0]),
+            color: getOreColor(asteroid.resource),
+            label: `+${chunk} ${commodityById[asteroid.resource].name}`,
+            size: 9 + chunk,
+            life: 0.55,
+            maxLife: 0.55,
+            velocity: [0, 18, 0]
           });
           return { ...asteroid, amount: asteroid.amount - chunk, miningProgress: 0 };
         }),
-        message: `Mining ${commodityById[nearestAsteroid.asteroid.resource].name} asteroid.`
+        message: `Mining ${commodityById[nearestAsteroid.asteroid.resource].name} vein · ${Math.round(nearestAsteroid.asteroid.miningProgress * 100)}%`
       };
       player = { ...player, energy: clamp(player.energy - delta * 12, 0, player.stats.energy) };
       primaryCooldown = Math.max(primaryCooldown, 0.08);
@@ -350,9 +416,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
       secondaryCooldown = weapons["homing-missile"]?.cooldown ?? 1.2;
     }
 
-    const pirates = runtime.enemies.filter((ship) => ship.role === "pirate" && ship.hull > 0);
+    const pirates = runtime.enemies.filter((ship) => ship.role === "pirate" && ship.hull > 0 && ship.deathTimer === undefined);
+    const loadout = getPirateLoadout(state.currentSystemId, systemById[state.currentSystemId].risk);
+    const graceActive = now < runtime.graceUntil;
     runtime.enemies = runtime.enemies.map((ship) => {
-      if (ship.hull <= 0) return ship;
+      if (ship.hull <= 0 || ship.deathTimer !== undefined) return ship;
       let targetPosition = player.position;
       if (ship.role === "patrol") targetPosition = pirates[0]?.position ?? player.position;
       if (ship.role === "trader" && pirates.length > 0) targetPosition = add(ship.position, normalize(sub(ship.position, pirates[0].position)));
@@ -360,11 +428,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const side = rightFromRotation([0, Math.atan2(toTarget[0], -toTarget[2]), 0]);
       const retreating = ship.role === "pirate" && ship.hull < ship.maxHull * 0.28;
       const desired = retreating || ship.role === "trader" ? scale(toTarget, -1) : normalize(add(toTarget, scale(side, ship.role === "pirate" ? 0.45 : 0.12)));
-      const shipSpeed = ship.role === "pirate" ? 92 : ship.role === "patrol" ? 118 : 105;
+      const shipSpeed = ship.role === "pirate" ? loadout.speed : ship.role === "patrol" ? 118 : 105;
       const moved = { ...ship, velocity: scale(desired, shipSpeed), position: add(ship.position, scale(desired, shipSpeed * delta)) };
       const hostileToPlayer = ship.role === "pirate";
       const distToPlayer = distance(moved.position, player.position);
-      const canFire = hostileToPlayer && distToPlayer < 620 && moved.fireCooldown <= 0;
+      const canFire =
+        hostileToPlayer &&
+        canPirateFire({
+          systemId: state.currentSystemId,
+          risk: systemById[state.currentSystemId].risk,
+          now,
+          graceUntil: runtime.graceUntil,
+          distanceToPlayer: distToPlayer,
+          fireCooldown: moved.fireCooldown
+        });
       if (canFire) {
         runtime.projectiles.push({
           id: projectileId("enemy-laser"),
@@ -373,10 +450,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
           position: moved.position,
           direction: normalize(sub(player.position, moved.position)),
           speed: 470,
-          damage: 10,
+          damage: loadout.damage,
           life: 1.8
         });
-        return { ...moved, fireCooldown: 0.85 + Math.random() * 0.4 };
+        return { ...moved, fireCooldown: loadout.fireCooldownMin + Math.random() * (loadout.fireCooldownMax - loadout.fireCooldownMin) };
       }
       const patrolFire = ship.role === "patrol" && pirates[0] && distance(moved.position, pirates[0].position) < 620 && moved.fireCooldown <= 0;
       if (patrolFire) {
@@ -409,22 +486,60 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const movedProjectile = { ...projectile, direction, position: add(projectile.position, scale(direction, projectile.speed * delta)) };
       let consumed = false;
       if (projectile.owner === "enemy" && distance(movedProjectile.position, player.position) < 22) {
+        const shielded = player.shield > 0;
         player = applyDamage(player, projectile.damage, now);
+        runtime.effects.push({
+          id: projectileId(shielded ? "shield-hit" : "player-hit"),
+          kind: shielded ? "shield-hit" : "hit",
+          position: player.position,
+          color: shielded ? "#69e4ff" : "#ff6270",
+          label: `-${Math.round(projectile.damage)}`,
+          size: shielded ? 28 : 16,
+          life: 0.42,
+          maxLife: 0.42,
+          velocity: [0, 12, 0]
+        });
         consumed = true;
       } else if (projectile.owner === "player" || projectile.owner === "patrol") {
         runtime.enemies = runtime.enemies.map((ship) => {
           const validTarget = projectile.owner === "patrol" ? ship.role === "pirate" : ship.role === "pirate";
-          if (!validTarget || ship.hull <= 0 || consumed || distance(movedProjectile.position, ship.position) > 25) return ship;
+          if (!validTarget || ship.hull <= 0 || ship.deathTimer !== undefined || consumed || distance(movedProjectile.position, ship.position) > 25) return ship;
+          const shielded = ship.shield > 0;
           const damaged = applyDamage(ship, projectile.damage, now);
           consumed = true;
+          runtime.effects.push({
+            id: projectileId(shielded ? "shield-hit" : "hit"),
+            kind: shielded ? "shield-hit" : "hit",
+            position: movedProjectile.position,
+            color: shielded ? "#69e4ff" : "#ff8a6a",
+            label: `-${Math.round(projectile.damage)}`,
+            size: projectile.kind === "missile" ? 22 : 12,
+            life: 0.34,
+            maxLife: 0.34,
+            velocity: [0, 10, 0]
+          });
           if (damaged.hull <= 0 && ship.hull > 0) {
             if (ship.role === "pirate") destroyedPirates += 1;
             lootDrops.push({
               id: projectileId("loot"),
               commodityId: ship.role === "pirate" ? "illegal-contraband" : "mechanical-parts",
               amount: ship.role === "pirate" ? 1 : 2,
-              position: ship.position
+              position: ship.position,
+              velocity: [18 - Math.random() * 36, 24 + Math.random() * 18, 18 - Math.random() * 36],
+              rarity: ship.role === "pirate" ? "rare" : "uncommon"
             });
+            runtime.effects.push({
+              id: projectileId("explosion"),
+              kind: "explosion",
+              position: ship.position,
+              color: ship.role === "pirate" ? "#ff784f" : "#64e4ff",
+              label: "Destroyed",
+              size: 46,
+              life: 0.85,
+              maxLife: 0.85,
+              velocity: [0, 6, 0]
+            });
+            return { ...damaged, deathTimer: 0.42 };
           }
           return damaged;
         });
@@ -434,7 +549,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     runtime = {
       ...runtime,
       projectiles: remainingProjectiles,
-      enemies: runtime.enemies.filter((ship) => ship.hull > 0),
+      enemies: runtime.enemies.filter((ship) => ship.hull > 0 || (ship.deathTimer ?? 0) > 0),
       loot: [...runtime.loot, ...lootDrops],
       destroyedPirates
     };
@@ -468,16 +583,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
             ? "Hull integrity failed."
             : lootDrops.length
               ? "Target destroyed. Cargo canister released."
+              : graceActive
+                ? `Pirates are sizing you up · weapons free in ${Math.ceil(runtime.graceUntil - now)}s`
               : runtime.message
       },
       primaryCooldown,
       secondaryCooldown,
       screen: player.hull <= 0 ? "gameOver" : get().screen,
-      targetId: runtime.enemies.some((ship) => ship.id === state.targetId) ? state.targetId : runtime.enemies.find((ship) => ship.role === "pirate")?.id
+      targetId: runtime.enemies.some((ship) => ship.id === state.targetId && ship.hull > 0 && ship.deathTimer === undefined)
+        ? state.targetId
+        : runtime.enemies.find((ship) => ship.role === "pirate" && ship.hull > 0 && ship.deathTimer === undefined)?.id
     });
   },
   cycleTarget: () => {
-    const pirates = get().runtime.enemies.filter((ship) => ship.role === "pirate");
+    const pirates = get().runtime.enemies.filter((ship) => ship.role === "pirate" && ship.hull > 0 && ship.deathTimer === undefined);
     if (pirates.length === 0) return set({ targetId: undefined });
     const currentIndex = pirates.findIndex((ship) => ship.id === get().targetId);
     set({ targetId: pirates[(currentIndex + 1) % pirates.length].id });

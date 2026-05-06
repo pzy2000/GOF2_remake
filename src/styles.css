@@ -140,6 +140,26 @@ h3 {
   pointer-events: none;
 }
 
+.target-label,
+.effect-label {
+  border: 1px solid rgba(255, 223, 110, 0.58);
+  border-radius: 6px;
+  background: rgba(3, 10, 20, 0.72);
+  color: #ffdf6e;
+  font-size: 0.72rem;
+  font-weight: 900;
+  padding: 4px 7px;
+  text-align: center;
+  text-shadow: 0 0 10px rgba(0, 0, 0, 0.8);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.effect-label {
+  border-color: rgba(128, 214, 255, 0.36);
+  color: #eaffff;
+}
+
 .hud {
   position: absolute;
   inset: 0;

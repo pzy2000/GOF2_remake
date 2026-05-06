@@ -22,7 +22,7 @@ export function Hud() {
   const player = useGameStore((state) => state.player);
   const runtime = useGameStore((state) => state.runtime);
   const currentSystem = useGameStore((state) => systemById[state.currentSystemId]);
-  const target = useGameStore((state) => state.runtime.enemies.find((ship) => ship.id === state.targetId));
+  const target = useGameStore((state) => state.runtime.enemies.find((ship) => ship.id === state.targetId && ship.hull > 0 && ship.deathTimer === undefined));
   const manifest = useGameStore((state) => state.assetManifest);
   const activeMissions = useGameStore((state) => state.activeMissions);
   const saveGame = useGameStore((state) => state.saveGame);
@@ -31,6 +31,13 @@ export function Hud() {
     .filter((station) => station.systemId === currentSystem.id)
     .map((station) => ({ station, dist: distance(player.position, station.position) }))
     .sort((a, b) => a.dist - b.dist)[0];
+  const pirateCount = runtime.enemies.filter((ship) => ship.role === "pirate" && ship.hull > 0 && ship.deathTimer === undefined).length;
+  const graceRemaining = Math.max(0, Math.ceil(runtime.graceUntil - runtime.clock));
+  const nearestMine = runtime.asteroids
+    .filter((asteroid) => asteroid.amount > 0)
+    .map((asteroid) => ({ asteroid, dist: distance(player.position, asteroid.position) }))
+    .sort((a, b) => a.dist - b.dist)[0];
+  const targetDistance = target ? Math.round(distance(player.position, target.position)) : 0;
   return (
     <div className="hud">
       <img className="hud-overlay-art" src={manifest.hudOverlay} alt="" />
@@ -47,13 +54,14 @@ export function Hud() {
         <h3>{shipLabel(player.shipId)}</h3>
         <p>Credits {player.credits.toLocaleString()} · Cargo {getCargoUsed(player.cargo)}/{player.stats.cargoCapacity} · Missiles {player.missiles}</p>
         <p>Throttle {Math.round(player.throttle * 100)}% · Speed {Math.round(Math.hypot(...player.velocity))}</p>
+        <p>{graceRemaining > 0 ? `Enemy weapons safe for ${graceRemaining}s` : pirateCount > 0 ? `${pirateCount} pirate contact(s)` : "Local space clear"}</p>
         {nearestStation ? <p>Nearest station: {stationById[nearestStation.station.id].name} {Math.round(nearestStation.dist)}m</p> : null}
       </section>
       <section className="hud-panel hud-target">
         {target ? (
           <>
             <h3>{target.name}</h3>
-            <p>{target.role.toUpperCase()} · {factionNames[target.factionId]}</p>
+            <p>{target.role.toUpperCase()} · {factionNames[target.factionId]} · {targetDistance}m</p>
             <Bar label="Target Hull" value={target.hull} max={target.maxHull} tone="red" />
             <Bar label="Target Shield" value={target.shield} max={target.maxShield} tone="cyan" />
           </>
@@ -67,6 +75,11 @@ export function Hud() {
       <section className="hud-panel hud-bottom-left">
         <h3>Active Missions</h3>
         {activeMissions.length === 0 ? <p>No active contracts.</p> : activeMissions.slice(0, 3).map((mission) => <p key={mission.id}>{mission.title}</p>)}
+        {nearestMine && nearestMine.dist < 390 ? (
+          <p>
+            Mining vein: {commodityById[nearestMine.asteroid.resource].name} · {Math.round(nearestMine.asteroid.miningProgress * 100)}% · {Math.round(nearestMine.dist)}m
+          </p>
+        ) : null}
       </section>
       <section className="hud-panel hud-bottom-right">
         <h3>Comms</h3>

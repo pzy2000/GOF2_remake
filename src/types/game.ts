@@ -1,5 +1,7 @@
 export type Vec3 = [number, number, number];
 
+export type OreRarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
+
 export type Screen =
   | "menu"
   | "flight"
@@ -215,6 +217,7 @@ export interface FlightEntity {
   maxShield: number;
   lastDamageAt: number;
   fireCooldown: number;
+  deathTimer?: number;
 }
 
 export interface AsteroidEntity {
@@ -224,6 +227,8 @@ export interface AsteroidEntity {
   radius: number;
   amount: number;
   miningProgress: number;
+  rarity: OreRarity;
+  hardness: number;
 }
 
 export interface LootEntity {
@@ -231,6 +236,8 @@ export interface LootEntity {
   commodityId: CommodityId;
   amount: number;
   position: Vec3;
+  velocity: Vec3;
+  rarity: OreRarity;
 }
 
 export interface ProjectileEntity {
@@ -245,14 +252,29 @@ export interface ProjectileEntity {
   targetId?: string;
 }
 
+export interface VisualEffectEntity {
+  id: string;
+  kind: "hit" | "shield-hit" | "explosion" | "damage-text" | "mining-beam";
+  position: Vec3;
+  endPosition?: Vec3;
+  velocity?: Vec3;
+  color: string;
+  label?: string;
+  size: number;
+  life: number;
+  maxLife: number;
+}
+
 export interface RuntimeState {
   enemies: FlightEntity[];
   asteroids: AsteroidEntity[];
   loot: LootEntity[];
   projectiles: ProjectileEntity[];
+  effects: VisualEffectEntity[];
   destroyedPirates: number;
   mined: CargoHold;
   clock: number;
+  graceUntil: number;
   message: string;
 }
 
