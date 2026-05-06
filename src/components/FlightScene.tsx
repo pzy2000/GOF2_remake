@@ -3,12 +3,13 @@ import { Html, Line, Stars, useGLTF } from "@react-three/drei";
 import { Component, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import * as THREE from "three";
-import { planetById, planets, shipById, stations, systemById, useGameStore } from "../state/gameStore";
-import type { AsteroidEntity, ConvoyEntity, FlightEntity, LootEntity, PlanetDefinition, ProjectileEntity, SalvageEntity, Vec3, VisualEffectEntity } from "../types/game";
+import { planetById, planets, shipById, systemById, useGameStore } from "../state/gameStore";
+import type { AsteroidEntity, ConvoyEntity, ExplorationSignalDefinition, FlightEntity, LootEntity, PlanetDefinition, ProjectileEntity, SalvageEntity, StationDefinition, Vec3, VisualEffectEntity } from "../types/game";
 import { add, forwardFromRotation, normalize, scale, sub } from "../systems/math";
 import { getOreColor } from "../systems/difficulty";
 import { getJumpGatePosition } from "../systems/autopilot";
 import { getNearestNavigationTarget } from "../systems/navigation";
+import { getIncompleteExplorationSignals, getVisibleStationsForSystem, isExplorationSignalDiscovered } from "../systems/exploration";
 
 function toThree(position: Vec3): [number, number, number] {
   return [position[0], position[1], position[2]];
@@ -392,13 +393,57 @@ function SalvageCrate({ salvage }: { salvage: SalvageEntity }) {
 function StationModel() {
   const currentSystemId = useGameStore((state) => state.currentSystemId);
   const knownPlanetIds = useGameStore((state) => state.knownPlanetIds);
-  const systemStations = stations.filter((station) => station.systemId === currentSystemId && knownPlanetIds.includes(station.planetId));
+  const explorationState = useGameStore((state) => state.explorationState);
+  const systemStations = getVisibleStationsForSystem(currentSystemId, explorationState).filter((station) => knownPlanetIds.includes(station.planetId));
   return (
     <>
       {systemStations.map((station) => (
         <StationGeometry key={station.id} station={station} />
       ))}
     </>
+  );
+}
+
+function ExplorationSignalMarker({ signal }: { signal: ExplorationSignalDefinition }) {
+  const clock = useGameStore((state) => state.runtime.clock);
+  const explorationState = useGameStore((state) => state.explorationState);
+  const activeScan = useGameStore((state) => state.runtime.explorationScan);
+  const discovered = isExplorationSignalDiscovered(signal.id, explorationState);
+  const scanning = activeScan?.signalId === signal.id;
+  const pulse = 0.5 + Math.sin(clock * (scanning ? 5.2 : 2.6) + signal.position[0] * 0.01) * 0.5;
+  const color = signal.kind === "wreck" ? "#ffd166" : signal.kind === "cache" ? "#74e08d" : signal.kind === "event" ? "#ff9bd5" : "#8fe9ff";
+  return (
+    <group position={toThree(signal.position)}>
+      {signal.kind === "wreck" ? (
+        <>
+          {[-1, 0, 1].map((offset) => (
+            <mesh key={offset} position={[offset * 24, offset * 5, -offset * 16]} rotation={[0.5 + offset * 0.2, clock * 0.08 + offset, 0.3]}>
+              <boxGeometry args={[28 - Math.abs(offset) * 5, 10, 16]} />
+              <meshStandardMaterial color="#6b5a4b" emissive="#4f2b17" emissiveIntensity={0.24} metalness={0.44} roughness={0.58} />
+            </mesh>
+          ))}
+        </>
+      ) : signal.kind === "cache" ? (
+        <mesh rotation={[0.4, clock * 0.25, 0.2]}>
+          <boxGeometry args={[26, 22, 20]} />
+          <meshStandardMaterial color="#617c72" emissive="#1f7a5f" emissiveIntensity={0.36} metalness={0.46} roughness={0.38} />
+        </mesh>
+      ) : (
+        <mesh rotation={[clock * 0.4, clock * 0.2, 0]}>
+          <octahedronGeometry args={[20 + pulse * 5, 0]} />
+          <meshBasicMaterial color={color} transparent opacity={0.42 + pulse * 0.28} toneMapped={false} />
+        </mesh>
+      )}
+      <mesh rotation={[Math.PI / 2, 0, clock * (0.32 + pulse * 0.08)]}>
+        <torusGeometry args={[58 + pulse * 10, 1.8, 8, 54]} />
+        <meshBasicMaterial color={color} transparent opacity={0.24 + pulse * 0.3} toneMapped={false} />
+      </mesh>
+      <Line points={[[-48, 0, 0], [0, 0, 0], [48, 0, 0]]} color={color} lineWidth={1.2} transparent opacity={0.28 + pulse * 0.32} />
+      <pointLight color={color} intensity={0.7 + pulse * 0.8} distance={220} />
+      <Html center distanceFactor={11} className="target-label exploration-label">
+        {scanning ? "SCANNING" : discovered ? signal.title.toUpperCase() : signal.maskedTitle.toUpperCase()}
+      </Html>
+    </group>
   );
 }
 
@@ -510,7 +555,7 @@ function JumpGateModel() {
   );
 }
 
-function StationGeometry({ station }: { station: (typeof stations)[number] }) {
+function StationGeometry({ station }: { station: StationDefinition }) {
   const accent =
     station.archetype === "Military Outpost"
       ? "#ff6b6b"
@@ -838,7 +883,9 @@ function TargetLock() {
 function SceneContent({ onShipModelStatus }: { onShipModelStatus: (status: ShipModelStatus) => void }) {
   const runtime = useGameStore((state) => state.runtime);
   const currentSystemId = useGameStore((state) => state.currentSystemId);
+  const explorationState = useGameStore((state) => state.explorationState);
   const ambient = 0.55 + systemById[currentSystemId].risk * 0.2;
+  const explorationSignals = getIncompleteExplorationSignals(currentSystemId, explorationState);
   return (
     <>
       <color attach="background" args={["#030712"]} />
@@ -861,6 +908,9 @@ function SceneContent({ onShipModelStatus }: { onShipModelStatus: (status: ShipM
       {runtime.salvage.map((salvage) => (
         <SalvageCrate key={salvage.id} salvage={salvage} />
       ))}
+      {explorationSignals.map((signal) => (
+        <ExplorationSignalMarker key={signal.id} signal={signal} />
+      ))}
       {runtime.asteroids.map((asteroid) => (
         <Asteroid key={asteroid.id} asteroid={asteroid} />
       ))}
@@ -882,6 +932,7 @@ export function FlightScene() {
   const currentSystemId = useGameStore((state) => state.currentSystemId);
   const player = useGameStore((state) => state.player);
   const knownPlanetIds = useGameStore((state) => state.knownPlanetIds);
+  const explorationState = useGameStore((state) => state.explorationState);
   const [shipModelStatus, setShipModelStatus] = useState<ShipModelStatus>({
     kind: "loading",
     text: "Ship model: waiting for GLB loader."
@@ -889,14 +940,19 @@ export function FlightScene() {
   const updateShipModelStatus = useCallback((status: ShipModelStatus) => {
     setShipModelStatus((current) => (current.kind === status.kind && current.text === status.text ? current : status));
   }, []);
-  const navigationTarget = getNearestNavigationTarget(currentSystemId, player.position, knownPlanetIds);
+  const navigationTarget = getNearestNavigationTarget(currentSystemId, player.position, knownPlanetIds, {
+    explorationState,
+    installedEquipment: player.equipment
+  });
   const hint = navigationTarget
     ? navigationTarget.inRange
       ? navigationTarget.kind === "station"
         ? `E Dock: ${navigationTarget.name}`
         : navigationTarget.kind === "planet-signal"
           ? "Scanning: Unknown Beacon"
-          : "E Activate: Stargate"
+          : navigationTarget.kind === "exploration-signal"
+            ? `E Scan: ${navigationTarget.name}`
+            : "E Activate: Stargate"
       : `${navigationTarget.name} ${Math.round(navigationTarget.distance)}m`
     : undefined;
   return (
@@ -916,7 +972,7 @@ export function FlightScene() {
         </Suspense>
       </Canvas>
       <div className={`ship-model-status ${shipModelStatus.kind}`}>{shipModelStatus.text}</div>
-      {hint ? <div className={`dock-hint ${navigationTarget?.kind === "stargate" ? "gate-hint" : navigationTarget?.kind === "planet-signal" ? "scan-hint" : ""}`}>{hint}</div> : null}
+      {hint ? <div className={`dock-hint ${navigationTarget?.kind === "stargate" ? "gate-hint" : navigationTarget?.kind === "planet-signal" || navigationTarget?.kind === "exploration-signal" ? "scan-hint" : ""}`}>{hint}</div> : null}
     </div>
   );
 }

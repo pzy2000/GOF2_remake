@@ -4,6 +4,7 @@ import { factionNames } from "../data/world";
 import { planetById, stationById, systems, useGameStore } from "../state/gameStore";
 import type { GalaxyMapMode } from "../types/game";
 import { GALAXY_DISCOVERY_DISTANCE, systemDistance } from "../systems/navigation";
+import { getExplorationSignalsForSystem, getVisibleStationsForSystem, isExplorationSignalDiscovered, isHiddenStationRevealed } from "../systems/exploration";
 
 const MAP_WIDTH = 840;
 const MAP_HEIGHT = 560;
@@ -22,6 +23,7 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
   const currentStationId = useGameStore((state) => state.currentStationId);
   const knownSystems = useGameStore((state) => state.knownSystems);
   const knownPlanetIds = useGameStore((state) => state.knownPlanetIds);
+  const explorationState = useGameStore((state) => state.explorationState);
   const galaxyMapMode = useGameStore((state) => state.galaxyMapMode);
   const startJumpToStation = useGameStore((state) => state.startJumpToStation);
   const activateStargateJumpToStation = useGameStore((state) => state.activateStargateJumpToStation);
@@ -39,12 +41,15 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
   const selectedKnown = knownSystems.includes(selectedSystem.id);
   const selectedCurrent = selectedSystem.id === currentSystemId;
   const selectedPlanets = selectedSystem.planetIds.map((id) => planetById[id]).filter(Boolean);
+  const selectedSignals = getExplorationSignalsForSystem(selectedSystem.id);
+  const visibleHiddenStations = getVisibleStationsForSystem(selectedSystem.id, explorationState).filter((station) => station.hidden);
   const firstKnownPlanet = selectedPlanets.find((planet) => knownPlanetIds.includes(planet.id));
   const selectedStation = selectedStationId ? stationById[selectedStationId] : firstKnownPlanet ? stationById[firstKnownPlanet.stationId] : undefined;
   const selectedPlanet = selectedStation ? planetById[selectedStation.planetId] : firstKnownPlanet;
   const selectedPlanetKnown = !!selectedPlanet && knownPlanetIds.includes(selectedPlanet.id);
+  const selectedStationKnown = !!selectedStation && selectedPlanetKnown && (!selectedStation.hidden || isHiddenStationRevealed(selectedStation.id, explorationState));
   const selectedSameStation = !!selectedStation && selectedStation.id === currentStationId;
-  const canTravel = mode !== "browse" && selectedKnown && selectedPlanetKnown && !!selectedStation && !selectedSameStation && !autopilot;
+  const canTravel = mode !== "browse" && selectedKnown && selectedStationKnown && !selectedSameStation && !autopilot;
   const stars = useMemo(
     () =>
       Array.from({ length: 120 }, (_, index) => ({
@@ -68,10 +73,10 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
   );
 
   useEffect(() => {
-    if (!selectedStation || selectedStation.systemId !== selectedSystem.id || !knownPlanetIds.includes(selectedStation.planetId)) {
+    if (!selectedStation || selectedStation.systemId !== selectedSystem.id || !knownPlanetIds.includes(selectedStation.planetId) || (selectedStation.hidden && !isHiddenStationRevealed(selectedStation.id, explorationState))) {
       setSelectedStationId(firstKnownPlanet ? firstKnownPlanet.stationId : undefined);
     }
-  }, [firstKnownPlanet, knownPlanetIds, selectedStation, selectedSystem.id]);
+  }, [explorationState, firstKnownPlanet, knownPlanetIds, selectedStation, selectedSystem.id]);
 
   function selectSystem(systemId: string) {
     const system = systems.find((candidate) => candidate.id === systemId);
@@ -82,7 +87,15 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
 
   function executeTravel(stationId = selectedStation?.id) {
     const station = stationId ? stationById[stationId] : undefined;
-    if (mode === "browse" || !station || !knownSystems.includes(station.systemId) || !knownPlanetIds.includes(station.planetId) || station.id === currentStationId || autopilot) return;
+    if (
+      mode === "browse" ||
+      !station ||
+      !knownSystems.includes(station.systemId) ||
+      !knownPlanetIds.includes(station.planetId) ||
+      (station.hidden && !isHiddenStationRevealed(station.id, explorationState)) ||
+      station.id === currentStationId ||
+      autopilot
+    ) return;
     if (mode === "gate") activateStargateJumpToStation(station.id);
     if (mode === "station-route") startJumpToStation(station.id);
   }
@@ -203,20 +216,54 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                     </button>
                   );
                 })}
+                {visibleHiddenStations.map((station) => {
+                  const planet = planetById[station.planetId];
+                  const known = !!planet && knownPlanetIds.includes(planet.id);
+                  const selected = selectedStation?.id === station.id;
+                  return (
+                    <button
+                      key={station.id}
+                      type="button"
+                      className={`hidden-station ${selected ? "selected" : ""}`}
+                      disabled={!known}
+                      onClick={() => setSelectedStationId(station.id)}
+                      onDoubleClick={() => executeTravel(station.id)}
+                    >
+                      <span>{station.name}</span>
+                      <small>{known ? `${planet.name} · Hidden Station Found` : "Signal masked"}</small>
+                    </button>
+                  );
+                })}
               </div>
             ) : (
               <p>Station: Signal masked</p>
             )}
+            {selectedKnown ? (
+              <div className="exploration-signal-list" aria-label={`${selectedSystem.name} exploration signals`}>
+                <h4>Exploration Signals</h4>
+                {selectedSignals.map((signal) => {
+                  const complete = explorationState.completedSignalIds.includes(signal.id);
+                  const discovered = isExplorationSignalDiscovered(signal.id, explorationState);
+                  return (
+                    <article key={signal.id} className={complete ? "complete" : discovered ? "discovered" : ""}>
+                      <strong>{discovered ? signal.title : "Masked Signal"}</strong>
+                      <span>{complete ? "Resolved" : discovered ? "Discovered" : signal.maskedTitle}</span>
+                      {complete ? <p>{signal.log}</p> : null}
+                    </article>
+                  );
+                })}
+              </div>
+            ) : null}
             <p>
               Destination:{" "}
-              {selectedKnown && selectedPlanetKnown && selectedStation && selectedPlanet
+              {selectedKnown && selectedStationKnown && selectedStation && selectedPlanet
                 ? `${selectedPlanet.name} · ${selectedStation.name}`
                 : selectedKnown
                   ? "Select a scanned planet beacon"
                   : "Signal masked"}
             </p>
             <button className="primary" disabled={!canTravel} onClick={() => executeTravel()}>
-              {travelLabel(mode, selectedSameStation, selectedKnown && selectedPlanetKnown && !!selectedStation, !!autopilot)}
+              {travelLabel(mode, selectedSameStation, selectedKnown && selectedStationKnown, !!autopilot)}
             </button>
             <p className="galaxy-help">{helpText(mode)}</p>
           </aside>

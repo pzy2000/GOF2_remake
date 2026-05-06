@@ -251,6 +251,7 @@ export interface StationDefinition {
   systemId: string;
   planetId: string;
   position: Vec3;
+  hidden?: boolean;
 }
 
 export interface PlanetDefinition {
@@ -278,7 +279,40 @@ export interface StarSystemDefinition {
   jumpGatePosition: Vec3;
   planetIds: string[];
   stationIds: string[];
+  hiddenStationIds?: string[];
   marketBias: Partial<Record<CommodityId, number>>;
+}
+
+export type ExplorationSignalKind = "anomaly" | "wreck" | "cache" | "event";
+
+export interface ExplorationSignalRewards {
+  credits?: number;
+  cargo?: CargoHold;
+  reputation?: Partial<Record<FactionId, number>>;
+}
+
+export interface ExplorationSignalDefinition {
+  id: string;
+  systemId: string;
+  kind: ExplorationSignalKind;
+  title: string;
+  maskedTitle: string;
+  description: string;
+  position: Vec3;
+  scanRange: number;
+  scanBand: [number, number];
+  scanTime: number;
+  rewards: ExplorationSignalRewards;
+  log: string;
+  revealStationId?: string;
+  revealPlanetIds?: string[];
+}
+
+export interface ExplorationState {
+  discoveredSignalIds: string[];
+  completedSignalIds: string[];
+  revealedStationIds: string[];
+  eventLogIds: string[];
 }
 
 export interface JumpGateDefinition {
@@ -445,6 +479,14 @@ export interface SalvageEntity {
   recovered: boolean;
 }
 
+export interface ExplorationScanRuntime {
+  signalId: string;
+  frequency: number;
+  progress: number;
+  inBand: boolean;
+  distance: number;
+}
+
 export interface ProjectileEntity {
   id: string;
   owner: "player" | "enemy" | "patrol";
@@ -503,6 +545,7 @@ export interface RuntimeState {
   clock: number;
   graceUntil: number;
   message: string;
+  explorationScan?: ExplorationScanRuntime;
 }
 
 export interface MarketEntry {
@@ -546,4 +589,5 @@ export interface SaveGameData {
   reputation: ReputationState;
   knownSystems: string[];
   knownPlanetIds: string[];
+  explorationState: ExplorationState;
 }

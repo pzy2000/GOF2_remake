@@ -2,6 +2,7 @@ import type { CommodityId, EquipmentId, FactionId } from "../types/game";
 import { commodities, commodityById } from "./commodities";
 import { contrabandLawBySystem } from "./contraband";
 import { equipmentById, equipmentList } from "./equipment";
+import { explorationSignals } from "./exploration";
 import { factionNames } from "./factions";
 import { missionTemplates } from "./missions";
 import { ships } from "./ships";
@@ -43,6 +44,7 @@ export function validateContentData(): ContentValidationResult {
   requireUnique(systems.map((item) => item.id), "system", errors);
   requireUnique(missionTemplates.map((item) => item.id), "mission", errors);
   requireUnique(equipmentList.map((item) => item.id), "equipment", errors);
+  requireUnique(explorationSignals.map((item) => item.id), "exploration signal", errors);
   requireUnique(storyArcs.map((item) => item.id), "story arc", errors);
   for (const arc of storyArcs) {
     requireUnique(arc.chapters.map((item) => item.id), `${arc.id} chapter`, errors);
@@ -62,7 +64,7 @@ export function validateContentData(): ContentValidationResult {
     const planet = planetById[station.planetId];
     if (!planet) errors.push(`Station ${station.id} references unknown planet ${station.planetId}`);
     if (planet && planet.systemId !== station.systemId) errors.push(`Station ${station.id} belongs to ${station.systemId} but planet ${planet.id} belongs to ${planet.systemId}`);
-    if (planet && planet.stationId !== station.id) errors.push(`Station ${station.id} is not the station listed by planet ${planet.id}`);
+    if (planet && planet.stationId !== station.id && !station.hidden) errors.push(`Station ${station.id} is not the station listed by planet ${planet.id}`);
     if (!hasFaction(station.factionId)) errors.push(`Station ${station.id} references unknown faction ${station.factionId}`);
   }
 
@@ -94,6 +96,14 @@ export function validateContentData(): ContentValidationResult {
       if (!station) errors.push(`System ${system.id} references unknown station ${stationId}`);
       if (station && station.systemId !== system.id) errors.push(`Station ${station.id} is listed in ${system.id} but belongs to ${station.systemId}`);
       if (station && !system.planetIds.includes(station.planetId)) errors.push(`System ${system.id} station ${station.id} planet ${station.planetId} is missing from planetIds`);
+      if (station?.hidden) errors.push(`Hidden station ${station.id} must not be listed in stationIds`);
+    }
+    for (const stationId of system.hiddenStationIds ?? []) {
+      const station = stationById[stationId];
+      if (!station) errors.push(`System ${system.id} references unknown hidden station ${stationId}`);
+      if (station && station.systemId !== system.id) errors.push(`Hidden station ${station.id} is listed in ${system.id} but belongs to ${station.systemId}`);
+      if (station && !station.hidden) errors.push(`System ${system.id} hidden station ${station.id} must be marked hidden`);
+      if (station && !system.planetIds.includes(station.planetId)) errors.push(`System ${system.id} hidden station ${station.id} planet ${station.planetId} is missing from planetIds`);
     }
     for (const commodityId of Object.keys(system.marketBias)) {
       if (!hasCommodity(commodityId)) errors.push(`System ${system.id} has unknown market commodity ${commodityId}`);
@@ -134,6 +144,35 @@ export function validateContentData(): ContentValidationResult {
   for (const equipment of equipmentList) {
     for (const commodityId of Object.keys(equipment.craftCost?.cargo ?? {})) {
       if (!hasCommodity(commodityId)) errors.push(`Equipment ${equipment.id} craft cost references unknown cargo ${commodityId}`);
+    }
+  }
+
+  for (const signal of explorationSignals) {
+    if (!systemById[signal.systemId]) errors.push(`Exploration signal ${signal.id} references unknown system ${signal.systemId}`);
+    if (signal.scanBand[0] < 0 || signal.scanBand[1] > 100 || signal.scanBand[0] >= signal.scanBand[1]) {
+      errors.push(`Exploration signal ${signal.id} has invalid scan band`);
+    }
+    if (signal.scanRange <= 0 || signal.scanTime <= 0) errors.push(`Exploration signal ${signal.id} has invalid scan parameters`);
+    for (const commodityId of Object.keys(signal.rewards.cargo ?? {})) {
+      if (!hasCommodity(commodityId)) errors.push(`Exploration signal ${signal.id} rewards unknown cargo ${commodityId}`);
+    }
+    for (const factionId of Object.keys(signal.rewards.reputation ?? {})) {
+      if (!hasFaction(factionId)) errors.push(`Exploration signal ${signal.id} rewards unknown reputation ${factionId}`);
+    }
+    if (signal.revealStationId) {
+      const system = systemById[signal.systemId];
+      const station = stationById[signal.revealStationId];
+      if (!station) errors.push(`Exploration signal ${signal.id} reveals unknown station ${signal.revealStationId}`);
+      if (station && !station.hidden) errors.push(`Exploration signal ${signal.id} reveal station ${station.id} must be hidden`);
+      if (station && station.systemId !== signal.systemId) errors.push(`Exploration signal ${signal.id} reveal station ${station.id} is not in ${signal.systemId}`);
+      if (system && !system.hiddenStationIds?.includes(signal.revealStationId)) {
+        errors.push(`Exploration signal ${signal.id} reveal station ${signal.revealStationId} is missing from hiddenStationIds`);
+      }
+    }
+    for (const planetId of signal.revealPlanetIds ?? []) {
+      const planet = planetById[planetId];
+      if (!planet) errors.push(`Exploration signal ${signal.id} reveals unknown planet ${planetId}`);
+      if (planet && planet.systemId !== signal.systemId) errors.push(`Exploration signal ${signal.id} reveal planet ${planet.id} is not in ${signal.systemId}`);
     }
   }
 

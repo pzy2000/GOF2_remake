@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, FocusEvent, KeyboardEvent, MouseEvent as ReactMouseEvent, MutableRefObject, ReactNode } from "react";
 import { commodities, shipById, ships, stationById, systemById, useGameStore } from "../state/gameStore";
-import { commodityById, equipmentById, equipmentName, factionNames, glassWakeProtocol, missionTemplates } from "../data/world";
+import { commodityById, equipmentById, equipmentName, explorationSignals, factionNames, glassWakeProtocol, missionTemplates } from "../data/world";
 import { canCompleteMission, getAvailableMissionsForSystem, getMissionDeadlineRemaining } from "../systems/missions";
 import {
   canBuyCommodityAtStation,
@@ -555,11 +555,13 @@ function CaptainLogTab() {
   const activeMissions = useGameStore((state) => state.activeMissions);
   const completedMissionIds = useGameStore((state) => state.completedMissionIds);
   const failedMissionIds = useGameStore((state) => state.failedMissionIds);
+  const explorationState = useGameStore((state) => state.explorationState);
   const progress = getStoryProgress(glassWakeProtocol, missionTemplates, activeMissions, completedMissionIds, failedMissionIds);
   const current = progress.current;
   const currentMission = current?.mission;
   const currentOrigin = currentMission ? systemById[currentMission.originSystemId] : undefined;
   const currentDestination = currentMission ? stationById[currentMission.destinationStationId] : undefined;
+  const completedExplorationLogs = explorationSignals.filter((signal) => explorationState.eventLogIds.includes(signal.id));
   return (
     <div className="story-log">
       <aside className="story-overview">
@@ -599,6 +601,23 @@ function CaptainLogTab() {
             </article>
           );
         })}
+        <div className="exploration-log-section">
+          <header>
+            <span>Exploration Archive</span>
+            <h3>Quiet Signals</h3>
+          </header>
+          <p>{explorationState.completedSignalIds.length}/{explorationSignals.length} signals resolved.</p>
+          {completedExplorationLogs.length === 0 ? (
+            <p className="muted">No exploration logs recovered.</p>
+          ) : (
+            completedExplorationLogs.map((signal) => (
+              <article key={signal.id} className="exploration-log-entry">
+                <b>{signal.title}</b>
+                <p>{signal.log}</p>
+              </article>
+            ))
+          )}
+        </div>
       </section>
     </div>
   );

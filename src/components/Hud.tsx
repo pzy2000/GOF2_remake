@@ -6,6 +6,7 @@ import { getMissionDeadlineRemaining } from "../systems/missions";
 import { distance } from "../systems/math";
 import { getNearestNavigationTarget } from "../systems/navigation";
 import { combatAiProfileLabels, getContrabandLawSummary } from "../systems/combatAi";
+import { explorationSignalById, getEffectiveSignalScanBand } from "../systems/exploration";
 
 function Bar({ label, value, max, tone }: { label: string; value: number; max: number; tone: "cyan" | "green" | "orange" | "red" }) {
   const percent = Math.max(0, Math.min(100, (value / max) * 100));
@@ -35,8 +36,17 @@ export function Hud() {
   const setScreen = useGameStore((state) => state.setScreen);
   const openGalaxyMap = useGameStore((state) => state.openGalaxyMap);
   const knownPlanetIds = useGameStore((state) => state.knownPlanetIds);
+  const explorationState = useGameStore((state) => state.explorationState);
+  const adjustExplorationScanFrequency = useGameStore((state) => state.adjustExplorationScanFrequency);
+  const cancelExplorationScan = useGameStore((state) => state.cancelExplorationScan);
   const equipmentEffects = getEquipmentEffects(player.equipment);
-  const nearestNavigation = getNearestNavigationTarget(currentSystem.id, player.position, knownPlanetIds);
+  const nearestNavigation = getNearestNavigationTarget(currentSystem.id, player.position, knownPlanetIds, {
+    explorationState,
+    installedEquipment: player.equipment
+  });
+  const activeScan = runtime.explorationScan;
+  const activeScanSignal = activeScan ? explorationSignalById[activeScan.signalId] : undefined;
+  const activeScanBand = activeScanSignal ? getEffectiveSignalScanBand(activeScanSignal, player.equipment) : undefined;
   const pirateCount = runtime.enemies.filter((ship) => ship.role === "pirate" && ship.hull > 0 && ship.deathTimer === undefined).length;
   const contrabandAmount = player.cargo["illegal-contraband"] ?? 0;
   const scanningPatrol = runtime.enemies.find((ship) => ship.role === "patrol" && ship.aiState === "scan" && (ship.scanProgress ?? 0) > 0);
@@ -78,7 +88,13 @@ export function Hud() {
         {scanningPatrol ? <p>Patrol scan {Math.round((scanningPatrol.scanProgress ?? 0) * 100)}%</p> : null}
         {nearestNavigation ? (
           <p>
-            {nearestNavigation.kind === "station" ? "Nearest station" : nearestNavigation.kind === "planet-signal" ? "Scan target" : "Nearest nav"}: {nearestNavigation.name} {Math.round(nearestNavigation.distance)}m
+            {nearestNavigation.kind === "station"
+              ? "Nearest station"
+              : nearestNavigation.kind === "planet-signal"
+                ? "Scan target"
+                : nearestNavigation.kind === "exploration-signal"
+                  ? "Exploration signal"
+                  : "Nearest nav"}: {nearestNavigation.name} {Math.round(nearestNavigation.distance)}m
           </p>
         ) : null}
       </section>
@@ -139,6 +155,31 @@ export function Hud() {
           <button onClick={() => setScreen("pause")}>Pause</button>
         </div>
       </section>
+      {activeScan && activeScanSignal && activeScanBand ? (
+        <section className="hud-panel scan-panel">
+          <div className="scan-panel-header">
+            <span>Frequency Scan</span>
+            <button onClick={cancelExplorationScan}>Cancel</button>
+          </div>
+          <h3>{activeScanSignal.title}</h3>
+          <div className="frequency-track" aria-label="Signal frequency">
+            <i className="frequency-band" style={{ left: `${activeScanBand[0]}%`, width: `${activeScanBand[1] - activeScanBand[0]}%` }} />
+            <b style={{ left: `${activeScan.frequency}%` }} />
+          </div>
+          <div className="scan-controls">
+            <button onClick={() => adjustExplorationScanFrequency(-5)}>-5</button>
+            <button onClick={() => adjustExplorationScanFrequency(-1)}>-1</button>
+            <span>{Math.round(activeScan.frequency)}</span>
+            <button onClick={() => adjustExplorationScanFrequency(1)}>+1</button>
+            <button onClick={() => adjustExplorationScanFrequency(5)}>+5</button>
+          </div>
+          <div className="scan-progress">
+            <span>{activeScan.inBand ? "LOCKED" : "TUNING"}</span>
+            <i style={{ width: `${Math.round(activeScan.progress * 100)}%` }} />
+            <b>{Math.round(activeScan.progress * 100)}%</b>
+          </div>
+        </section>
+      ) : null}
       <div className="cargo-ribbon">
         {Object.entries(player.cargo)
           .filter(([, amount]) => (amount ?? 0) > 0)

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { glassWakeProtocol, missionTemplates, shipById } from "../src/data/world";
 import { createInitialMarketState } from "../src/systems/economy";
+import { createInitialExplorationState } from "../src/systems/exploration";
 import { createInitialReputation } from "../src/systems/reputation";
 import {
   deleteSave,
@@ -74,7 +75,8 @@ describe("save system", () => {
       reputation: createInitialReputation(),
       knownSystems: ["helion-reach", "kuro-belt"],
       knownPlanetIds: ["helion-prime-world", "kuro-anvil"],
-      ...overrides
+      ...overrides,
+      explorationState: overrides.explorationState ?? createInitialExplorationState()
     };
   }
 
@@ -95,6 +97,12 @@ describe("save system", () => {
               energy: 90
             }
           ]
+        },
+        explorationState: {
+          discoveredSignalIds: ["quiet-signal-sundog-lattice"],
+          completedSignalIds: ["quiet-signal-sundog-lattice"],
+          revealedStationIds: ["parallax-hermitage"],
+          eventLogIds: ["quiet-signal-sundog-lattice"]
         }
       }),
       storage,
@@ -111,6 +119,8 @@ describe("save system", () => {
     expect(loaded?.knownPlanetIds).toEqual(["helion-prime-world", "kuro-anvil"]);
     expect(loaded?.player.equipmentInventory?.["plasma-cannon"]).toBe(1);
     expect(loaded?.player.ownedShipRecords?.[0]).toMatchObject({ shipId: "mule-lx", stationId: "ptd-home" });
+    expect(loaded?.explorationState.completedSignalIds).toEqual(["quiet-signal-sundog-lattice"]);
+    expect(loaded?.explorationState.revealedStationIds).toEqual(["parallax-hermitage"]);
     expect(loaded?.version).toBe(SAVE_VERSION);
   });
 
@@ -165,6 +175,7 @@ describe("save system", () => {
     );
     const loaded = readSave(storage, "auto");
     expect(loaded?.knownPlanetIds).toEqual(["helion-prime-world", "ashen-harbor", "black-arc"]);
+    expect(loaded?.explorationState).toEqual(createInitialExplorationState());
   });
 
   it("ignores bad legacy saves without corrupting empty slots", () => {

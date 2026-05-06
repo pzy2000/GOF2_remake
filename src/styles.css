@@ -249,6 +249,11 @@ h3 {
   color: #dff6ff;
 }
 
+.exploration-label {
+  border-color: rgba(155, 255, 232, 0.52);
+  color: #d7fff7;
+}
+
 .hud {
   position: absolute;
   inset: 0;
@@ -311,6 +316,102 @@ h3 {
   right: 18px;
   bottom: 62px;
   pointer-events: auto;
+}
+
+.scan-panel {
+  left: 50%;
+  bottom: 86px;
+  width: min(430px, 44vw);
+  transform: translateX(-50%);
+  pointer-events: auto;
+}
+
+.scan-panel-header,
+.scan-controls,
+.scan-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.scan-panel-header {
+  justify-content: space-between;
+}
+
+.scan-panel-header span,
+.scan-progress span {
+  color: #ffd69a;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+}
+
+.scan-panel-header button,
+.scan-controls button {
+  min-height: 30px;
+  padding: 0 9px;
+}
+
+.frequency-track {
+  position: relative;
+  height: 34px;
+  border: 1px solid rgba(128, 214, 255, 0.22);
+  border-radius: 6px;
+  background:
+    linear-gradient(90deg, rgba(128, 214, 255, 0.1) 1px, transparent 1px),
+    rgba(4, 14, 27, 0.84);
+  background-size: 10% 100%;
+}
+
+.frequency-band,
+.frequency-track b {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.frequency-band {
+  height: 18px;
+  border: 1px solid rgba(116, 224, 141, 0.62);
+  border-radius: 999px;
+  background: rgba(116, 224, 141, 0.2);
+}
+
+.frequency-track b {
+  width: 4px;
+  height: 28px;
+  border-radius: 999px;
+  background: #fff6d6;
+  box-shadow: 0 0 14px rgba(255, 246, 214, 0.78);
+}
+
+.scan-controls {
+  justify-content: center;
+}
+
+.scan-controls span {
+  min-width: 48px;
+  color: #e8f4ff;
+  font-weight: 900;
+  text-align: center;
+}
+
+.scan-progress {
+  position: relative;
+  min-height: 28px;
+  overflow: hidden;
+  justify-content: space-between;
+  border: 1px solid rgba(128, 214, 255, 0.18);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 0 8px;
+}
+
+.scan-progress i {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 3px;
+  background: linear-gradient(90deg, #63e6ff, #74e08d);
 }
 
 .quick-actions {
@@ -915,6 +1016,31 @@ button.equipment-trigger {
   gap: 10px;
 }
 
+.exploration-log-section {
+  display: grid;
+  gap: 10px;
+  border: 1px solid rgba(155, 255, 232, 0.24);
+  border-radius: 8px;
+  background: rgba(5, 28, 30, 0.52);
+  padding: 16px;
+}
+
+.exploration-log-section header span {
+  color: #9db7c9;
+  font-size: 0.8rem;
+}
+
+.exploration-log-entry {
+  display: grid;
+  gap: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 10px;
+}
+
+.exploration-log-entry b {
+  color: #d7fff7;
+}
+
 .story-entry header {
   display: flex;
   align-items: flex-start;
@@ -1338,6 +1464,51 @@ button.equipment-trigger {
   color: #92a9bd;
   font-size: 0.74rem;
   line-height: 1.25;
+}
+
+.planet-list button.hidden-station {
+  border-color: rgba(155, 255, 232, 0.38);
+  background: rgba(42, 144, 124, 0.12);
+}
+
+.exploration-signal-list {
+  display: grid;
+  gap: 8px;
+  max-height: 210px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.exploration-signal-list h4 {
+  margin: 0;
+  color: #e8f4ff;
+  font-size: 0.92rem;
+}
+
+.exploration-signal-list article {
+  display: grid;
+  gap: 3px;
+  border: 1px solid rgba(128, 214, 255, 0.16);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 8px;
+}
+
+.exploration-signal-list article.discovered {
+  border-color: rgba(255, 214, 128, 0.42);
+}
+
+.exploration-signal-list article.complete {
+  border-color: rgba(116, 224, 141, 0.44);
+}
+
+.exploration-signal-list span {
+  color: #9db7c9;
+  font-size: 0.74rem;
+}
+
+.exploration-signal-list p {
+  font-size: 0.8rem;
 }
 
 .galaxy-stat-row {

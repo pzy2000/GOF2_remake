@@ -1,7 +1,8 @@
 import { planetById, planets, stations, stationById, systemById, systems } from "../data/world";
-import type { PlanetDefinition, StationDefinition, Vec3 } from "../types/game";
+import type { EquipmentId, ExplorationSignalDefinition, ExplorationState, PlanetDefinition, StationDefinition, Vec3 } from "../types/game";
 import { getJumpGatePosition } from "./autopilot";
 import { STATION_INTERACTION_RANGE } from "./equipment";
+import { getEffectiveSignalScanRange, getIncompleteExplorationSignals, getVisibleStationsForSystem, isExplorationSignalDiscovered } from "./exploration";
 import { distance } from "./math";
 
 export const STARGATE_NAME = "Stargate";
@@ -29,6 +30,15 @@ export type NavigationTarget =
       inRange: boolean;
     }
   | {
+      kind: "exploration-signal";
+      id: string;
+      name: string;
+      signal: ExplorationSignalDefinition;
+      position: Vec3;
+      distance: number;
+      inRange: boolean;
+    }
+  | {
       kind: "stargate";
       id: string;
       name: typeof STARGATE_NAME;
@@ -38,9 +48,20 @@ export type NavigationTarget =
       inRange: boolean;
     };
 
-export function getNearestNavigationTarget(systemId: string, playerPosition: Vec3, knownPlanetIds: string[] = planets.map((planet) => planet.id)): NavigationTarget | undefined {
+export interface NavigationOptions {
+  explorationState?: ExplorationState;
+  installedEquipment?: EquipmentId[];
+}
+
+export function getNearestNavigationTarget(
+  systemId: string,
+  playerPosition: Vec3,
+  knownPlanetIds: string[] = planets.map((planet) => planet.id),
+  options: NavigationOptions = {}
+): NavigationTarget | undefined {
   const knownPlanets = new Set(knownPlanetIds);
-  const stationTarget = stations
+  const visibleStations = options.explorationState ? getVisibleStationsForSystem(systemId, options.explorationState) : stations.filter((station) => station.systemId === systemId && !station.hidden);
+  const stationTarget = visibleStations
     .filter((station) => station.systemId === systemId && knownPlanets.has(station.planetId))
     .map((station) => ({
       kind: "station" as const,
@@ -64,6 +85,22 @@ export function getNearestNavigationTarget(systemId: string, playerPosition: Vec
       inRange: distance(playerPosition, planet.beaconPosition) < PLANET_SCAN_RANGE
     }))
     .sort((a, b) => a.distance - b.distance)[0];
+  const explorationTarget = options.explorationState
+    ? getIncompleteExplorationSignals(systemId, options.explorationState)
+        .map((signal) => {
+          const dist = distance(playerPosition, signal.position);
+          return {
+            kind: "exploration-signal" as const,
+            id: signal.id,
+            name: isExplorationSignalDiscovered(signal.id, options.explorationState!) ? signal.title : signal.maskedTitle,
+            signal,
+            position: signal.position,
+            distance: dist,
+            inRange: dist <= getEffectiveSignalScanRange(signal, options.installedEquipment)
+          };
+        })
+        .sort((a, b) => a.distance - b.distance)[0]
+    : undefined;
 
   const gatePosition = getJumpGatePosition(systemId);
   const gateDistance = distance(playerPosition, gatePosition);
@@ -77,7 +114,7 @@ export function getNearestNavigationTarget(systemId: string, playerPosition: Vec
     inRange: gateDistance < STARGATE_INTERACTION_RANGE
   };
 
-  return [stationTarget, signalTarget, gateTarget].filter((target): target is NavigationTarget => !!target).sort((a, b) => a.distance - b.distance)[0];
+  return [stationTarget, signalTarget, explorationTarget, gateTarget].filter((target): target is NavigationTarget => !!target).sort((a, b) => a.distance - b.distance)[0];
 }
 
 export function isKnownSystem(knownSystems: string[], systemId: string): boolean {

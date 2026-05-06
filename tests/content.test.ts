@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { commodities, contrabandLawBySystem, equipmentById, glassWakeProtocol, missionTemplates, planetById, planets, ships, stationById, stations, systems } from "../src/data/world";
+import { commodities, contrabandLawBySystem, equipmentById, explorationSignals, glassWakeProtocol, missionTemplates, planetById, planets, ships, stationById, stations, systems } from "../src/data/world";
 import { fallbackAssetManifest } from "../src/systems/assets";
 import { getEquipmentSlotUsage, getShipSlotCapacity } from "../src/systems/equipment";
 import { validateContentData } from "../src/data/validate";
@@ -17,6 +17,7 @@ describe("content data", () => {
     expect(idsAreUnique(stations.map((item) => item.id))).toBe(true);
     expect(idsAreUnique(systems.map((item) => item.id))).toBe(true);
     expect(idsAreUnique(missionTemplates.map((item) => item.id))).toBe(true);
+    expect(idsAreUnique(explorationSignals.map((item) => item.id))).toBe(true);
   });
 
   it("passes cross-reference validation", () => {
@@ -81,6 +82,25 @@ describe("content data", () => {
     expect(station.name).toBe("PTD Home");
     expect(station.systemId).toBe(system.id);
     expect(station.planetId).toBe(planet.id);
+  });
+
+  it("defines one Quiet Signals exploration target for every system", () => {
+    expect(explorationSignals).toHaveLength(systems.length);
+    for (const system of systems) {
+      expect(explorationSignals.filter((signal) => signal.systemId === system.id)).toHaveLength(1);
+    }
+    for (const signal of explorationSignals) {
+      for (const commodityId of Object.keys(signal.rewards.cargo ?? {})) {
+        expect(commodities.some((commodity) => commodity.id === commodityId)).toBe(true);
+      }
+      if (signal.revealStationId) {
+        const station = stationById[signal.revealStationId];
+        const system = systems.find((item) => item.id === signal.systemId);
+        expect(station.hidden).toBe(true);
+        expect(system?.stationIds).not.toContain(station.id);
+        expect(system?.hiddenStationIds).toContain(station.id);
+      }
+    }
   });
 
   it("keeps stock ship loadouts within their slot capacities", () => {

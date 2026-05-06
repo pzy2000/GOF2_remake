@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { planetById, stationById } from "../src/data/world";
+import { explorationSignalById, planetById, stationById } from "../src/data/world";
 import { getJumpGatePosition } from "../src/systems/autopilot";
+import { createInitialExplorationState } from "../src/systems/exploration";
 import {
   discoverNearbyPlanets,
   getInitialKnownPlanetIds,
@@ -67,5 +68,39 @@ describe("navigation targets and discovery", () => {
     ]);
     expect(known.discovered.map((item) => item.id)).toEqual(["lode-minor"]);
     expect(known.knownPlanetIds).toContain("lode-minor");
+  });
+
+  it("shows incomplete exploration signals as navigation targets", () => {
+    const signal = explorationSignalById["quiet-signal-sundog-lattice"];
+    const target = getNearestNavigationTarget("helion-reach", signal.position, ["helion-prime-world"], {
+      explorationState: createInitialExplorationState()
+    });
+    expect(target?.kind).toBe("exploration-signal");
+    expect(target?.name).toBe(signal.maskedTitle);
+    expect(target?.inRange).toBe(true);
+  });
+
+  it("does not target completed exploration signals", () => {
+    const signal = explorationSignalById["quiet-signal-sundog-lattice"];
+    const target = getNearestNavigationTarget("helion-reach", signal.position, ["helion-prime-world"], {
+      explorationState: {
+        ...createInitialExplorationState(),
+        completedSignalIds: [signal.id]
+      }
+    });
+    expect(target?.kind).not.toBe("exploration-signal");
+  });
+
+  it("allows revealed hidden stations to become navigation targets", () => {
+    const station = stationById["parallax-hermitage"];
+    const target = getNearestNavigationTarget("mirr-vale", station.position, ["mirr-glass", "hush-orbit"], {
+      explorationState: {
+        ...createInitialExplorationState(),
+        revealedStationIds: [station.id]
+      }
+    });
+    expect(target?.kind).toBe("station");
+    expect(target?.name).toBe("Parallax Hermitage");
+    expect(target?.inRange).toBe(true);
   });
 });

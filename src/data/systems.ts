@@ -376,6 +376,7 @@ export const stations: StationDefinition[] = [
   { id: "optic-garden", name: "Optic Garden", archetype: "Research Station", factionId: "mirr-collective", systemId: "mirr-vale", planetId: "optic-tide", position: [650, 30, -870] },
   { id: "hush-array", name: "Hush Array", archetype: "Research Station", factionId: "mirr-collective", systemId: "mirr-vale", planetId: "hush-orbit", position: [-660, -30, -850] },
   { id: "viridian-lab", name: "Viridian Lab", archetype: "Research Station", factionId: "mirr-collective", systemId: "mirr-vale", planetId: "viridian-ruins", position: [-130, 340, -940] },
+  { id: "parallax-hermitage", name: "Parallax Hermitage", archetype: "Research Station", factionId: "mirr-collective", systemId: "mirr-vale", planetId: "hush-orbit", position: [-520, 90, -720], hidden: true },
   { id: "ashen-freeport", name: "Ashen Freeport", archetype: "Frontier Port", factionId: "vossari-clans", systemId: "ashen-drift", planetId: "ashen-harbor", position: [-120, -40, -730] },
   { id: "black-arcade", name: "Black Arcade", archetype: "Pirate Black Market", factionId: "independent-pirates", systemId: "ashen-drift", planetId: "black-arc", position: [210, 15, -960] },
   { id: "emberfall-relay", name: "Emberfall Relay", archetype: "Frontier Port", factionId: "vossari-clans", systemId: "ashen-drift", planetId: "emberfall", position: [-720, 35, -870] },
@@ -445,6 +446,7 @@ export const systems: StarSystemDefinition[] = [
     jumpGatePosition: [460, -100, -1280],
     planetIds: ["mirr-glass", "optic-tide", "hush-orbit", "viridian-ruins"],
     stationIds: ["mirr-lattice", "optic-garden", "hush-array", "viridian-lab"],
+    hiddenStationIds: ["parallax-hermitage"],
     marketBias: { "data-cores": 1.28, optics: 1.22, microchips: 1.16, "rare-plants": 0.88, voidglass: 1.35 }
   },
   {

@@ -8,9 +8,11 @@ import type {
   CommodityId,
   ConvoyEntity,
   EquipmentId,
+  FactionId,
   FlightEntity,
   FlightInput,
   GalaxyMapMode,
+  ExplorationState,
   LootEntity,
   MarketState,
   MissionDefinition,
@@ -93,6 +95,15 @@ import {
   MINING_YIELD_PER_CYCLE,
   normalizePlayerEquipmentStats
 } from "../systems/equipment";
+import {
+  createInitialExplorationState,
+  explorationSignalById,
+  getEffectiveSignalScanBand,
+  getEffectiveSignalScanRange,
+  isFrequencyInSignalBand,
+  isHiddenStationRevealed,
+  normalizeExplorationState
+} from "../systems/exploration";
 import {
   getInitialKnownSystems,
   getInitialKnownPlanetIds,
@@ -255,7 +266,8 @@ function createRuntimeForSystem(systemId: string, activeMissions: MissionDefinit
     mined: {},
     clock: 0,
     graceUntil: STARTER_GRACE_SECONDS,
-    message: "Flight systems online."
+    message: "Flight systems online.",
+    explorationScan: undefined
   };
 }
 
@@ -398,9 +410,10 @@ function launchPositionForStation(stationId: string | undefined, fallback: Vec3)
   return station ? add(station.position, add(scale(awayFromPlanet, 280), [0, 18, 0])) : fallback;
 }
 
-function isKnownStation(stationId: string, knownPlanetIds: string[]): boolean {
+function isKnownStation(stationId: string, knownPlanetIds: string[], explorationState: ExplorationState): boolean {
   const station = stationById[stationId];
-  return !!station && knownPlanetIds.includes(station.planetId);
+  if (!station || !knownPlanetIds.includes(station.planetId)) return false;
+  return !station.hidden || isHiddenStationRevealed(station.id, explorationState);
 }
 
 function mergeKnownPlanetIds(knownPlanetIds: string[], knownSystemIds: string[], currentStationId?: string): string[] {
@@ -430,6 +443,69 @@ function addOwnedShipId(player: PlayerState, shipId: string): string[] {
   return Array.from(new Set([...(player.ownedShips ?? [player.shipId]), shipId]));
 }
 
+function addUniqueIds(existing: string[], additions: string[]): string[] {
+  return Array.from(new Set([...existing, ...additions]));
+}
+
+function applyExplorationReward(snapshot: {
+  signalId: string;
+  player: PlayerState;
+  reputation: ReturnType<typeof createInitialReputation>;
+  explorationState: ExplorationState;
+  knownPlanetIds: string[];
+  activeMissions: MissionDefinition[];
+}) {
+  const signal = explorationSignalById[snapshot.signalId];
+  if (!signal || snapshot.explorationState.completedSignalIds.includes(signal.id)) {
+    return {
+      player: snapshot.player,
+      reputation: snapshot.reputation,
+      explorationState: snapshot.explorationState,
+      knownPlanetIds: snapshot.knownPlanetIds,
+      collectedCargo: 0,
+      message: signal ? `${signal.title} already resolved.` : "Exploration signal lost."
+    };
+  }
+
+  let player = snapshot.player;
+  let reputation = snapshot.reputation;
+  let collectedCargo = 0;
+  if (signal.rewards.credits) player = { ...player, credits: player.credits + signal.rewards.credits };
+  for (const [commodityId, amount] of Object.entries(signal.rewards.cargo ?? {})) {
+    const result = addCargoWithinCapacity(player, commodityId as CommodityId, amount ?? 0, snapshot.activeMissions);
+    player = result.player;
+    collectedCargo += result.collected;
+  }
+  for (const [factionId, delta] of Object.entries(signal.rewards.reputation ?? {})) {
+    reputation = updateReputation(reputation, factionId as FactionId, delta ?? 0);
+  }
+
+  const explorationState: ExplorationState = {
+    discoveredSignalIds: addUniqueIds(snapshot.explorationState.discoveredSignalIds, [signal.id]),
+    completedSignalIds: addUniqueIds(snapshot.explorationState.completedSignalIds, [signal.id]),
+    revealedStationIds: signal.revealStationId
+      ? addUniqueIds(snapshot.explorationState.revealedStationIds, [signal.revealStationId])
+      : snapshot.explorationState.revealedStationIds,
+    eventLogIds: addUniqueIds(snapshot.explorationState.eventLogIds, [signal.id])
+  };
+  const knownPlanetIds = signal.revealPlanetIds?.length
+    ? planets.filter((planet) => new Set([...snapshot.knownPlanetIds, ...(signal.revealPlanetIds ?? [])]).has(planet.id)).map((planet) => planet.id)
+    : snapshot.knownPlanetIds;
+  const rewardParts = [
+    signal.rewards.credits ? `+${signal.rewards.credits} credits` : "",
+    collectedCargo > 0 ? `+${collectedCargo} cargo` : "",
+    signal.revealStationId ? `${stationById[signal.revealStationId]?.name ?? signal.revealStationId} revealed` : ""
+  ].filter(Boolean);
+  return {
+    player,
+    reputation,
+    explorationState,
+    knownPlanetIds,
+    collectedCargo,
+    message: `${signal.title} resolved.${rewardParts.length ? ` ${rewardParts.join(" · ")}.` : ""}`
+  };
+}
+
 interface GameStore {
   screen: Screen;
   previousScreen: Screen;
@@ -452,6 +528,7 @@ interface GameStore {
   reputation: ReturnType<typeof createInitialReputation>;
   knownSystems: string[];
   knownPlanetIds: string[];
+  explorationState: ExplorationState;
   primaryCooldown: number;
   secondaryCooldown: number;
   hasSave: boolean;
@@ -472,6 +549,8 @@ interface GameStore {
   advanceGameClock: (delta: number) => void;
   cycleTarget: () => void;
   interact: () => void;
+  adjustExplorationScanFrequency: (delta: number) => void;
+  cancelExplorationScan: () => void;
   dockAt: (stationId: string) => void;
   undock: () => void;
   startJumpToStation: (stationId: string) => void;
@@ -507,6 +586,7 @@ type SavePayloadOverrides = Partial<
     | "reputation"
     | "knownSystems"
     | "knownPlanetIds"
+    | "explorationState"
   >
 >;
 
@@ -522,7 +602,8 @@ function savePayload(state: GameStore, overrides: SavePayloadOverrides = {}): Om
     marketState: overrides.marketState ?? state.marketState,
     reputation: overrides.reputation ?? state.reputation,
     knownSystems: overrides.knownSystems ?? state.knownSystems,
-    knownPlanetIds: overrides.knownPlanetIds ?? state.knownPlanetIds
+    knownPlanetIds: overrides.knownPlanetIds ?? state.knownPlanetIds,
+    explorationState: overrides.explorationState ?? state.explorationState
   };
 }
 
@@ -556,6 +637,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   reputation: createInitialReputation(),
   knownSystems: getInitialKnownSystems("helion-reach"),
   knownPlanetIds: getInitialKnownPlanetIds(getInitialKnownSystems("helion-reach")),
+  explorationState: createInitialExplorationState(),
   primaryCooldown: 0,
   secondaryCooldown: 0,
   hasSave: readSave() !== null,
@@ -583,6 +665,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       reputation: createInitialReputation(),
       knownSystems: getInitialKnownSystems("helion-reach"),
       knownPlanetIds: getInitialKnownPlanetIds(getInitialKnownSystems("helion-reach")),
+      explorationState: createInitialExplorationState(),
       primaryCooldown: 0,
       secondaryCooldown: 0,
       activeSaveSlotId: undefined
@@ -606,6 +689,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       reputation: save.reputation,
       knownSystems: save.knownSystems,
       knownPlanetIds: save.knownPlanetIds,
+      explorationState: normalizeExplorationState(save.explorationState),
       runtime: createRuntimeForSystem(save.currentSystemId, save.activeMissions),
       autopilot: undefined,
       hasSave: true,
@@ -934,6 +1018,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
         .filter((effect) => effect.life > 0),
       message: state.runtime.message
     };
+    let explorationState = state.explorationState;
+    let knownPlanetIds = state.knownPlanetIds;
     let primaryCooldown = Math.max(0, state.primaryCooldown - delta);
     let secondaryCooldown = Math.max(0, state.secondaryCooldown - delta);
     const target = runtime.enemies.find((ship) => ship.id === state.targetId && ship.hull > 0);
@@ -1107,6 +1193,73 @@ export const useGameStore = create<GameStore>((set, get) => ({
       return regenerateShield(moved, moved.maxShield, now, delta, 5);
     });
 
+    if (runtime.explorationScan) {
+      const signal = explorationSignalById[runtime.explorationScan.signalId];
+      if (!signal || explorationState.completedSignalIds.includes(runtime.explorationScan.signalId)) {
+        runtime = { ...runtime, explorationScan: undefined };
+      } else {
+        const scanDistance = distance(player.position, signal.position);
+        const inRange = scanDistance <= getEffectiveSignalScanRange(signal, player.equipment);
+        const inBand = inRange && isFrequencyInSignalBand(signal, runtime.explorationScan.frequency, player.equipment);
+        const progress = clamp(
+          runtime.explorationScan.progress + (inBand ? delta / signal.scanTime : -delta * 0.22),
+          0,
+          1
+        );
+        if (progress >= 1) {
+          const result = applyExplorationReward({
+            signalId: signal.id,
+            player,
+            reputation,
+            explorationState,
+            knownPlanetIds,
+            activeMissions: state.activeMissions
+          });
+          player = result.player;
+          reputation = result.reputation;
+          explorationState = result.explorationState;
+          knownPlanetIds = result.knownPlanetIds;
+          runtime = {
+            ...runtime,
+            explorationScan: undefined,
+            message: result.message,
+            effects: [
+              ...runtime.effects,
+              {
+                id: projectileId("exploration-resolved"),
+                kind: "nav-ring",
+                position: signal.position,
+                color: "#9bffe8",
+                secondaryColor: "#fff6d6",
+                label: "RESOLVED",
+                particleCount: 0,
+                spread: 1,
+                size: 68,
+                life: 0.7,
+                maxLife: 0.7
+              }
+            ]
+          };
+          audioSystem.play("mission-complete");
+        } else {
+          runtime = {
+            ...runtime,
+            explorationScan: {
+              ...runtime.explorationScan,
+              progress,
+              inBand,
+              distance: scanDistance
+            },
+            message: inRange
+              ? inBand
+                ? `Frequency lock on ${signal.title}: ${Math.round(progress * 100)}%.`
+                : `Tuning ${signal.title}: align frequency inside ${getEffectiveSignalScanBand(signal, player.equipment).join("-")}.`
+              : `${signal.title} scan paused. Return within ${Math.round(getEffectiveSignalScanRange(signal, player.equipment))}m.`
+          };
+        }
+      }
+    }
+
     const remainingProjectiles: ProjectileEntity[] = [];
     const lootDrops: LootEntity[] = [];
     let destroyedPirates = runtime.destroyedPirates;
@@ -1256,8 +1409,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       runtime.message = `${mission.title} failed: convoy destroyed.`;
     }
     runtime = { ...runtime, convoys: runtime.convoys.filter((convoy) => convoy.hull > 0 && !failedMissionIds.includes(convoy.missionId)) };
-    const planetDiscovery = discoverNearbyPlanets(state.currentSystemId, player.position, state.knownPlanetIds);
-    let knownPlanetIds = planetDiscovery.knownPlanetIds;
+    const planetDiscovery = discoverNearbyPlanets(state.currentSystemId, player.position, knownPlanetIds);
+    knownPlanetIds = planetDiscovery.knownPlanetIds;
     if (planetDiscovery.discovered.length > 0) {
       const names = planetDiscovery.discovered.map((planet) => planet.name).join(", ");
       runtime = {
@@ -1297,6 +1450,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       gameClock
     });
     const missionFailedThisFrame = expiration.failedMissionIds.length > failedMissionIds.length;
+    const explorationMessageActive = !!state.runtime.explorationScan || !!runtime.explorationScan || explorationState !== state.explorationState;
 
     set({
       player: expiration.player,
@@ -1313,6 +1467,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
               ? "Target destroyed. Cargo canister released."
               : miningActive
                 ? expiration.runtime.message
+              : explorationMessageActive
+                ? expiration.runtime.message
               : graceActive
                 ? `Pirates are sizing you up · weapons free in ${Math.ceil(runtime.graceUntil - now)}s`
               : expiration.runtime.message
@@ -1323,6 +1479,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       activeMissions: expiration.activeMissions,
       failedMissionIds: expiration.failedMissionIds,
       reputation: expiration.reputation,
+      explorationState,
       primaryCooldown,
       secondaryCooldown,
       screen: expiration.player.hull <= 0 ? "gameOver" : get().screen,
@@ -1362,7 +1519,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
   interact: () => {
     const state = get();
     const equipmentEffects = getEquipmentEffects(state.player.equipment);
-    const navigationTarget = getNearestNavigationTarget(state.currentSystemId, state.player.position, state.knownPlanetIds);
+    const navigationTarget = getNearestNavigationTarget(state.currentSystemId, state.player.position, state.knownPlanetIds, {
+      explorationState: state.explorationState,
+      installedEquipment: state.player.equipment
+    });
     const nearSalvage = state.runtime.salvage
       .filter((salvage) => !salvage.recovered)
       .map((salvage) => ({ salvage, dist: distance(salvage.position, state.player.position) }))
@@ -1421,6 +1581,34 @@ export const useGameStore = create<GameStore>((set, get) => ({
       if (collected > 0) audioSystem.play("loot");
       return;
     }
+    if (navigationTarget?.inRange && navigationTarget.kind === "exploration-signal") {
+      const signal = navigationTarget.signal;
+      const alreadyComplete = state.explorationState.completedSignalIds.includes(signal.id);
+      if (alreadyComplete) {
+        set({ runtime: { ...state.runtime, message: `${signal.title} already resolved.` } });
+        return;
+      }
+      const initialFrequency = Math.max(0, Math.min(100, Math.round((signal.scanBand[0] + signal.scanBand[1]) / 2) - 18));
+      set({
+        explorationState: {
+          ...state.explorationState,
+          discoveredSignalIds: addUniqueIds(state.explorationState.discoveredSignalIds, [signal.id])
+        },
+        runtime: {
+          ...state.runtime,
+          explorationScan: {
+            signalId: signal.id,
+            frequency: initialFrequency,
+            progress: 0,
+            inBand: false,
+            distance: navigationTarget.distance
+          },
+          message: `Signal handshake opened: ${signal.title}. Tune frequency into ${getEffectiveSignalScanBand(signal, state.player.equipment).join("-")}.`
+        }
+      });
+      audioSystem.play("ui-click");
+      return;
+    }
     if (navigationTarget?.inRange && navigationTarget.kind === "station") {
       get().dockAt(navigationTarget.station.id);
       return;
@@ -1451,10 +1639,33 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
     set({ runtime: { ...state.runtime, message: "No interactable object in range." } });
   },
+  adjustExplorationScanFrequency: (delta) => {
+    const state = get();
+    const scan = state.runtime.explorationScan;
+    if (!scan) return;
+    set({
+      runtime: {
+        ...state.runtime,
+        explorationScan: {
+          ...scan,
+          frequency: clamp(scan.frequency + delta, 0, 100)
+        }
+      }
+    });
+  },
+  cancelExplorationScan: () => {
+    const state = get();
+    if (!state.runtime.explorationScan) return;
+    set({ runtime: { ...state.runtime, explorationScan: undefined, message: "Signal scan canceled." } });
+  },
   dockAt: (stationId) => {
     const state = get();
     const station = stationById[stationId];
     if (!station) return;
+    if (station.hidden && !isHiddenStationRevealed(station.id, state.explorationState)) {
+      set({ runtime: { ...state.runtime, message: "Station beacon is still masked." } });
+      return;
+    }
     const knownPlanetIds = state.knownPlanetIds.includes(station.planetId)
       ? state.knownPlanetIds
       : [...state.knownPlanetIds, station.planetId];
@@ -1490,7 +1701,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const state = get();
     const targetStation = stationById[stationId];
     const targetSystem = targetStation ? systemById[targetStation.systemId] : undefined;
-    if (!targetSystem || !targetStation || targetStation.id === state.currentStationId || !isKnownStation(stationId, state.knownPlanetIds)) return;
+    if (!targetSystem || !targetStation || targetStation.id === state.currentStationId || !isKnownStation(stationId, state.knownPlanetIds, state.explorationState)) return;
     if (targetSystem.id !== state.currentSystemId && !isKnownSystem(state.knownSystems, targetSystem.id)) return;
     const originGate = getJumpGatePosition(state.currentSystemId);
     const launchPosition = state.screen === "station" ? launchPositionForStation(state.currentStationId, state.player.position) : state.player.position;
@@ -1541,7 +1752,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const targetStation = stationById[stationId];
     const targetSystem = targetStation ? systemById[targetStation.systemId] : undefined;
     const originGate = getJumpGatePosition(state.currentSystemId);
-    if (!targetSystem || !targetStation || !isKnownStation(stationId, state.knownPlanetIds)) return;
+    if (!targetSystem || !targetStation || !isKnownStation(stationId, state.knownPlanetIds, state.explorationState)) return;
     if (targetSystem.id !== state.currentSystemId && !isKnownSystem(state.knownSystems, targetSystem.id)) return;
     if (distance(state.player.position, originGate) >= STARGATE_INTERACTION_RANGE) {
       set({ runtime: { ...state.runtime, message: "Stargate link lost. Move closer to activate." }, screen: "flight", previousScreen: state.screen, galaxyMapMode: "browse" });
