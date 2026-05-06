@@ -591,3 +591,12 @@ export interface SaveGameData {
   knownPlanetIds: string[];
   explorationState: ExplorationState;
 }
+
+declare global {
+  interface Window {
+    __GOF2_E2E__?: {
+      getState: () => unknown;
+      setState: (partial: unknown, replace?: boolean) => void;
+    };
+  }
+}

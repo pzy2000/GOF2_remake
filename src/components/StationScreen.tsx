@@ -268,7 +268,7 @@ function MarketTab() {
             const sellPrice = getCommodityPrice(commodity.id, station, system, reputation, "sell", entry);
             const tag = getMarketTag(entry, station, system, commodity.id);
             return (
-              <div className="market-row" key={commodity.id}>
+              <div className="market-row" data-testid={`market-row-${commodity.id}`} key={commodity.id}>
                 <AtlasIcon icon={getCommodityIcon(commodity.id)} manifest={manifest} />
                 <div>
                   <strong>{commodity.name}</strong>
@@ -523,7 +523,7 @@ function MissionBoardTab() {
               ? glassWakeProtocol.chapters.find((chapter) => chapter.id === mission.storyChapterId)
               : undefined;
             return (
-              <article key={mission.id} className="mission-card">
+              <article key={mission.id} className="mission-card" data-testid={`mission-card-${mission.id}`}>
                 <div className="mission-title">
                   <AtlasIcon icon={getFactionIcon(mission.factionId)} manifest={manifest} size={40} />
                   <h3>{mission.title}</h3>

@@ -2044,4 +2044,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
   toggleCamera: () => set((state) => ({ cameraMode: state.cameraMode === "chase" ? "cinematic" : "chase" }))
 }));
 
+if (typeof window !== "undefined" && import.meta.env.DEV) {
+  Object.assign(window, {
+    __GOF2_E2E__: {
+      getState: () => useGameStore.getState(),
+      setState: useGameStore.setState
+    }
+  });
+}
+
 export { cloneMissionTemplates, commodities, planetById, planets, shipById, ships, stationById, stations, systemById, systems };

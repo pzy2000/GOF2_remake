@@ -16,7 +16,7 @@ function toThree(position: Vec3): [number, number, number] {
 }
 
 type ShipModelStatus = {
-  kind: "loading" | "loaded" | "fallback";
+  kind: "fallback";
   text: string;
 };
 
@@ -240,7 +240,7 @@ function PlayerEngineFlames({ shipId, afterburning, speed }: { shipId: string; a
   );
 }
 
-function PlayerShip({ onModelStatus }: { onModelStatus: (status: ShipModelStatus) => void }) {
+function PlayerShip({ onModelStatus }: { onModelStatus: (status: ShipModelStatus | null) => void }) {
   const player = useGameStore((state) => state.player);
   const modelUrl = useGameStore((state) => state.assetManifest.shipModels[state.player.shipId]);
   const afterburning = useGameStore((state) => state.input.afterburner && state.player.energy > 12);
@@ -250,15 +250,15 @@ function PlayerShip({ onModelStatus }: { onModelStatus: (status: ShipModelStatus
 
   useEffect(() => {
     if (modelUrl) {
-      onModelStatus({ kind: "loading", text: `Ship model: loading GLB for ${shipName}.` });
+      onModelStatus(null);
     } else {
       onModelStatus({ kind: "fallback", text: `Ship model: no GLB manifest entry for ${shipName}; using procedural fallback.` });
     }
   }, [modelUrl, onModelStatus, shipName]);
 
   const markLoaded = useCallback(() => {
-    onModelStatus({ kind: "loaded", text: `Ship model: GLB loaded for ${shipName}.` });
-  }, [onModelStatus, shipName]);
+    onModelStatus(null);
+  }, [onModelStatus]);
 
   const markFallback = useCallback(() => {
     onModelStatus({ kind: "fallback", text: `Ship model: GLB failed for ${shipName}; using procedural fallback.` });
@@ -880,7 +880,7 @@ function TargetLock() {
   );
 }
 
-function SceneContent({ onShipModelStatus }: { onShipModelStatus: (status: ShipModelStatus) => void }) {
+function SceneContent({ onShipModelStatus }: { onShipModelStatus: (status: ShipModelStatus | null) => void }) {
   const runtime = useGameStore((state) => state.runtime);
   const currentSystemId = useGameStore((state) => state.currentSystemId);
   const explorationState = useGameStore((state) => state.explorationState);
@@ -933,12 +933,9 @@ export function FlightScene() {
   const player = useGameStore((state) => state.player);
   const knownPlanetIds = useGameStore((state) => state.knownPlanetIds);
   const explorationState = useGameStore((state) => state.explorationState);
-  const [shipModelStatus, setShipModelStatus] = useState<ShipModelStatus>({
-    kind: "loading",
-    text: "Ship model: waiting for GLB loader."
-  });
-  const updateShipModelStatus = useCallback((status: ShipModelStatus) => {
-    setShipModelStatus((current) => (current.kind === status.kind && current.text === status.text ? current : status));
+  const [shipModelStatus, setShipModelStatus] = useState<ShipModelStatus | null>(null);
+  const updateShipModelStatus = useCallback((status: ShipModelStatus | null) => {
+    setShipModelStatus((current) => (current?.kind === status?.kind && current?.text === status?.text ? current : status));
   }, []);
   const navigationTarget = getNearestNavigationTarget(currentSystemId, player.position, knownPlanetIds, {
     explorationState,
@@ -971,7 +968,7 @@ export function FlightScene() {
           <SceneContent onShipModelStatus={updateShipModelStatus} />
         </Suspense>
       </Canvas>
-      <div className={`ship-model-status ${shipModelStatus.kind}`}>{shipModelStatus.text}</div>
+      {shipModelStatus ? <div className={`ship-model-status ${shipModelStatus.kind}`}>{shipModelStatus.text}</div> : null}
       {hint ? <div className={`dock-hint ${navigationTarget?.kind === "stargate" ? "gate-hint" : navigationTarget?.kind === "planet-signal" || navigationTarget?.kind === "exploration-signal" ? "scan-hint" : ""}`}>{hint}</div> : null}
     </div>
   );
