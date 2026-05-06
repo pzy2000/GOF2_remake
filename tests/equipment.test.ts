@@ -204,7 +204,8 @@ describe("equipment gameplay wiring", () => {
         failedMissionIds: [],
         marketState: createInitialMarketState(),
         reputation: createInitialReputation(),
-        knownSystems: ["helion-reach"]
+        knownSystems: ["helion-reach"],
+        knownPlanetIds: ["helion-prime-world"]
       },
       storage,
       "manual-1"

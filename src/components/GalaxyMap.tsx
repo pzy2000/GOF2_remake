@@ -1,7 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties, PointerEvent, WheelEvent } from "react";
 import { factionNames } from "../data/world";
-import { stationById, systems, useGameStore } from "../state/gameStore";
+import { planetById, stationById, systems, useGameStore } from "../state/gameStore";
 import type { GalaxyMapMode } from "../types/game";
 import { GALAXY_DISCOVERY_DISTANCE, systemDistance } from "../systems/navigation";
 
@@ -19,21 +19,32 @@ interface DragState {
 
 export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
   const currentSystemId = useGameStore((state) => state.currentSystemId);
+  const currentStationId = useGameStore((state) => state.currentStationId);
   const knownSystems = useGameStore((state) => state.knownSystems);
+  const knownPlanetIds = useGameStore((state) => state.knownPlanetIds);
   const galaxyMapMode = useGameStore((state) => state.galaxyMapMode);
-  const startJumpToSystem = useGameStore((state) => state.startJumpToSystem);
-  const activateStargateJumpToSystem = useGameStore((state) => state.activateStargateJumpToSystem);
+  const startJumpToStation = useGameStore((state) => state.startJumpToStation);
+  const activateStargateJumpToStation = useGameStore((state) => state.activateStargateJumpToStation);
   const autopilot = useGameStore((state) => state.autopilot);
   const setScreen = useGameStore((state) => state.setScreen);
   const mode: GalaxyMapMode = embedded ? "station-route" : galaxyMapMode;
   const [selectedSystemId, setSelectedSystemId] = useState(currentSystemId);
+  const [selectedStationId, setSelectedStationId] = useState<string | undefined>(
+    currentStationId ?? stationById[systems.find((system) => system.id === currentSystemId)?.stationIds[0] ?? ""]?.id
+  );
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [drag, setDrag] = useState<DragState | null>(null);
   const selectedSystem = systems.find((system) => system.id === selectedSystemId) ?? systems.find((system) => system.id === currentSystemId) ?? systems[0];
   const selectedKnown = knownSystems.includes(selectedSystem.id);
   const selectedCurrent = selectedSystem.id === currentSystemId;
-  const canTravel = mode !== "browse" && selectedKnown && !selectedCurrent && !autopilot;
+  const selectedPlanets = selectedSystem.planetIds.map((id) => planetById[id]).filter(Boolean);
+  const firstKnownPlanet = selectedPlanets.find((planet) => knownPlanetIds.includes(planet.id));
+  const selectedStation = selectedStationId ? stationById[selectedStationId] : firstKnownPlanet ? stationById[firstKnownPlanet.stationId] : undefined;
+  const selectedPlanet = selectedStation ? planetById[selectedStation.planetId] : firstKnownPlanet;
+  const selectedPlanetKnown = !!selectedPlanet && knownPlanetIds.includes(selectedPlanet.id);
+  const selectedSameStation = !!selectedStation && selectedStation.id === currentStationId;
+  const canTravel = mode !== "browse" && selectedKnown && selectedPlanetKnown && !!selectedStation && !selectedSameStation && !autopilot;
   const stars = useMemo(
     () =>
       Array.from({ length: 120 }, (_, index) => ({
@@ -56,10 +67,24 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
     [knownSystems]
   );
 
-  function executeTravel(systemId = selectedSystem.id) {
-    if (mode === "browse" || systemId === currentSystemId || !knownSystems.includes(systemId) || autopilot) return;
-    if (mode === "gate") activateStargateJumpToSystem(systemId);
-    if (mode === "station-route") startJumpToSystem(systemId);
+  useEffect(() => {
+    if (!selectedStation || selectedStation.systemId !== selectedSystem.id || !knownPlanetIds.includes(selectedStation.planetId)) {
+      setSelectedStationId(firstKnownPlanet ? firstKnownPlanet.stationId : undefined);
+    }
+  }, [firstKnownPlanet, knownPlanetIds, selectedStation, selectedSystem.id]);
+
+  function selectSystem(systemId: string) {
+    const system = systems.find((candidate) => candidate.id === systemId);
+    setSelectedSystemId(systemId);
+    const firstKnown = system?.planetIds.map((id) => planetById[id]).find((planet) => planet && knownPlanetIds.includes(planet.id));
+    setSelectedStationId(firstKnown?.stationId);
+  }
+
+  function executeTravel(stationId = selectedStation?.id) {
+    const station = stationId ? stationById[stationId] : undefined;
+    if (mode === "browse" || !station || !knownSystems.includes(station.systemId) || !knownPlanetIds.includes(station.planetId) || station.id === currentStationId || autopilot) return;
+    if (mode === "gate") activateStargateJumpToStation(station.id);
+    if (mode === "station-route") startJumpToStation(station.id);
   }
 
   function handleWheel(event: WheelEvent<HTMLDivElement>) {
@@ -132,8 +157,11 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                     key={system.id}
                     className={`galaxy-system ${known ? "known" : "locked"} ${current ? "current" : ""} ${selected ? "selected" : ""}`}
                     style={{ left: point.x, top: point.y, "--system-tone": systemTone(index, system.risk) } as CSSProperties}
-                    onClick={() => setSelectedSystemId(system.id)}
-                    onDoubleClick={() => executeTravel(system.id)}
+                    onClick={() => selectSystem(system.id)}
+                    onDoubleClick={() => {
+                      const firstKnown = system.planetIds.map((id) => planetById[id]).find((planet) => planet && knownPlanetIds.includes(planet.id));
+                      if (firstKnown) executeTravel(firstKnown.stationId);
+                    }}
                     aria-label={`${system.name} ${known ? "known" : "locked"}`}
                   >
                     <span className="orbit orbit-one" />
@@ -155,14 +183,40 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
               <span>Risk {selectedKnown ? `${Math.round(selectedSystem.risk * 100)}%` : "--"}</span>
               <span>{selectedCurrent ? "Current" : selectedKnown ? "Known" : "Locked"}</span>
             </div>
+            {selectedKnown ? (
+              <div className="planet-list" role="list" aria-label={`${selectedSystem.name} planets`}>
+                {selectedPlanets.map((planet) => {
+                  const known = knownPlanetIds.includes(planet.id);
+                  const station = stationById[planet.stationId];
+                  const selected = selectedStation?.id === station.id;
+                  return (
+                    <button
+                      key={planet.id}
+                      type="button"
+                      className={selected ? "selected" : ""}
+                      disabled={!known}
+                      onClick={() => setSelectedStationId(station.id)}
+                      onDoubleClick={() => executeTravel(station.id)}
+                    >
+                      <span>{known ? planet.name : "Unknown Beacon"}</span>
+                      <small>{known ? `${planet.type} · ${station.name}` : "Local scan required"}</small>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p>Station: Signal masked</p>
+            )}
             <p>
-              Station:{" "}
-              {selectedKnown
-                ? selectedSystem.stationIds.map((id) => stationById[id].name).join(", ")
-                : "Signal masked"}
+              Destination:{" "}
+              {selectedKnown && selectedPlanetKnown && selectedStation && selectedPlanet
+                ? `${selectedPlanet.name} · ${selectedStation.name}`
+                : selectedKnown
+                  ? "Select a scanned planet beacon"
+                  : "Signal masked"}
             </p>
             <button className="primary" disabled={!canTravel} onClick={() => executeTravel()}>
-              {travelLabel(mode, selectedCurrent, selectedKnown, !!autopilot)}
+              {travelLabel(mode, selectedSameStation, selectedKnown && selectedPlanetKnown && !!selectedStation, !!autopilot)}
             </button>
             <p className="galaxy-help">{helpText(mode)}</p>
           </aside>
@@ -195,14 +249,14 @@ function modeLabel(mode: GalaxyMapMode): string {
 }
 
 function helpText(mode: GalaxyMapMode): string {
-  if (mode === "gate") return "Double-click a known system to jump from the active Stargate.";
-  if (mode === "station-route") return "Double-click a known system to launch and fly to the Stargate route.";
-  return "Mouse wheel zooms. Drag empty space to pan. Stargate jumps require E near the gate.";
+  if (mode === "gate") return "Select a scanned planet station to jump from the active Stargate.";
+  if (mode === "station-route") return "Select a scanned planet station to launch a route through the jump engine.";
+  return "Mouse wheel zooms. Drag empty space to pan. Unknown beacons unlock through local flight scans.";
 }
 
-function travelLabel(mode: GalaxyMapMode, current: boolean, known: boolean, autopilot: boolean): string {
+function travelLabel(mode: GalaxyMapMode, currentStation: boolean, known: boolean, autopilot: boolean): string {
   if (autopilot) return "Autopilot Active";
-  if (current) return "Current System";
+  if (currentStation) return "Current Station";
   if (!known) return "Locked";
   if (mode === "gate") return "Activate Jump";
   if (mode === "station-route") return "Set Route";

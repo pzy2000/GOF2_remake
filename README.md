@@ -36,15 +36,17 @@ Generated project assets:
 - `equipment-icons.webp`
 - `nebula-bg.webp`
 - `skybox-panorama.webp`
+- `skybox-*.webp` per star system
+- `planet-*.webp` per visitable planet
 - `asteroid-textures.webp`
 - `faction-emblems.webp`
 - `hud-overlay.webp`
 
-No external copyrighted image packs are included. The flight scene uses `skybox-panorama.webp` as a camera-locked inside-sphere skybox so the nebula reads as infinitely far away while the older `nebula-bg.webp` remains available for station/menu fallback art. The game uses Three.js primitives and procedural geometry for ships, stations, asteroids, projectiles, and loot.
+No external copyrighted image packs are included. The flight scene uses per-system generated skyboxes as camera-locked inside-sphere backgrounds, with `skybox-panorama.webp` and `nebula-bg.webp` kept as fallbacks. Planets use generated equirectangular WebP surface textures on large Three.js spheres so each station sits beside its own visible world. The game uses Three.js primitives and procedural geometry for ships, stations, asteroids, projectiles, and loot.
 
 ## Jump Travel
 
-Galaxy Map jumps now launch an autopilot route instead of instantly changing systems. The ship leaves the station, flies to the local jump gate, spools a wormhole transit, arrives at the target system, and auto-docks at that system's primary station. Manual flight input cancels autopilot during navigation phases; once the gate spool or wormhole begins, the transit completes.
+Galaxy Map jumps now target discovered planet stations instead of only whole systems. The ship leaves the station, flies to the local jump gate, spools a wormhole transit, and exits near the selected station rather than auto-docking. Known systems reveal their primary planet by default; other planets appear as Unknown Beacon scan targets in local flight and unlock as jump destinations after the player flies into scan range. Manual flight input cancels autopilot during navigation phases; once the gate spool or wormhole begins, the transit completes.
 
 ## Trading And Contracts
 

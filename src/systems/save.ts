@@ -1,5 +1,6 @@
 import type { SaveGameData, SaveIndex, SaveSlotId, SaveSlotSummary } from "../types/game";
 import { createInitialMarketState } from "./economy";
+import { getInitialKnownPlanetIds } from "./navigation";
 
 export const SAVE_KEY = "gof2-by-pzy-save";
 export const SAVE_INDEX_KEY = "gof2-by-pzy-save-index";
@@ -39,6 +40,7 @@ function completeIndex(index?: Partial<SaveIndex>): SaveIndex {
 function normalizeSave(parsed: Partial<SaveGameData> | null): SaveGameData | null {
   if (!parsed || !parsed.player || !parsed.currentSystemId) return null;
   if (parsed.version !== SAVE_VERSION && parsed.version !== LEGACY_SAVE_VERSION) return null;
+  const knownSystems = parsed.knownSystems ?? [parsed.currentSystemId];
   return {
     ...parsed,
     version: SAVE_VERSION,
@@ -52,7 +54,8 @@ function normalizeSave(parsed: Partial<SaveGameData> | null): SaveGameData | nul
     failedMissionIds: parsed.failedMissionIds ?? [],
     marketState: parsed.marketState ?? createInitialMarketState(),
     reputation: parsed.reputation,
-    knownSystems: parsed.knownSystems ?? [parsed.currentSystemId]
+    knownSystems,
+    knownPlanetIds: parsed.knownPlanetIds ?? getInitialKnownPlanetIds(knownSystems, parsed.currentStationId)
   } as SaveGameData;
 }
 

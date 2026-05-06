@@ -191,7 +191,8 @@ h3 {
 }
 
 .target-label,
-.effect-label {
+.effect-label,
+.planet-label {
   border: 1px solid rgba(255, 223, 110, 0.58);
   border-radius: 6px;
   background: rgba(3, 10, 20, 0.72);
@@ -208,6 +209,12 @@ h3 {
 .effect-label {
   border-color: rgba(128, 214, 255, 0.36);
   color: #eaffff;
+}
+
+.planet-label {
+  border-color: rgba(128, 214, 255, 0.28);
+  background: rgba(3, 10, 20, 0.42);
+  color: #dff6ff;
 }
 
 .hud {
@@ -955,6 +962,50 @@ button.equipment-trigger {
   line-height: 1.45;
 }
 
+.planet-list {
+  display: grid;
+  gap: 8px;
+  max-height: 230px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.planet-list button {
+  display: grid;
+  gap: 3px;
+  min-height: 58px;
+  border: 1px solid rgba(128, 214, 255, 0.18);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 9px 10px;
+  color: #dff6ff;
+  text-align: left;
+}
+
+.planet-list button:hover:not(:disabled),
+.planet-list button.selected {
+  border-color: rgba(128, 214, 255, 0.55);
+  background: rgba(67, 184, 255, 0.12);
+}
+
+.planet-list button:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+}
+
+.planet-list span {
+  overflow: hidden;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.planet-list small {
+  color: #92a9bd;
+  font-size: 0.74rem;
+  line-height: 1.25;
+}
+
 .galaxy-stat-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -979,6 +1030,12 @@ button.equipment-trigger {
   border-color: rgba(255, 214, 128, 0.62);
   color: #fff2c5;
   box-shadow: 0 0 24px rgba(255, 193, 103, 0.18);
+}
+
+.scan-hint {
+  border-color: rgba(246, 201, 109, 0.62);
+  color: #fff2c5;
+  box-shadow: 0 0 24px rgba(246, 201, 109, 0.18);
 }
 
 .stat-grid {

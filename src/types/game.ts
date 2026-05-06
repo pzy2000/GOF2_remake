@@ -131,6 +131,8 @@ export interface AssetManifest {
   equipmentIcons: string;
   nebulaBg: string;
   skyboxPanorama: string;
+  systemSkyboxes: Record<string, string>;
+  planetTextures: Record<string, string>;
   asteroidTextures: string;
   factionEmblems: string;
   hudOverlay: string;
@@ -220,7 +222,22 @@ export interface StationDefinition {
   archetype: StationArchetype;
   factionId: FactionId;
   systemId: string;
+  planetId: string;
   position: Vec3;
+}
+
+export interface PlanetDefinition {
+  id: string;
+  name: string;
+  type: string;
+  description: string;
+  systemId: string;
+  stationId: string;
+  textureKey: string;
+  position: Vec3;
+  beaconPosition: Vec3;
+  radius: number;
+  atmosphereColor: string;
 }
 
 export interface StarSystemDefinition {
@@ -230,7 +247,9 @@ export interface StarSystemDefinition {
   factionId: FactionId;
   risk: number;
   position: [number, number];
+  skyboxKey: string;
   jumpGatePosition: Vec3;
+  planetIds: string[];
   stationIds: string[];
   marketBias: Partial<Record<CommodityId, number>>;
 }
@@ -476,4 +495,5 @@ export interface SaveGameData {
   marketState: MarketState;
   reputation: ReputationState;
   knownSystems: string[];
+  knownPlanetIds: string[];
 }

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { stationById } from "../src/data/world";
 import { GATE_ACTIVATION_SECONDS, getDefaultTargetStation, getJumpGatePosition, shouldCancelAutopilot, WORMHOLE_SECONDS } from "../src/systems/autopilot";
 import { distance } from "../src/systems/math";
 import type { FlightInput } from "../src/types/game";
@@ -83,23 +84,40 @@ describe("autopilot jump flow", () => {
     });
   });
 
+  it("can route to a discovered non-primary station in another system", async () => {
+    const store = await freshStore();
+    store.setState((state) => ({ knownPlanetIds: [...state.knownPlanetIds, "lode-minor"] }));
+    store.getState().dockAt("helion-prime");
+    store.getState().startJumpToStation("lode-spindle");
+    const state = store.getState();
+    expect(state.screen).toBe("flight");
+    expect(state.autopilot).toMatchObject({
+      phase: "to-origin-gate",
+      originSystemId: "helion-reach",
+      targetSystemId: "kuro-belt",
+      targetStationId: "lode-spindle",
+      cancelable: true
+    });
+  });
+
   it("starts a manual gate jump from the active Stargate", async () => {
     const store = await freshStore();
     const gate = getJumpGatePosition("helion-reach");
+    store.setState((state) => ({ knownPlanetIds: [...state.knownPlanetIds, "lode-minor"] }));
     store.setState((state) => ({
       screen: "galaxyMap",
       previousScreen: "flight",
       galaxyMapMode: "gate",
       player: { ...state.player, position: gate, velocity: [0, 0, 0] }
     }));
-    store.getState().activateStargateJumpToSystem("kuro-belt");
+    store.getState().activateStargateJumpToStation("lode-spindle");
     const state = store.getState();
     expect(state.screen).toBe("flight");
     expect(state.autopilot).toMatchObject({
       phase: "gate-activation",
       originSystemId: "helion-reach",
       targetSystemId: "kuro-belt",
-      targetStationId: "kuro-deep",
+      targetStationId: "lode-spindle",
       cancelable: false
     });
   });
@@ -120,9 +138,10 @@ describe("autopilot jump flow", () => {
     expect(store.getState().autopilot?.phase).toBe("wormhole");
   });
 
-  it("switches systems after wormhole transit and exits near the destination Stargate", async () => {
+  it("switches systems after wormhole transit and exits near the target station without auto-docking", async () => {
     const store = await freshStore();
-    store.getState().startJumpToSystem("kuro-belt");
+    store.setState((state) => ({ knownPlanetIds: [...state.knownPlanetIds, "lode-minor"] }));
+    store.getState().startJumpToStation("lode-spindle");
     store.setState((state) => ({
       autopilot: state.autopilot ? { ...state.autopilot, phase: "wormhole", timer: WORMHOLE_SECONDS - 0.01, cancelable: false } : undefined
     }));
@@ -132,8 +151,9 @@ describe("autopilot jump flow", () => {
     expect(state.currentStationId).toBeUndefined();
     expect(state.targetId).toBeUndefined();
     expect(state.autopilot).toBeUndefined();
-    expect(distance(state.player.position, getJumpGatePosition("kuro-belt"))).toBeLessThan(190);
+    expect(distance(state.player.position, stationById["lode-spindle"].position)).toBeLessThan(360);
     expect(state.knownSystems).toContain("ashen-drift");
+    expect(state.knownPlanetIds).toContain("lode-minor");
   });
 
   it("cancels only during cancelable navigation phases and ignores invalid routes", async () => {

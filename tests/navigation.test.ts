@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { stationById } from "../src/data/world";
+import { planetById, stationById } from "../src/data/world";
 import { getJumpGatePosition } from "../src/systems/autopilot";
 import {
+  discoverNearbyPlanets,
+  getInitialKnownPlanetIds,
   getInitialKnownSystems,
   getNearestNavigationTarget,
+  PLANET_SCAN_RANGE,
   revealNeighborSystems,
   STARGATE_INTERACTION_RANGE
 } from "../src/systems/navigation";
@@ -19,9 +22,17 @@ describe("navigation targets and discovery", () => {
 
   it("prefers the nearest station when the ship is closer to it", () => {
     const station = stationById["kuro-deep"];
-    const target = getNearestNavigationTarget("kuro-belt", station.position);
+    const target = getNearestNavigationTarget("kuro-belt", station.position, ["kuro-anvil"]);
     expect(target?.kind).toBe("station");
     expect(target?.name).toBe("Kuro Deepworks");
+    expect(target?.inRange).toBe(true);
+  });
+
+  it("shows undiscovered planet stations as scannable unknown beacons", () => {
+    const planet = planetById["lode-minor"];
+    const target = getNearestNavigationTarget("kuro-belt", planet.beaconPosition, ["kuro-anvil"]);
+    expect(target?.kind).toBe("planet-signal");
+    expect(target?.name).toBe("Unknown Beacon");
     expect(target?.inRange).toBe(true);
   });
 
@@ -36,7 +47,25 @@ describe("navigation targets and discovery", () => {
     expect(getInitialKnownSystems("helion-reach")).toEqual(["helion-reach", "kuro-belt", "vantara", "mirr-vale"]);
   });
 
+  it("unlocks only the primary planet for each known system by default", () => {
+    expect(getInitialKnownPlanetIds(["helion-reach", "kuro-belt", "vantara", "mirr-vale"])).toEqual([
+      "helion-prime-world",
+      "kuro-anvil",
+      "vantara-command",
+      "mirr-glass"
+    ]);
+  });
+
   it("reveals nearby systems after arriving through a gate", () => {
     expect(revealNeighborSystems(["helion-reach", "kuro-belt"], "kuro-belt")).toContain("ashen-drift");
+  });
+
+  it("discovers unknown planets when the ship flies into scan range", () => {
+    const planet = planetById["lode-minor"];
+    const known = discoverNearbyPlanets("kuro-belt", [planet.beaconPosition[0] + PLANET_SCAN_RANGE - 5, planet.beaconPosition[1], planet.beaconPosition[2]], [
+      "kuro-anvil"
+    ]);
+    expect(known.discovered.map((item) => item.id)).toEqual(["lode-minor"]);
+    expect(known.knownPlanetIds).toContain("lode-minor");
   });
 });

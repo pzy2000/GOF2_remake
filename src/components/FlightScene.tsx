@@ -2,8 +2,8 @@ import { Canvas, useFrame, useLoader, useThree } from "@react-three/fiber";
 import { Html, Line, Stars } from "@react-three/drei";
 import { Suspense, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
-import { stations, systemById, useGameStore } from "../state/gameStore";
-import type { AsteroidEntity, ConvoyEntity, FlightEntity, LootEntity, ProjectileEntity, SalvageEntity, Vec3, VisualEffectEntity } from "../types/game";
+import { planetById, planets, stations, systemById, useGameStore } from "../state/gameStore";
+import type { AsteroidEntity, ConvoyEntity, FlightEntity, LootEntity, PlanetDefinition, ProjectileEntity, SalvageEntity, Vec3, VisualEffectEntity } from "../types/game";
 import { add, forwardFromRotation, normalize, scale, sub } from "../systems/math";
 import { getOreColor } from "../systems/difficulty";
 import { getJumpGatePosition } from "../systems/autopilot";
@@ -102,7 +102,11 @@ function CameraRig() {
 }
 
 function InfiniteSkybox() {
-  const skybox = useGameStore((state) => state.assetManifest.skyboxPanorama || state.assetManifest.nebulaBg);
+  const currentSystemId = useGameStore((state) => state.currentSystemId);
+  const skybox = useGameStore((state) => {
+    const system = systemById[currentSystemId];
+    return state.assetManifest.systemSkyboxes[system?.skyboxKey ?? currentSystemId] || state.assetManifest.skyboxPanorama || state.assetManifest.nebulaBg;
+  });
   const texture = useLoader(THREE.TextureLoader, skybox);
   const { camera } = useThree();
   const skyGroupRef = useRef<THREE.Group | null>(null);
@@ -296,13 +300,78 @@ function SalvageCrate({ salvage }: { salvage: SalvageEntity }) {
 
 function StationModel() {
   const currentSystemId = useGameStore((state) => state.currentSystemId);
-  const systemStations = stations.filter((station) => station.systemId === currentSystemId);
+  const knownPlanetIds = useGameStore((state) => state.knownPlanetIds);
+  const systemStations = stations.filter((station) => station.systemId === currentSystemId && knownPlanetIds.includes(station.planetId));
   return (
     <>
       {systemStations.map((station) => (
         <StationGeometry key={station.id} station={station} />
       ))}
     </>
+  );
+}
+
+function PlanetBackdrops() {
+  const currentSystemId = useGameStore((state) => state.currentSystemId);
+  const knownPlanetIds = useGameStore((state) => state.knownPlanetIds);
+  const systemPlanets = planets.filter((planet) => planet.systemId === currentSystemId);
+  return (
+    <>
+      {systemPlanets.map((planet) =>
+        knownPlanetIds.includes(planet.id) ? <PlanetModel key={planet.id} planet={planet} /> : <UnknownPlanetBeacon key={planet.id} planet={planet} />
+      )}
+    </>
+  );
+}
+
+function PlanetModel({ planet }: { planet: PlanetDefinition }) {
+  const textureUrl = useGameStore((state) => state.assetManifest.planetTextures[planet.textureKey] || state.assetManifest.nebulaBg);
+  const clock = useGameStore((state) => state.runtime.clock);
+  const texture = useLoader(THREE.TextureLoader, textureUrl);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.anisotropy = 4;
+  return (
+    <group position={toThree(planet.position)}>
+      <mesh rotation={[0, clock * 0.015 + planet.radius * 0.0007, 0]}>
+        <sphereGeometry args={[planet.radius, 64, 32]} />
+        <meshStandardMaterial map={texture} roughness={0.82} metalness={0.03} emissive="#05070d" emissiveIntensity={0.05} />
+      </mesh>
+      <mesh>
+        <sphereGeometry args={[planet.radius * 1.018, 48, 24]} />
+        <meshBasicMaterial color={planet.atmosphereColor} transparent opacity={0.11} side={THREE.DoubleSide} depthWrite={false} toneMapped={false} />
+      </mesh>
+      <mesh rotation={[Math.PI / 2, 0, clock * 0.01]}>
+        <torusGeometry args={[planet.radius * 1.16, Math.max(1.4, planet.radius * 0.004), 8, 96]} />
+        <meshBasicMaterial color={planet.atmosphereColor} transparent opacity={0.12} toneMapped={false} />
+      </mesh>
+      <pointLight color={planet.atmosphereColor} intensity={0.65} distance={planet.radius * 2.3} />
+      <Html center distanceFactor={22} className="planet-label" position={[0, planet.radius * 0.72, 0]}>
+        {planet.name}
+      </Html>
+    </group>
+  );
+}
+
+function UnknownPlanetBeacon({ planet }: { planet: PlanetDefinition }) {
+  const clock = useGameStore((state) => state.runtime.clock);
+  const pulse = 0.5 + Math.sin(clock * 3.4 + planet.radius) * 0.5;
+  return (
+    <group position={toThree(planet.beaconPosition)}>
+      <mesh rotation={[Math.PI / 2, 0, clock * 0.8]}>
+        <torusGeometry args={[52 + pulse * 8, 2.2, 8, 42]} />
+        <meshBasicMaterial color="#f6c96d" transparent opacity={0.28 + pulse * 0.24} toneMapped={false} />
+      </mesh>
+      <mesh>
+        <sphereGeometry args={[12 + pulse * 4, 14, 8]} />
+        <meshBasicMaterial color="#fff2c5" transparent opacity={0.35 + pulse * 0.35} toneMapped={false} />
+      </mesh>
+      <pointLight color="#ffd166" intensity={0.8 + pulse * 0.8} distance={220} />
+      <Html center distanceFactor={11} className="target-label">
+        UNKNOWN BEACON
+      </Html>
+    </group>
   );
 }
 
@@ -686,6 +755,7 @@ function SceneContent() {
       <directionalLight position={[180, 220, 120]} intensity={1.4} />
       <pointLight position={[0, 0, 120]} color="#60c8ff" intensity={0.6} distance={500} />
       <InfiniteSkybox />
+      <PlanetBackdrops />
       <JumpGateModel />
       <StationModel />
       <PlayerShip />
@@ -720,12 +790,15 @@ export function FlightScene() {
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const currentSystemId = useGameStore((state) => state.currentSystemId);
   const player = useGameStore((state) => state.player);
-  const navigationTarget = getNearestNavigationTarget(currentSystemId, player.position);
+  const knownPlanetIds = useGameStore((state) => state.knownPlanetIds);
+  const navigationTarget = getNearestNavigationTarget(currentSystemId, player.position, knownPlanetIds);
   const hint = navigationTarget
     ? navigationTarget.inRange
       ? navigationTarget.kind === "station"
         ? `E Dock: ${navigationTarget.name}`
-        : "E Activate: Stargate"
+        : navigationTarget.kind === "planet-signal"
+          ? "Scanning: Unknown Beacon"
+          : "E Activate: Stargate"
       : `${navigationTarget.name} ${Math.round(navigationTarget.distance)}m`
     : undefined;
   return (
@@ -737,14 +810,14 @@ export function FlightScene() {
       }}
     >
       <FlightControls />
-      <Canvas camera={{ position: [0, 36, 210], fov: 68, near: 0.1, far: 3000 }} dpr={[1, 1.7]} shadows>
+      <Canvas camera={{ position: [0, 36, 210], fov: 68, near: 0.1, far: 5200 }} dpr={[1, 1.7]} shadows>
         <Suspense fallback={null}>
           <SimulationTicker />
           <CameraRig />
           <SceneContent />
         </Suspense>
       </Canvas>
-      {hint ? <div className={`dock-hint ${navigationTarget?.kind === "stargate" ? "gate-hint" : ""}`}>{hint}</div> : null}
+      {hint ? <div className={`dock-hint ${navigationTarget?.kind === "stargate" ? "gate-hint" : navigationTarget?.kind === "planet-signal" ? "scan-hint" : ""}`}>{hint}</div> : null}
     </div>
   );
 }

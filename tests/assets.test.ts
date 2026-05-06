@@ -12,4 +12,15 @@ describe("asset manifest", () => {
     const assetManifest = manifest as AssetManifest;
     expect(assetManifest.skyboxPanorama).toBe(fallbackAssetManifest.skyboxPanorama);
   });
+
+  it("points generated system and planet assets at WebP files", () => {
+    const assetManifest = manifest as AssetManifest;
+    const projectAssetPaths = [
+      ...Object.values(assetManifest.systemSkyboxes),
+      ...Object.values(assetManifest.planetTextures)
+    ];
+    for (const assetPath of projectAssetPaths) {
+      expect(assetPath).toMatch(/^\/assets\/generated\/.+\.webp$/);
+    }
+  });
 });

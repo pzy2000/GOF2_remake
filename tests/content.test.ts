@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { commodities, missionTemplates, ships, stationById, stations, systems } from "../src/data/world";
+import { commodities, missionTemplates, planetById, planets, ships, stationById, stations, systems } from "../src/data/world";
+import { fallbackAssetManifest } from "../src/systems/assets";
 import { validateContentData } from "../src/data/validate";
 import { createInitialMarketState } from "../src/systems/economy";
 
@@ -11,6 +12,7 @@ describe("content data", () => {
   it("keeps primary content ids unique", () => {
     expect(idsAreUnique(commodities.map((item) => item.id))).toBe(true);
     expect(idsAreUnique(ships.map((item) => item.id))).toBe(true);
+    expect(idsAreUnique(planets.map((item) => item.id))).toBe(true);
     expect(idsAreUnique(stations.map((item) => item.id))).toBe(true);
     expect(idsAreUnique(systems.map((item) => item.id))).toBe(true);
     expect(idsAreUnique(missionTemplates.map((item) => item.id))).toBe(true);
@@ -36,6 +38,31 @@ describe("content data", () => {
       for (const stationId of system.stationIds) {
         expect(stationById[stationId]?.systemId).toBe(system.id);
       }
+    }
+  });
+
+  it("models every existing system with 3-8 planets and one station per planet", () => {
+    expect(planets).toHaveLength(26);
+    for (const system of systems) {
+      expect(system.planetIds.length).toBeGreaterThanOrEqual(3);
+      expect(system.planetIds.length).toBeLessThanOrEqual(8);
+      expect(system.stationIds).toHaveLength(system.planetIds.length);
+      for (const planetId of system.planetIds) {
+        const planet = planetById[planetId];
+        const station = stationById[planet.stationId];
+        expect(planet.systemId).toBe(system.id);
+        expect(station.systemId).toBe(system.id);
+        expect(station.planetId).toBe(planet.id);
+      }
+    }
+  });
+
+  it("has generated skybox and planet texture manifest entries for the expanded catalog", () => {
+    for (const system of systems) {
+      expect(fallbackAssetManifest.systemSkyboxes[system.skyboxKey]).toMatch(/\.webp$/);
+    }
+    for (const planet of planets) {
+      expect(fallbackAssetManifest.planetTextures[planet.textureKey]).toMatch(/\.webp$/);
     }
   });
 });

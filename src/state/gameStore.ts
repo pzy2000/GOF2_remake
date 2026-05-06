@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { commodities, commodityById, equipmentById, missionTemplates, shipById, ships, stationById, stations, systemById, systems } from "../data/world";
+import { commodities, commodityById, equipmentById, missionTemplates, planetById, planets, shipById, ships, stationById, stations, systemById, systems } from "../data/world";
 import type {
   AssetManifest,
   AsteroidEntity,
@@ -45,6 +45,7 @@ import {
   GATE_ARRIVAL_DISTANCE,
   getDefaultTargetStation,
   getJumpGatePosition,
+  getStationArrivalPosition,
   integrateAutopilotStep,
   shouldCancelAutopilot,
   STATION_DOCK_DISTANCE,
@@ -84,7 +85,9 @@ import {
 } from "../systems/equipment";
 import {
   getInitialKnownSystems,
+  getInitialKnownPlanetIds,
   getNearestNavigationTarget,
+  discoverNearbyPlanets,
   isKnownSystem,
   revealNeighborSystems,
   STARGATE_INTERACTION_RANGE
@@ -369,7 +372,19 @@ function wormholeEffect(position: Vec3): RuntimeState["effects"][number] {
 
 function launchPositionForStation(stationId: string | undefined, fallback: Vec3): Vec3 {
   const station = stationId ? stationById[stationId] : undefined;
-  return station ? add(station.position, [0, 0, 280]) : fallback;
+  const planet = station ? planetById[station.planetId] : undefined;
+  const awayFromPlanet = station && planet ? normalize(sub(station.position, planet.position)) : [0, 0, 1] as Vec3;
+  return station ? add(station.position, add(scale(awayFromPlanet, 280), [0, 18, 0])) : fallback;
+}
+
+function isKnownStation(stationId: string, knownPlanetIds: string[]): boolean {
+  const station = stationById[stationId];
+  return !!station && knownPlanetIds.includes(station.planetId);
+}
+
+function mergeKnownPlanetIds(knownPlanetIds: string[], knownSystemIds: string[], currentStationId?: string): string[] {
+  const known = new Set([...knownPlanetIds, ...getInitialKnownPlanetIds(knownSystemIds, currentStationId)]);
+  return planets.filter((planet) => known.has(planet.id)).map((planet) => planet.id);
 }
 
 interface GameStore {
@@ -393,6 +408,7 @@ interface GameStore {
   failedMissionIds: string[];
   reputation: ReturnType<typeof createInitialReputation>;
   knownSystems: string[];
+  knownPlanetIds: string[];
   primaryCooldown: number;
   secondaryCooldown: number;
   hasSave: boolean;
@@ -415,7 +431,9 @@ interface GameStore {
   interact: () => void;
   dockAt: (stationId: string) => void;
   undock: () => void;
+  startJumpToStation: (stationId: string) => void;
   startJumpToSystem: (systemId: string) => void;
+  activateStargateJumpToStation: (stationId: string) => void;
   activateStargateJumpToSystem: (systemId: string) => void;
   cancelAutopilot: (reason?: string) => void;
   jumpToSystem: (systemId: string) => void;
@@ -440,7 +458,8 @@ function savePayload(state: GameStore): Omit<SaveGameData, "version" | "savedAt"
     failedMissionIds: state.failedMissionIds,
     marketState: state.marketState,
     reputation: state.reputation,
-    knownSystems: state.knownSystems
+    knownSystems: state.knownSystems,
+    knownPlanetIds: state.knownPlanetIds
   };
 }
 
@@ -464,6 +483,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   failedMissionIds: [],
   reputation: createInitialReputation(),
   knownSystems: getInitialKnownSystems("helion-reach"),
+  knownPlanetIds: getInitialKnownPlanetIds(getInitialKnownSystems("helion-reach")),
   primaryCooldown: 0,
   secondaryCooldown: 0,
   hasSave: readSave() !== null,
@@ -490,6 +510,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       failedMissionIds: [],
       reputation: createInitialReputation(),
       knownSystems: getInitialKnownSystems("helion-reach"),
+      knownPlanetIds: getInitialKnownPlanetIds(getInitialKnownSystems("helion-reach")),
       primaryCooldown: 0,
       secondaryCooldown: 0,
       activeSaveSlotId: undefined
@@ -512,6 +533,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       marketState: save.marketState,
       reputation: save.reputation,
       knownSystems: save.knownSystems,
+      knownPlanetIds: save.knownPlanetIds,
       runtime: createRuntimeForSystem(save.currentSystemId, save.activeMissions),
       autopilot: undefined,
       hasSave: true,
@@ -581,6 +603,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       let screen: Screen = "flight";
       let previousScreen = state.previousScreen;
       let knownSystems = state.knownSystems;
+      let knownPlanetIds = state.knownPlanetIds;
       let targetId = state.targetId;
       const targetSystem = systemById[autopilot.targetSystemId];
       const targetStation = stationById[autopilot.targetStationId];
@@ -659,19 +682,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
           currentSystemId = targetSystem.id;
           currentStationId = undefined;
           knownSystems = revealNeighborSystems(knownSystems, targetSystem.id);
+          knownPlanetIds = mergeKnownPlanetIds(knownPlanetIds, knownSystems, targetStation.id);
           targetId = undefined;
-          const destinationGate = getJumpGatePosition(targetSystem.id);
-          const exitDirection = normalize(sub(targetStation.position, destinationGate));
+          const arrivalPosition = getStationArrivalPosition(targetStation.id) ?? add(targetStation.position, [0, 36, 240]);
+          const exitDirection = normalize(sub(targetStation.position, arrivalPosition));
           player = {
             ...player,
-            position: add(destinationGate, scale(exitDirection, 150)),
-            velocity: scale(exitDirection, 180),
+            position: arrivalPosition,
+            velocity: scale(exitDirection, 120),
             rotation: rotationToward(exitDirection),
             throttle: 0.25
           };
           runtime = {
             ...createRuntimeForSystem(targetSystem.id, state.activeMissions),
-            message: `Arrived at ${targetSystem.name} Stargate.`,
+            message: `Arrived near ${targetStation.name}. Press E to dock.`,
             effects: [wormholeEffect(player.position)]
           };
           autopilot = undefined;
@@ -688,14 +712,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
         runtime.effects.push(navEffect(targetStation.position, `Dock ${Math.round(step.distanceToTarget)}m`));
         runtime.message = `Autopilot: approaching ${targetStation.name} · ${Math.round(step.distanceToTarget)}m`;
         if (step.distanceToTarget <= STATION_DOCK_DISTANCE) {
-          autopilot = {
-            ...autopilot,
-            phase: "docking",
-            targetPosition: targetStation.position,
-            timer: 0,
-            cancelable: false
-          };
-          runtime.message = `Docking approach locked: ${targetStation.name}.`;
+          autopilot = undefined;
+          player = { ...player, velocity: [0, 0, 0], throttle: 0 };
+          runtime.message = `Arrived near ${targetStation.name}. Press E to dock.`;
         }
       } else if (autopilot.phase === "docking") {
         const step = integrateAutopilotStep({
@@ -735,6 +754,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         screen,
         previousScreen,
         knownSystems,
+        knownPlanetIds,
         targetId,
         gameClock,
         marketState,
@@ -1160,6 +1180,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
       runtime.message = `${mission.title} failed: convoy destroyed.`;
     }
     runtime = { ...runtime, convoys: runtime.convoys.filter((convoy) => convoy.hull > 0 && !failedMissionIds.includes(convoy.missionId)) };
+    const planetDiscovery = discoverNearbyPlanets(state.currentSystemId, player.position, state.knownPlanetIds);
+    let knownPlanetIds = planetDiscovery.knownPlanetIds;
+    if (planetDiscovery.discovered.length > 0) {
+      const names = planetDiscovery.discovered.map((planet) => planet.name).join(", ");
+      runtime = {
+        ...runtime,
+        message: `Navigation scan complete: ${names} station beacon unlocked.`
+      };
+      audioSystem.play("ui-click");
+    }
 
     if (input.interact) {
       get().interact();
@@ -1211,6 +1241,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       },
       gameClock,
       marketState,
+      knownPlanetIds,
       activeMissions: expiration.activeMissions,
       failedMissionIds: expiration.failedMissionIds,
       reputation: expiration.reputation,
@@ -1253,7 +1284,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   interact: () => {
     const state = get();
     const equipmentEffects = getEquipmentEffects(state.player.equipment);
-    const navigationTarget = getNearestNavigationTarget(state.currentSystemId, state.player.position);
+    const navigationTarget = getNearestNavigationTarget(state.currentSystemId, state.player.position, state.knownPlanetIds);
     const nearSalvage = state.runtime.salvage
       .filter((salvage) => !salvage.recovered)
       .map((salvage) => ({ salvage, dist: distance(salvage.position, state.player.position) }))
@@ -1326,6 +1357,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
       });
       return;
     }
+    if (navigationTarget?.inRange && navigationTarget.kind === "planet-signal") {
+      const discovered = discoverNearbyPlanets(state.currentSystemId, state.player.position, state.knownPlanetIds);
+      set({
+        knownPlanetIds: discovered.knownPlanetIds,
+        runtime: {
+          ...state.runtime,
+          message:
+            discovered.discovered.length > 0
+              ? `Navigation scan complete: ${discovered.discovered.map((planet) => planet.name).join(", ")} station beacon unlocked.`
+              : "Unknown beacon already scanned."
+        }
+      });
+      return;
+    }
     set({ runtime: { ...state.runtime, message: "No interactable object in range." } });
   },
   dockAt: (stationId) => {
@@ -1340,16 +1385,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
         currentStationId: undefined,
         previousScreen: "station",
         autopilot: undefined,
-        player: { ...state.player, position: [0, 0, 120], throttle: 0.2 }
+        player: { ...state.player, position: launchPositionForStation(state.currentStationId, state.player.position), throttle: 0.2 }
       };
     }),
-  startJumpToSystem: (systemId) => {
+  startJumpToStation: (stationId) => {
     const state = get();
-    const targetSystem = systemById[systemId];
-    const targetStation = getDefaultTargetStation(systemId);
-    if (!targetSystem || !targetStation || systemId === state.currentSystemId || !isKnownSystem(state.knownSystems, systemId)) return;
+    const targetStation = stationById[stationId];
+    const targetSystem = targetStation ? systemById[targetStation.systemId] : undefined;
+    if (!targetSystem || !targetStation || targetStation.id === state.currentStationId || !isKnownStation(stationId, state.knownPlanetIds)) return;
+    if (targetSystem.id !== state.currentSystemId && !isKnownSystem(state.knownSystems, targetSystem.id)) return;
     const originGate = getJumpGatePosition(state.currentSystemId);
     const launchPosition = state.screen === "station" ? launchPositionForStation(state.currentStationId, state.player.position) : state.player.position;
+    const sameSystem = targetSystem.id === state.currentSystemId;
+    const targetPosition = sameSystem ? targetStation.position : originGate;
     set({
       screen: "flight",
       previousScreen: state.screen,
@@ -1357,11 +1405,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
       targetId: undefined,
       stationTab: "Galaxy Map",
       autopilot: {
-        phase: "to-origin-gate",
+        phase: sameSystem ? "to-destination-station" : "to-origin-gate",
         originSystemId: state.currentSystemId,
-        targetSystemId: systemId,
+        targetSystemId: targetSystem.id,
         targetStationId: targetStation.id,
-        targetPosition: originGate,
+        targetPosition,
         timer: 0,
         cancelable: true
       },
@@ -1369,28 +1417,71 @@ export const useGameStore = create<GameStore>((set, get) => ({
         ...state.player,
         position: launchPosition,
         velocity: [0, 0, 0],
-        rotation: rotationToward(sub(originGate, launchPosition)),
+        rotation: rotationToward(sub(targetPosition, launchPosition)),
         throttle: 0.55
       },
       runtime: {
         ...state.runtime,
         graceUntil: Math.max(state.runtime.graceUntil, state.runtime.clock + 5),
-        effects: [...state.runtime.effects, navEffect(originGate, "Jump Gate")],
-        message: `Autopilot: plotting jump to ${targetSystem.name}. Manual input cancels.`
+        effects: [...state.runtime.effects, navEffect(targetPosition, sameSystem ? targetStation.name : "Jump Gate")],
+        message: sameSystem
+          ? `Autopilot: plotting local route to ${targetStation.name}. Manual input cancels.`
+          : `Autopilot: plotting jump to ${targetStation.name}. Manual input cancels.`
       },
       input: { ...emptyInput },
       primaryCooldown: 0,
       secondaryCooldown: 0
     });
   },
-  activateStargateJumpToSystem: (systemId) => {
-    const state = get();
-    const targetSystem = systemById[systemId];
+  startJumpToSystem: (systemId) => {
     const targetStation = getDefaultTargetStation(systemId);
+    if (!targetStation) return;
+    get().startJumpToStation(targetStation.id);
+  },
+  activateStargateJumpToStation: (stationId) => {
+    const state = get();
+    const targetStation = stationById[stationId];
+    const targetSystem = targetStation ? systemById[targetStation.systemId] : undefined;
     const originGate = getJumpGatePosition(state.currentSystemId);
-    if (!targetSystem || !targetStation || systemId === state.currentSystemId || !isKnownSystem(state.knownSystems, systemId)) return;
+    if (!targetSystem || !targetStation || !isKnownStation(stationId, state.knownPlanetIds)) return;
+    if (targetSystem.id !== state.currentSystemId && !isKnownSystem(state.knownSystems, targetSystem.id)) return;
     if (distance(state.player.position, originGate) >= STARGATE_INTERACTION_RANGE) {
       set({ runtime: { ...state.runtime, message: "Stargate link lost. Move closer to activate." }, screen: "flight", previousScreen: state.screen, galaxyMapMode: "browse" });
+      return;
+    }
+    if (targetSystem.id === state.currentSystemId) {
+      set({
+        screen: "flight",
+        previousScreen: state.screen,
+        galaxyMapMode: "browse",
+        currentStationId: undefined,
+        targetId: undefined,
+        stationTab: "Galaxy Map",
+        autopilot: {
+          phase: "to-destination-station",
+          originSystemId: state.currentSystemId,
+          targetSystemId: targetSystem.id,
+          targetStationId: targetStation.id,
+          targetPosition: targetStation.position,
+          timer: 0,
+          cancelable: true
+        },
+        player: {
+          ...state.player,
+          velocity: [0, 0, 0],
+          rotation: rotationToward(sub(targetStation.position, state.player.position)),
+          throttle: 0.45
+        },
+        runtime: {
+          ...state.runtime,
+          graceUntil: Math.max(state.runtime.graceUntil, state.runtime.clock + 5),
+          effects: [...state.runtime.effects, navEffect(targetStation.position, targetStation.name)],
+          message: `Stargate local vector set for ${targetStation.name}. Manual input cancels.`
+        },
+        input: { ...emptyInput },
+        primaryCooldown: 0,
+        secondaryCooldown: 0
+      });
       return;
     }
     audioSystem.play("jump-gate");
@@ -1404,7 +1495,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       autopilot: {
         phase: "gate-activation",
         originSystemId: state.currentSystemId,
-        targetSystemId: systemId,
+        targetSystemId: targetSystem.id,
         targetStationId: targetStation.id,
         targetPosition: originGate,
         timer: 0,
@@ -1421,12 +1512,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
         ...state.runtime,
         graceUntil: Math.max(state.runtime.graceUntil, state.runtime.clock + 5),
         effects: [...state.runtime.effects, gateSpoolEffect(originGate, 0.05)],
-        message: `Stargate locked for ${targetSystem.name}. Spooling jump field.`
+        message: `Stargate locked for ${targetStation.name}. Spooling jump field.`
       },
       input: { ...emptyInput },
       primaryCooldown: 0,
       secondaryCooldown: 0
     });
+  },
+  activateStargateJumpToSystem: (systemId) => {
+    const targetStation = getDefaultTargetStation(systemId);
+    if (!targetStation) return;
+    get().activateStargateJumpToStation(targetStation.id);
   },
   cancelAutopilot: (reason = "Autopilot canceled. Manual control restored.") => {
     const state = get();
@@ -1449,6 +1545,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       autopilot: undefined,
       targetId: undefined,
       knownSystems: revealNeighborSystems(state.knownSystems, systemId),
+      knownPlanetIds: mergeKnownPlanetIds(state.knownPlanetIds, revealNeighborSystems(state.knownSystems, systemId)),
       input: { ...emptyInput },
       player: { ...state.player, position: add(getJumpGatePosition(systemId), [0, 0, 150]), velocity: [0, 0, 0], rotation: [0, 0, 0], throttle: 0.25 }
     }));
@@ -1566,4 +1663,4 @@ export const useGameStore = create<GameStore>((set, get) => ({
   toggleCamera: () => set((state) => ({ cameraMode: state.cameraMode === "chase" ? "cinematic" : "chase" }))
 }));
 
-export { cloneMissionTemplates, commodities, shipById, ships, stationById, stations, systemById, systems };
+export { cloneMissionTemplates, commodities, planetById, planets, shipById, ships, stationById, stations, systemById, systems };

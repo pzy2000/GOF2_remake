@@ -72,6 +72,7 @@ describe("save system", () => {
       marketState: createInitialMarketState(),
       reputation: createInitialReputation(),
       knownSystems: ["helion-reach", "kuro-belt"],
+      knownPlanetIds: ["helion-prime-world", "kuro-anvil"],
       ...overrides
     };
   }
@@ -87,6 +88,7 @@ describe("save system", () => {
     expect(loaded?.failedMissionIds).toEqual(["bounty-ashen"]);
     expect(loaded?.gameClock).toBe(123);
     expect(loaded?.marketState["helion-prime"]?.["basic-food"]).toBeDefined();
+    expect(loaded?.knownPlanetIds).toEqual(["helion-prime-world", "kuro-anvil"]);
     expect(loaded?.version).toBe(SAVE_VERSION);
   });
 
@@ -116,6 +118,31 @@ describe("save system", () => {
     expect(index.slots.auto?.exists).toBe(true);
     expect(index.lastPlayedSlotId).toBe("auto");
     expect(readSave(storage, "auto")?.version).toBe(SAVE_VERSION);
+  });
+
+  it("migrates saves without planet discovery to primary planets and the current station planet", () => {
+    const storage = new MemoryStorage();
+    const legacyPayload = {
+      ...payload({
+        currentSystemId: "ashen-drift",
+        currentStationId: "black-arcade",
+        knownSystems: ["helion-reach", "ashen-drift"]
+      }),
+      knownPlanetIds: undefined,
+      version: SAVE_VERSION,
+      savedAt: "2026-01-01T00:00:00.000Z"
+    };
+    storage.setItem(`${SAVE_SLOT_PREFIX}auto`, JSON.stringify(legacyPayload));
+    storage.setItem(
+      SAVE_INDEX_KEY,
+      JSON.stringify({
+        version: SAVE_VERSION,
+        slots: { auto: { id: "auto", label: "Auto / Quick Slot", exists: true, savedAt: legacyPayload.savedAt } },
+        lastPlayedSlotId: "auto"
+      })
+    );
+    const loaded = readSave(storage, "auto");
+    expect(loaded?.knownPlanetIds).toEqual(["helion-prime-world", "ashen-harbor", "black-arc"]);
   });
 
   it("ignores bad legacy saves without corrupting empty slots", () => {

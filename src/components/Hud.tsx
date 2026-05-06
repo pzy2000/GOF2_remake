@@ -33,8 +33,9 @@ export function Hud() {
   const saveGame = useGameStore((state) => state.saveGame);
   const setScreen = useGameStore((state) => state.setScreen);
   const openGalaxyMap = useGameStore((state) => state.openGalaxyMap);
+  const knownPlanetIds = useGameStore((state) => state.knownPlanetIds);
   const equipmentEffects = getEquipmentEffects(player.equipment);
-  const nearestNavigation = getNearestNavigationTarget(currentSystem.id, player.position);
+  const nearestNavigation = getNearestNavigationTarget(currentSystem.id, player.position, knownPlanetIds);
   const pirateCount = runtime.enemies.filter((ship) => ship.role === "pirate" && ship.hull > 0 && ship.deathTimer === undefined).length;
   const graceRemaining = Math.max(0, Math.ceil(runtime.graceUntil - runtime.clock));
   const nearestMine = runtime.asteroids
@@ -72,7 +73,7 @@ export function Hud() {
         <p>{graceRemaining > 0 ? `Enemy weapons safe for ${graceRemaining}s` : pirateCount > 0 ? `${pirateCount} pirate contact(s)` : "Local space clear"}</p>
         {nearestNavigation ? (
           <p>
-            {nearestNavigation.kind === "station" ? "Nearest station" : "Nearest nav"}: {nearestNavigation.name} {Math.round(nearestNavigation.distance)}m
+            {nearestNavigation.kind === "station" ? "Nearest station" : nearestNavigation.kind === "planet-signal" ? "Scan target" : "Nearest nav"}: {nearestNavigation.name} {Math.round(nearestNavigation.distance)}m
           </p>
         ) : null}
       </section>

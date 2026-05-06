@@ -1,4 +1,4 @@
-import { stationById, systemById } from "../data/world";
+import { planetById, stationById, systemById } from "../data/world";
 import type { FlightInput, PlayerState, StationDefinition, Vec3 } from "../types/game";
 import { add, clamp, distance, length, lerp, normalize, scale, sub } from "./math";
 
@@ -14,6 +14,14 @@ export function getDefaultTargetStation(systemId: string): StationDefinition | u
 
 export function getJumpGatePosition(systemId: string): Vec3 {
   return systemById[systemId]?.jumpGatePosition ?? [620, 70, -1240];
+}
+
+export function getStationArrivalPosition(stationId: string): Vec3 | undefined {
+  const station = stationById[stationId];
+  if (!station) return undefined;
+  const planet = planetById[station.planetId];
+  const awayFromPlanet = planet ? normalize(sub(station.position, planet.position)) : [0, 0, 1] as Vec3;
+  return add(station.position, add(scale(awayFromPlanet, 240), [0, 36, 0]));
 }
 
 export function shouldCancelAutopilot(input: FlightInput): boolean {

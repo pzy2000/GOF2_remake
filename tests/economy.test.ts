@@ -107,7 +107,7 @@ describe("economy", () => {
   it("finds profitable route hints across biased systems", () => {
     const hints = getTradeHints(createInitialMarketState(), 200);
     expect(hints.some((hint) => hint.fromStationId === "kuro-deep" && ["mirr-lattice", "celest-vault"].includes(hint.toStationId))).toBe(true);
-    expect(hints.some((hint) => hint.fromStationId === "helion-prime" && hint.toStationId === "ashen-freeport")).toBe(true);
+    expect(hints.some((hint) => stationById[hint.fromStationId].systemId === "helion-reach" && stationById[hint.toStationId].systemId === "ashen-drift")).toBe(true);
     expect(hints.some((hint) => hint.fromStationId === "black-arcade" && hint.profit > 0)).toBe(true);
   });
 
