@@ -2,6 +2,14 @@
 
 Browser-playable WebGL vertical slice for an original space combat/trading game. Fly a third-person ship, fight pirates, mine asteroids, collect cargo, dock at stations, trade, accept missions, jump between systems, and save/load through browser storage.
 
+## Screenshots
+
+| Main Menu | Flight HUD |
+| --- | --- |
+| ![Main menu with key art, new game, settings, credits, and save slots](docs/screenshots/main-menu.png) | ![Third-person flight HUD with ship gauges, pirate target lock, navigation hint, cargo, and comms](docs/screenshots/flight-hud.png) |
+| Station Market | Galaxy Map |
+| ![Station market interface for buying and selling commodities at Helion Prime Exchange](docs/screenshots/station-market.png) | ![Galaxy map showing discovered systems, jump routes, station destinations, and unknown signals](docs/screenshots/galaxy-map.png) |
+
 ## Run
 
 ```bash
