@@ -1,5 +1,5 @@
 import { missionTemplates } from "../data/world";
-import type { CargoHold, MissionDefinition, PlayerState, ReputationState } from "../types/game";
+import type { CargoHold, FactionId, MissionDefinition, PlayerState, ReputationState } from "../types/game";
 import { getCargoUsed, getOccupiedCargo } from "./economy";
 import { updateReputation } from "./reputation";
 
@@ -57,6 +57,36 @@ export function getMissionDeadlineRemaining(mission: MissionDefinition, gameCloc
 export function isMissionExpired(mission: MissionDefinition, gameClock: number): boolean {
   const remaining = getMissionDeadlineRemaining(mission, gameClock);
   return remaining !== undefined && remaining <= 0 && !mission.completed && !mission.failed;
+}
+
+export function areMissionPrerequisitesMet(mission: MissionDefinition, completedMissionIds: string[]): boolean {
+  return (mission.prerequisiteMissionIds ?? []).every((missionId) => completedMissionIds.includes(missionId));
+}
+
+export function isMissionAvailable(
+  mission: MissionDefinition,
+  activeMissions: MissionDefinition[],
+  completedMissionIds: string[],
+  failedMissionIds: string[]
+): boolean {
+  if (activeMissions.some((active) => active.id === mission.id)) return false;
+  if (completedMissionIds.includes(mission.id)) return false;
+  if (failedMissionIds.includes(mission.id) && !mission.retryOnFailure) return false;
+  return areMissionPrerequisitesMet(mission, completedMissionIds);
+}
+
+export function getAvailableMissionsForSystem(
+  missions: MissionDefinition[],
+  systemId: string,
+  activeMissions: MissionDefinition[],
+  completedMissionIds: string[],
+  failedMissionIds: string[]
+): MissionDefinition[] {
+  return missions.filter(
+    (mission) =>
+      mission.originSystemId === systemId &&
+      isMissionAvailable(mission, activeMissions, completedMissionIds, failedMissionIds)
+  );
 }
 
 export function canAcceptMission(
@@ -144,9 +174,14 @@ export function completeMission(
   reputation: ReputationState
 ): { player: PlayerState; reputation: ReputationState; completed: MissionDefinition } {
   const nextCargo = removeCargo(player.cargo, cargoToConsume(mission));
+  const reputationDeltas = mission.reputationRewards ?? { [mission.factionId]: mission.type === "Pirate bounty" ? 6 : 4 };
+  const nextReputation = Object.entries(reputationDeltas).reduce(
+    (next, [factionId, delta]) => updateReputation(next, factionId as FactionId, delta ?? 0),
+    reputation
+  );
   return {
     completed: { ...cloneMission(mission), completed: true },
-    reputation: updateReputation(reputation, mission.factionId, mission.type === "Pirate bounty" ? 6 : 4),
+    reputation: nextReputation,
     player: {
       ...player,
       cargo: nextCargo,

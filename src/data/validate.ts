@@ -4,6 +4,7 @@ import { equipmentById, equipmentList } from "./equipment";
 import { factionNames } from "./factions";
 import { missionTemplates } from "./missions";
 import { ships } from "./ships";
+import { storyArcs } from "./story";
 import { planetById, planets, stationById, stations, systemById, systems } from "./systems";
 
 export interface ContentValidationResult {
@@ -41,6 +42,13 @@ export function validateContentData(): ContentValidationResult {
   requireUnique(systems.map((item) => item.id), "system", errors);
   requireUnique(missionTemplates.map((item) => item.id), "mission", errors);
   requireUnique(equipmentList.map((item) => item.id), "equipment", errors);
+  requireUnique(storyArcs.map((item) => item.id), "story arc", errors);
+  for (const arc of storyArcs) {
+    requireUnique(arc.chapters.map((item) => item.id), `${arc.id} chapter`, errors);
+    requireUnique(arc.chapters.map((item) => item.missionId), `${arc.id} chapter mission`, errors);
+  }
+
+  const missionIds = new Set(missionTemplates.map((mission) => mission.id));
 
   for (const ship of ships) {
     for (const equipmentId of ship.equipment) {
@@ -95,6 +103,9 @@ export function validateContentData(): ContentValidationResult {
       errors.push(`Mission ${mission.id} destination station ${destinationStation.id} is not in ${mission.destinationSystemId}`);
     }
     if (!hasFaction(mission.factionId)) errors.push(`Mission ${mission.id} references unknown faction ${mission.factionId}`);
+    for (const factionId of Object.keys(mission.reputationRewards ?? {})) {
+      if (!hasFaction(factionId)) errors.push(`Mission ${mission.id} references unknown reputation reward faction ${factionId}`);
+    }
     for (const cargo of [mission.cargoProvided, mission.cargoRequired]) {
       for (const commodityId of Object.keys(cargo ?? {})) {
         if (!hasCommodity(commodityId)) errors.push(`Mission ${mission.id} references unknown cargo ${commodityId}`);
@@ -108,6 +119,21 @@ export function validateContentData(): ContentValidationResult {
     }
     if (mission.salvage?.systemId && !systemById[mission.salvage.systemId]) {
       errors.push(`Mission ${mission.id} references unknown salvage system ${mission.salvage.systemId}`);
+    }
+    for (const prerequisiteMissionId of mission.prerequisiteMissionIds ?? []) {
+      if (!missionIds.has(prerequisiteMissionId)) errors.push(`Mission ${mission.id} references unknown prerequisite mission ${prerequisiteMissionId}`);
+    }
+  }
+
+  for (const arc of storyArcs) {
+    for (const chapter of arc.chapters) {
+      const mission = missionTemplates.find((candidate) => candidate.id === chapter.missionId);
+      if (!mission) {
+        errors.push(`Story chapter ${chapter.id} references unknown mission ${chapter.missionId}`);
+        continue;
+      }
+      if (mission.storyArcId !== arc.id) errors.push(`Story chapter ${chapter.id} mission ${mission.id} is not tagged for arc ${arc.id}`);
+      if (mission.storyChapterId !== chapter.id) errors.push(`Story chapter ${chapter.id} mission ${mission.id} has story chapter ${mission.storyChapterId}`);
     }
   }
 

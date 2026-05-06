@@ -682,6 +682,103 @@ button.equipment-trigger {
   padding-bottom: 8px;
 }
 
+.story-pill {
+  border: 1px solid rgba(255, 193, 103, 0.5);
+  border-radius: 999px;
+  background: rgba(255, 193, 103, 0.12);
+  color: #ffd69a;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
+.story-log {
+  display: grid;
+  grid-template-columns: minmax(240px, 340px) 1fr;
+  gap: 18px;
+  min-height: 0;
+}
+
+.story-overview,
+.story-entry {
+  border: 1px solid rgba(128, 214, 255, 0.22);
+  border-radius: 8px;
+  background: rgba(8, 21, 38, 0.72);
+  padding: 16px;
+}
+
+.story-overview {
+  align-self: start;
+  display: grid;
+  gap: 14px;
+}
+
+.story-progress-meter {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.story-progress-meter b {
+  color: #ffd69a;
+  font-size: 2rem;
+}
+
+.story-progress-meter span,
+.story-current-objective span,
+.story-entry header span,
+.story-route {
+  color: #9db7c9;
+  font-size: 0.8rem;
+}
+
+.story-current-objective {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  display: grid;
+  gap: 6px;
+  padding-top: 12px;
+}
+
+.story-timeline {
+  display: grid;
+  gap: 10px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.story-entry {
+  display: grid;
+  gap: 10px;
+}
+
+.story-entry header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.story-entry.complete {
+  border-color: rgba(105, 228, 255, 0.42);
+}
+
+.story-entry.active,
+.story-entry.available,
+.story-entry.failed-retry {
+  border-color: rgba(255, 193, 103, 0.62);
+}
+
+.story-status {
+  border: 1px solid rgba(128, 214, 255, 0.22);
+  border-radius: 999px;
+  color: #d3ecff;
+  font-size: 0.72rem;
+  padding: 4px 8px;
+  white-space: nowrap;
+}
+
 .market-list,
 .mission-list {
   display: grid;
@@ -1091,6 +1188,7 @@ button.equipment-trigger {
   }
 
   .split-layout,
+  .story-log,
   .market-row,
   .save-slot {
     grid-template-columns: 1fr;

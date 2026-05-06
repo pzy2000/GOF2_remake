@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, FocusEvent, KeyboardEvent, MouseEvent as ReactMouseEvent, MutableRefObject, ReactNode } from "react";
 import { commodities, shipById, ships, stationById, systemById, useGameStore } from "../state/gameStore";
-import { commodityById, equipmentById, equipmentName, factionNames, missionTemplates } from "../data/world";
-import { canCompleteMission, getMissionDeadlineRemaining } from "../systems/missions";
+import { commodityById, equipmentById, equipmentName, factionNames, glassWakeProtocol, missionTemplates } from "../data/world";
+import { canCompleteMission, getAvailableMissionsForSystem, getMissionDeadlineRemaining } from "../systems/missions";
 import {
   canBuyCommodityAtStation,
   getCommodityPrice,
@@ -17,9 +17,10 @@ import { GalaxyMap } from "./GalaxyMap";
 import { AtlasIcon } from "./AtlasIcon";
 import { SaveSlotsPanel } from "./SaveSlotsPanel";
 import { getCommodityIcon, getEquipmentIcon, getFactionIcon } from "../data/iconAtlas";
+import { getStoryProgress, storyStatusLabel } from "../systems/story";
 import type { AssetManifest, CargoHold, CommodityId, EquipmentId, StationTab } from "../types/game";
 
-const tabs: StationTab[] = ["Market", "Hangar", "Shipyard", "Mission Board", "Blueprint Workshop", "Lounge", "Galaxy Map"];
+const tabs: StationTab[] = ["Market", "Hangar", "Shipyard", "Mission Board", "Captain's Log", "Blueprint Workshop", "Lounge", "Galaxy Map"];
 const craftable: EquipmentId[] = ["plasma-cannon", "shield-booster", "cargo-expansion", "scanner", "targeting-computer"];
 
 type EquipmentPopoverMode = "preview" | "pinned";
@@ -214,6 +215,7 @@ export function StationScreen() {
         {tab === "Hangar" ? <HangarTab /> : null}
         {tab === "Shipyard" ? <ShipyardTab /> : null}
         {tab === "Mission Board" ? <MissionBoardTab /> : null}
+        {tab === "Captain's Log" ? <CaptainLogTab /> : null}
         {tab === "Blueprint Workshop" ? <BlueprintTab /> : null}
         {tab === "Lounge" ? <LoungeTab /> : null}
         {tab === "Galaxy Map" ? <GalaxyMap embedded /> : null}
@@ -367,9 +369,7 @@ function MissionBoardTab() {
   const acceptMission = useGameStore((state) => state.acceptMission);
   const completeMission = useGameStore((state) => state.completeMission);
   const reputation = useGameStore((state) => state.reputation);
-  const available = missionTemplates.filter(
-    (mission) => mission.originSystemId === currentSystemId && !completedMissionIds.includes(mission.id) && !failedMissionIds.includes(mission.id)
-  );
+  const available = getAvailableMissionsForSystem(missionTemplates, currentSystemId, activeMissions, completedMissionIds, failedMissionIds);
   return (
     <div className="split-layout">
       <aside className="reputation-panel">
@@ -388,11 +388,15 @@ function MissionBoardTab() {
             const active = activeMissions.some((item) => item.id === mission.id);
             const complete = active && canCompleteMission(mission, player, currentSystemId, currentStationId, runtime.destroyedPirates, gameClock);
             const remaining = getMissionDeadlineRemaining(mission, gameClock);
+            const storyChapter = mission.storyArcId === glassWakeProtocol.id
+              ? glassWakeProtocol.chapters.find((chapter) => chapter.id === mission.storyChapterId)
+              : undefined;
             return (
               <article key={mission.id} className="mission-card">
                 <div className="mission-title">
                   <AtlasIcon icon={getFactionIcon(mission.factionId)} manifest={manifest} size={40} />
                   <h3>{mission.title}</h3>
+                  {storyChapter ? <span className="story-pill">Main Story {storyChapter.order.toString().padStart(2, "0")}</span> : null}
                 </div>
                 <p>{mission.type} · {factionNames[mission.factionId]} · Reward {mission.reward} cr</p>
                 <p>{mission.description}</p>
@@ -418,6 +422,67 @@ function MissionBoardTab() {
       </div>
     </div>
   );
+}
+
+function CaptainLogTab() {
+  const activeMissions = useGameStore((state) => state.activeMissions);
+  const completedMissionIds = useGameStore((state) => state.completedMissionIds);
+  const failedMissionIds = useGameStore((state) => state.failedMissionIds);
+  const progress = getStoryProgress(glassWakeProtocol, missionTemplates, activeMissions, completedMissionIds, failedMissionIds);
+  const current = progress.current;
+  const currentMission = current?.mission;
+  const currentOrigin = currentMission ? systemById[currentMission.originSystemId] : undefined;
+  const currentDestination = currentMission ? stationById[currentMission.destinationStationId] : undefined;
+  return (
+    <div className="story-log">
+      <aside className="story-overview">
+        <p className="eyebrow">Captain's Log</p>
+        <h2>{glassWakeProtocol.title}</h2>
+        <p>{glassWakeProtocol.subtitle}</p>
+        <div className="story-progress-meter">
+          <b>{progress.completedCount}/{progress.totalCount}</b>
+          <span>chapters complete</span>
+        </div>
+        <p>{glassWakeProtocol.summary}</p>
+        <div className="story-current-objective">
+          <span>Current Objective</span>
+          <p>{current ? currentObjectiveText(current.status, currentMission, currentOrigin?.name, currentDestination?.name) : "Protocol complete. Glass Wake is quiet for now."}</p>
+        </div>
+      </aside>
+      <section className="story-timeline" aria-label={`${glassWakeProtocol.title} chapters`}>
+        {progress.chapters.map(({ chapter, mission, status }) => {
+          const origin = mission ? systemById[mission.originSystemId] : undefined;
+          const destination = mission ? stationById[mission.destinationStationId] : undefined;
+          const locked = status === "locked";
+          return (
+            <article key={chapter.id} className={`story-entry ${status.replace(/\s+/g, "-")}`}>
+              <header>
+                <div>
+                  <span>Chapter {chapter.order.toString().padStart(2, "0")}</span>
+                  <h3>{locked ? chapter.lockedTitle : chapter.title}</h3>
+                </div>
+                <b className="story-status">{storyStatusLabel(status)}</b>
+              </header>
+              <p>{status === "complete" ? chapter.log : locked ? "Signal masked. Complete prior protocol entries to resolve this trace." : chapter.briefing}</p>
+              {mission && !locked ? (
+                <p className="story-route">
+                  {`${origin?.name ?? mission.originSystemId} Mission Board -> ${destination?.name ?? mission.destinationStationId}`}
+                </p>
+              ) : null}
+            </article>
+          );
+        })}
+      </section>
+    </div>
+  );
+}
+
+function currentObjectiveText(status: string, mission: typeof missionTemplates[number] | undefined, originName: string | undefined, destinationName: string | undefined): string {
+  if (!mission) return "Signal source missing from mission registry.";
+  if (status === "locked") return "Complete prior protocol entries to resolve the next trace.";
+  if (status === "active") return `Complete ${mission.title} and report to ${destinationName ?? mission.destinationStationId}.`;
+  if (status === "failed retry") return `Return to ${originName ?? mission.originSystemId} and retry ${mission.title}.`;
+  return `Accept ${mission.title} from the ${originName ?? mission.originSystemId} Mission Board.`;
 }
 
 function BlueprintTab() {

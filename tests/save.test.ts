@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shipById } from "../src/data/world";
+import { glassWakeProtocol, missionTemplates, shipById } from "../src/data/world";
 import { createInitialMarketState } from "../src/systems/economy";
 import { createInitialReputation } from "../src/systems/reputation";
 import {
@@ -15,6 +15,7 @@ import {
   SAVE_VERSION,
   writeSave
 } from "../src/systems/save";
+import { getStoryProgress } from "../src/systems/story";
 import type { PlayerState, SaveGameData } from "../src/types/game";
 
 class MemoryStorage implements Storage {
@@ -150,5 +151,31 @@ describe("save system", () => {
     storage.setItem(SAVE_KEY, "{not json");
     const slots = readSaveSlots(storage);
     expect(slots.every((slot) => !slot.exists)).toBe(true);
+  });
+
+  it("round trips active story missions and derives story progress from save fields", () => {
+    const storage = new MemoryStorage();
+    const activeStoryMission = {
+      ...missionTemplates.find((mission) => mission.id === "story-probe-in-glass")!,
+      accepted: true,
+      acceptedAt: 99
+    };
+    writeSave(
+      payload({
+        activeMissions: [activeStoryMission],
+        completedMissionIds: ["story-clean-carrier"],
+        failedMissionIds: []
+      }),
+      storage,
+      "manual-1"
+    );
+
+    const loaded = readSave(storage, "manual-1")!;
+    const progress = getStoryProgress(glassWakeProtocol, missionTemplates, loaded.activeMissions, loaded.completedMissionIds, loaded.failedMissionIds);
+
+    expect(loaded.activeMissions[0].storyArcId).toBe(glassWakeProtocol.id);
+    expect(progress.completedCount).toBe(1);
+    expect(progress.current?.chapter.id).toBe("glass-wake-02");
+    expect("storyState" in loaded).toBe(false);
   });
 });

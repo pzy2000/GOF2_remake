@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { commodities, missionTemplates, planetById, planets, ships, stationById, stations, systems } from "../src/data/world";
+import { commodities, glassWakeProtocol, missionTemplates, planetById, planets, ships, stationById, stations, systems } from "../src/data/world";
 import { fallbackAssetManifest } from "../src/systems/assets";
 import { validateContentData } from "../src/data/validate";
 import { createInitialMarketState } from "../src/systems/economy";
@@ -63,6 +63,22 @@ describe("content data", () => {
     }
     for (const planet of planets) {
       expect(fallbackAssetManifest.planetTextures[planet.textureKey]).toMatch(/\.webp$/);
+    }
+  });
+
+  it("connects every Glass Wake chapter to a valid story mission chain", () => {
+    expect(glassWakeProtocol.chapters).toHaveLength(8);
+    const missionById = new Map(missionTemplates.map((mission) => [mission.id, mission]));
+    for (const [index, chapter] of glassWakeProtocol.chapters.entries()) {
+      const mission = missionById.get(chapter.missionId);
+      expect(mission).toBeDefined();
+      expect(mission?.storyArcId).toBe(glassWakeProtocol.id);
+      expect(mission?.storyChapterId).toBe(chapter.id);
+      if (index === 0) {
+        expect(mission?.prerequisiteMissionIds ?? []).toEqual([]);
+      } else {
+        expect(mission?.prerequisiteMissionIds).toContain(glassWakeProtocol.chapters[index - 1].missionId);
+      }
     }
   });
 });

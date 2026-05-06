@@ -54,6 +54,8 @@ Station markets now track saved stock, demand, and baseline recovery. Buying red
 
 Contracts use saved shipboard time. Courier, cargo, passenger, mining, bounty, escort, and salvage missions have deadlines and reputation penalties. Passenger contracts reserve cargo capacity, cargo transport consumes player-provided goods on delivery, escort missions spawn a convoy ship in flight, and salvage missions spawn recoverable crates.
 
+The main story chapter is Glass Wake Protocol, an eight-step mission chain about a Mirr probe, spoofed trade beacons, Ashen relay pirates, and a quiet drone carrier near Celest Gate. Stations include a Captain's Log tab that tracks chapter progress, current objectives, retryable failures, and unlocked story logs without adding separate story save state.
+
 ## Saves, Data, And Audio
 
 The browser save system uses three manual slots plus one auto/quick slot. Older single-slot v1 saves are migrated into the auto slot the first time the v2 save index is read. Slot metadata shows system, station/flight state, credits, game time, saved date, and version.

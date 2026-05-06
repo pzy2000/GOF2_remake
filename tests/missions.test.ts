@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 import { missionTemplates, shipById } from "../src/data/world";
 import {
   acceptMission,
+  areMissionPrerequisitesMet,
   canCompleteMission,
   completeMission,
   failMission,
+  getAvailableMissionsForSystem,
+  isMissionAvailable,
   isMissionExpired,
   markEscortArrived,
   markSalvageRecovered
@@ -99,5 +102,28 @@ describe("missions", () => {
   it("does not complete courier delivery if mission cargo is missing", () => {
     const mission = { ...missionTemplates.find((item) => item.id === "courier-helion-kuro")!, accepted: true, acceptedAt: 0 };
     expect(canCompleteMission(mission, player(), "kuro-belt", "kuro-deep", 0, 10)).toBe(false);
+  });
+
+  it("gates story missions behind completed prerequisite missions", () => {
+    const first = missionTemplates.find((item) => item.id === "story-clean-carrier")!;
+    const second = missionTemplates.find((item) => item.id === "story-probe-in-glass")!;
+    const sideContract = missionTemplates.find((item) => item.id === "courier-helion-kuro")!;
+
+    expect(areMissionPrerequisitesMet(first, [])).toBe(true);
+    expect(areMissionPrerequisitesMet(second, [])).toBe(false);
+    expect(areMissionPrerequisitesMet(second, [first.id])).toBe(true);
+    expect(isMissionAvailable(sideContract, [], [], [])).toBe(true);
+    expect(isMissionAvailable(second, [], [first.id], [])).toBe(true);
+    expect(isMissionAvailable(second, [], [], [])).toBe(false);
+  });
+
+  it("keeps retryable failed story missions available without reopening completed missions", () => {
+    const first = missionTemplates.find((item) => item.id === "story-clean-carrier")!;
+    const second = missionTemplates.find((item) => item.id === "story-probe-in-glass")!;
+    const available = getAvailableMissionsForSystem(missionTemplates, "mirr-vale", [], [first.id], [second.id]);
+
+    expect(second.retryOnFailure).toBe(true);
+    expect(available.map((mission) => mission.id)).toContain(second.id);
+    expect(isMissionAvailable(second, [], [first.id, second.id], [second.id])).toBe(false);
   });
 });

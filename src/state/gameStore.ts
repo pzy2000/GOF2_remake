@@ -61,6 +61,7 @@ import {
   cloneMissionTemplates,
   completeMission as completeMissionPure,
   failMission as failMissionPure,
+  areMissionPrerequisitesMet,
   isMissionExpired,
   markEscortArrived,
   markSalvageRecovered
@@ -1635,14 +1636,23 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const state = get();
     const mission = missionTemplates.find((candidate) => candidate.id === missionId);
     if (!mission) return;
-    if (state.completedMissionIds.includes(missionId) || state.failedMissionIds.includes(missionId)) {
+    if (state.completedMissionIds.includes(missionId) || (state.failedMissionIds.includes(missionId) && !mission.retryOnFailure)) {
       set({ runtime: { ...state.runtime, message: "That contract is no longer available." } });
+      return;
+    }
+    if (!areMissionPrerequisitesMet(mission, state.completedMissionIds)) {
+      set({ runtime: { ...state.runtime, message: "Mission prerequisites are not complete." } });
       return;
     }
     const result = acceptMissionPure(state.player, state.activeMissions, mission, state.gameClock);
     const runtime = result.mission ? addMissionRuntimeEntity(state.runtime, result.mission, state.currentSystemId) : state.runtime;
     if (result.ok) audioSystem.play("ui-click");
-    set({ player: result.player, activeMissions: result.activeMissions, runtime: { ...runtime, message: result.message } });
+    set({
+      player: result.player,
+      activeMissions: result.activeMissions,
+      failedMissionIds: result.ok && mission.retryOnFailure ? state.failedMissionIds.filter((id) => id !== missionId) : state.failedMissionIds,
+      runtime: { ...runtime, message: result.message }
+    });
   },
   completeMission: (missionId) => {
     const state = get();

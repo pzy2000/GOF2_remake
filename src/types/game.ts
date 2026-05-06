@@ -64,6 +64,7 @@ export type StationTab =
   | "Hangar"
   | "Shipyard"
   | "Mission Board"
+  | "Captain's Log"
   | "Blueprint Workshop"
   | "Lounge"
   | "Galaxy Map";
@@ -283,6 +284,12 @@ export interface MissionDefinition {
   failed?: boolean;
   failureReason?: string;
   failureReputationDelta?: number;
+  storyArcId?: string;
+  storyChapterId?: string;
+  storyCritical?: boolean;
+  prerequisiteMissionIds?: string[];
+  retryOnFailure?: boolean;
+  reputationRewards?: Partial<Record<FactionId, number>>;
   passengerCount?: number;
   consumeCargoOnComplete?: boolean;
   escort?: {
