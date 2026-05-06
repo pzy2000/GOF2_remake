@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { stationById } from "../src/data/world";
 import { GATE_ACTIVATION_SECONDS, getDefaultTargetStation, getJumpGatePosition, shouldCancelAutopilot, WORMHOLE_SECONDS } from "../src/systems/autopilot";
+import { distance } from "../src/systems/math";
 import type { FlightInput } from "../src/types/game";
 
 class MemoryStorage implements Storage {
@@ -83,6 +83,27 @@ describe("autopilot jump flow", () => {
     });
   });
 
+  it("starts a manual gate jump from the active Stargate", async () => {
+    const store = await freshStore();
+    const gate = getJumpGatePosition("helion-reach");
+    store.setState((state) => ({
+      screen: "galaxyMap",
+      previousScreen: "flight",
+      galaxyMapMode: "gate",
+      player: { ...state.player, position: gate, velocity: [0, 0, 0] }
+    }));
+    store.getState().activateStargateJumpToSystem("kuro-belt");
+    const state = store.getState();
+    expect(state.screen).toBe("flight");
+    expect(state.autopilot).toMatchObject({
+      phase: "gate-activation",
+      originSystemId: "helion-reach",
+      targetSystemId: "kuro-belt",
+      targetStationId: "kuro-deep",
+      cancelable: false
+    });
+  });
+
   it("moves from gate approach to activation and then wormhole transit", async () => {
     const store = await freshStore();
     store.getState().startJumpToSystem("kuro-belt");
@@ -99,7 +120,7 @@ describe("autopilot jump flow", () => {
     expect(store.getState().autopilot?.phase).toBe("wormhole");
   });
 
-  it("switches systems after wormhole transit and targets the destination station", async () => {
+  it("switches systems after wormhole transit and exits near the destination Stargate", async () => {
     const store = await freshStore();
     store.getState().startJumpToSystem("kuro-belt");
     store.setState((state) => ({
@@ -110,37 +131,9 @@ describe("autopilot jump flow", () => {
     expect(state.currentSystemId).toBe("kuro-belt");
     expect(state.currentStationId).toBeUndefined();
     expect(state.targetId).toBeUndefined();
-    expect(state.autopilot).toMatchObject({
-      phase: "to-destination-station",
-      targetStationId: "kuro-deep",
-      cancelable: true
-    });
-  });
-
-  it("automatically docks when the destination station is reached", async () => {
-    const store = await freshStore();
-    const station = stationById["kuro-deep"];
-    store.setState((state) => ({
-      screen: "flight",
-      currentSystemId: "kuro-belt",
-      currentStationId: undefined,
-      player: { ...state.player, position: station.position, velocity: [0, 0, 0] },
-      autopilot: {
-        phase: "to-destination-station",
-        originSystemId: "helion-reach",
-        targetSystemId: "kuro-belt",
-        targetStationId: station.id,
-        targetPosition: station.position,
-        timer: 0,
-        cancelable: true
-      }
-    }));
-    store.getState().tick(0.1);
-    expect(store.getState().autopilot?.phase).toBe("docking");
-    store.getState().tick(1);
-    expect(store.getState().screen).toBe("station");
-    expect(store.getState().currentStationId).toBe("kuro-deep");
-    expect(store.getState().autopilot).toBeUndefined();
+    expect(state.autopilot).toBeUndefined();
+    expect(distance(state.player.position, getJumpGatePosition("kuro-belt"))).toBeLessThan(190);
+    expect(state.knownSystems).toContain("ashen-drift");
   });
 
   it("cancels only during cancelable navigation phases and ignores invalid routes", async () => {

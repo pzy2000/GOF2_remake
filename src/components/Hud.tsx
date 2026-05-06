@@ -1,9 +1,10 @@
-import { commodities, stationById, stations, systemById, useGameStore } from "../state/gameStore";
+import { commodities, stationById, systemById, useGameStore } from "../state/gameStore";
 import { commodityById, factionNames } from "../data/world";
 import { getOccupiedCargo } from "../systems/economy";
 import { getEquipmentEffects, hasMiningBeam } from "../systems/equipment";
 import { getMissionDeadlineRemaining } from "../systems/missions";
 import { distance } from "../systems/math";
+import { getNearestNavigationTarget } from "../systems/navigation";
 
 function Bar({ label, value, max, tone }: { label: string; value: number; max: number; tone: "cyan" | "green" | "orange" | "red" }) {
   const percent = Math.max(0, Math.min(100, (value / max) * 100));
@@ -31,11 +32,9 @@ export function Hud() {
   const gameClock = useGameStore((state) => state.gameClock);
   const saveGame = useGameStore((state) => state.saveGame);
   const setScreen = useGameStore((state) => state.setScreen);
+  const openGalaxyMap = useGameStore((state) => state.openGalaxyMap);
   const equipmentEffects = getEquipmentEffects(player.equipment);
-  const nearestStation = stations
-    .filter((station) => station.systemId === currentSystem.id)
-    .map((station) => ({ station, dist: distance(player.position, station.position) }))
-    .sort((a, b) => a.dist - b.dist)[0];
+  const nearestNavigation = getNearestNavigationTarget(currentSystem.id, player.position);
   const pirateCount = runtime.enemies.filter((ship) => ship.role === "pirate" && ship.hull > 0 && ship.deathTimer === undefined).length;
   const graceRemaining = Math.max(0, Math.ceil(runtime.graceUntil - runtime.clock));
   const nearestMine = runtime.asteroids
@@ -71,7 +70,11 @@ export function Hud() {
         <p>Throttle {Math.round(player.throttle * 100)}% · Speed {Math.round(Math.hypot(...player.velocity))}</p>
         {autopilot ? <p>Autopilot: {navLabel} · {navDistance}m</p> : null}
         <p>{graceRemaining > 0 ? `Enemy weapons safe for ${graceRemaining}s` : pirateCount > 0 ? `${pirateCount} pirate contact(s)` : "Local space clear"}</p>
-        {nearestStation ? <p>Nearest station: {stationById[nearestStation.station.id].name} {Math.round(nearestStation.dist)}m</p> : null}
+        {nearestNavigation ? (
+          <p>
+            {nearestNavigation.kind === "station" ? "Nearest station" : "Nearest nav"}: {nearestNavigation.name} {Math.round(nearestNavigation.distance)}m
+          </p>
+        ) : null}
       </section>
       <section className="hud-panel hud-target">
         {target ? (
@@ -122,7 +125,7 @@ export function Hud() {
         <p>{runtime.message}</p>
         {autopilot?.cancelable ? <p>Manual flight input cancels autopilot.</p> : null}
         <div className="quick-actions">
-          <button onClick={() => setScreen("galaxyMap")} disabled={!!autopilot}>Map</button>
+          <button onClick={() => openGalaxyMap("browse")} disabled={!!autopilot}>Map</button>
           <button onClick={() => saveGame()}>Save</button>
           <button onClick={() => setScreen("pause")}>Pause</button>
         </div>

@@ -57,6 +57,8 @@ export type Screen =
   | "credits"
   | "gameOver";
 
+export type GalaxyMapMode = "browse" | "gate" | "station-route";
+
 export type StationTab =
   | "Market"
   | "Hangar"

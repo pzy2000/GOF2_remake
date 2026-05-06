@@ -717,6 +717,270 @@ button.equipment-trigger {
   border-color: rgba(255, 193, 103, 0.74);
 }
 
+.galaxy-panel {
+  max-height: 92vh;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 18% 20%, rgba(61, 150, 154, 0.18), transparent 28%),
+    radial-gradient(circle at 82% 76%, rgba(204, 116, 74, 0.16), transparent 30%),
+    linear-gradient(150deg, rgba(5, 13, 27, 0.96), rgba(8, 12, 27, 0.94) 52%, rgba(18, 13, 22, 0.96));
+}
+
+.galaxy-header {
+  margin-bottom: 12px;
+}
+
+.galaxy-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.galaxy-controls span {
+  min-width: 54px;
+  color: #a9d9ee;
+  font-weight: 800;
+  text-align: right;
+}
+
+.galaxy-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  gap: 16px;
+  min-height: 0;
+}
+
+.galaxy-chart {
+  position: relative;
+  min-height: 560px;
+  overflow: hidden;
+  border: 1px solid rgba(128, 214, 255, 0.24);
+  border-radius: 8px;
+  background:
+    linear-gradient(rgba(100, 180, 210, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(100, 180, 210, 0.06) 1px, transparent 1px),
+    rgba(3, 8, 18, 0.7);
+  background-size: 42px 42px;
+  cursor: grab;
+  touch-action: none;
+}
+
+.galaxy-chart:active {
+  cursor: grabbing;
+}
+
+.galaxy-starfield,
+.galaxy-chart-space,
+.galaxy-routes {
+  position: absolute;
+  inset: 0;
+}
+
+.galaxy-starfield i {
+  position: absolute;
+  border-radius: 999px;
+  background: #eaf8ff;
+  box-shadow: 0 0 10px rgba(128, 214, 255, 0.9);
+}
+
+.galaxy-chart-space {
+  left: 50%;
+  top: 50%;
+  transform-origin: center;
+  margin-left: -420px;
+  margin-top: -280px;
+}
+
+.galaxy-routes {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.galaxy-routes line {
+  stroke: rgba(121, 143, 171, 0.22);
+  stroke-width: 1.2;
+  stroke-dasharray: 6 8;
+}
+
+.galaxy-routes line.known {
+  stroke: rgba(117, 228, 255, 0.42);
+  stroke-width: 1.7;
+  stroke-dasharray: none;
+}
+
+.galaxy-system {
+  --system-tone: #6ee7ff;
+  position: absolute;
+  width: 132px;
+  height: 132px;
+  min-height: 132px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #edfaff;
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+}
+
+.galaxy-system:hover:not(:disabled),
+.galaxy-system.active {
+  background: transparent;
+}
+
+.galaxy-system .orbit,
+.galaxy-system .star-core,
+.galaxy-system .moon,
+.galaxy-system .system-name {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.galaxy-system .orbit {
+  border: 1px solid color-mix(in srgb, var(--system-tone), transparent 45%);
+  border-radius: 999px;
+  box-shadow: 0 0 22px color-mix(in srgb, var(--system-tone), transparent 76%);
+}
+
+.galaxy-system .orbit-one {
+  width: 70px;
+  height: 34px;
+  transform: translate(-50%, -50%) rotate(-18deg);
+}
+
+.galaxy-system .orbit-two {
+  width: 96px;
+  height: 48px;
+  opacity: 0.58;
+  transform: translate(-50%, -50%) rotate(28deg);
+}
+
+.galaxy-system .star-core {
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--system-tone);
+  box-shadow:
+    0 0 18px var(--system-tone),
+    0 0 46px color-mix(in srgb, var(--system-tone), transparent 26%);
+}
+
+.galaxy-system .moon {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #f4fbff;
+  opacity: 0.86;
+}
+
+.galaxy-system .moon-one {
+  transform: translate(14px, -36px);
+}
+
+.galaxy-system .moon-two {
+  width: 6px;
+  height: 6px;
+  transform: translate(-44px, 14px);
+  opacity: 0.58;
+}
+
+.galaxy-system .system-name {
+  top: calc(50% + 54px);
+  width: 132px;
+  color: #dff6ff;
+  font-size: 0.78rem;
+  font-weight: 900;
+  text-align: center;
+  text-shadow: 0 0 12px rgba(0, 0, 0, 0.9);
+  white-space: normal;
+}
+
+.galaxy-system.locked {
+  opacity: 0.46;
+  filter: grayscale(0.8);
+}
+
+.galaxy-system.current .star-core {
+  background: #ffd780;
+  box-shadow: 0 0 20px #ffd780, 0 0 54px rgba(255, 193, 103, 0.75);
+}
+
+.galaxy-system.selected::after,
+.galaxy-system.current::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.galaxy-system.selected::after {
+  width: 116px;
+  height: 116px;
+  border: 1px solid rgba(234, 248, 255, 0.88);
+}
+
+.galaxy-system.current::before {
+  width: 84px;
+  height: 84px;
+  border: 2px solid rgba(255, 205, 119, 0.76);
+}
+
+.galaxy-details {
+  align-self: stretch;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  border: 1px solid rgba(128, 214, 255, 0.22);
+  border-radius: 8px;
+  background: rgba(4, 12, 24, 0.68);
+  padding: 16px;
+}
+
+.galaxy-details h3 {
+  font-size: 1.25rem;
+}
+
+.galaxy-details p {
+  color: #adc3d6;
+  line-height: 1.45;
+}
+
+.galaxy-stat-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.galaxy-stat-row span {
+  min-width: 0;
+  border: 1px solid rgba(128, 214, 255, 0.16);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  padding: 8px;
+  color: #dff6ff;
+  font-weight: 800;
+}
+
+.galaxy-help {
+  font-size: 0.86rem;
+}
+
+.gate-hint {
+  border-color: rgba(255, 214, 128, 0.62);
+  color: #fff2c5;
+  box-shadow: 0 0 24px rgba(255, 193, 103, 0.18);
+}
+
 .stat-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -772,6 +1036,23 @@ button.equipment-trigger {
   .screen-header {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .galaxy-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .galaxy-chart {
+    min-height: 440px;
+  }
+
+  .galaxy-details {
+    order: -1;
+  }
+
+  .galaxy-controls {
+    flex-wrap: wrap;
+    justify-content: flex-start;
   }
 }
 

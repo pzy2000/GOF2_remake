@@ -2,11 +2,12 @@ import { Canvas, useFrame, useLoader, useThree } from "@react-three/fiber";
 import { Html, Line, Stars } from "@react-three/drei";
 import { Suspense, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
-import { stationById, stations, systemById, useGameStore } from "../state/gameStore";
+import { stations, systemById, useGameStore } from "../state/gameStore";
 import type { AsteroidEntity, ConvoyEntity, FlightEntity, LootEntity, ProjectileEntity, SalvageEntity, Vec3, VisualEffectEntity } from "../types/game";
 import { add, forwardFromRotation, normalize, scale, sub } from "../systems/math";
 import { getOreColor } from "../systems/difficulty";
 import { getJumpGatePosition } from "../systems/autopilot";
+import { getNearestNavigationTarget } from "../systems/navigation";
 
 function toThree(position: Vec3): [number, number, number] {
   return [position[0], position[1], position[2]];
@@ -719,10 +720,14 @@ export function FlightScene() {
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const currentSystemId = useGameStore((state) => state.currentSystemId);
   const player = useGameStore((state) => state.player);
-  const station = stations
-    .filter((candidate) => candidate.systemId === currentSystemId)
-    .map((candidate) => ({ ...candidate, dist: Math.round(Math.hypot(player.position[0] - candidate.position[0], player.position[1] - candidate.position[1], player.position[2] - candidate.position[2])) }))
-    .sort((a, b) => a.dist - b.dist)[0];
+  const navigationTarget = getNearestNavigationTarget(currentSystemId, player.position);
+  const hint = navigationTarget
+    ? navigationTarget.inRange
+      ? navigationTarget.kind === "station"
+        ? `E Dock: ${navigationTarget.name}`
+        : "E Activate: Stargate"
+      : `${navigationTarget.name} ${Math.round(navigationTarget.distance)}m`
+    : undefined;
   return (
     <div
       ref={canvasRef}
@@ -739,7 +744,7 @@ export function FlightScene() {
           <SceneContent />
         </Suspense>
       </Canvas>
-      {station ? <div className="dock-hint">{station.dist < 260 ? `E Dock: ${stationById[station.id].name}` : `${stationById[station.id].name} ${station.dist}m`}</div> : null}
+      {hint ? <div className={`dock-hint ${navigationTarget?.kind === "stargate" ? "gate-hint" : ""}`}>{hint}</div> : null}
     </div>
   );
 }
