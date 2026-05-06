@@ -6,6 +6,7 @@ import { stationById, stations, systemById, useGameStore } from "../state/gameSt
 import type { AsteroidEntity, FlightEntity, LootEntity, ProjectileEntity, Vec3, VisualEffectEntity } from "../types/game";
 import { add, forwardFromRotation, normalize, scale, sub } from "../systems/math";
 import { getOreColor } from "../systems/difficulty";
+import { getJumpGatePosition } from "../systems/autopilot";
 
 function toThree(position: Vec3): [number, number, number] {
   return [position[0], position[1], position[2]];
@@ -256,6 +257,50 @@ function StationModel() {
   );
 }
 
+function JumpGateModel() {
+  const currentSystemId = useGameStore((state) => state.currentSystemId);
+  const autopilot = useGameStore((state) => state.autopilot);
+  const clock = useGameStore((state) => state.runtime.clock);
+  const gatePosition = getJumpGatePosition(currentSystemId);
+  const active =
+    autopilot?.originSystemId === currentSystemId &&
+    (autopilot.phase === "to-origin-gate" || autopilot.phase === "gate-activation" || autopilot.phase === "wormhole");
+  const spool = active && autopilot?.phase === "gate-activation" ? Math.min(1, autopilot.timer / 2.4) : active ? 0.35 : 0;
+  const pulse = 0.5 + Math.sin(clock * (active ? 8 : 2.2)) * 0.5;
+  return (
+    <group position={toThree(gatePosition)}>
+      <group rotation={[0, 0, clock * (active ? 0.9 + spool : 0.18)]}>
+        <mesh rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[88, 5.4, 12, 64]} />
+          <meshStandardMaterial color="#7ddcff" emissive="#1f9aff" emissiveIntensity={0.55 + spool * 1.2} metalness={0.55} roughness={0.28} />
+        </mesh>
+        <mesh rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[124, 3.2, 8, 64]} />
+          <meshBasicMaterial color="#8f7bff" transparent opacity={0.35 + spool * 0.35} toneMapped={false} />
+        </mesh>
+        {[0, 1, 2, 3].map((index) => {
+          const angle = index * (Math.PI / 2);
+          return (
+            <mesh key={index} position={[Math.cos(angle) * 112, Math.sin(angle) * 112, 0]} rotation={[0, 0, angle]}>
+              <boxGeometry args={[56, 12, 16]} />
+              <meshStandardMaterial color="#52677a" metalness={0.68} roughness={0.26} emissive="#10243b" />
+            </mesh>
+          );
+        })}
+      </group>
+      <mesh>
+        <sphereGeometry args={[18 + pulse * 6 + spool * 16, 20, 12]} />
+        <meshBasicMaterial color={spool > 0.82 ? "#ffffff" : "#73f0ff"} transparent opacity={0.32 + spool * 0.42} toneMapped={false} />
+      </mesh>
+      <Line points={[[-170, 0, 160], [0, 0, 0], [170, 0, 160]]} color="#62d9ff" lineWidth={1.4 + spool * 2.2} transparent opacity={0.18 + spool * 0.42} />
+      <pointLight color="#64e4ff" intensity={1 + spool * 4} distance={420} />
+      <Html center distanceFactor={13} className="target-label">
+        JUMP GATE
+      </Html>
+    </group>
+  );
+}
+
 function StationGeometry({ station }: { station: (typeof stations)[number] }) {
   const accent =
     station.archetype === "Military Outpost"
@@ -401,6 +446,33 @@ function LootCrate({ loot }: { loot: LootEntity }) {
   );
 }
 
+function WormholeTunnel() {
+  const autopilot = useGameStore((state) => state.autopilot);
+  const player = useGameStore((state) => state.player);
+  const clock = useGameStore((state) => state.runtime.clock);
+  const rings = useMemo(() => Array.from({ length: 16 }, (_, index) => index), []);
+  if (autopilot?.phase !== "wormhole") return null;
+  return (
+    <group position={toThree(player.position)} rotation={player.rotation}>
+      {rings.map((index) => {
+        const z = -90 - index * 58 - ((clock * 260) % 58);
+        const radius = 42 + index * 9 + Math.sin(clock * 12 + index) * 7;
+        const opacity = Math.max(0, 0.68 - index * 0.035);
+        return (
+          <mesh key={index} position={[0, 0, z]} rotation={[0, 0, clock * 1.8 + index * 0.7]}>
+            <torusGeometry args={[radius, 2.2 + (index % 3), 8, 42]} />
+            <meshBasicMaterial color={index % 2 === 0 ? "#65e7ff" : "#9b7bff"} transparent opacity={opacity} toneMapped={false} />
+          </mesh>
+        );
+      })}
+      {[-1, 1].map((side) => (
+        <Line key={side} points={[[side * 28, 0, 20], [side * 120, 35, -720]]} color="#dff8ff" lineWidth={2} transparent opacity={0.38} />
+      ))}
+      <pointLight color="#7ddcff" intensity={4.8} distance={560} />
+    </group>
+  );
+}
+
 function VisualEffect({ effect }: { effect: VisualEffectEntity }) {
   const alpha = Math.max(0, effect.life / effect.maxLife);
   const particles = useMemo(
@@ -423,6 +495,69 @@ function VisualEffect({ effect }: { effect: VisualEffectEntity }) {
       }),
     [effect.id, effect.kind, effect.particleCount, effect.secondaryColor, effect.size, effect.spread, effect.color]
   );
+
+  if (effect.kind === "nav-ring") {
+    return (
+      <group position={toThree(effect.position)}>
+        <mesh rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[effect.size, 1.6, 8, 48]} />
+          <meshBasicMaterial color={effect.color} transparent opacity={alpha * 0.55} toneMapped={false} />
+        </mesh>
+        <mesh>
+          <sphereGeometry args={[7 + alpha * 7, 12, 8]} />
+          <meshBasicMaterial color={effect.secondaryColor ?? effect.color} transparent opacity={alpha * 0.3} toneMapped={false} />
+        </mesh>
+        {effect.label ? (
+          <Html center distanceFactor={10} className="effect-label" style={{ opacity: alpha }}>
+            {effect.label}
+          </Html>
+        ) : null}
+      </group>
+    );
+  }
+
+  if (effect.kind === "gate-spool") {
+    return (
+      <group position={toThree(effect.position)}>
+        <mesh rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[effect.size * (1.12 - alpha * 0.2), 4.2, 10, 64]} />
+          <meshBasicMaterial color={effect.color} transparent opacity={alpha * 0.58} toneMapped={false} />
+        </mesh>
+        <mesh>
+          <sphereGeometry args={[effect.size * 0.2 + (1 - alpha) * 24, 18, 12]} />
+          <meshBasicMaterial color={effect.secondaryColor ?? effect.color} transparent opacity={alpha * 0.34} toneMapped={false} />
+        </mesh>
+        {particles.map((particle, index) => (
+          <mesh key={index} position={toThree(scale(particle.position, 1.1 - alpha * 0.3))}>
+            <sphereGeometry args={[particle.size * (0.8 + alpha), 8, 6]} />
+            <meshBasicMaterial color={particle.color} transparent opacity={alpha * 0.72} toneMapped={false} />
+          </mesh>
+        ))}
+        {effect.label ? (
+          <Html center distanceFactor={9} className="effect-label" style={{ opacity: alpha }}>
+            {effect.label}
+          </Html>
+        ) : null}
+      </group>
+    );
+  }
+
+  if (effect.kind === "wormhole") {
+    return (
+      <group position={toThree(effect.position)}>
+        {particles.map((particle, index) => (
+          <mesh key={index} position={toThree(scale(particle.position, 1.8 - alpha * 0.6))}>
+            <sphereGeometry args={[particle.size * (1.2 + alpha), 8, 6]} />
+            <meshBasicMaterial color={particle.color} transparent opacity={alpha * 0.68} toneMapped={false} />
+          </mesh>
+        ))}
+        <mesh>
+          <sphereGeometry args={[effect.size * (1.1 - alpha * 0.35), 18, 12]} />
+          <meshBasicMaterial color={effect.color} transparent opacity={alpha * 0.14} wireframe toneMapped={false} />
+        </mesh>
+      </group>
+    );
+  }
 
   if (effect.kind === "mining-beam" && effect.endPosition) {
     const jitterA = add(effect.endPosition, [Math.sin(effect.life * 53) * 7, Math.cos(effect.life * 41) * 4, Math.sin(effect.life * 31) * 7]);
@@ -502,8 +637,10 @@ function SceneContent() {
       <directionalLight position={[180, 220, 120]} intensity={1.4} />
       <pointLight position={[0, 0, 120]} color="#60c8ff" intensity={0.6} distance={500} />
       <InfiniteSkybox />
+      <JumpGateModel />
       <StationModel />
       <PlayerShip />
+      <WormholeTunnel />
       <TargetLock />
       {runtime.enemies.map((ship) => (
         <NpcShip key={ship.id} ship={ship} />

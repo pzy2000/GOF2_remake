@@ -4,7 +4,8 @@ import { stationById, systems, useGameStore } from "../state/gameStore";
 export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
   const currentSystemId = useGameStore((state) => state.currentSystemId);
   const knownSystems = useGameStore((state) => state.knownSystems);
-  const jumpToSystem = useGameStore((state) => state.jumpToSystem);
+  const startJumpToSystem = useGameStore((state) => state.startJumpToSystem);
+  const autopilot = useGameStore((state) => state.autopilot);
   const setScreen = useGameStore((state) => state.setScreen);
   return (
     <section className={embedded ? "galaxy embedded" : "modal-screen galaxy"}>
@@ -26,8 +27,8 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                 <p>{system.description}</p>
                 <p>{factionNames[system.factionId]} · Risk {Math.round(system.risk * 100)}%</p>
                 <p>Station: {system.stationIds.map((id) => stationById[id].name).join(", ")}</p>
-                <button disabled={!known || current} onClick={() => jumpToSystem(system.id)}>
-                  {current ? "Current System" : known ? "Jump" : "Unknown"}
+                <button disabled={!known || current || !!autopilot} onClick={() => startJumpToSystem(system.id)}>
+                  {current ? "Current System" : known ? "Autopilot Jump" : "Unknown"}
                 </button>
               </article>
             );

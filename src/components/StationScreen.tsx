@@ -1,7 +1,7 @@
 import { commodities, shipById, ships, stationById, systemById, useGameStore } from "../state/gameStore";
 import { commodityById, factionNames, missionTemplates, weapons } from "../data/world";
 import { canCompleteMission } from "../systems/missions";
-import { getCargoUsed, getCommodityPrice } from "../systems/economy";
+import { canBuyCommodityAtStation, getCargoUsed, getCommodityPrice, isCommodityVisibleInMarket } from "../systems/economy";
 import { reputationLabel } from "../systems/reputation";
 import { GalaxyMap } from "./GalaxyMap";
 import { AtlasIcon } from "./AtlasIcon";
@@ -60,13 +60,14 @@ function MarketTab() {
   const reputation = useGameStore((state) => state.reputation.factions[station.factionId]);
   const buy = useGameStore((state) => state.buy);
   const sell = useGameStore((state) => state.sell);
-  const listed = commodities.filter((item) => item.category !== "ore" || station.archetype === "Mining Station" || station.archetype === "Pirate Black Market");
+  const listed = commodities.filter((item) => isCommodityVisibleInMarket(item.id, station, player.cargo));
   return (
     <div className="table-panel">
         <h2>Market</h2>
         <p>Credits {player.credits.toLocaleString()} · Cargo {getCargoUsed(player.cargo)}/{player.stats.cargoCapacity}</p>
         <div className="market-list">
           {listed.map((commodity) => {
+            const canBuy = canBuyCommodityAtStation(commodity.id, station);
             const buyPrice = getCommodityPrice(commodity.id, station, system, reputation, "buy");
             const sellPrice = getCommodityPrice(commodity.id, station, system, reputation, "sell");
             return (
@@ -76,8 +77,14 @@ function MarketTab() {
                   <strong>{commodity.name}</strong>
                   <span>{commodity.legal ? "Licensed" : "Restricted"} · Hold {player.cargo[commodity.id] ?? 0}</span>
                 </div>
-                <b>{buyPrice}/{sellPrice} cr</b>
-                <button onClick={() => buy(commodity.id, 1)}>Buy</button>
+                <b>{canBuy ? buyPrice : "—"}/{sellPrice} cr</b>
+                <button
+                  onClick={() => buy(commodity.id, 1)}
+                  disabled={!canBuy}
+                  title={canBuy ? undefined : "Not stocked at this station"}
+                >
+                  Buy
+                </button>
                 <button onClick={() => sell(commodity.id, 1)} disabled={(player.cargo[commodity.id] ?? 0) <= 0}>Sell</button>
               </div>
             );
@@ -226,7 +233,10 @@ function LoungeTab() {
   return (
     <div className="lounge">
       <h2>Lounge</h2>
-      <p>Dockhands in {currentSystem.name} say mining stations pay reliably for mechanical parts, while research arrays overpay for optics, microchips, and voidglass.</p>
+      <p>
+        Dockhands in {currentSystem.name} say any market will buy ore already in your hold, but mining stations
+        and black markets are the ones that stock it.
+      </p>
       <p>Patrol captains are quietly posting bounty work wherever Independent Pirates pressure the lanes.</p>
       <p>Pirate black markets buy restricted cargo cheaply, but civilized stations charge a heavy risk premium.</p>
     </div>

@@ -42,6 +42,10 @@ Generated project assets:
 
 No external copyrighted image packs are included. The flight scene uses `skybox-panorama.webp` as a camera-locked inside-sphere skybox so the nebula reads as infinitely far away while the older `nebula-bg.webp` remains available for station/menu fallback art. The game uses Three.js primitives and procedural geometry for ships, stations, asteroids, projectiles, and loot.
 
+## Jump Travel
+
+Galaxy Map jumps now launch an autopilot route instead of instantly changing systems. The ship leaves the station, flies to the local jump gate, spools a wormhole transit, arrives at the target system, and auto-docks at that system's primary station. Manual flight input cancels autopilot during navigation phases; once the gate spool or wormhole begins, the transit completes.
+
 ## Known Limitations
 
 This is a vertical slice, not a full campaign. Mission archetypes beyond courier, mining, and bounty are represented on the board but not fully simulated. Commodity, equipment, and faction sprite sheets are sliced in the UI with CSS atlas positioning. Audio is represented by UI feedback and is ready for a fuller browser audio layer later.

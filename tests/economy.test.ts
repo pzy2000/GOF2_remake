@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { commodityById, stationById, systemById, shipById } from "../src/data/world";
-import { buyCommodity, getCargoUsed, getCommodityPrice, sellCommodity } from "../src/systems/economy";
+import {
+  buyCommodity,
+  canBuyCommodityAtStation,
+  getCargoUsed,
+  getCommodityPrice,
+  isCommodityVisibleInMarket,
+  sellCommodity
+} from "../src/systems/economy";
 import type { PlayerState } from "../src/types/game";
 
 function player(): PlayerState {
@@ -46,5 +53,25 @@ describe("economy", () => {
     expect(sold.player.cargo.iron).toBe(3);
     const overfill = buyCommodity({ ...sold.player, stats: { ...sold.player.stats, cargoCapacity: 3 } }, station, kuro, "titanium", 1);
     expect(overfill.ok).toBe(false);
+  });
+
+  it("shows held ore anywhere but stocks ore only at ore markets", () => {
+    const helion = systemById["helion-reach"];
+    const tradeHub = stationById["helion-prime"];
+    const miningStation = stationById["kuro-deep"];
+    const start = player();
+
+    expect(isCommodityVisibleInMarket("iron", tradeHub, start.cargo)).toBe(false);
+    expect(canBuyCommodityAtStation("iron", tradeHub)).toBe(false);
+
+    const carryingOre = { ...start, cargo: { iron: 2 } };
+    expect(isCommodityVisibleInMarket("iron", tradeHub, carryingOre.cargo)).toBe(true);
+    expect(canBuyCommodityAtStation("iron", tradeHub)).toBe(false);
+    expect(buyCommodity(carryingOre, tradeHub, helion, "iron", 1).ok).toBe(false);
+
+    expect(isCommodityVisibleInMarket("iron", miningStation, start.cargo)).toBe(true);
+    expect(canBuyCommodityAtStation("iron", miningStation)).toBe(true);
+    expect(isCommodityVisibleInMarket("basic-food", tradeHub, start.cargo)).toBe(true);
+    expect(canBuyCommodityAtStation("basic-food", tradeHub)).toBe(true);
   });
 });

@@ -3,6 +3,7 @@ import { commodities, commodityById, missionTemplates, shipById, ships, stationB
 import type {
   AssetManifest,
   AsteroidEntity,
+  AutoPilotState,
   CargoHold,
   CommodityId,
   FlightEntity,
@@ -32,6 +33,17 @@ import {
   STARTER_GRACE_SECONDS
 } from "../systems/difficulty";
 import { integrateVelocity } from "../systems/flight";
+import {
+  GATE_ACTIVATION_SECONDS,
+  GATE_ARRIVAL_DISTANCE,
+  getDefaultTargetStation,
+  getJumpGatePosition,
+  integrateAutopilotStep,
+  shouldCancelAutopilot,
+  STATION_DOCK_DISTANCE,
+  WORMHOLE_SECONDS,
+  rotationToward
+} from "../systems/autopilot";
 import { buyCommodity, getCargoUsed, sellCommodity } from "../systems/economy";
 import { createInitialReputation, updateReputation } from "../systems/reputation";
 import { acceptMission as acceptMissionPure, canCompleteMission, cloneMissionTemplates, completeMission as completeMissionPure } from "../systems/missions";
@@ -149,6 +161,73 @@ function addCargoWithinCapacity(player: PlayerState, commodityId: CommodityId, a
   };
 }
 
+function tickRuntimeEffects(runtime: RuntimeState, delta: number, clock: number): RuntimeState {
+  return {
+    ...runtime,
+    clock,
+    effects: runtime.effects
+      .map((effect) => ({
+        ...effect,
+        life: effect.life - delta,
+        position: add(effect.position, scale(effect.velocity ?? [0, 0, 0], delta)),
+        endPosition: effect.endPosition ? add(effect.endPosition, scale(effect.velocity ?? [0, 0, 0], delta)) : undefined
+      }))
+      .filter((effect) => effect.life > 0)
+  };
+}
+
+function navEffect(position: Vec3, label: string): RuntimeState["effects"][number] {
+  return {
+    id: projectileId("nav-ring"),
+    kind: "nav-ring",
+    position,
+    color: "#6ee7ff",
+    secondaryColor: "#d9f8ff",
+    label,
+    particleCount: 0,
+    spread: 1,
+    size: 54,
+    life: 0.18,
+    maxLife: 0.18
+  };
+}
+
+function gateSpoolEffect(position: Vec3, progress: number): RuntimeState["effects"][number] {
+  return {
+    id: projectileId("gate-spool"),
+    kind: "gate-spool",
+    position,
+    color: progress > 0.82 ? "#ffffff" : "#63e6ff",
+    secondaryColor: "#8f7bff",
+    label: progress > 0.95 ? "JUMP" : undefined,
+    particleCount: 18,
+    spread: 120,
+    size: 92 + progress * 38,
+    life: 0.22,
+    maxLife: 0.22
+  };
+}
+
+function wormholeEffect(position: Vec3): RuntimeState["effects"][number] {
+  return {
+    id: projectileId("wormhole"),
+    kind: "wormhole",
+    position,
+    color: "#6ee7ff",
+    secondaryColor: "#8f7bff",
+    particleCount: 24,
+    spread: 180,
+    size: 120,
+    life: 0.28,
+    maxLife: 0.28
+  };
+}
+
+function launchPositionForStation(stationId: string | undefined, fallback: Vec3): Vec3 {
+  const station = stationId ? stationById[stationId] : undefined;
+  return station ? add(station.position, [0, 0, 280]) : fallback;
+}
+
 interface GameStore {
   screen: Screen;
   previousScreen: Screen;
@@ -160,6 +239,7 @@ interface GameStore {
   assetManifest: AssetManifest;
   player: PlayerState;
   runtime: RuntimeState;
+  autopilot?: AutoPilotState;
   input: FlightInput;
   activeMissions: MissionDefinition[];
   completedMissionIds: string[];
@@ -181,6 +261,8 @@ interface GameStore {
   interact: () => void;
   dockAt: (stationId: string) => void;
   undock: () => void;
+  startJumpToSystem: (systemId: string) => void;
+  cancelAutopilot: (reason?: string) => void;
   jumpToSystem: (systemId: string) => void;
   buy: (commodityId: CommodityId, amount?: number) => void;
   sell: (commodityId: CommodityId, amount?: number) => void;
@@ -214,6 +296,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   assetManifest: fallbackAssetManifest,
   player: createInitialPlayer(),
   runtime: createRuntimeForSystem("helion-reach"),
+  autopilot: undefined,
   input: emptyInput,
   activeMissions: [],
   completedMissionIds: [],
@@ -234,6 +317,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       cameraMode: "chase",
       player: createInitialPlayer(),
       runtime: createRuntimeForSystem("helion-reach"),
+      autopilot: undefined,
       activeMissions: [],
       completedMissionIds: [],
       reputation: createInitialReputation(),
@@ -255,6 +339,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       reputation: save.reputation,
       knownSystems: save.knownSystems,
       runtime: createRuntimeForSystem(save.currentSystemId),
+      autopilot: undefined,
       hasSave: true,
       targetId: undefined
     });
@@ -278,6 +363,191 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const now = state.runtime.clock + delta;
     const input = state.input;
     const { dx, dy } = state.consumeMouse();
+
+    if (state.autopilot) {
+      let runtime = tickRuntimeEffects(state.runtime, delta, now);
+      if (input.pause) {
+        set({ screen: "pause", previousScreen: "flight", runtime, input: { ...get().input, pause: false } });
+        return;
+      }
+
+      const controlInput: FlightInput = { ...input, mouseDX: dx, mouseDY: dy };
+      if (state.autopilot.cancelable && shouldCancelAutopilot(controlInput)) {
+        set({
+          autopilot: undefined,
+          runtime: { ...runtime, message: "Autopilot canceled. Manual control restored." },
+          input: { ...emptyInput }
+        });
+        return;
+      }
+
+      let player = state.player;
+      let autopilot: AutoPilotState | undefined = { ...state.autopilot, timer: state.autopilot.timer + delta };
+      let currentSystemId = state.currentSystemId;
+      let currentStationId = state.currentStationId;
+      let screen: Screen = "flight";
+      let previousScreen = state.previousScreen;
+      let knownSystems = state.knownSystems;
+      let targetId = state.targetId;
+      const targetSystem = systemById[autopilot.targetSystemId];
+      const targetStation = stationById[autopilot.targetStationId];
+
+      if (!targetSystem || !targetStation) {
+        set({
+          autopilot: undefined,
+          runtime: { ...runtime, message: "Autopilot route failed. Manual control restored." },
+          input: { ...emptyInput }
+        });
+        return;
+      }
+
+      if (autopilot.phase === "to-origin-gate") {
+        const gatePosition = getJumpGatePosition(currentSystemId);
+        const step = integrateAutopilotStep({
+          player,
+          targetPosition: gatePosition,
+          delta,
+          maxSpeed: 680,
+          arriveDistance: GATE_ARRIVAL_DISTANCE
+        });
+        player = step.player;
+        runtime.effects.push(navEffect(gatePosition, `Gate ${Math.round(step.distanceToTarget)}m`));
+        runtime.message = `Autopilot: aligning to jump gate · ${Math.round(step.distanceToTarget)}m`;
+        autopilot = { ...autopilot, targetPosition: gatePosition };
+        if (step.distanceToTarget <= GATE_ARRIVAL_DISTANCE) {
+          autopilot = {
+            ...autopilot,
+            phase: "gate-activation",
+            targetPosition: gatePosition,
+            timer: 0,
+            cancelable: false
+          };
+          runtime.message = "Gate approach locked. Spooling jump field.";
+        }
+      } else if (autopilot.phase === "gate-activation") {
+        const gatePosition = getJumpGatePosition(currentSystemId);
+        const progress = clamp(autopilot.timer / GATE_ACTIVATION_SECONDS, 0, 1);
+        const step = integrateAutopilotStep({
+          player,
+          targetPosition: gatePosition,
+          delta,
+          maxSpeed: 260,
+          arriveDistance: 10
+        });
+        player = step.player;
+        runtime.effects.push(gateSpoolEffect(gatePosition, progress));
+        runtime.message = `Gate spool-up ${Math.round(progress * 100)}%`;
+        if (progress >= 1) {
+          autopilot = {
+            ...autopilot,
+            phase: "wormhole",
+            targetPosition: gatePosition,
+            timer: 0,
+            cancelable: false
+          };
+          runtime.effects.push(wormholeEffect(player.position));
+          runtime.message = "Wormhole transit engaged.";
+        }
+      } else if (autopilot.phase === "wormhole") {
+        const progress = clamp(autopilot.timer / WORMHOLE_SECONDS, 0, 1);
+        const forward = forwardFromRotation(player.rotation);
+        player = {
+          ...player,
+          position: add(player.position, scale(forward, (760 + progress * 380) * delta)),
+          velocity: scale(forward, 820 + progress * 360),
+          throttle: 1,
+          energy: clamp(player.energy + delta * 42, 0, player.stats.energy)
+        };
+        runtime.effects.push(wormholeEffect(player.position));
+        runtime.message = `Wormhole transit ${Math.round(progress * 100)}%`;
+        if (progress >= 1) {
+          currentSystemId = targetSystem.id;
+          currentStationId = undefined;
+          knownSystems = Array.from(new Set([...knownSystems, targetSystem.id]));
+          targetId = undefined;
+          const destinationGate = getJumpGatePosition(targetSystem.id);
+          const exitDirection = normalize(sub(targetStation.position, destinationGate));
+          player = {
+            ...player,
+            position: add(destinationGate, scale(exitDirection, 150)),
+            velocity: scale(exitDirection, 420),
+            rotation: rotationToward(exitDirection),
+            throttle: 1
+          };
+          runtime = {
+            ...createRuntimeForSystem(targetSystem.id),
+            message: `Arrived in ${targetSystem.name}. Autopilot set for ${targetStation.name}.`,
+            effects: [wormholeEffect(player.position)]
+          };
+          autopilot = {
+            ...autopilot,
+            phase: "to-destination-station",
+            targetPosition: targetStation.position,
+            timer: 0,
+            cancelable: true
+          };
+        }
+      } else if (autopilot.phase === "to-destination-station") {
+        const step = integrateAutopilotStep({
+          player,
+          targetPosition: targetStation.position,
+          delta,
+          maxSpeed: 620,
+          arriveDistance: STATION_DOCK_DISTANCE
+        });
+        player = step.player;
+        runtime.effects.push(navEffect(targetStation.position, `Dock ${Math.round(step.distanceToTarget)}m`));
+        runtime.message = `Autopilot: approaching ${targetStation.name} · ${Math.round(step.distanceToTarget)}m`;
+        if (step.distanceToTarget <= STATION_DOCK_DISTANCE) {
+          autopilot = {
+            ...autopilot,
+            phase: "docking",
+            targetPosition: targetStation.position,
+            timer: 0,
+            cancelable: false
+          };
+          runtime.message = `Docking approach locked: ${targetStation.name}.`;
+        }
+      } else if (autopilot.phase === "docking") {
+        const step = integrateAutopilotStep({
+          player,
+          targetPosition: targetStation.position,
+          delta,
+          maxSpeed: 170,
+          arriveDistance: 150
+        });
+        player = step.player;
+        runtime.message = `Docking with ${targetStation.name}...`;
+        if (autopilot.timer >= 0.9 || step.distanceToTarget <= 220) {
+          screen = "station";
+          previousScreen = "flight";
+          currentStationId = targetStation.id;
+          autopilot = undefined;
+          player = { ...player, velocity: [0, 0, 0], throttle: 0 };
+          runtime.message = `Docking complete at ${targetStation.name}.`;
+        }
+      }
+
+      set({
+        player,
+        runtime,
+        autopilot,
+        currentSystemId,
+        currentStationId,
+        screen,
+        previousScreen,
+        knownSystems,
+        targetId,
+        primaryCooldown: Math.max(0, state.primaryCooldown - delta),
+        secondaryCooldown: Math.max(0, state.secondaryCooldown - delta),
+        input:
+          screen === "station"
+            ? { ...emptyInput }
+            : { ...get().input, interact: false, cycleTarget: false, toggleMap: false, toggleCamera: false, pause: false, mouseDX: 0, mouseDY: 0 }
+      });
+      return;
+    }
+
     let player = state.player;
     const pitch = clamp(player.rotation[0] + dy * 0.0022 * player.stats.handling, -1.15, 1.15);
     const yaw = player.rotation[1] - dx * 0.0022 * player.stats.handling;
@@ -338,58 +608,68 @@ export const useGameStore = create<GameStore>((set, get) => ({
       .map((asteroid) => ({ asteroid, dist: distance(player.position, asteroid.position) }))
       .sort((a, b) => a.dist - b.dist)[0];
 
-    const miningActive = input.firePrimary && nearestAsteroid && nearestAsteroid.dist < 360 && player.energy > 5;
-    if (miningActive) {
-      runtime.effects.push({
-        id: projectileId("mining-beam"),
-        kind: "mining-beam",
-        position: add(player.position, scale(forward, 12)),
-        endPosition: nearestAsteroid.asteroid.position,
-        color: getOreColor(nearestAsteroid.asteroid.resource),
-        secondaryColor: "#eaffff",
-        label: commodityById[nearestAsteroid.asteroid.resource].name,
-        particleCount: 3,
-        spread: 12,
-        size: 1,
-        life: 0.12,
-        maxLife: 0.12
-      });
-      runtime = {
-        ...runtime,
-        asteroids: runtime.asteroids.map((asteroid) => {
-          if (asteroid.id !== nearestAsteroid.asteroid.id) return asteroid;
-          const progress = asteroid.miningProgress + getMiningProgressIncrement(asteroid.resource, delta);
-          if (progress < 1) return { ...asteroid, miningProgress: progress };
-          const chunk = Math.min(2, asteroid.amount);
-          const popDirection = normalize(sub(add(asteroid.position, [asteroid.radius, 10, asteroid.radius * 0.25]), player.position));
-          runtime.loot.push({
-            id: projectileId("ore"),
-            commodityId: asteroid.resource,
-            amount: chunk,
-            position: add(asteroid.position, [asteroid.radius * 0.6, 0, 0]),
-            velocity: scale(popDirection, 46 + 12 / asteroid.hardness),
-            rarity: asteroid.rarity
-          });
-          runtime.effects.push({
-            id: projectileId("ore-pop"),
-            kind: "hit",
-            position: add(asteroid.position, [asteroid.radius * 0.6, 0, 0]),
-            color: getOreColor(asteroid.resource),
-            secondaryColor: "#ffffff",
-            label: `+${chunk} ${commodityById[asteroid.resource].name}`,
-            particleCount: 8,
-            spread: 18,
-            size: 9 + chunk,
-            life: 0.55,
-            maxLife: 0.55,
-            velocity: [0, 18, 0]
-          });
-          return { ...asteroid, amount: asteroid.amount - chunk, miningProgress: 0 };
-        }),
-        message: `Mining ${commodityById[nearestAsteroid.asteroid.resource].name} vein · ${Math.round(nearestAsteroid.asteroid.miningProgress * 100)}%`
-      };
-      player = { ...player, energy: clamp(player.energy - delta * 12, 0, player.stats.energy) };
-      primaryCooldown = Math.max(primaryCooldown, 0.08);
+    const miningActive = !!(input.firePrimary && nearestAsteroid && nearestAsteroid.dist < 360 && player.energy > 5);
+    if (miningActive && nearestAsteroid) {
+      const cargoAvailable = Math.max(0, player.stats.cargoCapacity - getCargoUsed(player.cargo));
+      if (cargoAvailable <= 0) {
+        runtime = { ...runtime, message: "Cargo hold full." };
+      } else {
+        runtime.effects.push({
+          id: projectileId("mining-beam"),
+          kind: "mining-beam",
+          position: add(player.position, scale(forward, 12)),
+          endPosition: nearestAsteroid.asteroid.position,
+          color: getOreColor(nearestAsteroid.asteroid.resource),
+          secondaryColor: "#eaffff",
+          label: commodityById[nearestAsteroid.asteroid.resource].name,
+          particleCount: 3,
+          spread: 12,
+          size: 1,
+          life: 0.12,
+          maxLife: 0.12
+        });
+
+        let miningMessage = `Mining ${commodityById[nearestAsteroid.asteroid.resource].name} vein · ${Math.round(nearestAsteroid.asteroid.miningProgress * 100)}%`;
+        runtime = {
+          ...runtime,
+          asteroids: runtime.asteroids.map((asteroid) => {
+            if (asteroid.id !== nearestAsteroid.asteroid.id) return asteroid;
+            const progress = asteroid.miningProgress + getMiningProgressIncrement(asteroid.resource, delta);
+            if (progress < 1) {
+              miningMessage = `Mining ${commodityById[asteroid.resource].name} vein · ${Math.round(progress * 100)}%`;
+              return { ...asteroid, miningProgress: progress };
+            }
+
+            const chunk = Math.min(2, asteroid.amount);
+            const result = addCargoWithinCapacity(player, asteroid.resource, chunk);
+            if (result.collected <= 0) {
+              miningMessage = "Cargo hold full.";
+              return asteroid;
+            }
+
+            player = result.player;
+            runtime.effects.push({
+              id: projectileId("ore-pop"),
+              kind: "hit",
+              position: add(asteroid.position, [asteroid.radius * 0.6, 0, 0]),
+              color: getOreColor(asteroid.resource),
+              secondaryColor: "#ffffff",
+              label: `+${result.collected} ${commodityById[asteroid.resource].name}`,
+              particleCount: 8,
+              spread: 18,
+              size: 9 + result.collected,
+              life: 0.55,
+              maxLife: 0.55,
+              velocity: [0, 18, 0]
+            });
+            miningMessage = `Mined ${result.collected} ${commodityById[asteroid.resource].name}. Cargo ${getCargoUsed(player.cargo)}/${player.stats.cargoCapacity}.`;
+            return { ...asteroid, amount: asteroid.amount - result.collected, miningProgress: 0 };
+          }),
+          message: miningMessage
+        };
+        player = { ...player, energy: clamp(player.energy - delta * 12, 0, player.stats.energy) };
+        primaryCooldown = Math.max(primaryCooldown, 0.08);
+      }
     } else if (input.firePrimary && primaryCooldown <= 0 && player.energy >= (weapons["pulse-laser"]?.energyCost ?? 0)) {
       runtime.projectiles.push({
         id: projectileId("laser"),
@@ -598,6 +878,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
             ? "Hull integrity failed."
             : lootDrops.length
               ? "Target destroyed. Cargo canister released."
+              : miningActive
+                ? runtime.message
               : graceActive
                 ? `Pirates are sizing you up · weapons free in ${Math.ceil(runtime.graceUntil - now)}s`
               : runtime.message
@@ -649,23 +931,77 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
     set({ runtime: { ...state.runtime, message: "No interactable object in range." } });
   },
-  dockAt: (stationId) => set({ screen: "station", currentStationId: stationId, stationTab: "Market", previousScreen: "flight" }),
+  dockAt: (stationId) => set({ screen: "station", currentStationId: stationId, stationTab: "Market", previousScreen: "flight", autopilot: undefined }),
   undock: () =>
     set((state) => ({
       screen: "flight",
       currentStationId: undefined,
       previousScreen: "station",
+      autopilot: undefined,
       player: { ...state.player, position: [0, 0, 120], throttle: 0.2 }
     })),
+  startJumpToSystem: (systemId) => {
+    const state = get();
+    const targetSystem = systemById[systemId];
+    const targetStation = getDefaultTargetStation(systemId);
+    if (!targetSystem || !targetStation || systemId === state.currentSystemId) return;
+    const originGate = getJumpGatePosition(state.currentSystemId);
+    const launchPosition = state.screen === "station" ? launchPositionForStation(state.currentStationId, state.player.position) : state.player.position;
+    set({
+      screen: "flight",
+      previousScreen: state.screen,
+      currentStationId: undefined,
+      targetId: undefined,
+      stationTab: "Galaxy Map",
+      autopilot: {
+        phase: "to-origin-gate",
+        originSystemId: state.currentSystemId,
+        targetSystemId: systemId,
+        targetStationId: targetStation.id,
+        targetPosition: originGate,
+        timer: 0,
+        cancelable: true
+      },
+      knownSystems: Array.from(new Set([...state.knownSystems, systemId])),
+      player: {
+        ...state.player,
+        position: launchPosition,
+        velocity: [0, 0, 0],
+        rotation: rotationToward(sub(originGate, launchPosition)),
+        throttle: 0.55
+      },
+      runtime: {
+        ...state.runtime,
+        graceUntil: Math.max(state.runtime.graceUntil, state.runtime.clock + 5),
+        effects: [...state.runtime.effects, navEffect(originGate, "Jump Gate")],
+        message: `Autopilot: plotting jump to ${targetSystem.name}. Manual input cancels.`
+      },
+      input: { ...emptyInput },
+      primaryCooldown: 0,
+      secondaryCooldown: 0
+    });
+  },
+  cancelAutopilot: (reason = "Autopilot canceled. Manual control restored.") => {
+    const state = get();
+    if (!state.autopilot) return;
+    set({
+      autopilot: undefined,
+      runtime: { ...state.runtime, message: reason },
+      input: { ...emptyInput }
+    });
+  },
   jumpToSystem: (systemId) => {
     if (!systemById[systemId]) return;
     set((state) => ({
-      screen: state.screen === "galaxyMap" ? "flight" : state.screen,
+      screen: state.screen === "galaxyMap" || state.screen === "station" ? "flight" : state.screen,
+      previousScreen: state.screen,
       currentSystemId: systemId,
       currentStationId: undefined,
-      runtime: createRuntimeForSystem(systemId),
+      runtime: { ...createRuntimeForSystem(systemId), message: `Jumped to ${systemById[systemId].name}.` },
+      autopilot: undefined,
       targetId: undefined,
       knownSystems: Array.from(new Set([...state.knownSystems, systemId])),
+      input: { ...emptyInput },
       player: { ...state.player, position: [0, 0, 120], velocity: [0, 0, 0], rotation: [0, 0, 0], throttle: 0.25 }
     }));
   },

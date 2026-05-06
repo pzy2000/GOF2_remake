@@ -320,9 +320,11 @@ h3 {
 }
 
 .station-screen {
-  min-height: 100%;
-  overflow: auto;
+  height: 100%;
+  overflow: hidden;
   padding: 24px;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
   background:
     linear-gradient(rgba(3, 7, 18, 0.88), rgba(3, 7, 18, 0.96)),
     url("/assets/generated/nebula-bg.webp") center/cover fixed;
@@ -353,7 +355,9 @@ h3 {
   border-radius: 8px;
   background: rgba(4, 12, 24, 0.76);
   padding: 18px;
-  min-height: 68vh;
+  min-height: 0;
+  overflow: hidden;
+  display: grid;
 }
 
 .split-layout {
@@ -367,6 +371,11 @@ h3 {
 .lounge {
   display: grid;
   gap: 14px;
+  min-height: 0;
+}
+
+.table-panel {
+  grid-template-rows: auto auto minmax(0, 1fr);
 }
 
 .atlas-icon {
@@ -439,6 +448,13 @@ h3 {
 .mission-list {
   display: grid;
   gap: 8px;
+}
+
+.market-list {
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+  padding-right: 4px;
 }
 
 .market-row {

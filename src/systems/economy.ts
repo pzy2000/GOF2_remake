@@ -53,6 +53,25 @@ const archetypeBias: Record<StationArchetype, Partial<Record<CommodityId, number
   }
 };
 
+const oreMarketArchetypes = new Set<StationArchetype>(["Mining Station", "Pirate Black Market"]);
+
+export function canBuyCommodityAtStation(commodityId: CommodityId, station: StationDefinition): boolean {
+  const commodity = commodityById[commodityId];
+  return commodity.category !== "ore" || oreMarketArchetypes.has(station.archetype);
+}
+
+export function isCommodityVisibleInMarket(
+  commodityId: CommodityId,
+  station: StationDefinition,
+  cargo: CargoHold
+): boolean {
+  const commodity = commodityById[commodityId];
+  return (
+    canBuyCommodityAtStation(commodityId, station) ||
+    (commodity.category === "ore" && (cargo[commodityId] ?? 0) > 0)
+  );
+}
+
 export function getCargoUsed(cargo: CargoHold): number {
   return Object.entries(cargo).reduce((total, [commodityId, amount]) => {
     const commodity = commodityById[commodityId as CommodityId];
@@ -94,6 +113,9 @@ export function buyCommodity(
   const total = unitPrice * amount;
   const cargoUsed = getCargoUsed(player.cargo);
   if (amount <= 0) return { ok: false, player, total: 0, message: "Select a positive amount." };
+  if (!canBuyCommodityAtStation(commodityId, station)) {
+    return { ok: false, player, total, message: "Not stocked at this station." };
+  }
   if (cargoUsed + amount > player.stats.cargoCapacity) return { ok: false, player, total, message: "Cargo hold full." };
   if (player.credits < total) return { ok: false, player, total, message: "Not enough credits." };
   return {

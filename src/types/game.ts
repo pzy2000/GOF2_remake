@@ -154,8 +154,16 @@ export interface StarSystemDefinition {
   factionId: FactionId;
   risk: number;
   position: [number, number];
+  jumpGatePosition: Vec3;
   stationIds: string[];
   marketBias: Partial<Record<CommodityId, number>>;
+}
+
+export interface JumpGateDefinition {
+  id: string;
+  systemId: string;
+  name: string;
+  position: Vec3;
 }
 
 export interface MissionDefinition {
@@ -255,7 +263,7 @@ export interface ProjectileEntity {
 
 export interface VisualEffectEntity {
   id: string;
-  kind: "hit" | "shield-hit" | "explosion" | "damage-text" | "mining-beam";
+  kind: "hit" | "shield-hit" | "explosion" | "damage-text" | "mining-beam" | "gate-spool" | "wormhole" | "nav-ring";
   position: Vec3;
   endPosition?: Vec3;
   velocity?: Vec3;
@@ -267,6 +275,23 @@ export interface VisualEffectEntity {
   size: number;
   life: number;
   maxLife: number;
+}
+
+export type AutoPilotPhase =
+  | "to-origin-gate"
+  | "gate-activation"
+  | "wormhole"
+  | "to-destination-station"
+  | "docking";
+
+export interface AutoPilotState {
+  phase: AutoPilotPhase;
+  originSystemId: string;
+  targetSystemId: string;
+  targetStationId: string;
+  targetPosition: Vec3;
+  timer: number;
+  cancelable: boolean;
 }
 
 export interface RuntimeState {

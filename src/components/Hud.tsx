@@ -21,6 +21,7 @@ function Bar({ label, value, max, tone }: { label: string; value: number; max: n
 export function Hud() {
   const player = useGameStore((state) => state.player);
   const runtime = useGameStore((state) => state.runtime);
+  const autopilot = useGameStore((state) => state.autopilot);
   const currentSystem = useGameStore((state) => systemById[state.currentSystemId]);
   const target = useGameStore((state) => state.runtime.enemies.find((ship) => ship.id === state.targetId && ship.hull > 0 && ship.deathTimer === undefined));
   const manifest = useGameStore((state) => state.assetManifest);
@@ -38,6 +39,16 @@ export function Hud() {
     .map((asteroid) => ({ asteroid, dist: distance(player.position, asteroid.position) }))
     .sort((a, b) => a.dist - b.dist)[0];
   const targetDistance = target ? Math.round(distance(player.position, target.position)) : 0;
+  const navDistance = autopilot ? Math.round(distance(player.position, autopilot.targetPosition)) : 0;
+  const navLabel = autopilot
+    ? {
+        "to-origin-gate": "Aligning to gate",
+        "gate-activation": "Gate spool-up",
+        wormhole: "Wormhole transit",
+        "to-destination-station": "Approaching station",
+        docking: "Docking"
+      }[autopilot.phase]
+    : "";
   return (
     <div className="hud">
       <img className="hud-overlay-art" src={manifest.hudOverlay} alt="" />
@@ -54,6 +65,7 @@ export function Hud() {
         <h3>{shipLabel(player.shipId)}</h3>
         <p>Credits {player.credits.toLocaleString()} · Cargo {getCargoUsed(player.cargo)}/{player.stats.cargoCapacity} · Missiles {player.missiles}</p>
         <p>Throttle {Math.round(player.throttle * 100)}% · Speed {Math.round(Math.hypot(...player.velocity))}</p>
+        {autopilot ? <p>Autopilot: {navLabel} · {navDistance}m</p> : null}
         <p>{graceRemaining > 0 ? `Enemy weapons safe for ${graceRemaining}s` : pirateCount > 0 ? `${pirateCount} pirate contact(s)` : "Local space clear"}</p>
         {nearestStation ? <p>Nearest station: {stationById[nearestStation.station.id].name} {Math.round(nearestStation.dist)}m</p> : null}
       </section>
@@ -84,8 +96,9 @@ export function Hud() {
       <section className="hud-panel hud-bottom-right">
         <h3>Comms</h3>
         <p>{runtime.message}</p>
+        {autopilot?.cancelable ? <p>Manual flight input cancels autopilot.</p> : null}
         <div className="quick-actions">
-          <button onClick={() => setScreen("galaxyMap")}>Map</button>
+          <button onClick={() => setScreen("galaxyMap")} disabled={!!autopilot}>Map</button>
           <button onClick={saveGame}>Save</button>
           <button onClick={() => setScreen("pause")}>Pause</button>
         </div>

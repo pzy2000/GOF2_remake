@@ -127,6 +127,7 @@ export const systems: StarSystemDefinition[] = [
     factionId: "solar-directorate",
     risk: 0.18,
     position: [0, 0],
+    jumpGatePosition: [640, 70, -1240],
     stationIds: ["helion-prime"],
     marketBias: { "basic-food": 0.88, "drinking-water": 0.9, electronics: 1.08, "medical-supplies": 1.12, iron: 0.95 }
   },
@@ -137,6 +138,7 @@ export const systems: StarSystemDefinition[] = [
     factionId: "free-belt-union",
     risk: 0.32,
     position: [-1.2, 0.8],
+    jumpGatePosition: [-640, 90, -1180],
     stationIds: ["kuro-deep"],
     marketBias: { iron: 0.72, titanium: 0.78, cesogen: 0.9, "mechanical-parts": 1.16, "energy-cells": 1.12 }
   },
@@ -147,6 +149,7 @@ export const systems: StarSystemDefinition[] = [
     factionId: "solar-directorate",
     risk: 0.28,
     position: [1.4, 0.7],
+    jumpGatePosition: [720, 45, -1220],
     stationIds: ["vantara-bastion"],
     marketBias: { "ship-components": 1.2, "medical-supplies": 1.18, "radioactive-materials": 0.92, "illegal-contraband": 1.65 }
   },
@@ -157,6 +160,7 @@ export const systems: StarSystemDefinition[] = [
     factionId: "mirr-collective",
     risk: 0.22,
     position: [0.8, -1.1],
+    jumpGatePosition: [460, -100, -1280],
     stationIds: ["mirr-lattice"],
     marketBias: { "data-cores": 1.28, optics: 1.22, microchips: 1.16, "rare-plants": 0.88, voidglass: 1.35 }
   },
@@ -167,6 +171,7 @@ export const systems: StarSystemDefinition[] = [
     factionId: "vossari-clans",
     risk: 0.68,
     position: [-2.1, -0.9],
+    jumpGatePosition: [-780, -70, -1320],
     stationIds: ["ashen-freeport", "black-arcade"],
     marketBias: { "illegal-contraband": 0.72, "luxury-goods": 1.24, "medical-supplies": 1.34, gold: 1.18, voidglass: 1.48 }
   },
@@ -177,6 +182,7 @@ export const systems: StarSystemDefinition[] = [
     factionId: "solar-directorate",
     risk: 0.36,
     position: [2.2, -0.6],
+    jumpGatePosition: [800, 120, -1380],
     stationIds: ["celest-vault"],
     marketBias: { "luxury-goods": 1.36, "ship-components": 1.3, "data-cores": 1.24, "rare-animals": 1.18, "noble-gas": 0.86 }
   }
