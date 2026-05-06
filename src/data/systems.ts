@@ -338,6 +338,19 @@ export const planets: PlanetDefinition[] = [
     beaconPosition: [-220, -310, -990],
     radius: 340,
     atmosphereColor: "#9bbcff"
+  },
+  {
+    id: "ptd-home-world",
+    name: "PTD Home",
+    type: "Private ship vault world",
+    description: "A quiet orbital depot reserved for storing and refitting the player's older hulls.",
+    systemId: "ptd-home",
+    stationId: "ptd-home",
+    textureKey: "ptd-home-world",
+    position: [0, -160, -1040],
+    beaconPosition: [0, 0, -720],
+    radius: 430,
+    atmosphereColor: "#8ecbff"
   }
 ];
 
@@ -372,7 +385,8 @@ export const stations: StationDefinition[] = [
   { id: "aurelia-exchange", name: "Aurelia Exchange", archetype: "Trade Hub", factionId: "solar-directorate", systemId: "celest-gate", planetId: "aurelia", position: [680, 50, -940] },
   { id: "opal-drydock", name: "Opal Drydock", archetype: "Military Outpost", factionId: "solar-directorate", systemId: "celest-gate", planetId: "opal-minor", position: [-650, 40, -880] },
   { id: "zenith-skydock", name: "Zenith Skydock", archetype: "Mining Station", factionId: "solar-directorate", systemId: "celest-gate", planetId: "zenith-gas", position: [210, 350, -1040] },
-  { id: "pearl-consulate", name: "Pearl Consulate", archetype: "Trade Hub", factionId: "solar-directorate", systemId: "celest-gate", planetId: "pearl-night", position: [-220, -310, -990] }
+  { id: "pearl-consulate", name: "Pearl Consulate", archetype: "Trade Hub", factionId: "solar-directorate", systemId: "celest-gate", planetId: "pearl-night", position: [-220, -310, -990] },
+  { id: "ptd-home", name: "PTD Home", archetype: "Trade Hub", factionId: "solar-directorate", systemId: "ptd-home", planetId: "ptd-home-world", position: [0, 0, -720] }
 ];
 
 export const stationById = Object.fromEntries(stations.map((station) => [station.id, station])) as Record<
@@ -458,6 +472,19 @@ export const systems: StarSystemDefinition[] = [
     planetIds: ["celest-crown", "aurelia", "opal-minor", "zenith-gas", "pearl-night"],
     stationIds: ["celest-vault", "aurelia-exchange", "opal-drydock", "zenith-skydock", "pearl-consulate"],
     marketBias: { "luxury-goods": 1.36, "ship-components": 1.3, "data-cores": 1.24, "rare-animals": 1.18, "noble-gas": 0.86 }
+  },
+  {
+    id: "ptd-home",
+    name: "PTD Home",
+    description: "Private storage lanes for parked ships, default loadouts, and free local hull swaps.",
+    factionId: "solar-directorate",
+    risk: 0.05,
+    position: [0.45, 0.35],
+    skyboxKey: "ptd-home",
+    jumpGatePosition: [520, 40, -980],
+    planetIds: ["ptd-home-world"],
+    stationIds: ["ptd-home"],
+    marketBias: { "ship-components": 0.94, electronics: 0.98, "energy-cells": 0.96 }
   }
 ];
 

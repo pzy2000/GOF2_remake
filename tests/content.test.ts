@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { commodities, glassWakeProtocol, missionTemplates, planetById, planets, ships, stationById, stations, systems } from "../src/data/world";
+import { commodities, equipmentById, glassWakeProtocol, missionTemplates, planetById, planets, ships, stationById, stations, systems } from "../src/data/world";
 import { fallbackAssetManifest } from "../src/systems/assets";
+import { getEquipmentSlotUsage, getShipSlotCapacity } from "../src/systems/equipment";
 import { validateContentData } from "../src/data/validate";
 import { createInitialMarketState } from "../src/systems/economy";
 
@@ -41,11 +42,16 @@ describe("content data", () => {
     }
   });
 
-  it("models every existing system with 3-8 planets and one station per planet", () => {
-    expect(planets).toHaveLength(26);
+  it("models every existing system with valid planets and one station per planet", () => {
+    expect(planets).toHaveLength(27);
     for (const system of systems) {
-      expect(system.planetIds.length).toBeGreaterThanOrEqual(3);
-      expect(system.planetIds.length).toBeLessThanOrEqual(8);
+      if (system.id === "ptd-home") {
+        expect(system.planetIds).toEqual(["ptd-home-world"]);
+        expect(system.stationIds).toEqual(["ptd-home"]);
+      } else {
+        expect(system.planetIds.length).toBeGreaterThanOrEqual(3);
+        expect(system.planetIds.length).toBeLessThanOrEqual(8);
+      }
       expect(system.stationIds).toHaveLength(system.planetIds.length);
       for (const planetId of system.planetIds) {
         const planet = planetById[planetId];
@@ -63,6 +69,37 @@ describe("content data", () => {
     }
     for (const planet of planets) {
       expect(fallbackAssetManifest.planetTextures[planet.textureKey]).toMatch(/\.webp$/);
+    }
+  });
+
+  it("models PTD Home as the single home ship-storage station", () => {
+    const system = systems.find((item) => item.id === "ptd-home")!;
+    const planet = planetById["ptd-home-world"];
+    const station = stationById["ptd-home"];
+    expect(system.name).toBe("PTD Home");
+    expect(planet.name).toBe("PTD Home");
+    expect(station.name).toBe("PTD Home");
+    expect(station.systemId).toBe(system.id);
+    expect(station.planetId).toBe(planet.id);
+  });
+
+  it("keeps stock ship loadouts within their slot capacities", () => {
+    for (const ship of ships) {
+      const usage = getEquipmentSlotUsage(ship.equipment);
+      const capacity = getShipSlotCapacity(ship.stats);
+      expect(usage.primary).toBeLessThanOrEqual(capacity.primary);
+      expect(usage.secondary).toBeLessThanOrEqual(capacity.secondary);
+      expect(usage.utility).toBeLessThanOrEqual(capacity.utility);
+      expect(usage.defense).toBeLessThanOrEqual(capacity.defense);
+      expect(usage.engineering).toBeLessThanOrEqual(capacity.engineering);
+    }
+  });
+
+  it("uses valid commodities for equipment blueprint material costs", () => {
+    for (const equipment of Object.values(equipmentById)) {
+      for (const commodityId of Object.keys(equipment.craftCost?.cargo ?? {})) {
+        expect(commodities.some((commodity) => commodity.id === commodityId)).toBe(true);
+      }
     }
   });
 

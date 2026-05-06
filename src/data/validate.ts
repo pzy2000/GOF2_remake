@@ -75,7 +75,11 @@ export function validateContentData(): ContentValidationResult {
 
   for (const system of systems) {
     if (!hasFaction(system.factionId)) errors.push(`System ${system.id} references unknown faction ${system.factionId}`);
-    if (system.planetIds.length < 3 || system.planetIds.length > 8) errors.push(`System ${system.id} must have 3-8 planets`);
+    if (system.id === "ptd-home") {
+      if (system.planetIds.length !== 1) errors.push("System ptd-home must have exactly one planet");
+    } else if (system.planetIds.length < 3 || system.planetIds.length > 8) {
+      errors.push(`System ${system.id} must have 3-8 planets`);
+    }
     const systemStationIds = new Set(system.stationIds);
     for (const planetId of system.planetIds) {
       const planet = planetById[planetId];
@@ -122,6 +126,12 @@ export function validateContentData(): ContentValidationResult {
     }
     for (const prerequisiteMissionId of mission.prerequisiteMissionIds ?? []) {
       if (!missionIds.has(prerequisiteMissionId)) errors.push(`Mission ${mission.id} references unknown prerequisite mission ${prerequisiteMissionId}`);
+    }
+  }
+
+  for (const equipment of equipmentList) {
+    for (const commodityId of Object.keys(equipment.craftCost?.cargo ?? {})) {
+      if (!hasCommodity(commodityId)) errors.push(`Equipment ${equipment.id} craft cost references unknown cargo ${commodityId}`);
     }
   }
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import manifest from "../public/assets/generated/manifest.json";
+import { ships } from "../src/data/world";
 import { fallbackAssetManifest } from "../src/systems/assets";
 import type { AssetManifest } from "../src/types/game";
 
@@ -21,6 +22,14 @@ describe("asset manifest", () => {
     ];
     for (const assetPath of projectAssetPaths) {
       expect(assetPath).toMatch(/^\/assets\/generated\/.+\.webp$/);
+    }
+  });
+
+  it("points every player ship to a generated GLB model", () => {
+    const assetManifest = manifest as AssetManifest;
+    for (const ship of ships) {
+      expect(assetManifest.shipModels[ship.id]).toMatch(/^\/assets\/generated\/ships\/.+\.glb$/);
+      expect(fallbackAssetManifest.shipModels[ship.id]).toBe(assetManifest.shipModels[ship.id]);
     }
   });
 });

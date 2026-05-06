@@ -44,7 +44,7 @@ describe("navigation targets and discovery", () => {
   });
 
   it("starts with the current system and nearby systems known", () => {
-    expect(getInitialKnownSystems("helion-reach")).toEqual(["helion-reach", "kuro-belt", "vantara", "mirr-vale"]);
+    expect(getInitialKnownSystems("helion-reach")).toEqual(["helion-reach", "kuro-belt", "vantara", "mirr-vale", "ptd-home"]);
   });
 
   it("unlocks only the primary planet for each known system by default", () => {

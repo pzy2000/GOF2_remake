@@ -7,8 +7,11 @@ import {
   getActiveSecondaryWeapon,
   getEffectiveShipStats,
   getEquipmentEffects,
+  getEquipmentSlotUsage,
+  getShipSlotCapacity,
   getWeaponCooldown,
   hasMiningBeam,
+  installEquipmentFromInventory,
   normalizePlayerEquipmentStats
 } from "../src/systems/equipment";
 import { createInitialMarketState } from "../src/systems/economy";
@@ -155,40 +158,85 @@ describe("equipment definitions and helpers", () => {
   });
 
   it("selects active equipment-driven weapons", () => {
-    expect(getActivePrimaryWeapon(["pulse-laser", "plasma-cannon"])?.id).toBe("plasma-cannon");
-    expect(getActivePrimaryWeapon(["pulse-laser"])?.id).toBe("pulse-laser");
+    expect(getActivePrimaryWeapon(["pulse-laser", "plasma-cannon"])?.id).toBe("pulse-laser");
+    expect(getActivePrimaryWeapon(["plasma-cannon", "pulse-laser"])?.id).toBe("plasma-cannon");
     expect(getActiveSecondaryWeapon(["pulse-laser"])).toBeUndefined();
     expect(getActiveSecondaryWeapon(["homing-missile"])?.id).toBe("homing-missile");
     expect(hasMiningBeam(["mining-beam"])).toBe(true);
     expect(getWeaponCooldown(equipmentById["pulse-laser"].weapon!, ["pulse-laser", "targeting-computer"])).toBeCloseTo(0.1408);
   });
+
+  it("tracks equipment slot usage and inventory-backed installation", () => {
+    const base = playerForShip();
+    const player = normalizePlayerEquipmentStats({
+      ...base,
+      equipment: ["pulse-laser"],
+      equipmentInventory: { "plasma-cannon": 1, "shield-booster": 1 }
+    });
+    expect(getShipSlotCapacity(player.stats).primary).toBe(1);
+    expect(getEquipmentSlotUsage(player.equipment).primary).toBe(1);
+
+    const blocked = installEquipmentFromInventory(player, "plasma-cannon");
+    expect(blocked.ok).toBe(false);
+    expect(blocked.message).toBe("No primary slot available.");
+
+    const shield = installEquipmentFromInventory(player, "shield-booster");
+    expect(shield.ok).toBe(true);
+    expect(shield.player.equipment).toContain("shield-booster");
+    expect(shield.player.equipmentInventory?.["shield-booster"]).toBe(0);
+    expect(shield.player.stats.shield).toBe(105);
+  });
 });
 
 describe("equipment gameplay wiring", () => {
-  it("crafting passive equipment updates effective ship stats", async () => {
+  it("crafting equipment consumes materials and adds it to inventory", async () => {
     const store = await freshStore();
-    store.setState((state) => ({ player: { ...state.player, credits: 5000 } }));
+    store.setState((state) => ({
+      player: {
+        ...state.player,
+        credits: 5000,
+        cargo: { titanium: 2, "energy-cells": 2 }
+      }
+    }));
 
-    store.getState().craftEquipment("shield-booster");
-    store.getState().craftEquipment("cargo-expansion");
+    store.getState().craftEquipment("plasma-cannon");
 
     const state = store.getState();
-    expect(state.player.stats.shield).toBe(105);
-    expect(state.player.stats.cargoCapacity).toBe(30);
-    expect(state.player.credits).toBe(3400);
+    expect(state.player.equipment).not.toContain("plasma-cannon");
+    expect(state.player.equipmentInventory?.["plasma-cannon"]).toBe(1);
+    expect(state.player.cargo.titanium).toBeUndefined();
+    expect(state.player.cargo["energy-cells"]).toBeUndefined();
+    expect(state.player.credits).toBe(3700);
   });
 
-  it("ship purchases apply stock equipment effects immediately", async () => {
+  it("ship purchases park the old ship at PTD Home and apply the new stock loadout", async () => {
     const store = await freshStore();
-    store.setState((state) => ({ player: { ...state.player, credits: 50000 } }));
+    store.setState((state) => ({ currentStationId: "meridian-dock", player: { ...state.player, credits: 50000 } }));
 
     store.getState().buyShip("horizon-ark");
 
     const state = store.getState();
+    expect(state.player.ownedShipRecords?.find((ship) => ship.shipId === "sparrow-mk1")?.stationId).toBe("ptd-home");
+    expect(state.player.equipment).toEqual(shipById["horizon-ark"].equipment);
     expect(state.player.stats.shield).toBe(245);
     expect(state.player.stats.energy).toBe(235);
     expect(state.player.shield).toBe(245);
     expect(state.player.energy).toBe(235);
+  });
+
+  it("switches back to parked ships only from PTD Home", async () => {
+    const store = await freshStore();
+    store.setState((state) => ({ currentStationId: "meridian-dock", player: { ...state.player, credits: 50000 } }));
+    store.getState().buyShip("mule-lx");
+    expect(store.getState().player.shipId).toBe("mule-lx");
+
+    store.getState().switchShip("sparrow-mk1");
+    expect(store.getState().player.shipId).toBe("mule-lx");
+
+    store.setState({ currentStationId: "ptd-home" });
+    store.getState().switchShip("sparrow-mk1");
+    expect(store.getState().player.shipId).toBe("sparrow-mk1");
+    expect(store.getState().player.ownedShipRecords?.find((ship) => ship.shipId === "mule-lx")?.stationId).toBe("ptd-home");
   });
 
   it("loadGame normalizes old saved stats without a save version bump", async () => {
@@ -229,7 +277,7 @@ describe("equipment gameplay wiring", () => {
       input: { ...state.input, firePrimary: true }
     }));
     store.getState().tick(0.05);
-    expect(store.getState().runtime.projectiles.find((projectile) => projectile.owner === "player")?.damage).toBe(34);
+    expect(store.getState().runtime.projectiles.find((projectile) => projectile.owner === "player")?.damage).toBe(16);
 
     store.setState((state) => ({
       player: equip({ ...state.player, missiles: 6 }, ["pulse-laser"]),

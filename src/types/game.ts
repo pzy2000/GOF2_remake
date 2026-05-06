@@ -126,6 +126,10 @@ export type EquipmentId =
   | "repair-drone"
   | "targeting-computer";
 
+export type EquipmentSlotType = "primary" | "secondary" | "utility" | "defense" | "engineering";
+
+export type EquipmentInventory = Partial<Record<EquipmentId, number>>;
+
 export interface AssetManifest {
   keyArt: string;
   commodityIcons: string;
@@ -134,6 +138,7 @@ export interface AssetManifest {
   skyboxPanorama: string;
   systemSkyboxes: Record<string, string>;
   planetTextures: Record<string, string>;
+  shipModels: Record<string, string>;
   asteroidTextures: string;
   factionEmblems: string;
   hudOverlay: string;
@@ -149,6 +154,8 @@ export interface ShipStats {
   primarySlots: number;
   secondarySlots: number;
   utilitySlots: number;
+  defenseSlots: number;
+  engineeringSlots: number;
 }
 
 export interface ShipDefinition {
@@ -176,6 +183,11 @@ export interface EquipmentDisplayStat {
   value: string;
 }
 
+export interface EquipmentCraftCost {
+  credits: number;
+  cargo: CargoHold;
+}
+
 export interface EquipmentModifiers {
   stats?: Partial<Pick<ShipStats, "hull" | "shield" | "energy" | "cargoCapacity">>;
   afterburnerMultiplier?: number;
@@ -196,6 +208,10 @@ export interface EquipmentDefinition {
   description: string;
   effect: string;
   displayStats: EquipmentDisplayStat[];
+  slotType: EquipmentSlotType;
+  slotSize?: number;
+  craftCost?: EquipmentCraftCost;
+  installableOn?: string[];
   modifiers?: EquipmentModifiers;
   weapon?: WeaponDefinition;
 }
@@ -330,13 +346,24 @@ export interface PlayerState {
   credits: number;
   cargo: CargoHold;
   equipment: EquipmentId[];
+  equipmentInventory?: EquipmentInventory;
   missiles: number;
   ownedShips: string[];
+  ownedShipRecords?: OwnedShipRecord[];
   position: Vec3;
   velocity: Vec3;
   rotation: Vec3;
   throttle: number;
   lastDamageAt: number;
+}
+
+export interface OwnedShipRecord {
+  shipId: string;
+  stationId: string;
+  installedEquipment: EquipmentId[];
+  hull: number;
+  shield: number;
+  energy: number;
 }
 
 export interface FlightEntity {

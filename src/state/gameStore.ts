@@ -76,8 +76,12 @@ import {
   getEquipmentEffects,
   getWeaponCooldown,
   hasMiningBeam,
-  installEquipment,
+  installEquipmentFromInventory as installEquipmentFromInventoryPure,
   createPlayerShipLoadout,
+  uninstallEquipmentToInventory as uninstallEquipmentToInventoryPure,
+  addEquipmentToInventory,
+  hasCraftMaterials,
+  removeCargo as removeCraftCargo,
   MINING_COOLDOWN_SECONDS,
   MINING_ENERGY_DRAIN_PER_SECOND,
   MINING_MIN_ENERGY,
@@ -112,6 +116,7 @@ const emptyInput: FlightInput = {
 };
 
 const oreCycle: CommodityId[] = ["iron", "titanium", "cesogen", "gold", "voidglass"];
+const SHIP_STORAGE_STATION_ID = "ptd-home";
 
 function createInitialPlayer(): PlayerState {
   const starter = shipById["sparrow-mk1"];
@@ -125,8 +130,10 @@ function createInitialPlayer(): PlayerState {
     credits: 1500,
     cargo: { "basic-food": 3, "drinking-water": 2 },
     equipment: starter.equipment,
+    equipmentInventory: {},
     missiles: 6,
     ownedShips: [starter.id],
+    ownedShipRecords: [],
     position: [0, 0, 120],
     velocity: [0, 0, 0],
     rotation: [0, 0, 0],
@@ -388,6 +395,28 @@ function mergeKnownPlanetIds(knownPlanetIds: string[], knownSystemIds: string[],
   return planets.filter((planet) => known.has(planet.id)).map((planet) => planet.id);
 }
 
+function currentShipStorageRecord(player: PlayerState): NonNullable<PlayerState["ownedShipRecords"]>[number] {
+  return {
+    shipId: player.shipId,
+    stationId: SHIP_STORAGE_STATION_ID,
+    installedEquipment: [...player.equipment],
+    hull: player.hull,
+    shield: player.shield,
+    energy: player.energy
+  };
+}
+
+function upsertShipRecord(
+  records: NonNullable<PlayerState["ownedShipRecords"]> = [],
+  record: NonNullable<PlayerState["ownedShipRecords"]>[number]
+): NonNullable<PlayerState["ownedShipRecords"]> {
+  return [...records.filter((item) => item.shipId !== record.shipId), record];
+}
+
+function addOwnedShipId(player: PlayerState, shipId: string): string[] {
+  return Array.from(new Set([...(player.ownedShips ?? [player.shipId]), shipId]));
+}
+
 interface GameStore {
   screen: Screen;
   previousScreen: Screen;
@@ -444,7 +473,10 @@ interface GameStore {
   completeMission: (missionId: string) => void;
   repairAndRefill: () => void;
   buyShip: (shipId: string) => void;
+  switchShip: (shipId: string) => void;
   craftEquipment: (equipmentId: string) => void;
+  installEquipmentFromInventory: (equipmentId: EquipmentId) => void;
+  uninstallEquipmentToInventory: (equipmentId: EquipmentId) => void;
   toggleCamera: () => void;
 }
 
@@ -1699,17 +1731,51 @@ export const useGameStore = create<GameStore>((set, get) => ({
       set({ runtime: { ...state.runtime, message: "Not enough credits for that ship." } });
       return;
     }
+    const storedCurrentShip = currentShipStorageRecord(state.player);
+    const storedRecords = upsertShipRecord(state.player.ownedShipRecords, storedCurrentShip).filter((record) => record.shipId !== ship.id);
     const player = createPlayerShipLoadout(
       {
         ...state.player,
         credits: state.player.credits - ship.price,
-        ownedShips: [...state.player.ownedShips, shipId]
+        ownedShips: addOwnedShipId(state.player, shipId),
+        ownedShipRecords: storedRecords
       },
       ship
     );
     set({
       player,
-      runtime: { ...state.runtime, message: `${ship.name} purchased and equipped.` }
+      runtime: { ...state.runtime, message: `${ship.name} purchased. Previous ship stored at PTD Home.` }
+    });
+  },
+  switchShip: (shipId) => {
+    const state = get();
+    const record = state.player.ownedShipRecords?.find((candidate) => candidate.shipId === shipId);
+    const ship = shipById[shipId];
+    if (!record || !ship) {
+      set({ runtime: { ...state.runtime, message: "That ship is not stored in your fleet." } });
+      return;
+    }
+    if (state.currentStationId !== record.stationId) {
+      const stationName = stationById[record.stationId]?.name ?? record.stationId;
+      set({ runtime: { ...state.runtime, message: `That ship is stored at ${stationName}.` } });
+      return;
+    }
+    const storedCurrentShip = currentShipStorageRecord(state.player);
+    const ownedShipRecords = upsertShipRecord(state.player.ownedShipRecords, storedCurrentShip).filter((candidate) => candidate.shipId !== shipId);
+    const player = normalizePlayerEquipmentStats({
+      ...state.player,
+      shipId,
+      equipment: [...record.installedEquipment],
+      hull: record.hull,
+      shield: record.shield,
+      energy: record.energy,
+      ownedShips: addOwnedShipId(state.player, shipId),
+      ownedShipRecords
+    });
+    audioSystem.play("ui-click");
+    set({
+      player,
+      runtime: { ...state.runtime, message: `${ship.name} switched in from PTD Home.` }
     });
   },
   craftEquipment: (equipmentId) => {
@@ -1719,18 +1785,47 @@ export const useGameStore = create<GameStore>((set, get) => ({
       return;
     }
     const typedEquipmentId = equipmentId as EquipmentId;
-    if (state.player.equipment.includes(typedEquipmentId)) {
-      set({ runtime: { ...state.runtime, message: "Equipment already installed." } });
+    const equipment = equipmentById[typedEquipmentId];
+    const cost = equipment.craftCost;
+    if (!cost) {
+      set({ runtime: { ...state.runtime, message: "That blueprint is not craftable." } });
       return;
     }
-    const cost = equipmentId === "plasma-cannon" ? 1300 : equipmentId === "shield-booster" ? 900 : 700;
-    if (state.player.credits < cost) {
+    if (state.player.credits < cost.credits) {
       set({ runtime: { ...state.runtime, message: "Not enough credits to craft that blueprint." } });
       return;
     }
+    if (!hasCraftMaterials(state.player.cargo, cost.cargo)) {
+      set({ runtime: { ...state.runtime, message: "Missing cargo materials for that blueprint." } });
+      return;
+    }
+    audioSystem.play("ui-click");
     set({
-      player: installEquipment({ ...state.player, credits: state.player.credits - cost }, typedEquipmentId),
-      runtime: { ...state.runtime, message: `Crafted ${equipmentId.replace("-", " ")}.` }
+      player: {
+        ...state.player,
+        credits: state.player.credits - cost.credits,
+        cargo: removeCraftCargo(state.player.cargo, cost.cargo),
+        equipmentInventory: addEquipmentToInventory(state.player.equipmentInventory, typedEquipmentId)
+      },
+      runtime: { ...state.runtime, message: `Crafted ${equipment.name}. Added to equipment inventory.` }
+    });
+  },
+  installEquipmentFromInventory: (equipmentId) => {
+    const state = get();
+    const result = installEquipmentFromInventoryPure(state.player, equipmentId);
+    if (result.ok) audioSystem.play("ui-click");
+    set({
+      player: result.player,
+      runtime: { ...state.runtime, message: result.message }
+    });
+  },
+  uninstallEquipmentToInventory: (equipmentId) => {
+    const state = get();
+    const result = uninstallEquipmentToInventoryPure(state.player, equipmentId);
+    if (result.ok) audioSystem.play("ui-click");
+    set({
+      player: result.player,
+      runtime: { ...state.runtime, message: result.message }
     });
   },
   toggleCamera: () => set((state) => ({ cameraMode: state.cameraMode === "chase" ? "cinematic" : "chase" }))

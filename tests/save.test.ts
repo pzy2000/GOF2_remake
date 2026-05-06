@@ -80,7 +80,26 @@ describe("save system", () => {
 
   it("round trips v2 save data through named slots", () => {
     const storage = new MemoryStorage();
-    writeSave(payload(), storage, "manual-1");
+    writeSave(
+      payload({
+        player: {
+          ...player(),
+          equipmentInventory: { "plasma-cannon": 1 },
+          ownedShipRecords: [
+            {
+              shipId: "mule-lx",
+              stationId: "ptd-home",
+              installedEquipment: shipById["mule-lx"].equipment,
+              hull: 150,
+              shield: 90,
+              energy: 90
+            }
+          ]
+        }
+      }),
+      storage,
+      "manual-1"
+    );
     expect(storage.getItem(`${SAVE_SLOT_PREFIX}manual-1`)).toContain("helion-reach");
     expect(storage.getItem(SAVE_INDEX_KEY)).toContain("manual-1");
     const loaded = readSave(storage, "manual-1");
@@ -90,6 +109,8 @@ describe("save system", () => {
     expect(loaded?.gameClock).toBe(123);
     expect(loaded?.marketState["helion-prime"]?.["basic-food"]).toBeDefined();
     expect(loaded?.knownPlanetIds).toEqual(["helion-prime-world", "kuro-anvil"]);
+    expect(loaded?.player.equipmentInventory?.["plasma-cannon"]).toBe(1);
+    expect(loaded?.player.ownedShipRecords?.[0]).toMatchObject({ shipId: "mule-lx", stationId: "ptd-home" });
     expect(loaded?.version).toBe(SAVE_VERSION);
   });
 

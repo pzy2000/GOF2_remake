@@ -12,7 +12,8 @@ export const fallbackAssetManifest: AssetManifest = {
     vantara: "/assets/generated/skybox-vantara.webp",
     "mirr-vale": "/assets/generated/skybox-mirr-vale.webp",
     "ashen-drift": "/assets/generated/skybox-ashen-drift.webp",
-    "celest-gate": "/assets/generated/skybox-celest-gate.webp"
+    "celest-gate": "/assets/generated/skybox-celest-gate.webp",
+    "ptd-home": "/assets/generated/skybox-panorama.webp"
   },
   planetTextures: {
     "helion-prime-world": "/assets/generated/planet-helion-prime-world.webp",
@@ -40,7 +41,15 @@ export const fallbackAssetManifest: AssetManifest = {
     aurelia: "/assets/generated/planet-aurelia.webp",
     "opal-minor": "/assets/generated/planet-opal-minor.webp",
     "zenith-gas": "/assets/generated/planet-zenith-gas.webp",
-    "pearl-night": "/assets/generated/planet-pearl-night.webp"
+    "pearl-night": "/assets/generated/planet-pearl-night.webp",
+    "ptd-home-world": "/assets/generated/planet-celest-crown.webp"
+  },
+  shipModels: {
+    "sparrow-mk1": "/assets/generated/ships/sparrow-mk1.glb",
+    "mule-lx": "/assets/generated/ships/mule-lx.glb",
+    "raptor-v": "/assets/generated/ships/raptor-v.glb",
+    "bastion-7": "/assets/generated/ships/bastion-7.glb",
+    "horizon-ark": "/assets/generated/ships/horizon-ark.glb"
   },
   asteroidTextures: "/assets/generated/asteroid-textures.webp",
   factionEmblems: "/assets/generated/faction-emblems.webp",

@@ -1,5 +1,6 @@
 import type { SaveGameData, SaveIndex, SaveSlotId, SaveSlotSummary } from "../types/game";
 import { createInitialMarketState } from "./economy";
+import { normalizePlayerEquipmentStats } from "./equipment";
 import { getInitialKnownPlanetIds } from "./navigation";
 
 export const SAVE_KEY = "gof2-by-pzy-save";
@@ -48,7 +49,7 @@ function normalizeSave(parsed: Partial<SaveGameData> | null): SaveGameData | nul
     currentSystemId: parsed.currentSystemId,
     currentStationId: parsed.currentStationId,
     gameClock: parsed.gameClock ?? 0,
-    player: parsed.player,
+    player: normalizePlayerEquipmentStats(parsed.player),
     activeMissions: parsed.activeMissions ?? [],
     completedMissionIds: parsed.completedMissionIds ?? [],
     failedMissionIds: parsed.failedMissionIds ?? [],

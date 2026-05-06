@@ -1,8 +1,9 @@
 import { Canvas, useFrame, useLoader, useThree } from "@react-three/fiber";
-import { Html, Line, Stars } from "@react-three/drei";
-import { Suspense, useEffect, useMemo, useRef } from "react";
+import { Html, Line, Stars, useGLTF } from "@react-three/drei";
+import { Component, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { ReactNode } from "react";
 import * as THREE from "three";
-import { planetById, planets, stations, systemById, useGameStore } from "../state/gameStore";
+import { planetById, planets, shipById, stations, systemById, useGameStore } from "../state/gameStore";
 import type { AsteroidEntity, ConvoyEntity, FlightEntity, LootEntity, PlanetDefinition, ProjectileEntity, SalvageEntity, Vec3, VisualEffectEntity } from "../types/game";
 import { add, forwardFromRotation, normalize, scale, sub } from "../systems/math";
 import { getOreColor } from "../systems/difficulty";
@@ -12,6 +13,11 @@ import { getNearestNavigationTarget } from "../systems/navigation";
 function toThree(position: Vec3): [number, number, number] {
   return [position[0], position[1], position[2]];
 }
+
+type ShipModelStatus = {
+  kind: "loading" | "loaded" | "fallback";
+  text: string;
+};
 
 function FlightControls() {
   const setInput = useGameStore((state) => state.setInput);
@@ -128,62 +134,147 @@ function InfiniteSkybox() {
   );
 }
 
-function PlayerShip() {
-  const player = useGameStore((state) => state.player);
-  const afterburning = useGameStore((state) => state.input.afterburner && state.player.energy > 12);
-  const speed = Math.hypot(...player.velocity);
-  const flameScale = Math.max(0.65, Math.min(2.6, speed / 120 + (afterburning ? 1.05 : 0)));
+const playerShipVisuals: Record<string, { scale: number; engines: Vec3[]; flameColor: string; afterburnerColor: string }> = {
+  "sparrow-mk1": { scale: 1, engines: [[-5.5, -1.6, 17], [5.5, -1.6, 17]], flameColor: "#ff8b3d", afterburnerColor: "#66e4ff" },
+  "mule-lx": { scale: 0.95, engines: [[-12, -3, 20], [12, -3, 20]], flameColor: "#ffb657", afterburnerColor: "#7ee7ff" },
+  "raptor-v": { scale: 0.96, engines: [[-8, -1.8, 18], [0, -1.2, 20], [8, -1.8, 18]], flameColor: "#ff5f6d", afterburnerColor: "#70f0ff" },
+  "bastion-7": { scale: 0.9, engines: [[-14, -4, 22], [0, -3, 24], [14, -4, 22]], flameColor: "#ff7a45", afterburnerColor: "#ffd166" },
+  "horizon-ark": { scale: 0.92, engines: [[-16, -2.4, 24], [-5, -2, 26], [5, -2, 26], [16, -2.4, 24]], flameColor: "#8ff7ff", afterburnerColor: "#ffffff" }
+};
+
+class ShipModelBoundary extends Component<{ children: ReactNode; fallback: ReactNode; onFallback: () => void }, { failed: boolean }> {
+  state = { failed: false };
+
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+
+  componentDidCatch() {
+    this.props.onFallback();
+  }
+
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
+
+function GltfPlayerShip({ onLoaded, shipId, url }: { onLoaded: () => void; shipId: string; url: string }) {
+  const gltf = useGLTF(url);
+  useEffect(() => {
+    onLoaded();
+  }, [onLoaded]);
+  const clone = useMemo(() => {
+    const scene = gltf.scene.clone(true);
+    scene.traverse((node) => {
+      if (node instanceof THREE.Mesh) {
+        node.castShadow = true;
+        node.receiveShadow = true;
+      }
+    });
+    return scene;
+  }, [gltf.scene]);
+  const visual = playerShipVisuals[shipId] ?? playerShipVisuals["sparrow-mk1"];
+  return <primitive object={clone} scale={visual.scale} />;
+}
+
+function ProceduralPlayerShip({ shipId }: { shipId: string }) {
+  const color =
+    shipId === "mule-lx"
+      ? "#9a7b4f"
+      : shipId === "raptor-v"
+        ? "#d94b58"
+        : shipId === "bastion-7"
+          ? "#6f2530"
+          : shipId === "horizon-ark"
+            ? "#f5ead2"
+            : "#cfefff";
   return (
-    <group position={toThree(player.position)} rotation={player.rotation}>
-      <mesh position={[0, 0, -6]} castShadow>
-        <coneGeometry args={[8.5, 34, 5]} />
-        <meshStandardMaterial color="#cfefff" metalness={0.5} roughness={0.32} emissive="#12334a" />
+    <>
+      <mesh position={[0, 0, -8]} rotation={[-Math.PI / 2, 0, 0]} castShadow>
+        <coneGeometry args={[9, 32, shipId === "raptor-v" ? 3 : 5]} />
+        <meshStandardMaterial color={color} metalness={0.5} roughness={0.32} emissive="#12334a" />
       </mesh>
-      <mesh position={[0, 1.8, 2]} scale={[1.05, 0.65, 1]} castShadow>
+      <mesh position={[0, 1.8, 2]} scale={shipId === "mule-lx" ? [1.8, 0.95, 1.2] : shipId === "bastion-7" ? [1.55, 1.1, 1.25] : [1.05, 0.65, 1]} castShadow>
         <boxGeometry args={[16, 9, 26]} />
-        <meshStandardMaterial color="#15354d" metalness={0.38} roughness={0.36} emissive="#092033" />
+        <meshStandardMaterial color={shipId === "horizon-ark" ? "#d8c58e" : "#15354d"} metalness={0.38} roughness={0.36} emissive="#092033" />
       </mesh>
       <mesh position={[0, 5.2, -8]} castShadow>
         <sphereGeometry args={[4.8, 12, 8]} />
         <meshStandardMaterial color="#9be8ff" metalness={0.2} roughness={0.18} emissive="#1e95c8" emissiveIntensity={0.42} />
       </mesh>
       <mesh position={[0, 0.4, 6]} castShadow>
-        <boxGeometry args={[40, 2.2, 12]} />
-        <meshStandardMaterial color="#318ccf" metalness={0.55} roughness={0.28} />
+        <boxGeometry args={shipId === "mule-lx" ? [56, 4, 14] : shipId === "raptor-v" ? [48, 2, 10] : [40, 2.2, 12]} />
+        <meshStandardMaterial color={shipId === "raptor-v" ? "#2a2f35" : "#318ccf"} metalness={0.55} roughness={0.28} />
       </mesh>
-      <mesh position={[-15, 0.2, -2]} rotation={[0, 0, 0.34]} castShadow>
-        <boxGeometry args={[6, 1.8, 24]} />
-        <meshStandardMaterial color="#71c9ff" metalness={0.45} roughness={0.32} emissive="#0e3658" />
-      </mesh>
-      <mesh position={[15, 0.2, -2]} rotation={[0, 0, -0.34]} castShadow>
-        <boxGeometry args={[6, 1.8, 24]} />
-        <meshStandardMaterial color="#71c9ff" metalness={0.45} roughness={0.32} emissive="#0e3658" />
-      </mesh>
-      <mesh position={[-10, 1, 13]} rotation={[0.4, 0, 0]}>
-        <boxGeometry args={[2.6, 2.6, 8]} />
-        <meshStandardMaterial color="#202c38" metalness={0.65} roughness={0.22} emissive="#08131e" />
-      </mesh>
-      <mesh position={[10, 1, 13]} rotation={[0.4, 0, 0]}>
-        <boxGeometry args={[2.6, 2.6, 8]} />
-        <meshStandardMaterial color="#202c38" metalness={0.65} roughness={0.22} emissive="#08131e" />
-      </mesh>
-      {[-5.5, 5.5].map((x) => (
-        <group key={x} position={[x, -1.6, 16]}>
-          <mesh>
-            <cylinderGeometry args={[2.5, 3.4, 3, 12]} />
-            <meshStandardMaterial color="#273647" metalness={0.8} roughness={0.24} emissive="#101c2a" />
-          </mesh>
-          <mesh position={[0, 0, 5.5]} rotation={[Math.PI / 2, 0, 0]} scale={[1, 1, flameScale]}>
-            <coneGeometry args={[3.4, 18, 16]} />
-            <meshBasicMaterial color={afterburning ? "#66e4ff" : "#ff8b3d"} transparent opacity={0.38 + Math.min(0.35, speed / 500)} toneMapped={false} />
-          </mesh>
-          <pointLight color={afterburning ? "#66e4ff" : "#ff8b3d"} intensity={afterburning ? 1.1 : 0.45} distance={90} />
-        </group>
+      {[-1, 1].map((side) => (
+        <mesh key={side} position={[side * 15, 0.2, -2]} rotation={[0, 0, side * -0.34]} castShadow>
+          <boxGeometry args={[6, 1.8, shipId === "horizon-ark" ? 34 : 24]} />
+          <meshStandardMaterial color={shipId === "bastion-7" ? "#7a2e36" : "#71c9ff"} metalness={0.45} roughness={0.32} emissive="#0e3658" />
+        </mesh>
       ))}
       <mesh position={[0, -0.4, -18]} rotation={[0.24, 0, 0]} castShadow>
         <boxGeometry args={[5, 13, 2.4]} />
         <meshStandardMaterial color="#2b89bd" metalness={0.55} roughness={0.28} />
       </mesh>
+    </>
+  );
+}
+
+function PlayerEngineFlames({ shipId, afterburning, speed }: { shipId: string; afterburning: boolean; speed: number }) {
+  const visual = playerShipVisuals[shipId] ?? playerShipVisuals["sparrow-mk1"];
+  const flameScale = Math.max(0.65, Math.min(2.8, speed / 120 + (afterburning ? 1.05 : 0)));
+  const color = afterburning ? visual.afterburnerColor : visual.flameColor;
+  return (
+    <>
+      {visual.engines.map((position, index) => (
+        <group key={`${shipId}-engine-${index}`} position={toThree(position)}>
+          <mesh position={[0, 0, 5.5]} rotation={[Math.PI / 2, 0, 0]} scale={[1, 1, flameScale]}>
+            <coneGeometry args={[3.2, 18, 16]} />
+            <meshBasicMaterial color={color} transparent opacity={0.38 + Math.min(0.35, speed / 500)} toneMapped={false} />
+          </mesh>
+          <pointLight color={color} intensity={afterburning ? 1.1 : 0.45} distance={90} />
+        </group>
+      ))}
+    </>
+  );
+}
+
+function PlayerShip({ onModelStatus }: { onModelStatus: (status: ShipModelStatus) => void }) {
+  const player = useGameStore((state) => state.player);
+  const modelUrl = useGameStore((state) => state.assetManifest.shipModels[state.player.shipId]);
+  const afterburning = useGameStore((state) => state.input.afterburner && state.player.energy > 12);
+  const speed = Math.hypot(...player.velocity);
+  const fallback = <ProceduralPlayerShip shipId={player.shipId} />;
+  const shipName = shipById[player.shipId]?.name ?? player.shipId;
+
+  useEffect(() => {
+    if (modelUrl) {
+      onModelStatus({ kind: "loading", text: `Ship model: loading GLB for ${shipName}.` });
+    } else {
+      onModelStatus({ kind: "fallback", text: `Ship model: no GLB manifest entry for ${shipName}; using procedural fallback.` });
+    }
+  }, [modelUrl, onModelStatus, shipName]);
+
+  const markLoaded = useCallback(() => {
+    onModelStatus({ kind: "loaded", text: `Ship model: GLB loaded for ${shipName}.` });
+  }, [onModelStatus, shipName]);
+
+  const markFallback = useCallback(() => {
+    onModelStatus({ kind: "fallback", text: `Ship model: GLB failed for ${shipName}; using procedural fallback.` });
+  }, [onModelStatus, shipName]);
+
+  return (
+    <group position={toThree(player.position)} rotation={player.rotation}>
+      {modelUrl ? (
+        <ShipModelBoundary key={player.shipId} fallback={fallback} onFallback={markFallback}>
+          <Suspense fallback={fallback}>
+            <GltfPlayerShip onLoaded={markLoaded} shipId={player.shipId} url={modelUrl} />
+          </Suspense>
+        </ShipModelBoundary>
+      ) : (
+        fallback
+      )}
+      <PlayerEngineFlames shipId={player.shipId} afterburning={afterburning} speed={speed} />
     </group>
   );
 }
@@ -744,7 +835,7 @@ function TargetLock() {
   );
 }
 
-function SceneContent() {
+function SceneContent({ onShipModelStatus }: { onShipModelStatus: (status: ShipModelStatus) => void }) {
   const runtime = useGameStore((state) => state.runtime);
   const currentSystemId = useGameStore((state) => state.currentSystemId);
   const ambient = 0.55 + systemById[currentSystemId].risk * 0.2;
@@ -758,7 +849,7 @@ function SceneContent() {
       <PlanetBackdrops />
       <JumpGateModel />
       <StationModel />
-      <PlayerShip />
+      <PlayerShip onModelStatus={onShipModelStatus} />
       <WormholeTunnel />
       <TargetLock />
       {runtime.enemies.map((ship) => (
@@ -791,6 +882,13 @@ export function FlightScene() {
   const currentSystemId = useGameStore((state) => state.currentSystemId);
   const player = useGameStore((state) => state.player);
   const knownPlanetIds = useGameStore((state) => state.knownPlanetIds);
+  const [shipModelStatus, setShipModelStatus] = useState<ShipModelStatus>({
+    kind: "loading",
+    text: "Ship model: waiting for GLB loader."
+  });
+  const updateShipModelStatus = useCallback((status: ShipModelStatus) => {
+    setShipModelStatus((current) => (current.kind === status.kind && current.text === status.text ? current : status));
+  }, []);
   const navigationTarget = getNearestNavigationTarget(currentSystemId, player.position, knownPlanetIds);
   const hint = navigationTarget
     ? navigationTarget.inRange
@@ -814,9 +912,10 @@ export function FlightScene() {
         <Suspense fallback={null}>
           <SimulationTicker />
           <CameraRig />
-          <SceneContent />
+          <SceneContent onShipModelStatus={updateShipModelStatus} />
         </Suspense>
       </Canvas>
+      <div className={`ship-model-status ${shipModelStatus.kind}`}>{shipModelStatus.text}</div>
       {hint ? <div className={`dock-hint ${navigationTarget?.kind === "stargate" ? "gate-hint" : navigationTarget?.kind === "planet-signal" ? "scan-hint" : ""}`}>{hint}</div> : null}
     </div>
   );

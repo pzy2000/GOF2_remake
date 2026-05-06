@@ -18,10 +18,24 @@ import { AtlasIcon } from "./AtlasIcon";
 import { SaveSlotsPanel } from "./SaveSlotsPanel";
 import { getCommodityIcon, getEquipmentIcon, getFactionIcon } from "../data/iconAtlas";
 import { getStoryProgress, storyStatusLabel } from "../systems/story";
-import type { AssetManifest, CargoHold, CommodityId, EquipmentId, StationTab } from "../types/game";
+import {
+  canInstallEquipment,
+  getEquipmentSlotUsage,
+  getShipSlotCapacity,
+  hasCraftMaterials
+} from "../systems/equipment";
+import type { AssetManifest, CargoHold, CommodityId, EquipmentId, EquipmentSlotType, StationTab } from "../types/game";
 
 const tabs: StationTab[] = ["Market", "Hangar", "Shipyard", "Mission Board", "Captain's Log", "Blueprint Workshop", "Lounge", "Galaxy Map"];
 const craftable: EquipmentId[] = ["plasma-cannon", "shield-booster", "cargo-expansion", "scanner", "targeting-computer"];
+const equipmentSlotOrder: EquipmentSlotType[] = ["primary", "secondary", "utility", "defense", "engineering"];
+const equipmentSlotLabels: Record<EquipmentSlotType, string> = {
+  primary: "Primary",
+  secondary: "Secondary",
+  utility: "Utility",
+  defense: "Defense",
+  engineering: "Engineering"
+};
 
 type EquipmentPopoverMode = "preview" | "pinned";
 
@@ -278,51 +292,105 @@ function HangarTab() {
   const player = useGameStore((state) => state.player);
   const activeMissions = useGameStore((state) => state.activeMissions);
   const repairAndRefill = useGameStore((state) => state.repairAndRefill);
+  const installFromInventory = useGameStore((state) => state.installEquipmentFromInventory);
+  const uninstallToInventory = useGameStore((state) => state.uninstallEquipmentToInventory);
+  const [inventoryFilter, setInventoryFilter] = useState<EquipmentSlotType | "all">("all");
   const equipmentPopover = useEquipmentPopover();
+  const ship = shipById[player.shipId];
+  const slotUsage = getEquipmentSlotUsage(player.equipment);
+  const slotCapacity = getShipSlotCapacity(player.stats);
+  const inventoryEntries = (Object.entries(player.equipmentInventory ?? {}) as [EquipmentId, number | undefined][])
+    .filter(([, amount]) => (amount ?? 0) > 0)
+    .filter(([id]) => inventoryFilter === "all" || equipmentById[id].slotType === inventoryFilter);
   return (
     <>
-      <div className="hangar-layout">
-        <aside className="equipment-strip">
-          {player.equipment.map((item) => (
-            <EquipmentTrigger
-              className="equipment-icon-trigger"
-              equipmentId={item}
-              getTriggerProps={equipmentPopover.getTriggerProps}
-              key={item}
-              status="Installed"
-            >
-              <AtlasIcon icon={getEquipmentIcon(item)} manifest={manifest} size={54} showTitle={false} />
-            </EquipmentTrigger>
-          ))}
-        </aside>
-        <div>
-          <h2>Hangar</h2>
-          <p>{shipById[player.shipId].name} · {shipById[player.shipId].role}</p>
+      <div className="hangar-build-grid">
+        <section className="hangar-panel">
+          <h2>Current Ship</h2>
+          <p>{ship.name} · {ship.role}</p>
           <div className="stat-grid">
             <span>Hull {Math.round(player.hull)}/{player.stats.hull}</span>
             <span>Shield {Math.round(player.shield)}/{player.stats.shield}</span>
             <span>Energy {Math.round(player.energy)}/{player.stats.energy}</span>
             <span>Cargo {getOccupiedCargo(player.cargo, activeMissions)}/{player.stats.cargoCapacity}</span>
-            <span>Primary slots {player.stats.primarySlots}</span>
-            <span>Secondary slots {player.stats.secondarySlots}</span>
           </div>
-          <h3>Installed Equipment</h3>
-          <div className="icon-chip-row">
-            {player.equipment.map((item) => (
-              <EquipmentTrigger
-                className="icon-chip equipment-chip-trigger"
-                equipmentId={item}
-                getTriggerProps={equipmentPopover.getTriggerProps}
-                key={item}
-                status="Installed"
-              >
-                <AtlasIcon icon={getEquipmentIcon(item)} manifest={manifest} size={30} showTitle={false} />
-                {equipmentName(item)}
-              </EquipmentTrigger>
-            ))}
+          <div className="slot-grid" aria-label="Equipment slots">
+            {equipmentSlotOrder.map((slotType) => {
+              const used = slotUsage[slotType];
+              const capacity = slotCapacity[slotType];
+              const fill = capacity > 0 ? Math.min(100, (used / capacity) * 100) : 0;
+              return (
+                <div className="slot-meter" key={slotType}>
+                  <span>{equipmentSlotLabels[slotType]}</span>
+                  <b>{used}/{capacity}</b>
+                  <i style={{ width: `${fill}%` }} />
+                </div>
+              );
+            })}
           </div>
           <button className="primary" onClick={repairAndRefill}>Repair Hull and Refill Missiles</button>
-        </div>
+        </section>
+        <section className="hangar-panel hangar-scroll-panel">
+          <h2>Installed Equipment</h2>
+          <div className="equipment-list">
+            {player.equipment.map((item, index) => (
+              <div className="equipment-list-row" key={`${item}-${index}`}>
+                <EquipmentTrigger
+                  className="equipment-row-trigger"
+                  equipmentId={item}
+                  getTriggerProps={equipmentPopover.getTriggerProps}
+                  status={`Installed · ${equipmentSlotLabels[equipmentById[item].slotType]}`}
+                >
+                  <AtlasIcon icon={getEquipmentIcon(item)} manifest={manifest} size={38} showTitle={false} />
+                  <span>
+                    <strong>{equipmentName(item)}</strong>
+                    <small>{equipmentSlotLabels[equipmentById[item].slotType]} · {equipmentById[item].effect}</small>
+                  </span>
+                </EquipmentTrigger>
+                <button onClick={() => uninstallToInventory(item)}>Unload</button>
+              </div>
+            ))}
+          </div>
+        </section>
+        <section className="hangar-panel hangar-scroll-panel">
+          <header className="inventory-header">
+            <h2>Inventory</h2>
+            <select value={inventoryFilter} onChange={(event) => setInventoryFilter(event.target.value as EquipmentSlotType | "all")} aria-label="Filter equipment inventory">
+              <option value="all">All</option>
+              {equipmentSlotOrder.map((slotType) => (
+                <option key={slotType} value={slotType}>{equipmentSlotLabels[slotType]}</option>
+              ))}
+            </select>
+          </header>
+          <div className="equipment-list">
+            {inventoryEntries.length > 0 ? (
+              inventoryEntries.map(([item, amount]) => {
+                const availability = canInstallEquipment(player, item);
+                return (
+                  <div className="equipment-list-row" key={item}>
+                    <EquipmentTrigger
+                      className="equipment-row-trigger"
+                      equipmentId={item}
+                      getTriggerProps={equipmentPopover.getTriggerProps}
+                      status={`Inventory x${amount ?? 0}`}
+                    >
+                      <AtlasIcon icon={getEquipmentIcon(item)} manifest={manifest} size={38} showTitle={false} />
+                      <span>
+                        <strong>{equipmentName(item)} x{amount}</strong>
+                        <small>{equipmentSlotLabels[equipmentById[item].slotType]} · {equipmentById[item].role}</small>
+                      </span>
+                    </EquipmentTrigger>
+                    <button disabled={!availability.ok} title={availability.ok ? undefined : availability.message} onClick={() => installFromInventory(item)}>
+                      Install
+                    </button>
+                  </div>
+                );
+              })
+            ) : (
+              <p className="muted">No spare equipment in inventory.</p>
+            )}
+          </div>
+        </section>
       </div>
       <EquipmentPopover
         manifest={manifest}
@@ -336,22 +404,78 @@ function HangarTab() {
 
 function ShipyardTab() {
   const player = useGameStore((state) => state.player);
+  const currentStationId = useGameStore((state) => state.currentStationId);
   const buyShip = useGameStore((state) => state.buyShip);
+  const switchShip = useGameStore((state) => state.switchShip);
+  const [pendingShipId, setPendingShipId] = useState<string | null>(null);
+  const pendingShip = pendingShipId ? shipById[pendingShipId] : undefined;
+  const currentShip = shipById[player.shipId];
   return (
-    <div>
+    <div className="shipyard-panel">
       <h2>Shipyard</h2>
+      <p className="muted">Purchased ships transfer your active hull into secure storage at PTD Home. Stored ships can be switched there for free.</p>
       <div className="ship-grid">
-        {ships.map((ship) => (
-          <article key={ship.id} className="ship-card">
-            <h3>{ship.name}</h3>
-            <p>{ship.role}</p>
-            <p>Hull {ship.stats.hull} · Shield {ship.stats.shield} · Speed {ship.stats.speed} · Cargo {ship.stats.cargoCapacity}</p>
-            <button disabled={player.ownedShips.includes(ship.id) || player.credits < ship.price} onClick={() => buyShip(ship.id)}>
-              {player.ownedShips.includes(ship.id) ? "Owned" : `${ship.price.toLocaleString()} cr`}
-            </button>
-          </article>
-        ))}
+        {ships.map((ship) => {
+          const current = player.shipId === ship.id;
+          const storedRecord = player.ownedShipRecords?.find((record) => record.shipId === ship.id);
+          const owned = current || player.ownedShips.includes(ship.id);
+          const storedStation = storedRecord ? stationById[storedRecord.stationId] : undefined;
+          const canSwitch = !!storedRecord && currentStationId === storedRecord.stationId;
+          return (
+            <article key={ship.id} className={`ship-card ${current ? "current-ship-card" : ""}`}>
+              <h3>{ship.name}</h3>
+              <p>{ship.role}</p>
+              <p>Hull {ship.stats.hull} · Shield {ship.stats.shield} · Speed {ship.stats.speed} · Cargo {ship.stats.cargoCapacity}</p>
+              <p>Slots {ship.stats.primarySlots}P / {ship.stats.secondarySlots}S / {ship.stats.utilitySlots}U / {ship.stats.defenseSlots}D / {ship.stats.engineeringSlots}E</p>
+              <p>Stock loadout: {ship.equipment.map(equipmentName).join(", ")}</p>
+              {current ? (
+                <button disabled>Current</button>
+              ) : canSwitch ? (
+                <button onClick={() => switchShip(ship.id)}>Switch Free</button>
+              ) : storedRecord ? (
+                <button disabled>Stored at {storedStation?.name ?? storedRecord.stationId}</button>
+              ) : owned ? (
+                <button disabled>Owned</button>
+              ) : (
+                <button disabled={player.credits < ship.price} onClick={() => setPendingShipId(ship.id)}>
+                  Buy {ship.price.toLocaleString()} cr
+                </button>
+              )}
+            </article>
+          );
+        })}
       </div>
+      {pendingShip ? (
+        <div className="modal-screen static-screen" role="dialog" aria-modal="true" aria-label={`Confirm ${pendingShip.name} purchase`}>
+          <section className="modal-panel ship-purchase-modal">
+            <h2>Confirm Purchase</h2>
+            <p>
+              Buy {pendingShip.name} for {pendingShip.price.toLocaleString()} credits. Your {currentShip.name} and its installed equipment will be stored at PTD Home.
+            </p>
+            <div className="ship-confirm-grid">
+              <span>Default loadout</span>
+              <b>{pendingShip.equipment.map(equipmentName).join(", ")}</b>
+              <span>Slot layout</span>
+              <b>{pendingShip.stats.primarySlots}P / {pendingShip.stats.secondarySlots}S / {pendingShip.stats.utilitySlots}U / {pendingShip.stats.defenseSlots}D / {pendingShip.stats.engineeringSlots}E</b>
+              <span>Storage station</span>
+              <b>PTD Home</b>
+            </div>
+            <div className="modal-actions">
+              <button onClick={() => setPendingShipId(null)}>Cancel</button>
+              <button
+                className="primary"
+                disabled={player.credits < pendingShip.price}
+                onClick={() => {
+                  buyShip(pendingShip.id);
+                  setPendingShipId(null);
+                }}
+              >
+                Confirm Buy
+              </button>
+            </div>
+          </section>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -381,7 +505,7 @@ function MissionBoardTab() {
           </div>
         ))}
       </aside>
-      <div>
+      <div className="mission-board-panel">
         <h2>Mission Board</h2>
         <div className="mission-list">
           {[...activeMissions, ...available.filter((mission) => !activeMissions.some((active) => active.id === mission.id))].map((mission) => {
@@ -492,30 +616,40 @@ function BlueprintTab() {
   const equipmentPopover = useEquipmentPopover();
   return (
     <>
-      <div>
+      <div className="blueprint-panel">
         <h2>Blueprint Workshop</h2>
         <div className="ship-grid">
           {craftable.map((id) => {
+            const equipment = equipmentById[id];
+            const craftCost = equipment.craftCost;
+            const inventoryCount = player.equipmentInventory?.[id] ?? 0;
             const installed = player.equipment.includes(id);
+            const canCraft = !!craftCost && player.credits >= craftCost.credits && hasCraftMaterials(player.cargo, craftCost.cargo);
+            const missing = craftCost ? getCraftMissingText(player, craftCost.credits, craftCost.cargo) : "No blueprint data.";
             return (
               <article
                 className="ship-card equipment-card equipment-trigger"
                 key={id}
                 role="button"
                 tabIndex={0}
-                {...equipmentPopover.getTriggerProps(id, installed ? "Installed" : "Craftable")}
+                {...equipmentPopover.getTriggerProps(id, installed ? "Installed" : inventoryCount > 0 ? `Inventory x${inventoryCount}` : "Craftable")}
               >
                 <AtlasIcon icon={getEquipmentIcon(id)} manifest={manifest} size={52} showTitle={false} />
                 <h3>{equipmentName(id)}</h3>
-                <p>{equipmentById[id].category} upgrade · prototype fabrication</p>
+                <p>{equipment.category} · {equipmentSlotLabels[equipment.slotType]} slot</p>
+                {craftCost ? (
+                  <p>{craftCost.credits.toLocaleString()} cr · {formatCargo(craftCost.cargo)}</p>
+                ) : null}
+                <p>Installed {installed ? "yes" : "no"} · Inventory {inventoryCount}</p>
+                {missing ? <p className="warning-text">{missing}</p> : <p className="muted">Added to equipment inventory after fabrication.</p>}
                 <button
-                  disabled={installed}
+                  disabled={!canCraft}
                   onClick={(event) => {
                     event.stopPropagation();
                     craftEquipment(id);
                   }}
                 >
-                  {installed ? "Installed" : "Craft"}
+                  Craft
                 </button>
               </article>
             );
@@ -530,6 +664,16 @@ function BlueprintTab() {
       />
     </>
   );
+}
+
+function getCraftMissingText(player: ReturnType<typeof useGameStore.getState>["player"], credits: number, cargo: CargoHold): string {
+  const missing: string[] = [];
+  if (player.credits < credits) missing.push(`${(credits - player.credits).toLocaleString()} credits`);
+  for (const [id, amount] of Object.entries(cargo) as [CommodityId, number][]) {
+    const shortage = amount - (player.cargo[id] ?? 0);
+    if (shortage > 0) missing.push(`${shortage} ${commodityById[id].name}`);
+  }
+  return missing.length > 0 ? `Missing ${missing.join(", ")}.` : "";
 }
 
 function LoungeTab() {

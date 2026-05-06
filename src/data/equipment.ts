@@ -16,6 +16,8 @@ export const equipmentList: EquipmentDefinition[] = [
       { label: "Range", value: "900m" },
       { label: "Speed", value: "740" }
     ],
+    slotType: "primary",
+    craftCost: { credits: 450, cargo: { electronics: 1, "energy-cells": 1 } },
     weapon: weapons["pulse-laser"]
   },
   {
@@ -32,6 +34,8 @@ export const equipmentList: EquipmentDefinition[] = [
       { label: "Range", value: "780m" },
       { label: "Speed", value: "520" }
     ],
+    slotType: "primary",
+    craftCost: { credits: 1300, cargo: { titanium: 2, "energy-cells": 2 } },
     weapon: weapons["plasma-cannon"]
   },
   {
@@ -47,6 +51,8 @@ export const equipmentList: EquipmentDefinition[] = [
       { label: "Range", value: "1300m" },
       { label: "Speed", value: "360" }
     ],
+    slotType: "secondary",
+    craftCost: { credits: 900, cargo: { "ship-components": 1, "energy-cells": 1 } },
     weapon: weapons["homing-missile"]
   },
   {
@@ -61,6 +67,8 @@ export const equipmentList: EquipmentDefinition[] = [
       { label: "Drain", value: "12/s" },
       { label: "Yield", value: "2 units" }
     ],
+    slotType: "utility",
+    craftCost: { credits: 650, cargo: { iron: 2, "energy-cells": 1 } },
     weapon: weapons["mining-beam"]
   },
   {
@@ -71,6 +79,8 @@ export const equipmentList: EquipmentDefinition[] = [
     description: "Adds a dedicated reserve layer to the ship's defensive envelope.",
     effect: "Increases maximum shield capacity by 25.",
     displayStats: [{ label: "Max Shield", value: "+25" }],
+    slotType: "defense",
+    craftCost: { credits: 900, cargo: { "ship-components": 1, "energy-cells": 1 } },
     modifiers: { stats: { shield: 25 } }
   },
   {
@@ -81,6 +91,8 @@ export const equipmentList: EquipmentDefinition[] = [
     description: "Rebalances internal storage racks for ore, trade goods, passengers, and mission freight.",
     effect: "Increases cargo capacity by 12.",
     displayStats: [{ label: "Cargo", value: "+12" }],
+    slotType: "engineering",
+    craftCost: { credits: 700, cargo: { "mechanical-parts": 2, plastics: 2 } },
     modifiers: { stats: { cargoCapacity: 12 } }
   },
   {
@@ -94,6 +106,8 @@ export const equipmentList: EquipmentDefinition[] = [
       { label: "Boost", value: "2.05x" },
       { label: "Drain", value: "50/s" }
     ],
+    slotType: "engineering",
+    craftCost: { credits: 760, cargo: { "energy-cells": 2, hydraulics: 1 } },
     modifiers: { afterburnerMultiplier: 2.05, afterburnerEnergyDrain: 50 }
   },
   {
@@ -107,6 +121,8 @@ export const equipmentList: EquipmentDefinition[] = [
       { label: "Interact", value: "+60m" },
       { label: "Vein HUD", value: "+80m" }
     ],
+    slotType: "utility",
+    craftCost: { credits: 700, cargo: { electronics: 1, "data-cores": 1 } },
     modifiers: { scannerRangeBonus: 60, miningHudRangeBonus: 80 }
   },
   {
@@ -117,6 +133,8 @@ export const equipmentList: EquipmentDefinition[] = [
     description: "Bolts high-density plating around exposed frame ribs and reactor shielding.",
     effect: "Increases maximum hull integrity by 30.",
     displayStats: [{ label: "Max Hull", value: "+30" }],
+    slotType: "defense",
+    craftCost: { credits: 850, cargo: { titanium: 2, "mechanical-parts": 1 } },
     modifiers: { stats: { hull: 30 } }
   },
   {
@@ -130,6 +148,8 @@ export const equipmentList: EquipmentDefinition[] = [
       { label: "Max Energy", value: "+25" },
       { label: "Regen", value: "+4/s" }
     ],
+    slotType: "engineering",
+    craftCost: { credits: 1100, cargo: { "energy-cells": 2, microchips: 1 } },
     modifiers: { stats: { energy: 25 }, energyRegenBonus: 4 }
   },
   {
@@ -143,6 +163,8 @@ export const equipmentList: EquipmentDefinition[] = [
       { label: "Hull Regen", value: "2/s" },
       { label: "Delay", value: "8s" }
     ],
+    slotType: "utility",
+    craftCost: { credits: 950, cargo: { "mechanical-parts": 1, microchips: 1 } },
     modifiers: { hullRegenPerSecond: 2, hullRegenDelay: 8 }
   },
   {
@@ -153,6 +175,8 @@ export const equipmentList: EquipmentDefinition[] = [
     description: "Tightens firing windows with target lead estimation and launcher timing compensation.",
     effect: "Reduces primary and secondary weapon cooldowns by 12%.",
     displayStats: [{ label: "Cooldown", value: "-12%" }],
+    slotType: "engineering",
+    craftCost: { credits: 820, cargo: { optics: 1, microchips: 1 } },
     modifiers: { weaponCooldownMultiplier: 0.88 }
   }
 ];
