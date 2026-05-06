@@ -2,8 +2,20 @@ import { describe, expect, it } from "vitest";
 import { shipById } from "../src/data/world";
 import { createInitialMarketState } from "../src/systems/economy";
 import { createInitialReputation } from "../src/systems/reputation";
-import { readSave, SAVE_KEY, writeSave } from "../src/systems/save";
-import type { PlayerState } from "../src/types/game";
+import {
+  deleteSave,
+  getLatestSaveSlotId,
+  LEGACY_SAVE_VERSION,
+  readSave,
+  readSaveIndex,
+  readSaveSlots,
+  SAVE_INDEX_KEY,
+  SAVE_KEY,
+  SAVE_SLOT_PREFIX,
+  SAVE_VERSION,
+  writeSave
+} from "../src/systems/save";
+import type { PlayerState, SaveGameData } from "../src/types/game";
 
 class MemoryStorage implements Storage {
   private data = new Map<string, string>();
@@ -49,28 +61,67 @@ function player(): PlayerState {
 }
 
 describe("save system", () => {
-  it("round trips save data through Storage", () => {
+  function payload(overrides: Partial<Omit<SaveGameData, "version" | "savedAt">> = {}): Omit<SaveGameData, "version" | "savedAt"> {
+    return {
+      currentSystemId: "helion-reach",
+      gameClock: 123,
+      player: player(),
+      activeMissions: [],
+      completedMissionIds: ["courier-helion-kuro"],
+      failedMissionIds: ["bounty-ashen"],
+      marketState: createInitialMarketState(),
+      reputation: createInitialReputation(),
+      knownSystems: ["helion-reach", "kuro-belt"],
+      ...overrides
+    };
+  }
+
+  it("round trips v2 save data through named slots", () => {
     const storage = new MemoryStorage();
-    writeSave(
-      {
-        currentSystemId: "helion-reach",
-        gameClock: 123,
-        player: player(),
-        activeMissions: [],
-        completedMissionIds: ["courier-helion-kuro"],
-        failedMissionIds: ["bounty-ashen"],
-        marketState: createInitialMarketState(),
-        reputation: createInitialReputation(),
-        knownSystems: ["helion-reach", "kuro-belt"]
-      },
-      storage
-    );
-    expect(storage.getItem(SAVE_KEY)).toContain("helion-reach");
-    const loaded = readSave(storage);
+    writeSave(payload(), storage, "manual-1");
+    expect(storage.getItem(`${SAVE_SLOT_PREFIX}manual-1`)).toContain("helion-reach");
+    expect(storage.getItem(SAVE_INDEX_KEY)).toContain("manual-1");
+    const loaded = readSave(storage, "manual-1");
     expect(loaded?.player.credits).toBe(4321);
     expect(loaded?.completedMissionIds).toEqual(["courier-helion-kuro"]);
     expect(loaded?.failedMissionIds).toEqual(["bounty-ashen"]);
     expect(loaded?.gameClock).toBe(123);
     expect(loaded?.marketState["helion-prime"]?.["basic-food"]).toBeDefined();
+    expect(loaded?.version).toBe(SAVE_VERSION);
+  });
+
+  it("continues from the latest valid slot and deletes slots from the index", () => {
+    const storage = new MemoryStorage();
+    writeSave(payload({ currentSystemId: "kuro-belt" }), storage, "manual-1");
+    writeSave(payload({ currentSystemId: "celest-gate", player: { ...player(), credits: 9999 } }), storage, "manual-2");
+    expect(getLatestSaveSlotId(storage)).toBe("manual-2");
+    expect(readSave(storage)?.currentSystemId).toBe("celest-gate");
+
+    deleteSave("manual-2", storage);
+    expect(readSaveSlots(storage).find((slot) => slot.id === "manual-2")?.exists).toBe(false);
+    expect(readSave(storage)?.currentSystemId).toBe("kuro-belt");
+  });
+
+  it("migrates a v1 single save into the auto slot", () => {
+    const storage = new MemoryStorage();
+    storage.setItem(
+      SAVE_KEY,
+      JSON.stringify({
+        ...payload(),
+        version: LEGACY_SAVE_VERSION,
+        savedAt: "2026-01-01T00:00:00.000Z"
+      })
+    );
+    const index = readSaveIndex(storage);
+    expect(index.slots.auto?.exists).toBe(true);
+    expect(index.lastPlayedSlotId).toBe("auto");
+    expect(readSave(storage, "auto")?.version).toBe(SAVE_VERSION);
+  });
+
+  it("ignores bad legacy saves without corrupting empty slots", () => {
+    const storage = new MemoryStorage();
+    storage.setItem(SAVE_KEY, "{not json");
+    const slots = readSaveSlots(storage);
+    expect(slots.every((slot) => !slot.exists)).toBe(true);
   });
 });

@@ -52,6 +52,14 @@ Station markets now track saved stock, demand, and baseline recovery. Buying red
 
 Contracts use saved shipboard time. Courier, cargo, passenger, mining, bounty, escort, and salvage missions have deadlines and reputation penalties. Passenger contracts reserve cargo capacity, cargo transport consumes player-provided goods on delivery, escort missions spawn a convoy ship in flight, and salvage missions spawn recoverable crates.
 
+## Saves, Data, And Audio
+
+The browser save system uses three manual slots plus one auto/quick slot. Older single-slot v1 saves are migrated into the auto slot the first time the v2 save index is read. Slot metadata shows system, station/flight state, credits, game time, saved date, and version.
+
+Game content is split into strongly typed data modules for commodities, ships/equipment, systems/stations, factions, and missions, with validation tests for duplicate ids and broken references.
+
+Audio is generated at runtime with the Web Audio API. No audio files are required. Settings include master, SFX, music, and mute controls, while flight/market interactions trigger synthesized lasers, missiles, mining, explosions, UI clicks, warnings, and simple safe/combat/station music layers.
+
 ## Known Limitations
 
-This is a vertical slice, not a full campaign. Dynamic markets react to player trades and drift back toward station baselines, but NPC trade fleets do not globally simulate supply chains yet. Escort routes are currently same-system contracts so they stay independent from jump-gate autopilot. Commodity, equipment, and faction sprite sheets are sliced in the UI with CSS atlas positioning. Audio is represented by UI feedback and is ready for a fuller browser audio layer later.
+This is a vertical slice, not a full campaign. Dynamic markets react to player trades and drift back toward station baselines, but NPC trade fleets do not globally simulate supply chains yet. Escort routes are currently same-system contracts so they stay independent from jump-gate autopilot. Commodity, equipment, and faction sprite sheets are sliced in the UI with CSS atlas positioning. Procedural audio is intentionally lightweight and can later be replaced or layered with authored assets.

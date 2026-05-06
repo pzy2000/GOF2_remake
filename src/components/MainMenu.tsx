@@ -1,4 +1,5 @@
 import { useGameStore } from "../state/gameStore";
+import { SaveSlotsPanel } from "./SaveSlotsPanel";
 
 export function MainMenu() {
   const manifest = useGameStore((state) => state.assetManifest);
@@ -14,10 +15,11 @@ export function MainMenu() {
         <p className="menu-summary">Trade, mine, fight pirates, dock at stations, and push across a six-system frontier.</p>
         <div className="menu-actions">
           <button className="primary" onClick={newGame}>New Game</button>
-          <button onClick={loadGame} disabled={!hasSave}>Continue</button>
+          <button onClick={() => loadGame()} disabled={!hasSave}>Continue</button>
           <button onClick={() => setScreen("settings")}>Settings</button>
           <button onClick={() => setScreen("credits")}>Credits</button>
         </div>
+        <SaveSlotsPanel mode="load" />
       </section>
     </main>
   );

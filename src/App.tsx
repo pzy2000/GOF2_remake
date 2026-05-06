@@ -1,9 +1,11 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { FlightScene } from "./components/FlightScene";
 import { GalaxyMap } from "./components/GalaxyMap";
 import { Hud } from "./components/Hud";
 import { MainMenu } from "./components/MainMenu";
 import { StationScreen } from "./components/StationScreen";
+import { SaveSlotsPanel } from "./components/SaveSlotsPanel";
+import { audioSystem, getAudioSettings, saveAudioSettings } from "./systems/audio";
 import { loadAssetManifest } from "./systems/assets";
 import { useGameStore } from "./state/gameStore";
 import "./styles.css";
@@ -20,10 +22,11 @@ function PauseMenu() {
         <p>Systems are stable. Save before risky jumps or bounty contracts.</p>
         <div className="menu-actions compact">
           <button className="primary" onClick={() => setScreen("flight")}>Resume</button>
-          <button onClick={saveGame}>Save</button>
-          <button onClick={loadGame}>Reload Save</button>
+          <button onClick={() => saveGame()}>Quick Save</button>
+          <button onClick={() => loadGame()}>Reload Latest</button>
           <button onClick={() => setScreen("menu")}>Main Menu</button>
         </div>
+        <SaveSlotsPanel mode="manage" />
       </div>
     </section>
   );
@@ -40,7 +43,7 @@ function GameOver() {
         <h2>Game Over</h2>
         <p>Your ship broke apart under fire. Reload a browser save or start over from Helion Reach.</p>
         <div className="menu-actions compact">
-          <button className="primary" onClick={loadGame}>Reload Save</button>
+          <button className="primary" onClick={() => loadGame()}>Reload Save</button>
           <button onClick={newGame}>New Game</button>
           <button onClick={() => setScreen("menu")}>Main Menu</button>
         </div>
@@ -51,6 +54,10 @@ function GameOver() {
 
 function SimpleScreen({ type }: { type: "settings" | "credits" }) {
   const setScreen = useGameStore((state) => state.setScreen);
+  const [audioSettings, setAudioSettings] = useState(getAudioSettings);
+  const updateAudio = (patch: Partial<typeof audioSettings>) => {
+    setAudioSettings(saveAudioSettings({ ...audioSettings, ...patch }));
+  };
   return (
     <section className="modal-screen static-screen">
       <div className="modal-panel wide">
@@ -59,7 +66,24 @@ function SimpleScreen({ type }: { type: "settings" | "credits" }) {
         {type === "settings" ? (
           <>
             <p>Keyboard and mouse controls are active in flight. Click the 3D view once to capture mouse movement.</p>
-            <p>Audio is represented by lightweight UI feedback in this vertical slice; a fuller mix can be layered later without backend work.</p>
+            <div className="settings-grid">
+              <label>
+                <span>Master</span>
+                <input type="range" min="0" max="1" step="0.01" value={audioSettings.masterVolume} onChange={(event) => updateAudio({ masterVolume: Number(event.target.value) })} />
+              </label>
+              <label>
+                <span>SFX</span>
+                <input type="range" min="0" max="1" step="0.01" value={audioSettings.sfxVolume} onChange={(event) => updateAudio({ sfxVolume: Number(event.target.value) })} />
+              </label>
+              <label>
+                <span>Music</span>
+                <input type="range" min="0" max="1" step="0.01" value={audioSettings.musicVolume} onChange={(event) => updateAudio({ musicVolume: Number(event.target.value) })} />
+              </label>
+              <label className="toggle-line">
+                <input type="checkbox" checked={audioSettings.muted} onChange={(event) => updateAudio({ muted: event.target.checked })} />
+                <span>Mute audio</span>
+              </label>
+            </div>
           </>
         ) : (
           <>
@@ -91,6 +115,29 @@ function GameClockTicker() {
   return null;
 }
 
+function AudioRuntime() {
+  const screen = useGameStore((state) => state.screen);
+  const pirateCount = useGameStore((state) => state.runtime.enemies.filter((ship) => ship.role === "pirate" && ship.hull > 0 && ship.deathTimer === undefined).length);
+  useEffect(() => {
+    const unlock = () => audioSystem.unlock();
+    const click = (event: MouseEvent) => {
+      if ((event.target as HTMLElement | null)?.closest("button")) audioSystem.play("ui-click");
+      unlock();
+    };
+    window.addEventListener("pointerdown", click);
+    window.addEventListener("keydown", unlock);
+    return () => {
+      window.removeEventListener("pointerdown", click);
+      window.removeEventListener("keydown", unlock);
+    };
+  }, []);
+  useEffect(() => {
+    const mode = screen === "station" ? "station" : screen === "flight" ? (pirateCount > 0 ? "combat" : "safe") : "silent";
+    audioSystem.setMusicMode(mode);
+  }, [pirateCount, screen]);
+  return null;
+}
+
 export default function App() {
   const screen = useGameStore((state) => state.screen);
   const setAssetManifest = useGameStore((state) => state.setAssetManifest);
@@ -98,11 +145,12 @@ export default function App() {
     loadAssetManifest().then(setAssetManifest).catch(() => undefined);
   }, [setAssetManifest]);
 
-  if (screen === "menu") return <MainMenu />;
-  if (screen === "settings" || screen === "credits") return <SimpleScreen type={screen} />;
+  if (screen === "menu") return <><AudioRuntime /><MainMenu /></>;
+  if (screen === "settings" || screen === "credits") return <><AudioRuntime /><SimpleScreen type={screen} /></>;
   if (screen === "station") {
     return (
       <>
+        <AudioRuntime />
         <GameClockTicker />
         <StationScreen />
       </>
@@ -111,6 +159,7 @@ export default function App() {
 
   return (
     <main className="game-shell">
+      <AudioRuntime />
       <GameClockTicker />
       <FlightScene />
       <Hud />

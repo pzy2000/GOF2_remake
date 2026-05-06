@@ -2,6 +2,51 @@ export type Vec3 = [number, number, number];
 
 export type OreRarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
 
+export type SaveSlotId = "manual-1" | "manual-2" | "manual-3" | "auto";
+
+export interface SaveSlotSummary {
+  id: SaveSlotId;
+  label: string;
+  exists: boolean;
+  savedAt?: string;
+  currentSystemId?: string;
+  currentStationId?: string;
+  credits?: number;
+  gameClock?: number;
+  version?: number;
+}
+
+export interface SaveIndex {
+  version: number;
+  slots: Partial<Record<SaveSlotId, SaveSlotSummary>>;
+  lastPlayedSlotId?: SaveSlotId;
+}
+
+export type AudioEventName =
+  | "ui-click"
+  | "laser"
+  | "missile"
+  | "explosion"
+  | "mining"
+  | "loot"
+  | "dock"
+  | "undock"
+  | "jump-gate"
+  | "wormhole"
+  | "mission-complete"
+  | "mission-fail"
+  | "low-hull"
+  | "shield-break";
+
+export type MusicMode = "safe" | "combat" | "station" | "silent";
+
+export interface AudioSettings {
+  masterVolume: number;
+  sfxVolume: number;
+  musicVolume: number;
+  muted: boolean;
+}
+
 export type Screen =
   | "menu"
   | "flight"

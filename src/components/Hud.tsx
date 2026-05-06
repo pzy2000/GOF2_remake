@@ -121,7 +121,7 @@ export function Hud() {
         {autopilot?.cancelable ? <p>Manual flight input cancels autopilot.</p> : null}
         <div className="quick-actions">
           <button onClick={() => setScreen("galaxyMap")} disabled={!!autopilot}>Map</button>
-          <button onClick={saveGame}>Save</button>
+          <button onClick={() => saveGame()}>Save</button>
           <button onClick={() => setScreen("pause")}>Pause</button>
         </div>
       </section>

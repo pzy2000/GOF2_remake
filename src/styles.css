@@ -114,6 +114,56 @@ h3 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.save-slots-panel {
+  display: grid;
+  gap: 10px;
+  pointer-events: auto;
+}
+
+.save-slot-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.save-slot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  border: 1px solid rgba(128, 214, 255, 0.2);
+  border-radius: 8px;
+  background: rgba(4, 14, 27, 0.74);
+  padding: 10px;
+}
+
+.save-slot.active {
+  border-color: rgba(255, 193, 103, 0.72);
+}
+
+.save-slot div:first-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.save-slot span {
+  color: #adc3d6;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.save-slot-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.save-slot-actions button {
+  min-height: 32px;
+  padding: 0 10px;
+}
+
 .game-shell,
 .flight-canvas {
   position: relative;
@@ -317,6 +367,28 @@ h3 {
 
 .modal-panel.wide {
   width: min(1180px, 96vw);
+}
+
+.settings-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.settings-grid label {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  color: #d8efff;
+}
+
+.settings-grid input[type="range"] {
+  width: 100%;
+}
+
+.settings-grid .toggle-line {
+  grid-template-columns: auto 1fr;
+  justify-content: start;
 }
 
 .station-screen {
@@ -529,7 +601,8 @@ h3 {
   }
 
   .split-layout,
-  .market-row {
+  .market-row,
+  .save-slot {
     grid-template-columns: 1fr;
   }
 

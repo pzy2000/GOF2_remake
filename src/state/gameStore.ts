@@ -17,6 +17,8 @@ import type {
   RuntimeState,
   SalvageEntity,
   SaveGameData,
+  SaveSlotId,
+  SaveSlotSummary,
   Screen,
   StationTab,
   Vec3
@@ -60,7 +62,8 @@ import {
   markEscortArrived,
   markSalvageRecovered
 } from "../systems/missions";
-import { readSave, writeSave } from "../systems/save";
+import { deleteSave as deleteSaveSlot, getLatestSaveSlotId, readSave, readSaveSlots, writeSave } from "../systems/save";
+import { audioSystem } from "../systems/audio";
 
 const emptyInput: FlightInput = {
   throttleUp: false,
@@ -257,6 +260,7 @@ function applyExpiredMissions(snapshot: {
       reputation = result.reputation;
       failedMissionIds.push(mission.id);
       message = `${mission.title} failed: deadline expired.`;
+      audioSystem.play("mission-fail");
       runtime = {
         ...runtime,
         convoys: runtime.convoys.filter((convoy) => convoy.missionId !== mission.id),
@@ -365,10 +369,14 @@ interface GameStore {
   primaryCooldown: number;
   secondaryCooldown: number;
   hasSave: boolean;
+  saveSlots: SaveSlotSummary[];
+  activeSaveSlotId?: SaveSlotId;
   setAssetManifest: (manifest: AssetManifest) => void;
   newGame: () => void;
-  loadGame: () => boolean;
-  saveGame: () => void;
+  loadGame: (slotId?: SaveSlotId) => boolean;
+  saveGame: (slotId?: SaveSlotId) => void;
+  deleteSave: (slotId: SaveSlotId) => void;
+  refreshSaveSlots: () => void;
   setScreen: (screen: Screen) => void;
   setStationTab: (tab: StationTab) => void;
   setInput: (patch: Partial<FlightInput>) => void;
@@ -429,6 +437,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   primaryCooldown: 0,
   secondaryCooldown: 0,
   hasSave: readSave() !== null,
+  saveSlots: readSaveSlots(),
+  activeSaveSlotId: undefined,
   setAssetManifest: (assetManifest) => set({ assetManifest }),
   newGame: () =>
     set({
@@ -450,10 +460,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
       reputation: createInitialReputation(),
       knownSystems: systems.map((system) => system.id),
       primaryCooldown: 0,
-      secondaryCooldown: 0
+      secondaryCooldown: 0,
+      activeSaveSlotId: undefined
     }),
-  loadGame: () => {
-    const save = readSave();
+  loadGame: (slotId) => {
+    const resolvedSlotId = slotId ?? getLatestSaveSlotId();
+    const save = readSave(undefined, resolvedSlotId);
     if (!save) return false;
     set({
       screen: "flight",
@@ -471,14 +483,30 @@ export const useGameStore = create<GameStore>((set, get) => ({
       runtime: createRuntimeForSystem(save.currentSystemId, save.activeMissions),
       autopilot: undefined,
       hasSave: true,
+      saveSlots: readSaveSlots(),
+      activeSaveSlotId: resolvedSlotId,
       targetId: undefined
     });
+    audioSystem.play("ui-click");
     return true;
   },
-  saveGame: () => {
-    writeSave(savePayload(get()));
-    set({ hasSave: true, runtime: { ...get().runtime, message: "Game saved to browser storage." } });
+  saveGame: (slotId) => {
+    const state = get();
+    const resolvedSlot = slotId ?? state.activeSaveSlotId ?? "auto";
+    writeSave(savePayload(state), undefined, resolvedSlot);
+    audioSystem.play("ui-click");
+    set({ hasSave: true, activeSaveSlotId: resolvedSlot, saveSlots: readSaveSlots(), runtime: { ...get().runtime, message: `Game saved to ${resolvedSlot}.` } });
   },
+  deleteSave: (slotId) => {
+    deleteSaveSlot(slotId);
+    set((state) => ({
+      saveSlots: readSaveSlots(),
+      hasSave: readSave() !== null,
+      activeSaveSlotId: state.activeSaveSlotId === slotId ? undefined : state.activeSaveSlotId,
+      runtime: { ...state.runtime, message: `Deleted ${slotId}.` }
+    }));
+  },
+  refreshSaveSlots: () => set({ saveSlots: readSaveSlots(), hasSave: readSave() !== null }),
   setScreen: (screen) => set((state) => ({ previousScreen: state.screen, screen })),
   setStationTab: (stationTab) => set({ stationTab }),
   setInput: (patch) => set((state) => ({ input: { ...state.input, ...patch } })),
@@ -547,6 +575,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         runtime.message = `Autopilot: aligning to jump gate · ${Math.round(step.distanceToTarget)}m`;
         autopilot = { ...autopilot, targetPosition: gatePosition };
         if (step.distanceToTarget <= GATE_ARRIVAL_DISTANCE) {
+          audioSystem.play("jump-gate");
           autopilot = {
             ...autopilot,
             phase: "gate-activation",
@@ -570,6 +599,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         runtime.effects.push(gateSpoolEffect(gatePosition, progress));
         runtime.message = `Gate spool-up ${Math.round(progress * 100)}%`;
         if (progress >= 1) {
+          audioSystem.play("wormhole");
           autopilot = {
             ...autopilot,
             phase: "wormhole",
@@ -768,6 +798,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     const miningActive = !!(input.firePrimary && nearestAsteroid && nearestAsteroid.dist < 360 && player.energy > 5);
     if (miningActive && nearestAsteroid) {
+      audioSystem.play("mining");
       const cargoAvailable = Math.max(0, player.stats.cargoCapacity - getOccupiedCargo(player.cargo, state.activeMissions));
       if (cargoAvailable <= 0) {
         runtime = { ...runtime, message: "Cargo hold full." };
@@ -840,6 +871,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         life: 1.4,
         targetId: target?.id
       });
+      audioSystem.play("laser");
       player = { ...player, energy: player.energy - (weapons["pulse-laser"]?.energyCost ?? 5) };
       primaryCooldown = weapons["pulse-laser"]?.cooldown ?? 0.18;
     }
@@ -856,6 +888,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         life: 3.6,
         targetId: target?.id
       });
+      audioSystem.play("missile");
       player = { ...player, missiles: player.missiles - 1 };
       secondaryCooldown = weapons["homing-missile"]?.cooldown ?? 1.2;
     }
@@ -964,7 +997,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
         });
       } else if (projectile.owner === "enemy" && distance(movedProjectile.position, player.position) < 22) {
         const shielded = player.shield > 0;
+        const previousShield = player.shield;
+        const previousHullRatio = player.hull / player.stats.hull;
         player = applyDamage(player, projectile.damage, now);
+        if (previousShield > 0 && player.shield <= 0) audioSystem.play("shield-break");
+        if (previousHullRatio > 0.3 && player.hull / player.stats.hull <= 0.3) audioSystem.play("low-hull");
         runtime.effects.push({
           id: projectileId(shielded ? "shield-hit" : "player-hit"),
           kind: shielded ? "shield-hit" : "hit",
@@ -1025,6 +1062,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
               maxLife: 0.85,
               velocity: [0, 6, 0]
             });
+            audioSystem.play("explosion");
             return { ...damaged, deathTimer: 0.42 };
           }
           return damaged;
@@ -1054,6 +1092,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       reputation = result.reputation;
       activeMissions = activeMissions.filter((candidate) => candidate.id !== mission.id);
       failedMissionIds = Array.from(new Set([...failedMissionIds, mission.id]));
+      audioSystem.play("mission-fail");
       runtime.effects.push({
         id: projectileId("convoy-explosion"),
         kind: "explosion",
@@ -1067,6 +1106,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         life: 0.85,
         maxLife: 0.85
       });
+      audioSystem.play("explosion");
       runtime.message = `${mission.title} failed: convoy destroyed.`;
     }
     runtime = { ...runtime, convoys: runtime.convoys.filter((convoy) => convoy.hull > 0 && !failedMissionIds.includes(convoy.missionId)) };
@@ -1199,6 +1239,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           message: `Recovered ${nearSalvage.salvage.name}. Return to station.`
         }
       });
+      audioSystem.play("loot");
       return;
     }
     const nearLoot = state.runtime.loot.filter((loot) => distance(loot.position, state.player.position) < 90);
@@ -1220,6 +1261,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           message: collected > 0 ? `Collected ${collected} cargo unit(s).` : "Cargo hold full."
         }
       });
+      if (collected > 0) audioSystem.play("loot");
       return;
     }
     if (station && station.dist < 260) {
@@ -1228,15 +1270,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
     set({ runtime: { ...state.runtime, message: "No interactable object in range." } });
   },
-  dockAt: (stationId) => set({ screen: "station", currentStationId: stationId, stationTab: "Market", previousScreen: "flight", autopilot: undefined }),
+  dockAt: (stationId) => {
+    audioSystem.play("dock");
+    set({ screen: "station", currentStationId: stationId, stationTab: "Market", previousScreen: "flight", autopilot: undefined });
+  },
   undock: () =>
-    set((state) => ({
-      screen: "flight",
-      currentStationId: undefined,
-      previousScreen: "station",
-      autopilot: undefined,
-      player: { ...state.player, position: [0, 0, 120], throttle: 0.2 }
-    })),
+    set((state) => {
+      audioSystem.play("undock");
+      return {
+        screen: "flight",
+        currentStationId: undefined,
+        previousScreen: "station",
+        autopilot: undefined,
+        player: { ...state.player, position: [0, 0, 120], throttle: 0.2 }
+      };
+    }),
   startJumpToSystem: (systemId) => {
     const state = get();
     const targetSystem = systemById[systemId];
@@ -1330,6 +1378,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
     const result = acceptMissionPure(state.player, state.activeMissions, mission, state.gameClock);
     const runtime = result.mission ? addMissionRuntimeEntity(state.runtime, result.mission, state.currentSystemId) : state.runtime;
+    if (result.ok) audioSystem.play("ui-click");
     set({ player: result.player, activeMissions: result.activeMissions, runtime: { ...runtime, message: result.message } });
   },
   completeMission: (missionId) => {
@@ -1341,6 +1390,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       return;
     }
     const result = completeMissionPure(mission, state.player, state.reputation);
+    audioSystem.play("mission-complete");
     set({
       player: result.player,
       reputation: result.reputation,

@@ -13,6 +13,7 @@ import {
 import { reputationLabel } from "../systems/reputation";
 import { GalaxyMap } from "./GalaxyMap";
 import { AtlasIcon } from "./AtlasIcon";
+import { SaveSlotsPanel } from "./SaveSlotsPanel";
 import { getCommodityIcon, getEquipmentIcon, getFactionIcon } from "../data/iconAtlas";
 import type { CargoHold, CommodityId, EquipmentId, StationTab } from "../types/game";
 
@@ -36,7 +37,7 @@ export function StationScreen() {
           <p>{factionNames[station.factionId]}</p>
         </div>
         <div className="station-actions">
-          <button onClick={saveGame}>Save</button>
+          <button onClick={() => saveGame()}>Quick Save</button>
           <button className="primary" onClick={undock}>Launch</button>
         </div>
       </header>
@@ -55,6 +56,7 @@ export function StationScreen() {
         {tab === "Blueprint Workshop" ? <BlueprintTab /> : null}
         {tab === "Lounge" ? <LoungeTab /> : null}
         {tab === "Galaxy Map" ? <GalaxyMap embedded /> : null}
+        {tab === "Hangar" ? <SaveSlotsPanel mode="manage" /> : null}
       </section>
     </main>
   );
