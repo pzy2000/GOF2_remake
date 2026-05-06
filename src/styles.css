@@ -537,9 +537,10 @@ h3 {
   padding: 24px;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
-  background:
-    linear-gradient(rgba(3, 7, 18, 0.88), rgba(3, 7, 18, 0.96)),
-    url("/assets/generated/nebula-bg.webp") center/cover fixed;
+  background-color: #030712;
+  background-position: center;
+  background-size: cover;
+  background-attachment: fixed;
 }
 
 .station-header,

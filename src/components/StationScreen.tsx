@@ -196,14 +196,18 @@ export function StationScreen() {
   const currentStationId = useGameStore((state) => state.currentStationId);
   const station = currentStationId ? stationById[currentStationId] : undefined;
   const tab = useGameStore((state) => state.stationTab);
+  const manifest = useGameStore((state) => state.assetManifest);
   const setStationTab = useGameStore((state) => state.setStationTab);
   const undock = useGameStore((state) => state.undock);
   const saveGame = useGameStore((state) => state.saveGame);
   const autoSaveSlot = useGameStore((state) => state.saveSlots.find((slot) => slot.id === "auto"));
   const autoSaveTime = autoSaveSlot?.savedAt ? new Date(autoSaveSlot.savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : undefined;
   if (!station) return null;
+  const stationBackground: CSSProperties = {
+    backgroundImage: `linear-gradient(rgba(3, 7, 18, 0.88), rgba(3, 7, 18, 0.96)), url(${manifest.nebulaBg})`
+  };
   return (
-    <main className="station-screen">
+    <main className="station-screen" style={stationBackground}>
       <header className="station-header">
         <div>
           <p className="station-autosave-note">
