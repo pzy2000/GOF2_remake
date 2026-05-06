@@ -183,11 +183,16 @@ export function StationScreen() {
   const setStationTab = useGameStore((state) => state.setStationTab);
   const undock = useGameStore((state) => state.undock);
   const saveGame = useGameStore((state) => state.saveGame);
+  const autoSaveSlot = useGameStore((state) => state.saveSlots.find((slot) => slot.id === "auto"));
+  const autoSaveTime = autoSaveSlot?.savedAt ? new Date(autoSaveSlot.savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : undefined;
   if (!station) return null;
   return (
     <main className="station-screen">
       <header className="station-header">
         <div>
+          <p className="station-autosave-note">
+            {autoSaveTime ? `Auto-saved to Auto / Quick Slot · ${autoSaveTime}` : "Auto-save writes to Auto / Quick Slot"}
+          </p>
           <p className="eyebrow">{station.archetype}</p>
           <h1>{station.name}</h1>
           <p>{factionNames[station.factionId]}</p>

@@ -447,19 +447,45 @@ interface GameStore {
   toggleCamera: () => void;
 }
 
-function savePayload(state: GameStore): Omit<SaveGameData, "version" | "savedAt"> {
+type SavePayloadOverrides = Partial<
+  Pick<
+    GameStore,
+    | "currentSystemId"
+    | "currentStationId"
+    | "gameClock"
+    | "player"
+    | "activeMissions"
+    | "completedMissionIds"
+    | "failedMissionIds"
+    | "marketState"
+    | "reputation"
+    | "knownSystems"
+    | "knownPlanetIds"
+  >
+>;
+
+function savePayload(state: GameStore, overrides: SavePayloadOverrides = {}): Omit<SaveGameData, "version" | "savedAt"> {
   return {
-    currentSystemId: state.currentSystemId,
-    currentStationId: state.currentStationId,
-    gameClock: state.gameClock,
-    player: state.player,
-    activeMissions: state.activeMissions,
-    completedMissionIds: state.completedMissionIds,
-    failedMissionIds: state.failedMissionIds,
-    marketState: state.marketState,
-    reputation: state.reputation,
-    knownSystems: state.knownSystems,
-    knownPlanetIds: state.knownPlanetIds
+    currentSystemId: overrides.currentSystemId ?? state.currentSystemId,
+    currentStationId: Object.prototype.hasOwnProperty.call(overrides, "currentStationId") ? overrides.currentStationId : state.currentStationId,
+    gameClock: overrides.gameClock ?? state.gameClock,
+    player: overrides.player ?? state.player,
+    activeMissions: overrides.activeMissions ?? state.activeMissions,
+    completedMissionIds: overrides.completedMissionIds ?? state.completedMissionIds,
+    failedMissionIds: overrides.failedMissionIds ?? state.failedMissionIds,
+    marketState: overrides.marketState ?? state.marketState,
+    reputation: overrides.reputation ?? state.reputation,
+    knownSystems: overrides.knownSystems ?? state.knownSystems,
+    knownPlanetIds: overrides.knownPlanetIds ?? state.knownPlanetIds
+  };
+}
+
+function writeStationAutoSave(state: GameStore, overrides: SavePayloadOverrides): Pick<GameStore, "hasSave" | "saveSlots" | "activeSaveSlotId"> {
+  writeSave(savePayload(state, overrides), undefined, "auto");
+  return {
+    hasSave: true,
+    saveSlots: readSaveSlots(),
+    activeSaveSlotId: "auto"
   };
 }
 
@@ -605,6 +631,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       let knownSystems = state.knownSystems;
       let knownPlanetIds = state.knownPlanetIds;
       let targetId = state.targetId;
+      let enteredStationId: string | undefined;
       const targetSystem = systemById[autopilot.targetSystemId];
       const targetStation = stationById[autopilot.targetStationId];
 
@@ -730,6 +757,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           screen = "station";
           previousScreen = "flight";
           currentStationId = targetStation.id;
+          enteredStationId = targetStation.id;
           autopilot = undefined;
           player = { ...player, velocity: [0, 0, 0], throttle: 0 };
           runtime.message = `Docking complete at ${targetStation.name}.`;
@@ -744,6 +772,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
         runtime,
         gameClock
       });
+      const stationAutoSave = enteredStationId
+        ? writeStationAutoSave(state, {
+            currentSystemId,
+            currentStationId: enteredStationId,
+            gameClock,
+            player: expiration.player,
+            activeMissions: expiration.activeMissions,
+            failedMissionIds: expiration.failedMissionIds,
+            marketState,
+            reputation: expiration.reputation,
+            knownSystems,
+            knownPlanetIds
+          })
+        : {};
 
       set({
         player: expiration.player,
@@ -761,6 +803,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         activeMissions: expiration.activeMissions,
         failedMissionIds: expiration.failedMissionIds,
         reputation: expiration.reputation,
+        ...stationAutoSave,
         primaryCooldown: Math.max(0, state.primaryCooldown - delta),
         secondaryCooldown: Math.max(0, state.secondaryCooldown - delta),
         input:
@@ -1374,8 +1417,28 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({ runtime: { ...state.runtime, message: "No interactable object in range." } });
   },
   dockAt: (stationId) => {
+    const state = get();
+    const station = stationById[stationId];
+    if (!station) return;
+    const knownPlanetIds = state.knownPlanetIds.includes(station.planetId)
+      ? state.knownPlanetIds
+      : [...state.knownPlanetIds, station.planetId];
+    const stationAutoSave = writeStationAutoSave(state, {
+      currentSystemId: station.systemId,
+      currentStationId: station.id,
+      knownPlanetIds
+    });
     audioSystem.play("dock");
-    set({ screen: "station", currentStationId: stationId, stationTab: "Market", previousScreen: "flight", autopilot: undefined });
+    set({
+      screen: "station",
+      currentSystemId: station.systemId,
+      currentStationId: station.id,
+      knownPlanetIds,
+      stationTab: "Market",
+      previousScreen: "flight",
+      autopilot: undefined,
+      ...stationAutoSave
+    });
   },
   undock: () =>
     set((state) => {

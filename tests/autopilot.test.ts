@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { stationById } from "../src/data/world";
 import { GATE_ACTIVATION_SECONDS, getDefaultTargetStation, getJumpGatePosition, shouldCancelAutopilot, WORMHOLE_SECONDS } from "../src/systems/autopilot";
 import { distance } from "../src/systems/math";
+import { readSave } from "../src/systems/save";
 import type { FlightInput } from "../src/types/game";
 
 class MemoryStorage implements Storage {
@@ -43,9 +44,9 @@ const neutralInput: FlightInput = {
   mouseDY: 0
 };
 
-async function freshStore() {
+async function freshStore(storage: Storage = new MemoryStorage()) {
   vi.resetModules();
-  vi.stubGlobal("localStorage", new MemoryStorage());
+  vi.stubGlobal("localStorage", storage);
   const module = await import("../src/state/gameStore");
   module.useGameStore.getState().newGame();
   return module.useGameStore;
@@ -65,6 +66,40 @@ describe("autopilot jump flow", () => {
     expect(shouldCancelAutopilot({ ...neutralInput, fireSecondary: true })).toBe(true);
     expect(shouldCancelAutopilot({ ...neutralInput, mouseDX: 1 })).toBe(true);
     expect(shouldCancelAutopilot({ ...neutralInput, pause: true })).toBe(false);
+  });
+
+  it("auto-saves to the auto slot when docking manually", async () => {
+    const storage = new MemoryStorage();
+    const store = await freshStore(storage);
+    store.getState().dockAt("helion-prime");
+    const save = readSave(storage, "auto");
+    expect(save?.currentStationId).toBe("helion-prime");
+    expect(save?.currentSystemId).toBe("helion-reach");
+    expect(store.getState().activeSaveSlotId).toBe("auto");
+  });
+
+  it("auto-saves to the auto slot when autopilot docking completes", async () => {
+    const storage = new MemoryStorage();
+    const store = await freshStore(storage);
+    const station = stationById["helion-prime"];
+    store.setState((state) => ({
+      screen: "flight",
+      autopilot: {
+        phase: "docking",
+        originSystemId: "helion-reach",
+        targetSystemId: "helion-reach",
+        targetStationId: station.id,
+        targetPosition: station.position,
+        timer: 0.9,
+        cancelable: false
+      },
+      player: { ...state.player, position: station.position, velocity: [0, 0, 0] }
+    }));
+    store.getState().tick(0.05);
+    const save = readSave(storage, "auto");
+    expect(store.getState().screen).toBe("station");
+    expect(save?.currentStationId).toBe("helion-prime");
+    expect(save?.currentSystemId).toBe("helion-reach");
   });
 
   it("starts from a station by launching into flight toward the origin gate", async () => {
