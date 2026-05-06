@@ -46,6 +46,12 @@ No external copyrighted image packs are included. The flight scene uses `skybox-
 
 Galaxy Map jumps now launch an autopilot route instead of instantly changing systems. The ship leaves the station, flies to the local jump gate, spools a wormhole transit, arrives at the target system, and auto-docks at that system's primary station. Manual flight input cancels autopilot during navigation phases; once the gate spool or wormhole begins, the transit completes.
 
+## Trading And Contracts
+
+Station markets now track saved stock, demand, and baseline recovery. Buying reduces local stock and pushes buy prices upward; selling increases stock and cools demand. Lounge rumors list live profitable trade routes, including ore exports, frontier supply runs, and high-risk restricted goods lanes.
+
+Contracts use saved shipboard time. Courier, cargo, passenger, mining, bounty, escort, and salvage missions have deadlines and reputation penalties. Passenger contracts reserve cargo capacity, cargo transport consumes player-provided goods on delivery, escort missions spawn a convoy ship in flight, and salvage missions spawn recoverable crates.
+
 ## Known Limitations
 
-This is a vertical slice, not a full campaign. Mission archetypes beyond courier, mining, and bounty are represented on the board but not fully simulated. Commodity, equipment, and faction sprite sheets are sliced in the UI with CSS atlas positioning. Audio is represented by UI feedback and is ready for a fuller browser audio layer later.
+This is a vertical slice, not a full campaign. Dynamic markets react to player trades and drift back toward station baselines, but NPC trade fleets do not globally simulate supply chains yet. Escort routes are currently same-system contracts so they stay independent from jump-gate autopilot. Commodity, equipment, and faction sprite sheets are sliced in the UI with CSS atlas positioning. Audio is represented by UI feedback and is ready for a fuller browser audio layer later.

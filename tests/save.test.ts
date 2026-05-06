@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { shipById } from "../src/data/world";
+import { createInitialMarketState } from "../src/systems/economy";
 import { createInitialReputation } from "../src/systems/reputation";
 import { readSave, SAVE_KEY, writeSave } from "../src/systems/save";
 import type { PlayerState } from "../src/types/game";
@@ -53,9 +54,12 @@ describe("save system", () => {
     writeSave(
       {
         currentSystemId: "helion-reach",
+        gameClock: 123,
         player: player(),
         activeMissions: [],
         completedMissionIds: ["courier-helion-kuro"],
+        failedMissionIds: ["bounty-ashen"],
+        marketState: createInitialMarketState(),
         reputation: createInitialReputation(),
         knownSystems: ["helion-reach", "kuro-belt"]
       },
@@ -65,5 +69,8 @@ describe("save system", () => {
     const loaded = readSave(storage);
     expect(loaded?.player.credits).toBe(4321);
     expect(loaded?.completedMissionIds).toEqual(["courier-helion-kuro"]);
+    expect(loaded?.failedMissionIds).toEqual(["bounty-ashen"]);
+    expect(loaded?.gameClock).toBe(123);
+    expect(loaded?.marketState["helion-prime"]?.["basic-food"]).toBeDefined();
   });
 });

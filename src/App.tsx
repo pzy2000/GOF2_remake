@@ -73,6 +73,24 @@ function SimpleScreen({ type }: { type: "settings" | "credits" }) {
   );
 }
 
+function GameClockTicker() {
+  const screen = useGameStore((state) => state.screen);
+  const advanceGameClock = useGameStore((state) => state.advanceGameClock);
+  useEffect(() => {
+    if (screen !== "station" && screen !== "galaxyMap") return undefined;
+    let frame = 0;
+    let last = performance.now();
+    const tick = (now: number) => {
+      advanceGameClock(Math.min((now - last) / 1000, 0.25));
+      last = now;
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [advanceGameClock, screen]);
+  return null;
+}
+
 export default function App() {
   const screen = useGameStore((state) => state.screen);
   const setAssetManifest = useGameStore((state) => state.setAssetManifest);
@@ -82,10 +100,18 @@ export default function App() {
 
   if (screen === "menu") return <MainMenu />;
   if (screen === "settings" || screen === "credits") return <SimpleScreen type={screen} />;
-  if (screen === "station") return <StationScreen />;
+  if (screen === "station") {
+    return (
+      <>
+        <GameClockTicker />
+        <StationScreen />
+      </>
+    );
+  }
 
   return (
     <main className="game-shell">
+      <GameClockTicker />
       <FlightScene />
       <Hud />
       {screen === "pause" ? <PauseMenu /> : null}

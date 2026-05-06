@@ -1,6 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { missionTemplates, shipById } from "../src/data/world";
-import { acceptMission, canCompleteMission, completeMission } from "../src/systems/missions";
+import {
+  acceptMission,
+  canCompleteMission,
+  completeMission,
+  failMission,
+  isMissionExpired,
+  markEscortArrived,
+  markSalvageRecovered
+} from "../src/systems/missions";
+import { getOccupiedCargo } from "../src/systems/economy";
 import { createInitialReputation } from "../src/systems/reputation";
 import type { PlayerState } from "../src/types/game";
 
@@ -41,5 +50,54 @@ describe("missions", () => {
     const mission = { ...missionTemplates.find((item) => item.id === "mining-kuro-iron")!, accepted: true };
     expect(canCompleteMission(mission, player(), "kuro-belt", "kuro-deep", 0)).toBe(false);
     expect(canCompleteMission(mission, { ...player(), cargo: { iron: 5 } }, "kuro-belt", "kuro-deep", 0)).toBe(true);
+  });
+
+  it("consumes player-provided cargo for cargo transport", () => {
+    const mission = { ...missionTemplates.find((item) => item.id === "cargo-helion-ashen")!, accepted: true, acceptedAt: 0 };
+    const loaded = { ...player(), cargo: { "basic-food": 3, "medical-supplies": 2 } };
+    expect(canCompleteMission(mission, loaded, "ashen-drift", "ashen-freeport", 0, 20)).toBe(true);
+    const completed = completeMission(mission, loaded, createInitialReputation());
+    expect(completed.player.cargo["basic-food"]).toBeUndefined();
+    expect(completed.player.cargo["medical-supplies"]).toBeUndefined();
+    expect(completed.player.credits).toBe(1420);
+  });
+
+  it("uses cargo capacity for passenger missions and releases it on completion", () => {
+    const mission = missionTemplates.find((item) => item.id === "passenger-helion-celest")!;
+    const accepted = acceptMission({ ...player(), stats: { ...player().stats, cargoCapacity: 3 } }, [], mission);
+    expect(accepted.ok).toBe(false);
+
+    const roomy = acceptMission(player(), [], mission, 12);
+    expect(roomy.ok).toBe(true);
+    expect(getOccupiedCargo(roomy.player.cargo, roomy.activeMissions)).toBe(4);
+    expect(canCompleteMission(roomy.activeMissions[0], roomy.player, "celest-gate", "celest-vault", 0, 20)).toBe(true);
+    const completed = completeMission(roomy.activeMissions[0], roomy.player, createInitialReputation());
+    expect(getOccupiedCargo(completed.player.cargo, [])).toBe(0);
+  });
+
+  it("completes escort and salvage missions through progress flags", () => {
+    const escort = { ...missionTemplates.find((item) => item.id === "escort-vantara")!, accepted: true, acceptedAt: 0 };
+    expect(canCompleteMission(escort, player(), "vantara", "vantara-bastion", 0, 10)).toBe(false);
+    const arrived = markEscortArrived(escort);
+    expect(canCompleteMission(arrived, player(), "vantara", "vantara-bastion", 0, 10)).toBe(true);
+
+    const salvage = { ...missionTemplates.find((item) => item.id === "salvage-mirr")!, accepted: true, acceptedAt: 0 };
+    expect(canCompleteMission(salvage, player(), "mirr-vale", "mirr-lattice", 0, 10)).toBe(false);
+    const recovered = markSalvageRecovered(salvage);
+    expect(canCompleteMission(recovered, player(), "mirr-vale", "mirr-lattice", 0, 10)).toBe(true);
+  });
+
+  it("fails expired missions and applies reputation penalties", () => {
+    const mission = { ...missionTemplates.find((item) => item.id === "courier-helion-kuro")!, accepted: true, acceptedAt: 0 };
+    expect(isMissionExpired(mission, mission.deadlineSeconds! + 1)).toBe(true);
+    const result = failMission(mission, { ...player(), cargo: { "data-cores": 1 } }, createInitialReputation(), "Deadline expired");
+    expect(result.failed.failed).toBe(true);
+    expect(result.player.cargo["data-cores"]).toBeUndefined();
+    expect(result.reputation.factions["solar-directorate"]).toBeLessThan(createInitialReputation().factions["solar-directorate"]);
+  });
+
+  it("does not complete courier delivery if mission cargo is missing", () => {
+    const mission = { ...missionTemplates.find((item) => item.id === "courier-helion-kuro")!, accepted: true, acceptedAt: 0 };
+    expect(canCompleteMission(mission, player(), "kuro-belt", "kuro-deep", 0, 10)).toBe(false);
   });
 });

@@ -6,13 +6,16 @@ import type {
   AutoPilotState,
   CargoHold,
   CommodityId,
+  ConvoyEntity,
   FlightEntity,
   FlightInput,
   LootEntity,
+  MarketState,
   MissionDefinition,
   PlayerState,
   ProjectileEntity,
   RuntimeState,
+  SalvageEntity,
   SaveGameData,
   Screen,
   StationTab,
@@ -44,9 +47,19 @@ import {
   WORMHOLE_SECONDS,
   rotationToward
 } from "../systems/autopilot";
-import { buyCommodity, getCargoUsed, sellCommodity } from "../systems/economy";
-import { createInitialReputation, updateReputation } from "../systems/reputation";
-import { acceptMission as acceptMissionPure, canCompleteMission, cloneMissionTemplates, completeMission as completeMissionPure } from "../systems/missions";
+import { advanceMarketState, buyCommodity, createInitialMarketState, getCargoUsed, getOccupiedCargo, sellCommodity } from "../systems/economy";
+import { createInitialReputation } from "../systems/reputation";
+import {
+  acceptMission as acceptMissionPure,
+  canCompleteMission,
+  cloneMission,
+  cloneMissionTemplates,
+  completeMission as completeMissionPure,
+  failMission as failMissionPure,
+  isMissionExpired,
+  markEscortArrived,
+  markSalvageRecovered
+} from "../systems/missions";
 import { readSave, writeSave } from "../systems/save";
 
 const emptyInput: FlightInput = {
@@ -111,7 +124,53 @@ function createShipEntity(id: string, role: FlightEntity["role"], position: Vec3
   };
 }
 
-function createRuntimeForSystem(systemId: string): RuntimeState {
+function createConvoyEntity(mission: MissionDefinition): ConvoyEntity | undefined {
+  if (!mission.escort || mission.escort.arrived || mission.failed || mission.completed) return undefined;
+  return {
+    id: mission.escort.convoyId,
+    missionId: mission.id,
+    name: mission.escort.convoyName,
+    factionId: mission.factionId,
+    position: [...mission.escort.originPosition],
+    velocity: [0, 0, 0],
+    hull: mission.escort.hull,
+    maxHull: mission.escort.hull,
+    shield: 45,
+    maxShield: 45,
+    lastDamageAt: -999,
+    destinationStationId: mission.destinationStationId,
+    destinationPosition: [...mission.escort.destinationPosition],
+    arrived: false
+  };
+}
+
+function createSalvageEntity(mission: MissionDefinition): SalvageEntity | undefined {
+  if (!mission.salvage || mission.salvage.recovered || mission.failed || mission.completed) return undefined;
+  return {
+    id: mission.salvage.salvageId,
+    missionId: mission.id,
+    name: mission.salvage.name,
+    commodityId: mission.salvage.commodityId,
+    amount: mission.salvage.amount,
+    position: [...mission.salvage.position],
+    recovered: false
+  };
+}
+
+function missionRuntimeEntities(systemId: string, activeMissions: MissionDefinition[]) {
+  return {
+    convoys: activeMissions
+      .filter((mission) => mission.originSystemId === systemId || mission.destinationSystemId === systemId)
+      .map(createConvoyEntity)
+      .filter(Boolean) as ConvoyEntity[],
+    salvage: activeMissions
+      .filter((mission) => mission.salvage?.systemId === systemId)
+      .map(createSalvageEntity)
+      .filter(Boolean) as SalvageEntity[]
+  };
+}
+
+function createRuntimeForSystem(systemId: string, activeMissions: MissionDefinition[] = []): RuntimeState {
   const system = systemById[systemId];
   const pirateCount = getPirateSpawnCount(systemId, system.risk);
   const asteroids: AsteroidEntity[] = Array.from({ length: systemId === "kuro-belt" ? 16 : 10 }, (_, index) => ({
@@ -124,6 +183,7 @@ function createRuntimeForSystem(systemId: string): RuntimeState {
     rarity: getOreRarity(oreCycle[index % oreCycle.length]),
     hardness: getOreHardness(oreCycle[index % oreCycle.length])
   }));
+  const missionEntities = missionRuntimeEntities(systemId, activeMissions);
   return {
     enemies: [
       ...Array.from({ length: pirateCount }, (_, index) =>
@@ -132,6 +192,8 @@ function createRuntimeForSystem(systemId: string): RuntimeState {
       createShipEntity(`${systemId}-patrol-0`, "patrol", [-190, 55, -360]),
       createShipEntity(`${systemId}-trader-0`, "trader", [180, -25, -430])
     ],
+    convoys: missionEntities.convoys,
+    salvage: missionEntities.salvage,
     asteroids,
     loot: [],
     projectiles: [],
@@ -148,8 +210,23 @@ function projectileId(prefix: string): string {
   return `${prefix}-${Math.round(performance.now() * 1000)}-${Math.random().toString(16).slice(2)}`;
 }
 
-function addCargoWithinCapacity(player: PlayerState, commodityId: CommodityId, amount: number): { player: PlayerState; collected: number } {
-  const available = Math.max(0, player.stats.cargoCapacity - getCargoUsed(player.cargo));
+function addMissionRuntimeEntity(runtime: RuntimeState, mission: MissionDefinition, systemId: string): RuntimeState {
+  const convoy = (mission.originSystemId === systemId || mission.destinationSystemId === systemId) ? createConvoyEntity(mission) : undefined;
+  const salvage = mission.salvage?.systemId === systemId ? createSalvageEntity(mission) : undefined;
+  return {
+    ...runtime,
+    convoys: convoy && !runtime.convoys.some((item) => item.id === convoy.id) ? [...runtime.convoys, convoy] : runtime.convoys,
+    salvage: salvage && !runtime.salvage.some((item) => item.id === salvage.id) ? [...runtime.salvage, salvage] : runtime.salvage
+  };
+}
+
+function addCargoWithinCapacity(
+  player: PlayerState,
+  commodityId: CommodityId,
+  amount: number,
+  activeMissions: MissionDefinition[] = []
+): { player: PlayerState; collected: number } {
+  const available = Math.max(0, player.stats.cargoCapacity - getOccupiedCargo(player.cargo, activeMissions));
   const collected = Math.min(available, amount);
   if (collected <= 0) return { player, collected: 0 };
   return {
@@ -158,6 +235,43 @@ function addCargoWithinCapacity(player: PlayerState, commodityId: CommodityId, a
       ...player,
       cargo: { ...player.cargo, [commodityId]: (player.cargo[commodityId] ?? 0) + collected }
     }
+  };
+}
+
+function applyExpiredMissions(snapshot: {
+  player: PlayerState;
+  reputation: ReturnType<typeof createInitialReputation>;
+  activeMissions: MissionDefinition[];
+  failedMissionIds: string[];
+  runtime: RuntimeState;
+  gameClock: number;
+}) {
+  let { player, reputation, runtime } = snapshot;
+  const failedMissionIds = [...snapshot.failedMissionIds];
+  const activeMissions: MissionDefinition[] = [];
+  let message = runtime.message;
+  for (const mission of snapshot.activeMissions) {
+    if (isMissionExpired(mission, snapshot.gameClock)) {
+      const result = failMissionPure(mission, player, reputation, "Deadline expired");
+      player = result.player;
+      reputation = result.reputation;
+      failedMissionIds.push(mission.id);
+      message = `${mission.title} failed: deadline expired.`;
+      runtime = {
+        ...runtime,
+        convoys: runtime.convoys.filter((convoy) => convoy.missionId !== mission.id),
+        salvage: runtime.salvage.filter((salvage) => salvage.missionId !== mission.id)
+      };
+    } else {
+      activeMissions.push(mission);
+    }
+  }
+  return {
+    player,
+    reputation,
+    activeMissions,
+    failedMissionIds: Array.from(new Set(failedMissionIds)),
+    runtime: { ...runtime, message }
   };
 }
 
@@ -241,8 +355,11 @@ interface GameStore {
   runtime: RuntimeState;
   autopilot?: AutoPilotState;
   input: FlightInput;
+  gameClock: number;
+  marketState: MarketState;
   activeMissions: MissionDefinition[];
   completedMissionIds: string[];
+  failedMissionIds: string[];
   reputation: ReturnType<typeof createInitialReputation>;
   knownSystems: string[];
   primaryCooldown: number;
@@ -257,6 +374,7 @@ interface GameStore {
   setInput: (patch: Partial<FlightInput>) => void;
   consumeMouse: () => { dx: number; dy: number };
   tick: (delta: number) => void;
+  advanceGameClock: (delta: number) => void;
   cycleTarget: () => void;
   interact: () => void;
   dockAt: (stationId: string) => void;
@@ -278,9 +396,12 @@ function savePayload(state: GameStore): Omit<SaveGameData, "version" | "savedAt"
   return {
     currentSystemId: state.currentSystemId,
     currentStationId: state.currentStationId,
+    gameClock: state.gameClock,
     player: state.player,
     activeMissions: state.activeMissions,
     completedMissionIds: state.completedMissionIds,
+    failedMissionIds: state.failedMissionIds,
+    marketState: state.marketState,
     reputation: state.reputation,
     knownSystems: state.knownSystems
   };
@@ -298,8 +419,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
   runtime: createRuntimeForSystem("helion-reach"),
   autopilot: undefined,
   input: emptyInput,
+  gameClock: 0,
+  marketState: createInitialMarketState(),
   activeMissions: [],
   completedMissionIds: [],
+  failedMissionIds: [],
   reputation: createInitialReputation(),
   knownSystems: systems.map((system) => system.id),
   primaryCooldown: 0,
@@ -318,8 +442,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
       player: createInitialPlayer(),
       runtime: createRuntimeForSystem("helion-reach"),
       autopilot: undefined,
+      gameClock: 0,
+      marketState: createInitialMarketState(),
       activeMissions: [],
       completedMissionIds: [],
+      failedMissionIds: [],
       reputation: createInitialReputation(),
       knownSystems: systems.map((system) => system.id),
       primaryCooldown: 0,
@@ -333,12 +460,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
       previousScreen: "menu",
       currentSystemId: save.currentSystemId,
       currentStationId: save.currentStationId,
+      gameClock: save.gameClock,
       player: save.player,
       activeMissions: save.activeMissions,
       completedMissionIds: save.completedMissionIds,
+      failedMissionIds: save.failedMissionIds,
+      marketState: save.marketState,
       reputation: save.reputation,
       knownSystems: save.knownSystems,
-      runtime: createRuntimeForSystem(save.currentSystemId),
+      runtime: createRuntimeForSystem(save.currentSystemId, save.activeMissions),
       autopilot: undefined,
       hasSave: true,
       targetId: undefined
@@ -361,6 +491,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const state = get();
     if (state.screen !== "flight") return;
     const now = state.runtime.clock + delta;
+    const gameClock = state.gameClock + delta;
+    const marketState = advanceMarketState(state.marketState, delta);
     const input = state.input;
     const { dx, dy } = state.consumeMouse();
 
@@ -475,7 +607,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             throttle: 1
           };
           runtime = {
-            ...createRuntimeForSystem(targetSystem.id),
+            ...createRuntimeForSystem(targetSystem.id, state.activeMissions),
             message: `Arrived in ${targetSystem.name}. Autopilot set for ${targetStation.name}.`,
             effects: [wormholeEffect(player.position)]
           };
@@ -528,9 +660,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
         }
       }
 
-      set({
+      const expiration = applyExpiredMissions({
         player,
+        reputation: state.reputation,
+        activeMissions: state.activeMissions,
+        failedMissionIds: state.failedMissionIds,
         runtime,
+        gameClock
+      });
+
+      set({
+        player: expiration.player,
+        runtime: expiration.runtime,
         autopilot,
         currentSystemId,
         currentStationId,
@@ -538,6 +679,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
         previousScreen,
         knownSystems,
         targetId,
+        gameClock,
+        marketState,
+        activeMissions: expiration.activeMissions,
+        failedMissionIds: expiration.failedMissionIds,
+        reputation: expiration.reputation,
         primaryCooldown: Math.max(0, state.primaryCooldown - delta),
         secondaryCooldown: Math.max(0, state.secondaryCooldown - delta),
         input:
@@ -583,6 +729,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
         fireCooldown: ship.fireCooldown - delta,
         deathTimer: ship.deathTimer === undefined ? undefined : ship.deathTimer - delta
       })),
+      convoys: state.runtime.convoys.map((convoy) => {
+        if (convoy.arrived || convoy.hull <= 0) return convoy;
+        const toDestination = sub(convoy.destinationPosition, convoy.position);
+        const distToDestination = distance(convoy.position, convoy.destinationPosition);
+        if (distToDestination < 170) {
+          return { ...convoy, arrived: true, velocity: [0, 0, 0] };
+        }
+        const direction = normalize(toDestination);
+        const velocity = scale(direction, 128);
+        return regenerateShield({ ...convoy, velocity, position: add(convoy.position, scale(velocity, delta)) }, convoy.maxShield, now, delta, 5);
+      }),
+      salvage: state.runtime.salvage,
       loot: state.runtime.loot.map((loot) => ({
         ...loot,
         position: add(loot.position, scale(loot.velocity, delta)),
@@ -610,7 +768,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     const miningActive = !!(input.firePrimary && nearestAsteroid && nearestAsteroid.dist < 360 && player.energy > 5);
     if (miningActive && nearestAsteroid) {
-      const cargoAvailable = Math.max(0, player.stats.cargoCapacity - getCargoUsed(player.cargo));
+      const cargoAvailable = Math.max(0, player.stats.cargoCapacity - getOccupiedCargo(player.cargo, state.activeMissions));
       if (cargoAvailable <= 0) {
         runtime = { ...runtime, message: "Cargo hold full." };
       } else {
@@ -641,7 +799,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             }
 
             const chunk = Math.min(2, asteroid.amount);
-            const result = addCargoWithinCapacity(player, asteroid.resource, chunk);
+            const result = addCargoWithinCapacity(player, asteroid.resource, chunk, state.activeMissions);
             if (result.collected <= 0) {
               miningMessage = "Cargo hold full.";
               return asteroid;
@@ -662,7 +820,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
               maxLife: 0.55,
               velocity: [0, 18, 0]
             });
-            miningMessage = `Mined ${result.collected} ${commodityById[asteroid.resource].name}. Cargo ${getCargoUsed(player.cargo)}/${player.stats.cargoCapacity}.`;
+            miningMessage = `Mined ${result.collected} ${commodityById[asteroid.resource].name}. Cargo ${getOccupiedCargo(player.cargo, state.activeMissions)}/${player.stats.cargoCapacity}.`;
             return { ...asteroid, amount: asteroid.amount - result.collected, miningProgress: 0 };
           }),
           message: miningMessage
@@ -707,7 +865,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const graceActive = now < runtime.graceUntil;
     runtime.enemies = runtime.enemies.map((ship) => {
       if (ship.hull <= 0 || ship.deathTimer !== undefined) return ship;
+      const convoyTarget =
+        ship.role === "pirate"
+          ? runtime.convoys
+              .filter((convoy) => convoy.hull > 0 && !convoy.arrived)
+              .map((convoy) => ({ convoy, dist: distance(ship.position, convoy.position) }))
+              .sort((a, b) => a.dist - b.dist)[0]?.convoy
+          : undefined;
       let targetPosition = player.position;
+      if (ship.role === "pirate" && convoyTarget && distance(ship.position, convoyTarget.position) < 900) targetPosition = convoyTarget.position;
       if (ship.role === "patrol") targetPosition = pirates[0]?.position ?? player.position;
       if (ship.role === "trader" && pirates.length > 0) targetPosition = add(ship.position, normalize(sub(ship.position, pirates[0].position)));
       const toTarget = normalize(sub(targetPosition, ship.position));
@@ -717,7 +883,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const shipSpeed = ship.role === "pirate" ? loadout.speed : ship.role === "patrol" ? 118 : 105;
       const moved = { ...ship, velocity: scale(desired, shipSpeed), position: add(ship.position, scale(desired, shipSpeed * delta)) };
       const hostileToPlayer = ship.role === "pirate";
-      const distToPlayer = distance(moved.position, player.position);
+      const fireTarget = convoyTarget && distance(moved.position, convoyTarget.position) < 650 ? convoyTarget : undefined;
+      const fireTargetPosition = fireTarget?.position ?? player.position;
+      const distToPlayer = distance(moved.position, fireTargetPosition);
       const canFire =
         hostileToPlayer &&
         canPirateFire({
@@ -734,10 +902,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
           owner: "enemy",
           kind: "laser",
           position: moved.position,
-          direction: normalize(sub(player.position, moved.position)),
+          direction: normalize(sub(fireTargetPosition, moved.position)),
           speed: 470,
           damage: loadout.damage,
-          life: 1.8
+          life: 1.8,
+          targetId: fireTarget?.id
         });
         return { ...moved, fireCooldown: loadout.fireCooldownMin + Math.random() * (loadout.fireCooldownMax - loadout.fireCooldownMin) };
       }
@@ -771,7 +940,29 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }
       const movedProjectile = { ...projectile, direction, position: add(projectile.position, scale(direction, projectile.speed * delta)) };
       let consumed = false;
-      if (projectile.owner === "enemy" && distance(movedProjectile.position, player.position) < 22) {
+      if (projectile.owner === "enemy" && projectile.targetId) {
+        runtime.convoys = runtime.convoys.map((convoy) => {
+          if (convoy.id !== projectile.targetId || convoy.hull <= 0 || consumed || distance(movedProjectile.position, convoy.position) > 25) return convoy;
+          const shielded = convoy.shield > 0;
+          const damaged = applyDamage(convoy, projectile.damage, now);
+          consumed = true;
+          runtime.effects.push({
+            id: projectileId(shielded ? "convoy-shield-hit" : "convoy-hit"),
+            kind: shielded ? "shield-hit" : "hit",
+            position: movedProjectile.position,
+            color: shielded ? "#69e4ff" : "#ffb657",
+            secondaryColor: "#ffffff",
+            label: `-${Math.round(projectile.damage)}`,
+            particleCount: 5,
+            spread: 16,
+            size: shielded ? 22 : 14,
+            life: 0.34,
+            maxLife: 0.34,
+            velocity: [0, 8, 0]
+          });
+          return damaged;
+        });
+      } else if (projectile.owner === "enemy" && distance(movedProjectile.position, player.position) < 22) {
         const shielded = player.shield > 0;
         player = applyDamage(player, projectile.damage, now);
         runtime.effects.push({
@@ -849,9 +1040,41 @@ export const useGameStore = create<GameStore>((set, get) => ({
       destroyedPirates
     };
 
+    let activeMissions = state.activeMissions.map((mission) => {
+      const convoy = runtime.convoys.find((item) => item.missionId === mission.id);
+      return convoy?.arrived && mission.escort && !mission.escort.arrived ? markEscortArrived(mission) : mission;
+    });
+    let reputation = state.reputation;
+    let failedMissionIds = state.failedMissionIds;
+    for (const convoy of runtime.convoys.filter((item) => item.hull <= 0)) {
+      const mission = activeMissions.find((candidate) => candidate.id === convoy.missionId);
+      if (!mission) continue;
+      const result = failMissionPure(mission, player, reputation, "Escort convoy destroyed");
+      player = result.player;
+      reputation = result.reputation;
+      activeMissions = activeMissions.filter((candidate) => candidate.id !== mission.id);
+      failedMissionIds = Array.from(new Set([...failedMissionIds, mission.id]));
+      runtime.effects.push({
+        id: projectileId("convoy-explosion"),
+        kind: "explosion",
+        position: convoy.position,
+        color: "#ffb657",
+        secondaryColor: "#ff4e5f",
+        label: "Convoy lost",
+        particleCount: 24,
+        spread: 62,
+        size: 44,
+        life: 0.85,
+        maxLife: 0.85
+      });
+      runtime.message = `${mission.title} failed: convoy destroyed.`;
+    }
+    runtime = { ...runtime, convoys: runtime.convoys.filter((convoy) => convoy.hull > 0 && !failedMissionIds.includes(convoy.missionId)) };
+
     if (input.interact) {
       get().interact();
       set((latest) => ({ input: { ...latest.input, interact: false } }));
+      return;
     }
     if (input.cycleTarget) {
       get().cycleTarget();
@@ -869,27 +1092,66 @@ export const useGameStore = create<GameStore>((set, get) => ({
       set({ screen: "pause", previousScreen: "flight", input: { ...get().input, pause: false } });
     }
 
-    set({
+    const expiration = applyExpiredMissions({
       player,
+      reputation,
+      activeMissions,
+      failedMissionIds,
+      runtime,
+      gameClock
+    });
+    const missionFailedThisFrame = expiration.failedMissionIds.length > failedMissionIds.length;
+
+    set({
+      player: expiration.player,
       runtime: {
-        ...runtime,
+        ...expiration.runtime,
         message:
-          player.hull <= 0
+          expiration.player.hull <= 0
             ? "Hull integrity failed."
+            : missionFailedThisFrame
+              ? expiration.runtime.message
             : lootDrops.length
               ? "Target destroyed. Cargo canister released."
               : miningActive
-                ? runtime.message
+                ? expiration.runtime.message
               : graceActive
                 ? `Pirates are sizing you up · weapons free in ${Math.ceil(runtime.graceUntil - now)}s`
-              : runtime.message
+              : expiration.runtime.message
       },
+      gameClock,
+      marketState,
+      activeMissions: expiration.activeMissions,
+      failedMissionIds: expiration.failedMissionIds,
+      reputation: expiration.reputation,
       primaryCooldown,
       secondaryCooldown,
-      screen: player.hull <= 0 ? "gameOver" : get().screen,
+      screen: expiration.player.hull <= 0 ? "gameOver" : get().screen,
       targetId: runtime.enemies.some((ship) => ship.id === state.targetId && ship.hull > 0 && ship.deathTimer === undefined)
         ? state.targetId
         : runtime.enemies.find((ship) => ship.role === "pirate" && ship.hull > 0 && ship.deathTimer === undefined)?.id
+    });
+  },
+  advanceGameClock: (delta) => {
+    const state = get();
+    if (delta <= 0) return;
+    const gameClock = state.gameClock + delta;
+    const expiration = applyExpiredMissions({
+      player: state.player,
+      reputation: state.reputation,
+      activeMissions: state.activeMissions,
+      failedMissionIds: state.failedMissionIds,
+      runtime: state.runtime,
+      gameClock
+    });
+    set({
+      gameClock,
+      marketState: advanceMarketState(state.marketState, delta),
+      player: expiration.player,
+      reputation: expiration.reputation,
+      activeMissions: expiration.activeMissions,
+      failedMissionIds: expiration.failedMissionIds,
+      runtime: expiration.runtime
     });
   },
   cycleTarget: () => {
@@ -904,13 +1166,48 @@ export const useGameStore = create<GameStore>((set, get) => ({
       .filter((candidate) => candidate.systemId === state.currentSystemId)
       .map((candidate) => ({ station: candidate, dist: distance(state.player.position, candidate.position) }))
       .sort((a, b) => a.dist - b.dist)[0];
+    const nearSalvage = state.runtime.salvage
+      .filter((salvage) => !salvage.recovered)
+      .map((salvage) => ({ salvage, dist: distance(salvage.position, state.player.position) }))
+      .sort((a, b) => a.dist - b.dist)[0];
+    if (nearSalvage && nearSalvage.dist < 110) {
+      const activeMissions = state.activeMissions.map((mission) =>
+        mission.id === nearSalvage.salvage.missionId ? markSalvageRecovered(mission) : mission
+      );
+      set({
+        activeMissions,
+        runtime: {
+          ...state.runtime,
+          salvage: state.runtime.salvage.filter((salvage) => salvage.id !== nearSalvage.salvage.id),
+          effects: [
+            ...state.runtime.effects,
+            {
+              id: projectileId("salvage-recovered"),
+              kind: "hit",
+              position: nearSalvage.salvage.position,
+              color: "#9b7bff",
+              secondaryColor: "#eaffff",
+              label: "Recovered",
+              particleCount: 12,
+              spread: 24,
+              size: 16,
+              life: 0.7,
+              maxLife: 0.7,
+              velocity: [0, 12, 0]
+            }
+          ],
+          message: `Recovered ${nearSalvage.salvage.name}. Return to station.`
+        }
+      });
+      return;
+    }
     const nearLoot = state.runtime.loot.filter((loot) => distance(loot.position, state.player.position) < 90);
     if (nearLoot.length > 0) {
       let player = state.player;
       const collectedIds = new Set<string>();
       let collected = 0;
       for (const loot of nearLoot) {
-        const result = addCargoWithinCapacity(player, loot.commodityId, loot.amount);
+        const result = addCargoWithinCapacity(player, loot.commodityId, loot.amount, state.activeMissions);
         player = result.player;
         collected += result.collected;
         if (result.collected > 0) collectedIds.add(loot.id);
@@ -997,7 +1294,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       previousScreen: state.screen,
       currentSystemId: systemId,
       currentStationId: undefined,
-      runtime: { ...createRuntimeForSystem(systemId), message: `Jumped to ${systemById[systemId].name}.` },
+      runtime: { ...createRuntimeForSystem(systemId, state.activeMissions), message: `Jumped to ${systemById[systemId].name}.` },
       autopilot: undefined,
       targetId: undefined,
       knownSystems: Array.from(new Set([...state.knownSystems, systemId])),
@@ -1010,30 +1307,36 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (!state.currentStationId) return;
     const station = stationById[state.currentStationId];
     const system = systemById[state.currentSystemId];
-    const result = buyCommodity(state.player, station, system, commodityId, amount, state.reputation.factions[station.factionId]);
-    set({ player: result.player, runtime: { ...state.runtime, message: result.message } });
+    const reservedCargo = getOccupiedCargo(state.player.cargo, state.activeMissions) - getCargoUsed(state.player.cargo);
+    const result = buyCommodity(state.player, station, system, commodityId, amount, state.reputation.factions[station.factionId], state.marketState, reservedCargo);
+    set({ player: result.player, marketState: result.marketState ?? state.marketState, runtime: { ...state.runtime, message: result.message } });
   },
   sell: (commodityId, amount = 1) => {
     const state = get();
     if (!state.currentStationId) return;
     const station = stationById[state.currentStationId];
     const system = systemById[state.currentSystemId];
-    const result = sellCommodity(state.player, station, system, commodityId, amount, state.reputation.factions[station.factionId]);
+    const result = sellCommodity(state.player, station, system, commodityId, amount, state.reputation.factions[station.factionId], state.marketState);
     const completedCargo: CargoHold = { ...state.runtime.mined };
-    set({ player: result.player, runtime: { ...state.runtime, mined: completedCargo, message: result.message } });
+    set({ player: result.player, marketState: result.marketState ?? state.marketState, runtime: { ...state.runtime, mined: completedCargo, message: result.message } });
   },
   acceptMission: (missionId) => {
     const state = get();
     const mission = missionTemplates.find((candidate) => candidate.id === missionId);
     if (!mission) return;
-    const result = acceptMissionPure(state.player, state.activeMissions, mission);
-    set({ player: result.player, activeMissions: result.activeMissions, runtime: { ...state.runtime, message: result.message } });
+    if (state.completedMissionIds.includes(missionId) || state.failedMissionIds.includes(missionId)) {
+      set({ runtime: { ...state.runtime, message: "That contract is no longer available." } });
+      return;
+    }
+    const result = acceptMissionPure(state.player, state.activeMissions, mission, state.gameClock);
+    const runtime = result.mission ? addMissionRuntimeEntity(state.runtime, result.mission, state.currentSystemId) : state.runtime;
+    set({ player: result.player, activeMissions: result.activeMissions, runtime: { ...runtime, message: result.message } });
   },
   completeMission: (missionId) => {
     const state = get();
     if (!state.currentStationId) return;
     const mission = state.activeMissions.find((candidate) => candidate.id === missionId);
-    if (!mission || !canCompleteMission(mission, state.player, state.currentSystemId, state.currentStationId, state.runtime.destroyedPirates)) {
+    if (!mission || !canCompleteMission(mission, state.player, state.currentSystemId, state.currentStationId, state.runtime.destroyedPirates, state.gameClock)) {
       set({ runtime: { ...state.runtime, message: "Mission requirements are not complete." } });
       return;
     }
@@ -1043,7 +1346,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
       reputation: result.reputation,
       activeMissions: state.activeMissions.filter((active) => active.id !== missionId),
       completedMissionIds: [...state.completedMissionIds, missionId],
-      runtime: { ...state.runtime, message: `${mission.title} complete. +${mission.reward} credits.` }
+      runtime: {
+        ...state.runtime,
+        convoys: state.runtime.convoys.filter((convoy) => convoy.missionId !== missionId),
+        salvage: state.runtime.salvage.filter((salvage) => salvage.missionId !== missionId),
+        message: `${mission.title} complete. +${mission.reward} credits.`
+      }
     });
   },
   repairAndRefill: () => {

@@ -1,6 +1,7 @@
 import { commodities, stationById, stations, systemById, useGameStore } from "../state/gameStore";
 import { commodityById, factionNames } from "../data/world";
-import { getCargoUsed } from "../systems/economy";
+import { getOccupiedCargo } from "../systems/economy";
+import { getMissionDeadlineRemaining } from "../systems/missions";
 import { distance } from "../systems/math";
 
 function Bar({ label, value, max, tone }: { label: string; value: number; max: number; tone: "cyan" | "green" | "orange" | "red" }) {
@@ -26,6 +27,7 @@ export function Hud() {
   const target = useGameStore((state) => state.runtime.enemies.find((ship) => ship.id === state.targetId && ship.hull > 0 && ship.deathTimer === undefined));
   const manifest = useGameStore((state) => state.assetManifest);
   const activeMissions = useGameStore((state) => state.activeMissions);
+  const gameClock = useGameStore((state) => state.gameClock);
   const saveGame = useGameStore((state) => state.saveGame);
   const setScreen = useGameStore((state) => state.setScreen);
   const nearestStation = stations
@@ -63,7 +65,7 @@ export function Hud() {
       </section>
       <section className="hud-panel hud-top-right">
         <h3>{shipLabel(player.shipId)}</h3>
-        <p>Credits {player.credits.toLocaleString()} · Cargo {getCargoUsed(player.cargo)}/{player.stats.cargoCapacity} · Missiles {player.missiles}</p>
+        <p>Credits {player.credits.toLocaleString()} · Cargo {getOccupiedCargo(player.cargo, activeMissions)}/{player.stats.cargoCapacity} · Missiles {player.missiles}</p>
         <p>Throttle {Math.round(player.throttle * 100)}% · Speed {Math.round(Math.hypot(...player.velocity))}</p>
         {autopilot ? <p>Autopilot: {navLabel} · {navDistance}m</p> : null}
         <p>{graceRemaining > 0 ? `Enemy weapons safe for ${graceRemaining}s` : pirateCount > 0 ? `${pirateCount} pirate contact(s)` : "Local space clear"}</p>
@@ -86,7 +88,27 @@ export function Hud() {
       </section>
       <section className="hud-panel hud-bottom-left">
         <h3>Active Missions</h3>
-        {activeMissions.length === 0 ? <p>No active contracts.</p> : activeMissions.slice(0, 3).map((mission) => <p key={mission.id}>{mission.title}</p>)}
+        {activeMissions.length === 0 ? (
+          <p>No active contracts.</p>
+        ) : (
+          activeMissions.slice(0, 3).map((mission) => {
+            const remaining = getMissionDeadlineRemaining(mission, gameClock);
+            const missionDistance = mission.salvage && !mission.salvage.recovered
+              ? Math.round(distance(player.position, mission.salvage.position))
+              : mission.destinationSystemId === currentSystem.id
+                ? Math.round(distance(player.position, stationById[mission.destinationStationId].position))
+                : undefined;
+            const convoy = runtime.convoys.find((item) => item.missionId === mission.id);
+            return (
+              <p key={mission.id}>
+                {mission.title}
+                {remaining !== undefined ? ` · ${formatHudTime(remaining)}` : ""}
+                {missionDistance !== undefined ? ` · ${missionDistance}m` : ""}
+                {convoy ? ` · convoy ${Math.round(convoy.hull)}/${convoy.maxHull}` : ""}
+              </p>
+            );
+          })
+        )}
         {nearestMine && nearestMine.dist < 390 ? (
           <p>
             Mining vein: {commodityById[nearestMine.asteroid.resource].name} · {Math.round(nearestMine.asteroid.miningProgress * 100)}% · {Math.round(nearestMine.dist)}m
@@ -126,4 +148,10 @@ function shipLabel(shipId: string): string {
     "bastion-7": "Bastion-7",
     "horizon-ark": "Horizon Ark"
   }[shipId] ?? shipId;
+}
+
+function formatHudTime(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  const remainder = Math.floor(seconds % 60).toString().padStart(2, "0");
+  return `${minutes}:${remainder}`;
 }

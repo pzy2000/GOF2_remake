@@ -1,12 +1,20 @@
 import { commodities, shipById, ships, stationById, systemById, useGameStore } from "../state/gameStore";
 import { commodityById, factionNames, missionTemplates, weapons } from "../data/world";
-import { canCompleteMission } from "../systems/missions";
-import { canBuyCommodityAtStation, getCargoUsed, getCommodityPrice, isCommodityVisibleInMarket } from "../systems/economy";
+import { canCompleteMission, getMissionDeadlineRemaining } from "../systems/missions";
+import {
+  canBuyCommodityAtStation,
+  getCommodityPrice,
+  getMarketEntry,
+  getMarketTag,
+  getOccupiedCargo,
+  getTradeHints,
+  isCommodityVisibleInMarket
+} from "../systems/economy";
 import { reputationLabel } from "../systems/reputation";
 import { GalaxyMap } from "./GalaxyMap";
 import { AtlasIcon } from "./AtlasIcon";
 import { getCommodityIcon, getEquipmentIcon, getFactionIcon } from "../data/iconAtlas";
-import type { CommodityId, EquipmentId, StationTab } from "../types/game";
+import type { CargoHold, CommodityId, EquipmentId, StationTab } from "../types/game";
 
 const tabs: StationTab[] = ["Market", "Hangar", "Shipyard", "Mission Board", "Blueprint Workshop", "Lounge", "Galaxy Map"];
 const craftable: EquipmentId[] = ["plasma-cannon", "shield-booster", "cargo-expansion", "scanner", "targeting-computer"];
@@ -58,30 +66,36 @@ function MarketTab() {
   const station = useGameStore((state) => stationById[state.currentStationId ?? "helion-prime"]);
   const system = useGameStore((state) => systemById[state.currentSystemId]);
   const reputation = useGameStore((state) => state.reputation.factions[station.factionId]);
+  const marketState = useGameStore((state) => state.marketState);
+  const activeMissions = useGameStore((state) => state.activeMissions);
   const buy = useGameStore((state) => state.buy);
   const sell = useGameStore((state) => state.sell);
   const listed = commodities.filter((item) => isCommodityVisibleInMarket(item.id, station, player.cargo));
+  const occupiedCargo = getOccupiedCargo(player.cargo, activeMissions);
   return (
     <div className="table-panel">
         <h2>Market</h2>
-        <p>Credits {player.credits.toLocaleString()} · Cargo {getCargoUsed(player.cargo)}/{player.stats.cargoCapacity}</p>
+        <p>Credits {player.credits.toLocaleString()} · Cargo {occupiedCargo}/{player.stats.cargoCapacity}</p>
         <div className="market-list">
           {listed.map((commodity) => {
             const canBuy = canBuyCommodityAtStation(commodity.id, station);
-            const buyPrice = getCommodityPrice(commodity.id, station, system, reputation, "buy");
-            const sellPrice = getCommodityPrice(commodity.id, station, system, reputation, "sell");
+            const entry = getMarketEntry(marketState, station.id, commodity.id);
+            const buyPrice = getCommodityPrice(commodity.id, station, system, reputation, "buy", entry);
+            const sellPrice = getCommodityPrice(commodity.id, station, system, reputation, "sell", entry);
+            const tag = getMarketTag(entry, station, system, commodity.id);
             return (
               <div className="market-row" key={commodity.id}>
                 <AtlasIcon icon={getCommodityIcon(commodity.id)} manifest={manifest} />
                 <div>
                   <strong>{commodity.name}</strong>
                   <span>{commodity.legal ? "Licensed" : "Restricted"} · Hold {player.cargo[commodity.id] ?? 0}</span>
+                  <span>Stock {Math.floor(entry.stock)}/{entry.maxStock} · Demand {entry.demand.toFixed(2)} · {tag}</span>
                 </div>
                 <b>{canBuy ? buyPrice : "—"}/{sellPrice} cr</b>
                 <button
                   onClick={() => buy(commodity.id, 1)}
-                  disabled={!canBuy}
-                  title={canBuy ? undefined : "Not stocked at this station"}
+                  disabled={!canBuy || entry.stock < 1 || occupiedCargo >= player.stats.cargoCapacity}
+                  title={!canBuy ? "Not stocked at this station" : entry.stock < 1 ? "Out of stock" : undefined}
                 >
                   Buy
                 </button>
@@ -97,6 +111,7 @@ function MarketTab() {
 function HangarTab() {
   const manifest = useGameStore((state) => state.assetManifest);
   const player = useGameStore((state) => state.player);
+  const activeMissions = useGameStore((state) => state.activeMissions);
   const repairAndRefill = useGameStore((state) => state.repairAndRefill);
   return (
     <div className="hangar-layout">
@@ -112,7 +127,7 @@ function HangarTab() {
           <span>Hull {Math.round(player.hull)}/{player.stats.hull}</span>
           <span>Shield {Math.round(player.shield)}/{player.stats.shield}</span>
           <span>Energy {Math.round(player.energy)}/{player.stats.energy}</span>
-          <span>Cargo {getCargoUsed(player.cargo)}/{player.stats.cargoCapacity}</span>
+          <span>Cargo {getOccupiedCargo(player.cargo, activeMissions)}/{player.stats.cargoCapacity}</span>
           <span>Primary slots {player.stats.primarySlots}</span>
           <span>Secondary slots {player.stats.secondarySlots}</span>
         </div>
@@ -161,10 +176,14 @@ function MissionBoardTab() {
   const runtime = useGameStore((state) => state.runtime);
   const activeMissions = useGameStore((state) => state.activeMissions);
   const completedMissionIds = useGameStore((state) => state.completedMissionIds);
+  const failedMissionIds = useGameStore((state) => state.failedMissionIds);
+  const gameClock = useGameStore((state) => state.gameClock);
   const acceptMission = useGameStore((state) => state.acceptMission);
   const completeMission = useGameStore((state) => state.completeMission);
   const reputation = useGameStore((state) => state.reputation);
-  const available = missionTemplates.filter((mission) => mission.originSystemId === currentSystemId && !completedMissionIds.includes(mission.id));
+  const available = missionTemplates.filter(
+    (mission) => mission.originSystemId === currentSystemId && !completedMissionIds.includes(mission.id) && !failedMissionIds.includes(mission.id)
+  );
   return (
     <div className="split-layout">
       <aside className="reputation-panel">
@@ -181,7 +200,8 @@ function MissionBoardTab() {
         <div className="mission-list">
           {[...activeMissions, ...available.filter((mission) => !activeMissions.some((active) => active.id === mission.id))].map((mission) => {
             const active = activeMissions.some((item) => item.id === mission.id);
-            const complete = active && canCompleteMission(mission, player, currentSystemId, currentStationId, runtime.destroyedPirates);
+            const complete = active && canCompleteMission(mission, player, currentSystemId, currentStationId, runtime.destroyedPirates, gameClock);
+            const remaining = getMissionDeadlineRemaining(mission, gameClock);
             return (
               <article key={mission.id} className="mission-card">
                 <div className="mission-title">
@@ -190,6 +210,15 @@ function MissionBoardTab() {
                 </div>
                 <p>{mission.type} · {factionNames[mission.factionId]} · Reward {mission.reward} cr</p>
                 <p>{mission.description}</p>
+                <p>
+                  {remaining !== undefined ? `Time ${formatTime(remaining)} · ` : ""}
+                  Failure {mission.failureReputationDelta ?? -4} rep
+                </p>
+                {mission.cargoProvided ? <p>Provided cargo: {formatCargo(mission.cargoProvided)}</p> : null}
+                {mission.cargoRequired ? <p>Required cargo: {formatCargo(mission.cargoRequired)}{mission.consumeCargoOnComplete ? " · consumed" : ""}</p> : null}
+                {mission.passengerCount ? <p>Passengers occupy {mission.passengerCount} cargo space.</p> : null}
+                {mission.escort ? <p>Escort hull {mission.escort.hull}{mission.escort.arrived ? " · arrived" : ""}</p> : null}
+                {mission.salvage ? <p>Recovery target: {mission.salvage.name}{mission.salvage.recovered ? " · recovered" : ""}</p> : null}
                 {mission.targetCommodityId ? <p>Requires {mission.targetAmount} {commodityById[mission.targetCommodityId].name}</p> : null}
                 {active ? (
                   <button onClick={() => completeMission(mission.id)} disabled={!complete}>Complete</button>
@@ -230,17 +259,32 @@ function BlueprintTab() {
 
 function LoungeTab() {
   const currentSystem = useGameStore((state) => systemById[state.currentSystemId]);
+  const marketState = useGameStore((state) => state.marketState);
+  const hints = getTradeHints(marketState, 3);
   return (
     <div className="lounge">
       <h2>Lounge</h2>
-      <p>
-        Dockhands in {currentSystem.name} say any market will buy ore already in your hold, but mining stations
-        and black markets are the ones that stock it.
-      </p>
-      <p>Patrol captains are quietly posting bounty work wherever Independent Pirates pressure the lanes.</p>
-      <p>Pirate black markets buy restricted cargo cheaply, but civilized stations charge a heavy risk premium.</p>
+      <p>Dockhands in {currentSystem.name} are comparing live stock sheets and favor these runs:</p>
+      {hints.map((hint) => (
+        <p key={`${hint.commodityId}-${hint.fromStationId}-${hint.toStationId}`}>
+          {hint.commodityName}: {hint.fromStationName} → {hint.toStationName} · +{hint.profit} cr/unit
+        </p>
+      ))}
+      <p>Contract timers use shipboard time, so they keep moving while docked or browsing the map.</p>
     </div>
   );
+}
+
+function formatTime(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  const remainder = Math.floor(seconds % 60).toString().padStart(2, "0");
+  return `${minutes}:${remainder}`;
+}
+
+function formatCargo(cargo: CargoHold): string {
+  return Object.entries(cargo)
+    .map(([id, amount]) => `${amount} ${commodityById[id as CommodityId].name}`)
+    .join(", ");
 }
 
 function equipmentName(id: EquipmentId | string): string {

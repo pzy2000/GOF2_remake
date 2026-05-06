@@ -183,6 +183,30 @@ export interface MissionDefinition {
   factionId: FactionId;
   description: string;
   reward: number;
+  deadlineSeconds?: number;
+  acceptedAt?: number;
+  failed?: boolean;
+  failureReason?: string;
+  failureReputationDelta?: number;
+  passengerCount?: number;
+  consumeCargoOnComplete?: boolean;
+  escort?: {
+    convoyId: string;
+    convoyName: string;
+    originPosition: Vec3;
+    destinationPosition: Vec3;
+    hull: number;
+    arrived?: boolean;
+  };
+  salvage?: {
+    salvageId: string;
+    name: string;
+    systemId: string;
+    position: Vec3;
+    commodityId: CommodityId;
+    amount: number;
+    recovered?: boolean;
+  };
   cargoRequired?: CargoHold;
   cargoProvided?: CargoHold;
   targetCommodityId?: CommodityId;
@@ -249,6 +273,33 @@ export interface LootEntity {
   rarity: OreRarity;
 }
 
+export interface ConvoyEntity {
+  id: string;
+  missionId: string;
+  name: string;
+  factionId: FactionId;
+  position: Vec3;
+  velocity: Vec3;
+  hull: number;
+  maxHull: number;
+  shield: number;
+  maxShield: number;
+  lastDamageAt: number;
+  destinationStationId: string;
+  destinationPosition: Vec3;
+  arrived: boolean;
+}
+
+export interface SalvageEntity {
+  id: string;
+  missionId: string;
+  name: string;
+  commodityId: CommodityId;
+  amount: number;
+  position: Vec3;
+  recovered: boolean;
+}
+
 export interface ProjectileEntity {
   id: string;
   owner: "player" | "enemy" | "patrol";
@@ -296,6 +347,8 @@ export interface AutoPilotState {
 
 export interface RuntimeState {
   enemies: FlightEntity[];
+  convoys: ConvoyEntity[];
+  salvage: SalvageEntity[];
   asteroids: AsteroidEntity[];
   loot: LootEntity[];
   projectiles: ProjectileEntity[];
@@ -306,6 +359,16 @@ export interface RuntimeState {
   graceUntil: number;
   message: string;
 }
+
+export interface MarketEntry {
+  stock: number;
+  maxStock: number;
+  baselineStock: number;
+  demand: number;
+  baselineDemand: number;
+}
+
+export type MarketState = Record<string, Partial<Record<CommodityId, MarketEntry>>>;
 
 export interface FlightInput {
   throttleUp: boolean;
@@ -329,9 +392,12 @@ export interface SaveGameData {
   savedAt: string;
   currentSystemId: string;
   currentStationId?: string;
+  gameClock: number;
   player: PlayerState;
   activeMissions: MissionDefinition[];
   completedMissionIds: string[];
+  failedMissionIds: string[];
+  marketState: MarketState;
   reputation: ReputationState;
   knownSystems: string[];
 }

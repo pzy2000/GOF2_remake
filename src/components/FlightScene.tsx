@@ -3,7 +3,7 @@ import { Html, Line, Stars } from "@react-three/drei";
 import { Suspense, useEffect, useMemo, useRef } from "react";
 import * as THREE from "three";
 import { stationById, stations, systemById, useGameStore } from "../state/gameStore";
-import type { AsteroidEntity, FlightEntity, LootEntity, ProjectileEntity, Vec3, VisualEffectEntity } from "../types/game";
+import type { AsteroidEntity, ConvoyEntity, FlightEntity, LootEntity, ProjectileEntity, SalvageEntity, Vec3, VisualEffectEntity } from "../types/game";
 import { add, forwardFromRotation, normalize, scale, sub } from "../systems/math";
 import { getOreColor } from "../systems/difficulty";
 import { getJumpGatePosition } from "../systems/autopilot";
@@ -241,6 +241,54 @@ function NpcShip({ ship }: { ship: FlightEntity }) {
         <coneGeometry args={[ship.role === "trader" ? 4.2 : 3, 13, 12]} />
         <meshBasicMaterial color={ship.role === "pirate" ? "#ff5f6d" : "#64e4ff"} transparent opacity={0.36} toneMapped={false} />
       </mesh>
+    </group>
+  );
+}
+
+function ConvoyShip({ convoy }: { convoy: ConvoyEntity }) {
+  const direction = normalize(convoy.velocity);
+  const yaw = Math.atan2(direction[0], -direction[2]);
+  const healthRatio = convoy.hull / convoy.maxHull;
+  return (
+    <group position={toThree(convoy.position)} rotation={[0, yaw, 0]}>
+      <mesh>
+        <boxGeometry args={[34, 12, 42]} />
+        <meshStandardMaterial color="#c9a86a" metalness={0.35} roughness={0.48} emissive={healthRatio < 0.35 ? "#5f1d14" : "#1d342f"} emissiveIntensity={0.18} />
+      </mesh>
+      <mesh position={[-25, -2, 0]}>
+        <boxGeometry args={[10, 9, 34]} />
+        <meshStandardMaterial color="#65717b" metalness={0.4} roughness={0.44} />
+      </mesh>
+      <mesh position={[25, -2, 0]}>
+        <boxGeometry args={[10, 9, 34]} />
+        <meshStandardMaterial color="#65717b" metalness={0.4} roughness={0.44} />
+      </mesh>
+      <mesh position={[0, -2, 26]} rotation={[Math.PI / 2, 0, 0]}>
+        <coneGeometry args={[5, 18, 12]} />
+        <meshBasicMaterial color="#6ee7ff" transparent opacity={0.32} toneMapped={false} />
+      </mesh>
+      <Html center distanceFactor={12} className="target-label">
+        ESCORT · {Math.round(convoy.hull)}/{convoy.maxHull}
+      </Html>
+    </group>
+  );
+}
+
+function SalvageCrate({ salvage }: { salvage: SalvageEntity }) {
+  return (
+    <group position={toThree(salvage.position)}>
+      <mesh rotation={[0.4, 0.2, 0.6]}>
+        <boxGeometry args={[22, 16, 18]} />
+        <meshStandardMaterial color="#9b7bff" emissive="#4c2eb0" emissiveIntensity={0.45} metalness={0.36} roughness={0.42} />
+      </mesh>
+      <mesh rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[38, 1.5, 8, 42]} />
+        <meshBasicMaterial color="#eaffff" transparent opacity={0.5} toneMapped={false} />
+      </mesh>
+      <pointLight color="#9b7bff" intensity={0.9} distance={150} />
+      <Html center distanceFactor={10} className="target-label">
+        SALVAGE · E
+      </Html>
     </group>
   );
 }
@@ -644,6 +692,12 @@ function SceneContent() {
       <TargetLock />
       {runtime.enemies.map((ship) => (
         <NpcShip key={ship.id} ship={ship} />
+      ))}
+      {runtime.convoys.map((convoy) => (
+        <ConvoyShip key={convoy.id} convoy={convoy} />
+      ))}
+      {runtime.salvage.map((salvage) => (
+        <SalvageCrate key={salvage.id} salvage={salvage} />
       ))}
       {runtime.asteroids.map((asteroid) => (
         <Asteroid key={asteroid.id} asteroid={asteroid} />

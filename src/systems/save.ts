@@ -1,4 +1,5 @@
 import type { SaveGameData } from "../types/game";
+import { createInitialMarketState } from "./economy";
 
 export const SAVE_KEY = "gof2-by-pzy-save";
 export const SAVE_VERSION = 1;
@@ -12,7 +13,12 @@ export function parseSave(raw: string | null): SaveGameData | null {
   try {
     const parsed = JSON.parse(raw) as SaveGameData;
     if (parsed.version !== SAVE_VERSION || !parsed.player || !parsed.currentSystemId) return null;
-    return parsed;
+    return {
+      ...parsed,
+      gameClock: parsed.gameClock ?? 0,
+      failedMissionIds: parsed.failedMissionIds ?? [],
+      marketState: parsed.marketState ?? createInitialMarketState()
+    };
   } catch {
     return null;
   }
