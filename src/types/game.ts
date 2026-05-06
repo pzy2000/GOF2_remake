@@ -83,6 +83,7 @@ export interface AssetManifest {
   commodityIcons: string;
   equipmentIcons: string;
   nebulaBg: string;
+  skyboxPanorama: string;
   asteroidTextures: string;
   factionEmblems: string;
   hudOverlay: string;

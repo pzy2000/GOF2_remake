@@ -99,15 +99,26 @@ function CameraRig() {
   return null;
 }
 
-function SpaceBackdrop() {
-  const nebula = useGameStore((state) => state.assetManifest.nebulaBg);
-  const texture = useLoader(THREE.TextureLoader, nebula);
+function InfiniteSkybox() {
+  const skybox = useGameStore((state) => state.assetManifest.skyboxPanorama || state.assetManifest.nebulaBg);
+  const texture = useLoader(THREE.TextureLoader, skybox);
+  const { camera } = useThree();
+  const skyGroupRef = useRef<THREE.Group | null>(null);
   texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.anisotropy = 4;
+  useFrame(() => {
+    skyGroupRef.current?.position.copy(camera.position);
+  });
   return (
-    <mesh position={[0, 0, -1250]}>
-      <planeGeometry args={[2200, 1450]} />
-      <meshBasicMaterial map={texture} side={THREE.DoubleSide} toneMapped={false} />
-    </mesh>
+    <group ref={skyGroupRef} renderOrder={-1000}>
+      <mesh frustumCulled={false} renderOrder={-1000}>
+        <sphereGeometry args={[1800, 64, 32]} />
+        <meshBasicMaterial map={texture} side={THREE.BackSide} depthWrite={false} depthTest={false} toneMapped={false} />
+      </mesh>
+      <Stars radius={920} depth={95} count={2400} factor={4.5} saturation={0.36} fade speed={0.1} />
+    </group>
   );
 }
 
@@ -490,8 +501,7 @@ function SceneContent() {
       <ambientLight intensity={ambient} />
       <directionalLight position={[180, 220, 120]} intensity={1.4} />
       <pointLight position={[0, 0, 120]} color="#60c8ff" intensity={0.6} distance={500} />
-      <SpaceBackdrop />
-      <Stars radius={1200} depth={120} count={1700} factor={5} saturation={0.45} fade speed={0.28} />
+      <InfiniteSkybox />
       <StationModel />
       <PlayerShip />
       <TargetLock />

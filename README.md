@@ -35,11 +35,12 @@ Generated project assets:
 - `commodity-icons.webp`
 - `equipment-icons.webp`
 - `nebula-bg.webp`
+- `skybox-panorama.webp`
 - `asteroid-textures.webp`
 - `faction-emblems.webp`
 - `hud-overlay.webp`
 
-No external copyrighted image packs are included. The game uses Three.js primitives and procedural geometry for ships, stations, asteroids, projectiles, and loot.
+No external copyrighted image packs are included. The flight scene uses `skybox-panorama.webp` as a camera-locked inside-sphere skybox so the nebula reads as infinitely far away while the older `nebula-bg.webp` remains available for station/menu fallback art. The game uses Three.js primitives and procedural geometry for ships, stations, asteroids, projectiles, and loot.
 
 ## Known Limitations
 
