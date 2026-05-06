@@ -20,7 +20,17 @@ export const commodities: CommodityDefinition[] = [
   { id: "optics", name: "Optics", basePrice: 112, mass: 1, legal: true, volatility: 0.2, category: "trade" },
   { id: "hydraulics", name: "Hydraulics", basePrice: 66, mass: 1, legal: true, volatility: 0.14, category: "trade" },
   { id: "data-cores", name: "Data Cores", basePrice: 260, mass: 1, legal: true, volatility: 0.34, category: "trade" },
-  { id: "illegal-contraband", name: "Illegal Contraband", basePrice: 340, mass: 1, legal: false, volatility: 0.44, category: "restricted" },
+  {
+    id: "illegal-contraband",
+    name: "Illegal Contraband",
+    description:
+      "Regional law: Helion Reach, Kuro Belt, and Mirr Vale fine and confiscate; Vantara and Celest Gate trigger hostile pursuit; Ashen Drift and PTD Home treat it as legal black-market cargo.",
+    basePrice: 340,
+    mass: 1,
+    legal: false,
+    volatility: 0.44,
+    category: "restricted"
+  },
   { id: "iron", name: "Iron", basePrice: 24, mass: 1, legal: true, volatility: 0.08, category: "ore" },
   { id: "titanium", name: "Titanium", basePrice: 72, mass: 1, legal: true, volatility: 0.16, category: "ore" },
   { id: "cesogen", name: "Cesogen", basePrice: 128, mass: 1, legal: true, volatility: 0.24, category: "ore" },

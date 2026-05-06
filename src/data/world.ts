@@ -1,4 +1,5 @@
 export * from "./commodities";
+export * from "./contraband";
 export * from "./equipment";
 export * from "./factions";
 export * from "./missions";

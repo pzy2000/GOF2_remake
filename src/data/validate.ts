@@ -1,5 +1,6 @@
 import type { CommodityId, EquipmentId, FactionId } from "../types/game";
 import { commodities, commodityById } from "./commodities";
+import { contrabandLawBySystem } from "./contraband";
 import { equipmentById, equipmentList } from "./equipment";
 import { factionNames } from "./factions";
 import { missionTemplates } from "./missions";
@@ -75,6 +76,7 @@ export function validateContentData(): ContentValidationResult {
 
   for (const system of systems) {
     if (!hasFaction(system.factionId)) errors.push(`System ${system.id} references unknown faction ${system.factionId}`);
+    if (!contrabandLawBySystem[system.id]) errors.push(`System ${system.id} is missing contraband law`);
     if (system.id === "ptd-home") {
       if (system.planetIds.length !== 1) errors.push("System ptd-home must have exactly one planet");
     } else if (system.planetIds.length < 3 || system.planetIds.length > 8) {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { commodities, equipmentById, glassWakeProtocol, missionTemplates, planetById, planets, ships, stationById, stations, systems } from "../src/data/world";
+import { commodities, contrabandLawBySystem, equipmentById, glassWakeProtocol, missionTemplates, planetById, planets, ships, stationById, stations, systems } from "../src/data/world";
 import { fallbackAssetManifest } from "../src/systems/assets";
 import { getEquipmentSlotUsage, getShipSlotCapacity } from "../src/systems/equipment";
 import { validateContentData } from "../src/data/validate";
@@ -101,6 +101,15 @@ describe("content data", () => {
         expect(commodities.some((commodity) => commodity.id === commodityId)).toBe(true);
       }
     }
+  });
+
+  it("defines contraband law for every system and describes it on Illegal Contraband", () => {
+    for (const system of systems) {
+      expect(contrabandLawBySystem[system.id]).toBeDefined();
+    }
+    const contraband = commodities.find((commodity) => commodity.id === "illegal-contraband");
+    expect(contraband?.description).toContain("Helion Reach");
+    expect(contraband?.description).toContain("PTD Home");
   });
 
   it("connects every Glass Wake chapter to a valid story mission chain", () => {

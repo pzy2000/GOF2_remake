@@ -24,6 +24,7 @@ import {
   getShipSlotCapacity,
   hasCraftMaterials
 } from "../systems/equipment";
+import { getContrabandLawSummary } from "../systems/combatAi";
 import type { AssetManifest, CargoHold, CommodityId, EquipmentId, EquipmentSlotType, StationTab } from "../types/game";
 
 const tabs: StationTab[] = ["Market", "Hangar", "Shipyard", "Mission Board", "Captain's Log", "Blueprint Workshop", "Lounge", "Galaxy Map"];
@@ -268,6 +269,8 @@ function MarketTab() {
                 <div>
                   <strong>{commodity.name}</strong>
                   <span>{commodity.legal ? "Licensed" : "Restricted"} · Hold {player.cargo[commodity.id] ?? 0}</span>
+                  {commodity.description ? <span>{commodity.description}</span> : null}
+                  {commodity.id === "illegal-contraband" ? <span>Local law: {getContrabandLawSummary(system.id)}</span> : null}
                   <span>Stock {Math.floor(entry.stock)}/{entry.maxStock} · Demand {entry.demand.toFixed(2)} · {tag}</span>
                 </div>
                 <b>{canBuy ? buyPrice : "—"}/{sellPrice} cr</b>

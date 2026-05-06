@@ -5,6 +5,7 @@ import { getEquipmentEffects, hasMiningBeam } from "../systems/equipment";
 import { getMissionDeadlineRemaining } from "../systems/missions";
 import { distance } from "../systems/math";
 import { getNearestNavigationTarget } from "../systems/navigation";
+import { combatAiProfileLabels, getContrabandLawSummary } from "../systems/combatAi";
 
 function Bar({ label, value, max, tone }: { label: string; value: number; max: number; tone: "cyan" | "green" | "orange" | "red" }) {
   const percent = Math.max(0, Math.min(100, (value / max) * 100));
@@ -37,6 +38,8 @@ export function Hud() {
   const equipmentEffects = getEquipmentEffects(player.equipment);
   const nearestNavigation = getNearestNavigationTarget(currentSystem.id, player.position, knownPlanetIds);
   const pirateCount = runtime.enemies.filter((ship) => ship.role === "pirate" && ship.hull > 0 && ship.deathTimer === undefined).length;
+  const contrabandAmount = player.cargo["illegal-contraband"] ?? 0;
+  const scanningPatrol = runtime.enemies.find((ship) => ship.role === "patrol" && ship.aiState === "scan" && (ship.scanProgress ?? 0) > 0);
   const graceRemaining = Math.max(0, Math.ceil(runtime.graceUntil - runtime.clock));
   const nearestMine = runtime.asteroids
     .filter((asteroid) => asteroid.amount > 0)
@@ -71,6 +74,8 @@ export function Hud() {
         <p>Throttle {Math.round(player.throttle * 100)}% · Speed {Math.round(Math.hypot(...player.velocity))}</p>
         {autopilot ? <p>Autopilot: {navLabel} · {navDistance}m</p> : null}
         <p>{graceRemaining > 0 ? `Enemy weapons safe for ${graceRemaining}s` : pirateCount > 0 ? `${pirateCount} pirate contact(s)` : "Local space clear"}</p>
+        {contrabandAmount > 0 ? <p>Contraband law: {getContrabandLawSummary(currentSystem.id)}</p> : null}
+        {scanningPatrol ? <p>Patrol scan {Math.round((scanningPatrol.scanProgress ?? 0) * 100)}%</p> : null}
         {nearestNavigation ? (
           <p>
             {nearestNavigation.kind === "station" ? "Nearest station" : nearestNavigation.kind === "planet-signal" ? "Scan target" : "Nearest nav"}: {nearestNavigation.name} {Math.round(nearestNavigation.distance)}m
@@ -81,7 +86,10 @@ export function Hud() {
         {target ? (
           <>
             <h3>{target.name}</h3>
-            <p>{target.role.toUpperCase()} · {factionNames[target.factionId]} · {targetDistance}m</p>
+            <p>
+              {target.elite ? "ELITE · " : ""}
+              {combatAiProfileLabels[target.aiProfileId]} · {target.aiState.toUpperCase()} · {factionNames[target.factionId]} · {targetDistance}m
+            </p>
             <Bar label="Target Hull" value={target.hull} max={target.maxHull} tone="red" />
             <Bar label="Target Shield" value={target.shield} max={target.maxShield} tone="cyan" />
           </>

@@ -219,11 +219,21 @@ export interface EquipmentDefinition {
 export interface CommodityDefinition {
   id: CommodityId;
   name: string;
+  description?: string;
   basePrice: number;
   mass: number;
   legal: boolean;
   volatility: number;
   category: "trade" | "ore" | "restricted";
+}
+
+export type ContrabandLawDisposition = "legal" | "fine-confiscate" | "hostile-pursuit";
+
+export interface ContrabandLaw {
+  systemId: string;
+  label: string;
+  disposition: ContrabandLawDisposition;
+  summary: string;
 }
 
 export interface CargoStack {
@@ -379,6 +389,12 @@ export interface FlightEntity {
   maxShield: number;
   lastDamageAt: number;
   fireCooldown: number;
+  aiProfileId: "raider" | "interceptor" | "gunner" | "law-patrol" | "hauler" | "elite-ace";
+  aiState: "patrol" | "scan" | "intercept" | "attack" | "evade" | "retreat";
+  aiTargetId?: string;
+  aiTimer: number;
+  elite?: boolean;
+  scanProgress?: number;
   deathTimer?: number;
 }
 
