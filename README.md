@@ -43,4 +43,4 @@ No external copyrighted image packs are included. The game uses Three.js primiti
 
 ## Known Limitations
 
-This is a vertical slice, not a full campaign. Mission archetypes beyond courier, mining, and bounty are represented on the board but not fully simulated. Commodity/equipment sprite sheets are displayed as category thumbnails rather than individually sliced UI icons. Audio is represented by UI feedback and is ready for a fuller browser audio layer later.
+This is a vertical slice, not a full campaign. Mission archetypes beyond courier, mining, and bounty are represented on the board but not fully simulated. Commodity, equipment, and faction sprite sheets are sliced in the UI with CSS atlas positioning. Audio is represented by UI feedback and is ready for a fuller browser audio layer later.

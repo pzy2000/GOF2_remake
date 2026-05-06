@@ -259,7 +259,10 @@ export interface VisualEffectEntity {
   endPosition?: Vec3;
   velocity?: Vec3;
   color: string;
+  secondaryColor?: string;
   label?: string;
+  particleCount?: number;
+  spread?: number;
   size: number;
   life: number;
   maxLife: number;

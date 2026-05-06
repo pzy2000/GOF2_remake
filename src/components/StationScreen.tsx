@@ -4,6 +4,8 @@ import { canCompleteMission } from "../systems/missions";
 import { getCargoUsed, getCommodityPrice } from "../systems/economy";
 import { reputationLabel } from "../systems/reputation";
 import { GalaxyMap } from "./GalaxyMap";
+import { AtlasIcon } from "./AtlasIcon";
+import { getCommodityIcon, getEquipmentIcon, getFactionIcon } from "../data/iconAtlas";
 import type { CommodityId, EquipmentId, StationTab } from "../types/game";
 
 const tabs: StationTab[] = ["Market", "Hangar", "Shipyard", "Mission Board", "Blueprint Workshop", "Lounge", "Galaxy Map"];
@@ -60,12 +62,7 @@ function MarketTab() {
   const sell = useGameStore((state) => state.sell);
   const listed = commodities.filter((item) => item.category !== "ore" || station.archetype === "Mining Station" || station.archetype === "Pirate Black Market");
   return (
-    <div className="split-layout">
-      <aside className="asset-sheet">
-        <img src={manifest.commodityIcons} alt="Commodity icon sheet" />
-        <p>Commodity sheet thumbnail. Individual sprite slicing is a documented vertical-slice limitation.</p>
-      </aside>
-      <div className="table-panel">
+    <div className="table-panel">
         <h2>Market</h2>
         <p>Credits {player.credits.toLocaleString()} · Cargo {getCargoUsed(player.cargo)}/{player.stats.cargoCapacity}</p>
         <div className="market-list">
@@ -74,6 +71,7 @@ function MarketTab() {
             const sellPrice = getCommodityPrice(commodity.id, station, system, reputation, "sell");
             return (
               <div className="market-row" key={commodity.id}>
+                <AtlasIcon icon={getCommodityIcon(commodity.id)} manifest={manifest} />
                 <div>
                   <strong>{commodity.name}</strong>
                   <span>{commodity.legal ? "Licensed" : "Restricted"} · Hold {player.cargo[commodity.id] ?? 0}</span>
@@ -85,7 +83,6 @@ function MarketTab() {
             );
           })}
         </div>
-      </div>
     </div>
   );
 }
@@ -95,9 +92,11 @@ function HangarTab() {
   const player = useGameStore((state) => state.player);
   const repairAndRefill = useGameStore((state) => state.repairAndRefill);
   return (
-    <div className="split-layout">
-      <aside className="asset-sheet">
-        <img src={manifest.equipmentIcons} alt="Equipment icon sheet" />
+    <div className="hangar-layout">
+      <aside className="equipment-strip">
+        {player.equipment.map((item) => (
+          <AtlasIcon key={item} icon={getEquipmentIcon(item)} manifest={manifest} size={54} />
+        ))}
       </aside>
       <div>
         <h2>Hangar</h2>
@@ -111,7 +110,14 @@ function HangarTab() {
           <span>Secondary slots {player.stats.secondarySlots}</span>
         </div>
         <h3>Installed Equipment</h3>
-        <p>{player.equipment.map((item) => equipmentName(item)).join(", ")}</p>
+        <div className="icon-chip-row">
+          {player.equipment.map((item) => (
+            <span className="icon-chip" key={item}>
+              <AtlasIcon icon={getEquipmentIcon(item)} manifest={manifest} size={30} />
+              {equipmentName(item)}
+            </span>
+          ))}
+        </div>
         <button className="primary" onClick={repairAndRefill}>Repair Hull and Refill Missiles</button>
       </div>
     </div>
@@ -154,11 +160,13 @@ function MissionBoardTab() {
   const available = missionTemplates.filter((mission) => mission.originSystemId === currentSystemId && !completedMissionIds.includes(mission.id));
   return (
     <div className="split-layout">
-      <aside className="asset-sheet">
-        <img src={manifest.factionEmblems} alt="Faction emblem sheet" />
+      <aside className="reputation-panel">
         <h3>Reputation</h3>
         {Object.entries(reputation.factions).map(([id, value]) => (
-          <p key={id}>{id.replace(/-/g, " ")}: {value} · {reputationLabel(value)}</p>
+          <div className="reputation-row" key={id}>
+            <AtlasIcon icon={getFactionIcon(id)} manifest={manifest} size={38} />
+            <p>{id.replace(/-/g, " ")}: {value} · {reputationLabel(value)}</p>
+          </div>
         ))}
       </aside>
       <div>
@@ -169,7 +177,10 @@ function MissionBoardTab() {
             const complete = active && canCompleteMission(mission, player, currentSystemId, currentStationId, runtime.destroyedPirates);
             return (
               <article key={mission.id} className="mission-card">
-                <h3>{mission.title}</h3>
+                <div className="mission-title">
+                  <AtlasIcon icon={getFactionIcon(mission.factionId)} manifest={manifest} size={40} />
+                  <h3>{mission.title}</h3>
+                </div>
                 <p>{mission.type} · {factionNames[mission.factionId]} · Reward {mission.reward} cr</p>
                 <p>{mission.description}</p>
                 {mission.targetCommodityId ? <p>Requires {mission.targetAmount} {commodityById[mission.targetCommodityId].name}</p> : null}
@@ -192,15 +203,12 @@ function BlueprintTab() {
   const player = useGameStore((state) => state.player);
   const craftEquipment = useGameStore((state) => state.craftEquipment);
   return (
-    <div className="split-layout">
-      <aside className="asset-sheet">
-        <img src={manifest.equipmentIcons} alt="Equipment icon sheet" />
-      </aside>
-      <div>
+    <div>
         <h2>Blueprint Workshop</h2>
         <div className="ship-grid">
           {craftable.map((id) => (
             <article className="ship-card" key={id}>
+              <AtlasIcon icon={getEquipmentIcon(id)} manifest={manifest} size={52} />
               <h3>{equipmentName(id)}</h3>
               <p>{weapons[id]?.kind ?? "utility"} upgrade · prototype fabrication</p>
               <button disabled={player.equipment.includes(id)} onClick={() => craftEquipment(id)}>
@@ -209,7 +217,6 @@ function BlueprintTab() {
             </article>
           ))}
         </div>
-      </div>
     </div>
   );
 }

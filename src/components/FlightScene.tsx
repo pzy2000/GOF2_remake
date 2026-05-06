@@ -113,19 +113,59 @@ function SpaceBackdrop() {
 
 function PlayerShip() {
   const player = useGameStore((state) => state.player);
+  const afterburning = useGameStore((state) => state.input.afterburner && state.player.energy > 12);
+  const speed = Math.hypot(...player.velocity);
+  const flameScale = Math.max(0.65, Math.min(2.6, speed / 120 + (afterburning ? 1.05 : 0)));
   return (
     <group position={toThree(player.position)} rotation={player.rotation}>
-      <mesh castShadow>
-        <coneGeometry args={[9, 28, 4]} />
-        <meshStandardMaterial color="#d8f4ff" metalness={0.45} roughness={0.38} emissive="#12334a" />
+      <mesh position={[0, 0, -6]} castShadow>
+        <coneGeometry args={[8.5, 34, 5]} />
+        <meshStandardMaterial color="#cfefff" metalness={0.5} roughness={0.32} emissive="#12334a" />
       </mesh>
-      <mesh position={[0, 2, 8]} castShadow>
-        <boxGeometry args={[30, 2.4, 11]} />
+      <mesh position={[0, 1.8, 2]} scale={[1.05, 0.65, 1]} castShadow>
+        <boxGeometry args={[16, 9, 26]} />
+        <meshStandardMaterial color="#15354d" metalness={0.38} roughness={0.36} emissive="#092033" />
+      </mesh>
+      <mesh position={[0, 5.2, -8]} castShadow>
+        <sphereGeometry args={[4.8, 12, 8]} />
+        <meshStandardMaterial color="#9be8ff" metalness={0.2} roughness={0.18} emissive="#1e95c8" emissiveIntensity={0.42} />
+      </mesh>
+      <mesh position={[0, 0.4, 6]} castShadow>
+        <boxGeometry args={[40, 2.2, 12]} />
         <meshStandardMaterial color="#318ccf" metalness={0.55} roughness={0.28} />
       </mesh>
-      <mesh position={[0, -2, 15]}>
-        <sphereGeometry args={[3.2, 12, 8]} />
-        <meshStandardMaterial color="#ff8b3d" emissive="#ff5f1f" emissiveIntensity={1.8} />
+      <mesh position={[-15, 0.2, -2]} rotation={[0, 0, 0.34]} castShadow>
+        <boxGeometry args={[6, 1.8, 24]} />
+        <meshStandardMaterial color="#71c9ff" metalness={0.45} roughness={0.32} emissive="#0e3658" />
+      </mesh>
+      <mesh position={[15, 0.2, -2]} rotation={[0, 0, -0.34]} castShadow>
+        <boxGeometry args={[6, 1.8, 24]} />
+        <meshStandardMaterial color="#71c9ff" metalness={0.45} roughness={0.32} emissive="#0e3658" />
+      </mesh>
+      <mesh position={[-10, 1, 13]} rotation={[0.4, 0, 0]}>
+        <boxGeometry args={[2.6, 2.6, 8]} />
+        <meshStandardMaterial color="#202c38" metalness={0.65} roughness={0.22} emissive="#08131e" />
+      </mesh>
+      <mesh position={[10, 1, 13]} rotation={[0.4, 0, 0]}>
+        <boxGeometry args={[2.6, 2.6, 8]} />
+        <meshStandardMaterial color="#202c38" metalness={0.65} roughness={0.22} emissive="#08131e" />
+      </mesh>
+      {[-5.5, 5.5].map((x) => (
+        <group key={x} position={[x, -1.6, 16]}>
+          <mesh>
+            <cylinderGeometry args={[2.5, 3.4, 3, 12]} />
+            <meshStandardMaterial color="#273647" metalness={0.8} roughness={0.24} emissive="#101c2a" />
+          </mesh>
+          <mesh position={[0, 0, 5.5]} rotation={[Math.PI / 2, 0, 0]} scale={[1, 1, flameScale]}>
+            <coneGeometry args={[3.4, 18, 16]} />
+            <meshBasicMaterial color={afterburning ? "#66e4ff" : "#ff8b3d"} transparent opacity={0.38 + Math.min(0.35, speed / 500)} toneMapped={false} />
+          </mesh>
+          <pointLight color={afterburning ? "#66e4ff" : "#ff8b3d"} intensity={afterburning ? 1.1 : 0.45} distance={90} />
+        </group>
+      ))}
+      <mesh position={[0, -0.4, -18]} rotation={[0.24, 0, 0]} castShadow>
+        <boxGeometry args={[5, 13, 2.4]} />
+        <meshStandardMaterial color="#2b89bd" metalness={0.55} roughness={0.28} />
       </mesh>
     </group>
   );
@@ -137,15 +177,57 @@ function NpcShip({ ship }: { ship: FlightEntity }) {
   const direction = normalize(ship.velocity);
   const yaw = Math.atan2(direction[0], -direction[2]);
   const flashing = clock - ship.lastDamageAt < 0.18 || ship.deathTimer !== undefined;
+  const speed = Math.hypot(...ship.velocity);
+  const flameScale = Math.max(0.45, Math.min(1.45, speed / 115));
+  const body =
+    ship.role === "pirate"
+      ? { cone: [7, 25, 3] as [number, number, number], wing: [26, 1.8, 8] as [number, number, number], offset: 6, tail: "#3a111c" }
+      : ship.role === "patrol"
+        ? { cone: [7.5, 23, 4] as [number, number, number], wing: [22, 2.4, 12] as [number, number, number], offset: 5, tail: "#12344b" }
+        : { cone: [9, 20, 6] as [number, number, number], wing: [28, 3.8, 15] as [number, number, number], offset: 3, tail: "#4a3820" };
   return (
     <group position={toThree(ship.position)} rotation={[0, yaw, 0]} scale={ship.deathTimer !== undefined ? 0.82 : 1}>
       <mesh castShadow>
-        <coneGeometry args={[7, 22, 3]} />
+        <coneGeometry args={body.cone} />
         <meshStandardMaterial color={flashing ? "#ffffff" : color} metalness={0.35} roughness={0.44} emissive={color} emissiveIntensity={flashing ? 0.85 : 0.16} transparent opacity={ship.deathTimer !== undefined ? 0.45 : 1} />
       </mesh>
-      <mesh position={[0, 0, 7]}>
-        <boxGeometry args={[18, 2, 7]} />
-        <meshStandardMaterial color="#172130" metalness={0.2} roughness={0.5} transparent opacity={ship.deathTimer !== undefined ? 0.45 : 1} />
+      <mesh position={[0, 0, body.offset]} castShadow>
+        <boxGeometry args={body.wing} />
+        <meshStandardMaterial color={body.tail} metalness={0.28} roughness={0.5} transparent opacity={ship.deathTimer !== undefined ? 0.45 : 1} />
+      </mesh>
+      {ship.role === "pirate" ? (
+        <>
+          <mesh position={[-8, 1, -3]} rotation={[0, 0, 0.7]}>
+            <boxGeometry args={[3, 1.4, 18]} />
+            <meshStandardMaterial color="#711f2d" metalness={0.32} roughness={0.44} emissive="#23050a" />
+          </mesh>
+          <mesh position={[8, 1, -3]} rotation={[0, 0, -0.7]}>
+            <boxGeometry args={[3, 1.4, 18]} />
+            <meshStandardMaterial color="#711f2d" metalness={0.32} roughness={0.44} emissive="#23050a" />
+          </mesh>
+        </>
+      ) : null}
+      {ship.role === "patrol" ? (
+        <mesh position={[0, 4.5, -6]}>
+          <boxGeometry args={[4, 7, 2]} />
+          <meshStandardMaterial color="#84d8ff" metalness={0.4} roughness={0.35} emissive="#1b719d" emissiveIntensity={0.25} />
+        </mesh>
+      ) : null}
+      {ship.role === "trader" ? (
+        <>
+          <mesh position={[-12, -1, -1]}>
+            <boxGeometry args={[6, 6, 13]} />
+            <meshStandardMaterial color="#6b522c" metalness={0.25} roughness={0.58} />
+          </mesh>
+          <mesh position={[12, -1, -1]}>
+            <boxGeometry args={[6, 6, 13]} />
+            <meshStandardMaterial color="#6b522c" metalness={0.25} roughness={0.58} />
+          </mesh>
+        </>
+      ) : null}
+      <mesh position={[0, -1.4, 13]} rotation={[Math.PI / 2, 0, 0]} scale={[1, 1, flameScale]}>
+        <coneGeometry args={[ship.role === "trader" ? 4.2 : 3, 13, 12]} />
+        <meshBasicMaterial color={ship.role === "pirate" ? "#ff5f6d" : "#64e4ff"} transparent opacity={0.36} toneMapped={false} />
       </mesh>
     </group>
   );
@@ -157,22 +239,104 @@ function StationModel() {
   return (
     <>
       {systemStations.map((station) => (
-        <group key={station.id} position={toThree(station.position)}>
-          <mesh>
-            <cylinderGeometry args={[44, 62, 34, 8]} />
-            <meshStandardMaterial color="#94a9b8" metalness={0.55} roughness={0.35} emissive="#172436" />
-          </mesh>
-          <mesh rotation={[Math.PI / 2, 0, 0]}>
-            <torusGeometry args={[78, 4, 8, 32]} />
-            <meshStandardMaterial color="#3bb4ff" emissive="#1f7acc" emissiveIntensity={0.55} />
-          </mesh>
-          <mesh position={[0, 0, 52]}>
-            <boxGeometry args={[82, 8, 18]} />
-            <meshStandardMaterial color="#d4c17d" emissive="#5b4617" emissiveIntensity={0.2} />
-          </mesh>
-        </group>
+        <StationGeometry key={station.id} station={station} />
       ))}
     </>
+  );
+}
+
+function StationGeometry({ station }: { station: (typeof stations)[number] }) {
+  const accent =
+    station.archetype === "Military Outpost"
+      ? "#ff6b6b"
+      : station.archetype === "Research Station"
+        ? "#9b7bff"
+        : station.archetype === "Mining Station"
+          ? "#ffd166"
+          : station.archetype === "Pirate Black Market"
+            ? "#ff4e5f"
+            : "#3bb4ff";
+  const ringScale = station.archetype === "Trade Hub" ? 1.2 : station.archetype === "Pirate Black Market" ? 0.82 : 1;
+  return (
+    <group position={toThree(station.position)}>
+      <mesh>
+        <cylinderGeometry args={[44, 62, 34, 8]} />
+        <meshStandardMaterial color="#94a9b8" metalness={0.55} roughness={0.35} emissive="#172436" />
+      </mesh>
+      <mesh rotation={[Math.PI / 2, 0, 0]} scale={[ringScale, ringScale, ringScale]}>
+        <torusGeometry args={[78, 4, 8, 32]} />
+        <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.55} />
+      </mesh>
+      <mesh position={[0, 0, 52]}>
+        <boxGeometry args={[82, 8, 18]} />
+        <meshStandardMaterial color="#d4c17d" emissive="#5b4617" emissiveIntensity={0.2} />
+      </mesh>
+      {station.archetype === "Mining Station" ? (
+        <>
+          {[-1, 1].map((side) => (
+            <group key={side} position={[side * 88, -8, 0]} rotation={[0, 0, side * 0.25]}>
+              <mesh>
+                <boxGeometry args={[72, 8, 10]} />
+                <meshStandardMaterial color="#6b7280" metalness={0.58} roughness={0.5} />
+              </mesh>
+              <mesh position={[side * 46, 0, -28]} rotation={[0, 0, Math.PI / 2]}>
+                <cylinderGeometry args={[10, 16, 26, 8]} />
+                <meshStandardMaterial color="#d8a23b" metalness={0.45} roughness={0.42} emissive="#53360b" />
+              </mesh>
+            </group>
+          ))}
+        </>
+      ) : null}
+      {station.archetype === "Research Station" ? (
+        <>
+          {[0, 1, 2].map((index) => (
+            <mesh key={index} position={[Math.cos(index * 2.1) * 84, Math.sin(index * 2.1) * 42, Math.sin(index) * 34]} rotation={[0.3, index, 0.2]}>
+              <boxGeometry args={[9, 70, 2.4]} />
+              <meshStandardMaterial color="#b8ccff" metalness={0.32} roughness={0.25} emissive="#372a77" emissiveIntensity={0.28} />
+            </mesh>
+          ))}
+        </>
+      ) : null}
+      {station.archetype === "Military Outpost" ? (
+        <>
+          {[-1, 1].map((side) => (
+            <group key={side} position={[side * 54, 42, -22]}>
+              <mesh>
+                <boxGeometry args={[20, 18, 20]} />
+                <meshStandardMaterial color="#4b5563" metalness={0.55} roughness={0.36} />
+              </mesh>
+              <mesh position={[0, 0, -18]} rotation={[Math.PI / 2, 0, 0]}>
+                <cylinderGeometry args={[3, 4, 34, 8]} />
+                <meshStandardMaterial color="#ff7b7b" emissive="#842d2d" emissiveIntensity={0.35} />
+              </mesh>
+            </group>
+          ))}
+        </>
+      ) : null}
+      {station.archetype === "Pirate Black Market" ? (
+        <>
+          <mesh position={[72, -28, 26]} rotation={[0.4, 0.2, 0.7]}>
+            <boxGeometry args={[80, 12, 18]} />
+            <meshStandardMaterial color="#462032" metalness={0.38} roughness={0.55} emissive="#260814" />
+          </mesh>
+          <mesh position={[-54, 36, -30]} rotation={[-0.2, 0.5, -0.4]}>
+            <boxGeometry args={[54, 16, 24]} />
+            <meshStandardMaterial color="#2a1c2d" metalness={0.32} roughness={0.58} emissive="#1a0719" />
+          </mesh>
+        </>
+      ) : null}
+      {station.archetype === "Trade Hub" || station.archetype === "Frontier Port" ? (
+        <>
+          {[-1, 1].map((side) => (
+            <mesh key={side} position={[side * 96, 0, 0]}>
+              <boxGeometry args={[26, 18, 80]} />
+              <meshStandardMaterial color="#788896" metalness={0.44} roughness={0.4} emissive="#172436" />
+            </mesh>
+          ))}
+        </>
+      ) : null}
+      <pointLight color={accent} intensity={0.75} distance={240} />
+    </group>
   );
 }
 
@@ -228,15 +392,40 @@ function LootCrate({ loot }: { loot: LootEntity }) {
 
 function VisualEffect({ effect }: { effect: VisualEffectEntity }) {
   const alpha = Math.max(0, effect.life / effect.maxLife);
+  const particles = useMemo(
+    () =>
+      Array.from({ length: effect.particleCount ?? (effect.kind === "explosion" ? 14 : effect.kind === "hit" ? 4 : 0) }, (_, index) => {
+        const seed = index * 12.9898 + effect.id.length * 78.233;
+        const a = Math.sin(seed) * 43758.5453;
+        const b = Math.sin(seed * 1.73) * 24634.6345;
+        const c = Math.sin(seed * 2.31) * 97531.1357;
+        const spread = effect.spread ?? effect.size;
+        return {
+          position: [
+            (a - Math.floor(a) - 0.5) * spread,
+            (b - Math.floor(b) - 0.5) * spread,
+            (c - Math.floor(c) - 0.5) * spread
+          ] as Vec3,
+          size: 1.2 + ((a * 17) % 1) * 3.2,
+          color: index % 2 === 0 ? effect.color : effect.secondaryColor ?? "#ffd166"
+        };
+      }),
+    [effect.id, effect.kind, effect.particleCount, effect.secondaryColor, effect.size, effect.spread, effect.color]
+  );
+
   if (effect.kind === "mining-beam" && effect.endPosition) {
+    const jitterA = add(effect.endPosition, [Math.sin(effect.life * 53) * 7, Math.cos(effect.life * 41) * 4, Math.sin(effect.life * 31) * 7]);
+    const jitterB = add(effect.endPosition, [Math.cos(effect.life * 47) * 5, Math.sin(effect.life * 29) * 6, Math.cos(effect.life * 37) * 5]);
     return (
-      <Line
-        points={[effect.position, effect.endPosition]}
-        color={effect.color}
-        lineWidth={3}
-        transparent
-        opacity={0.38 + alpha * 0.42}
-      />
+      <group>
+        <Line points={[effect.position, effect.endPosition]} color={effect.color} lineWidth={4} transparent opacity={0.42 + alpha * 0.48} />
+        <Line points={[effect.position, jitterA]} color={effect.secondaryColor ?? "#eaffff"} lineWidth={1.6} transparent opacity={alpha * 0.55} />
+        <Line points={[effect.position, jitterB]} color={effect.color} lineWidth={1.2} transparent opacity={alpha * 0.45} />
+        <mesh position={toThree(effect.endPosition)}>
+          <sphereGeometry args={[7 + alpha * 5, 12, 8]} />
+          <meshBasicMaterial color={effect.color} transparent opacity={0.22 + alpha * 0.38} toneMapped={false} />
+        </mesh>
+      </group>
     );
   }
   const radius = effect.kind === "explosion" ? effect.size * (1.2 - alpha * 0.55) : effect.size * (1.1 - alpha * 0.35);
@@ -247,11 +436,23 @@ function VisualEffect({ effect }: { effect: VisualEffectEntity }) {
         <meshBasicMaterial color={effect.color} transparent opacity={effect.kind === "explosion" ? alpha * 0.42 : alpha * 0.28} toneMapped={false} />
       </mesh>
       {effect.kind === "shield-hit" ? (
-        <mesh rotation={[Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[radius * 1.12, 1.4, 8, 32]} />
-          <meshBasicMaterial color={effect.color} transparent opacity={alpha * 0.72} toneMapped={false} />
-        </mesh>
+        <>
+          <mesh>
+            <sphereGeometry args={[radius * 1.24, 24, 16]} />
+            <meshBasicMaterial color={effect.color} transparent opacity={alpha * 0.12} wireframe toneMapped={false} />
+          </mesh>
+          <mesh rotation={[Math.PI / 2, 0, 0]}>
+            <torusGeometry args={[radius * 1.12, 1.4, 8, 32]} />
+            <meshBasicMaterial color={effect.color} transparent opacity={alpha * 0.72} toneMapped={false} />
+          </mesh>
+        </>
       ) : null}
+      {particles.map((particle, index) => (
+        <mesh key={index} position={toThree(scale(particle.position, 1.65 - alpha * 0.45))}>
+          <sphereGeometry args={[particle.size * (0.65 + alpha), 8, 6]} />
+          <meshBasicMaterial color={particle.color} transparent opacity={alpha * 0.74} toneMapped={false} />
+        </mesh>
+      ))}
       {effect.label ? (
         <Html center distanceFactor={9} className="effect-label" style={{ opacity: alpha }}>
           {effect.label}
