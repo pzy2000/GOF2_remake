@@ -66,6 +66,7 @@ import {
 } from "../systems/missions";
 import { deleteSave as deleteSaveSlot, getLatestSaveSlotId, readSave, readSaveSlots, writeSave } from "../systems/save";
 import { audioSystem } from "../systems/audio";
+import { getIdlePatrolDirection } from "../systems/patrol";
 import {
   getActivePrimaryWeapon,
   getActiveSecondaryWeapon,
@@ -949,14 +950,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
               .map((convoy) => ({ convoy, dist: distance(ship.position, convoy.position) }))
               .sort((a, b) => a.dist - b.dist)[0]?.convoy
           : undefined;
-      let targetPosition = player.position;
-      if (ship.role === "pirate" && convoyTarget && distance(ship.position, convoyTarget.position) < 900) targetPosition = convoyTarget.position;
-      if (ship.role === "patrol") targetPosition = pirates[0]?.position ?? player.position;
-      if (ship.role === "trader" && pirates.length > 0) targetPosition = add(ship.position, normalize(sub(ship.position, pirates[0].position)));
-      const toTarget = normalize(sub(targetPosition, ship.position));
-      const side = rightFromRotation([0, Math.atan2(toTarget[0], -toTarget[2]), 0]);
       const retreating = ship.role === "pirate" && ship.hull < ship.maxHull * 0.28;
-      const desired = retreating || ship.role === "trader" ? scale(toTarget, -1) : normalize(add(toTarget, scale(side, ship.role === "pirate" ? 0.45 : 0.12)));
+      let desired: Vec3;
+      if (ship.role === "patrol" && pirates.length === 0) {
+        desired = getIdlePatrolDirection(state.currentSystemId, ship.position);
+      } else {
+        let targetPosition = player.position;
+        if (ship.role === "pirate" && convoyTarget && distance(ship.position, convoyTarget.position) < 900) targetPosition = convoyTarget.position;
+        if (ship.role === "patrol" && pirates[0]) targetPosition = pirates[0].position;
+        if (ship.role === "trader" && pirates.length > 0) targetPosition = add(ship.position, normalize(sub(ship.position, pirates[0].position)));
+        const toTarget = normalize(sub(targetPosition, ship.position));
+        const side = rightFromRotation([0, Math.atan2(toTarget[0], -toTarget[2]), 0]);
+        desired = retreating || ship.role === "trader" ? scale(toTarget, -1) : normalize(add(toTarget, scale(side, ship.role === "pirate" ? 0.45 : 0.12)));
+      }
       const shipSpeed = ship.role === "pirate" ? loadout.speed : ship.role === "patrol" ? 118 : 105;
       const moved = { ...ship, velocity: scale(desired, shipSpeed), position: add(ship.position, scale(desired, shipSpeed * delta)) };
       const hostileToPlayer = ship.role === "pirate";
