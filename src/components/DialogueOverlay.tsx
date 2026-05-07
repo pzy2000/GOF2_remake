@@ -54,13 +54,18 @@ export function DialogueOverlay() {
 
   useEffect(() => {
     if (!line || !speaker) return undefined;
-    voiceSystem.speak(line.text, speaker.voiceHint);
+    voiceSystem.speak(line.text, speaker.voiceHint, {
+      onEnd: () => {
+        setVoiceStatus(voiceSystem.debugState);
+        advanceDialogue();
+      }
+    });
     setVoiceStatus(voiceSystem.debugState);
     return () => {
       voiceSystem.cancel();
       setVoiceStatus(voiceSystem.debugState);
     };
-  }, [line, speaker]);
+  }, [advanceDialogue, line, speaker]);
 
   if (!activeDialogue || !scene || !line || !speaker) return null;
 

@@ -31,6 +31,11 @@ type ScanKeyboardState = {
   scan?: ExplorationScanE2E;
 };
 
+type TestSpeechHarness = {
+  endCurrent: () => void;
+  endLastCanceled: () => void;
+};
+
 async function resetApp(page: Page) {
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
@@ -86,6 +91,87 @@ async function getScanKeyboardState(page: Page): Promise<ScanKeyboardState> {
   });
 }
 
+async function installSpeechSynthesisStub(page: Page) {
+  await page.addInitScript(() => {
+    type FakeUtterance = {
+      text: string;
+      lang: string;
+      pitch: number;
+      rate: number;
+      volume: number;
+      voice: SpeechSynthesisVoice | null;
+      onend: (() => void) | null;
+      onerror: (() => void) | null;
+    };
+
+    class FakeSpeechSynthesisUtterance implements FakeUtterance {
+      lang = "";
+      pitch = 1;
+      rate = 1;
+      volume = 1;
+      voice: SpeechSynthesisVoice | null = null;
+      onend: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+
+      constructor(public text: string) {}
+    }
+
+    const harness = {
+      current: undefined as FakeUtterance | undefined,
+      lastCanceled: undefined as FakeUtterance | undefined,
+      endCurrent() {
+        const utterance = this.current;
+        this.current = undefined;
+        synthesis.speaking = false;
+        utterance?.onend?.();
+      },
+      endLastCanceled() {
+        const utterance = this.lastCanceled;
+        this.lastCanceled = undefined;
+        utterance?.onend?.();
+      }
+    };
+    const synthesis = {
+      speaking: false,
+      paused: false,
+      getVoices: () => [{ lang: "en-US" }],
+      speak: (utterance: FakeUtterance) => {
+        harness.current = utterance;
+        synthesis.speaking = true;
+        synthesis.paused = false;
+      },
+      cancel: () => {
+        if (harness.current) harness.lastCanceled = harness.current;
+        harness.current = undefined;
+        synthesis.speaking = false;
+        synthesis.paused = false;
+      },
+      pause: () => {
+        synthesis.paused = true;
+      },
+      resume: () => {
+        synthesis.paused = false;
+      }
+    };
+
+    Object.defineProperty(window, "SpeechSynthesisUtterance", { value: FakeSpeechSynthesisUtterance, configurable: true });
+    Object.defineProperty(window, "speechSynthesis", { value: synthesis, configurable: true });
+    Object.defineProperty(window, "__GOF2_TEST_SPEECH__", { value: harness, configurable: true });
+  });
+}
+
+async function endCurrentVoice(page: Page) {
+  await page.evaluate(() => {
+    (window as unknown as { __GOF2_TEST_SPEECH__: TestSpeechHarness }).__GOF2_TEST_SPEECH__.endCurrent();
+  });
+}
+
+async function endLastCanceledVoice(page: Page) {
+  await page.evaluate(() => {
+    (window as unknown as { __GOF2_TEST_SPEECH__: TestSpeechHarness }).__GOF2_TEST_SPEECH__.endLastCanceled();
+  });
+}
+
 async function expectWebGlCanvasHasPixels(page: Page) {
   const canvas = page.locator(".flight-canvas canvas");
   await expect(canvas).toBeVisible();
@@ -100,6 +186,16 @@ async function dockAtStation(page: Page, stationId: string) {
     const state = window.__GOF2_E2E__!.getState() as { dockAt: (stationId: string) => void };
     state.dockAt(targetStationId);
   }, stationId);
+}
+
+async function acceptCleanCarrierMission(page: Page) {
+  await dockAtStation(page, "helion-prime");
+  await expect(page.getByRole("heading", { name: "Helion Prime Exchange" })).toBeVisible();
+  await page.getByRole("button", { name: "Mission Board" }).click();
+  const storyMission = page.getByTestId("mission-card-story-clean-carrier");
+  await expect(storyMission).toContainText("Glass Wake 01: Clean Carrier");
+  await storyMission.getByRole("button", { name: "Accept" }).click();
+  await expect(page.getByTestId("dialogue-overlay")).toContainText("Clean Carrier Briefing");
 }
 
 async function expectRouteActionInsideStationBody(page: Page) {
@@ -280,6 +376,50 @@ test.describe("browser smoke", () => {
     });
 
     await expect(page.getByText("MINING · Iron")).toBeVisible();
+  });
+
+  test("auto-advances voiced story dialogue when each line ends", async ({ page }) => {
+    await installSpeechSynthesisStub(page);
+    await resetApp(page);
+    await startNewGame(page);
+    await acceptCleanCarrierMission(page);
+
+    const dialogue = page.getByTestId("dialogue-overlay");
+    await expect(dialogue).toContainText("Captain, Helion traffic is handing you a clean sync key.");
+
+    await endCurrentVoice(page);
+    await expect(dialogue).toContainText("That is a lot of purity for one missing probe.");
+
+    await endCurrentVoice(page);
+    await expect(dialogue).toContainText("Purity is the point.");
+
+    await endCurrentVoice(page);
+    await expect(dialogue).toContainText("Advisory: a weak ghost ping is nested in the launch queue.");
+
+    await endCurrentVoice(page);
+    await expect(dialogue).toContainText("Then keep your receiver open and your mouth shut until Sera sees the key.");
+
+    await endCurrentVoice(page);
+    await expect(dialogue).toHaveCount(0);
+  });
+
+  test("does not auto-skip from canceled story dialogue speech", async ({ page }) => {
+    await installSpeechSynthesisStub(page);
+    await resetApp(page);
+    await startNewGame(page);
+    await acceptCleanCarrierMission(page);
+
+    const dialogue = page.getByTestId("dialogue-overlay");
+    await dialogue.getByRole("button", { name: "Next" }).click();
+    await expect(dialogue).toContainText("That is a lot of purity for one missing probe.");
+
+    await endLastCanceledVoice(page);
+    await expect(dialogue).toContainText("That is a lot of purity for one missing probe.");
+    await expect(dialogue).not.toContainText("Purity is the point.");
+
+    await dialogue.getByRole("button", { name: "Skip" }).click();
+    await endLastCanceledVoice(page);
+    await expect(dialogue).toHaveCount(0);
   });
 
   test("covers station trade, mission accept, jump, save, and reload", async ({ page }) => {

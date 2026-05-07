@@ -32,7 +32,7 @@ describe("browser voice system", () => {
     expect(voiceSystem.speak("Signal clear.")).toBe(false);
   });
 
-  it("speaks, pauses, resumes, cancels, and applies voice volume", async () => {
+  it("speaks, pauses, resumes, cancels, and applies boosted voice volume", async () => {
     const spoken: FakeUtterance[] = [];
     const synthesis = {
       speaking: false,
@@ -61,7 +61,7 @@ describe("browser voice system", () => {
 
     expect(voiceSystem.speak("Glass Wake confirmed.", "calm")).toBe(true);
     expect(synthesis.speak).toHaveBeenCalledOnce();
-    expect(spoken[0].volume).toBeCloseTo(0.3);
+    expect(spoken[0].volume).toBeCloseTo(0.405);
     expect(spoken[0].lang).toBe("en-US");
 
     expect(voiceSystem.pauseOrResume()).toBe("paused");
@@ -74,5 +74,64 @@ describe("browser voice system", () => {
 
     voiceSystem.applySettings({ masterVolume: 1, sfxVolume: 0.8, musicVolume: 0.4, voiceVolume: 1, muted: true });
     expect(voiceSystem.speak("Muted line.")).toBe(false);
+  });
+
+  it("fires completion only for the current utterance natural end", async () => {
+    const spoken: FakeUtterance[] = [];
+    const synthesis = {
+      speaking: false,
+      paused: false,
+      getVoices: vi.fn(() => [{ lang: "en-US" }]),
+      speak: vi.fn((utterance: FakeUtterance) => {
+        spoken.push(utterance);
+        synthesis.speaking = true;
+      }),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      cancel: vi.fn(() => {
+        synthesis.speaking = false;
+        synthesis.paused = false;
+      })
+    };
+    vi.stubGlobal("SpeechSynthesisUtterance", FakeUtterance);
+    vi.stubGlobal("window", { speechSynthesis: synthesis });
+
+    const { voiceSystem } = await freshVoice();
+    const onEnd = vi.fn();
+
+    expect(voiceSystem.speak("First line.", "firm", { onEnd })).toBe(true);
+    const first = spoken[0];
+    voiceSystem.cancel();
+    first.onend?.();
+    expect(onEnd).not.toHaveBeenCalled();
+
+    expect(voiceSystem.speak("Second line.", "firm", { onEnd })).toBe(true);
+    spoken[1].onend?.();
+    expect(onEnd).toHaveBeenCalledOnce();
+    spoken[1].onend?.();
+    expect(onEnd).toHaveBeenCalledOnce();
+  });
+
+  it("clamps boosted voice volume at the speech synthesis maximum", async () => {
+    const spoken: FakeUtterance[] = [];
+    const synthesis = {
+      speaking: false,
+      paused: false,
+      getVoices: vi.fn(() => [{ lang: "en-US" }]),
+      speak: vi.fn((utterance: FakeUtterance) => {
+        spoken.push(utterance);
+      }),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      cancel: vi.fn()
+    };
+    vi.stubGlobal("SpeechSynthesisUtterance", FakeUtterance);
+    vi.stubGlobal("window", { speechSynthesis: synthesis });
+
+    const { voiceSystem } = await freshVoice();
+    voiceSystem.applySettings({ masterVolume: 1, sfxVolume: 0.8, musicVolume: 0.4, voiceVolume: 1, muted: false });
+
+    expect(voiceSystem.speak("Louder line.")).toBe(true);
+    expect(spoken[0].volume).toBe(1);
   });
 });

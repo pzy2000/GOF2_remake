@@ -9,9 +9,14 @@ const defaultVoiceSettings: AudioSettings = {
 };
 
 type VoiceHint = "calm" | "firm" | "rough" | "bright" | "synthetic";
+type VoiceOptions = {
+  onEnd?: () => void;
+};
+
+const VOICE_VOLUME_BOOST = 1.35;
 
 function effectiveVolume(settings: AudioSettings): number {
-  return settings.muted ? 0 : Math.max(0, Math.min(1, settings.masterVolume * settings.voiceVolume));
+  return settings.muted ? 0 : Math.max(0, Math.min(1, settings.masterVolume * settings.voiceVolume * VOICE_VOLUME_BOOST));
 }
 
 function hasSpeechApi(): boolean {
@@ -50,7 +55,7 @@ class BrowserVoiceSystem {
     }
   }
 
-  speak(text: string, hint: VoiceHint = "firm"): boolean {
+  speak(text: string, hint: VoiceHint = "firm", options: VoiceOptions = {}): boolean {
     if (!hasSpeechApi() || !text.trim() || this.settings.muted || effectiveVolume(this.settings) <= 0) return false;
     this.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
@@ -61,7 +66,9 @@ class BrowserVoiceSystem {
     utterance.volume = effectiveVolume(this.settings);
     utterance.voice = window.speechSynthesis.getVoices().find((voice) => voice.lang.toLowerCase().startsWith("en")) ?? null;
     utterance.onend = () => {
-      if (this.current === utterance) this.current = undefined;
+      if (this.current !== utterance) return;
+      this.current = undefined;
+      options.onEnd?.();
     };
     utterance.onerror = () => {
       if (this.current === utterance) this.current = undefined;
