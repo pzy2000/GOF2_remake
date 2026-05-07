@@ -654,6 +654,16 @@ export interface ExplorationScanRuntime {
   distance: number;
 }
 
+export type StoryNotificationTone = "start" | "updated" | "complete" | "failed";
+
+export interface StoryNotification {
+  id: string;
+  tone: StoryNotificationTone;
+  title: string;
+  body: string;
+  expiresAt: number;
+}
+
 export interface DialogueState {
   seenSceneIds: string[];
 }
@@ -723,6 +733,7 @@ export interface RuntimeState {
   graceUntil: number;
   message: string;
   explorationScan?: ExplorationScanRuntime;
+  storyNotification?: StoryNotification;
 }
 
 export interface MarketEntry {

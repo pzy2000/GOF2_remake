@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties, PointerEvent, WheelEvent } from "react";
-import { factionNames } from "../data/world";
+import { commodityById, factionNames, glassWakeProtocol, missionTemplates } from "../data/world";
 import { planetById, stationById, systems, useGameStore } from "../state/gameStore";
 import type { GalaxyMapMode } from "../types/game";
 import { GALAXY_DISCOVERY_DISTANCE, systemDistance } from "../systems/navigation";
 import { getExplorationSignalsForSystem, getVisibleStationsForSystem, isExplorationSignalDiscovered, isExplorationSignalUnlocked, isHiddenStationRevealed } from "../systems/exploration";
+import { getStoryObjectiveSummary } from "../systems/story";
 import {
   formatTechLevel,
+  localizeCommodityName,
   localizeFactionName,
   localizePlanetName,
   localizeStationName,
@@ -33,6 +35,10 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
   const locale = useGameStore((state) => state.locale);
   const knownSystems = useGameStore((state) => state.knownSystems);
   const knownPlanetIds = useGameStore((state) => state.knownPlanetIds);
+  const activeMissions = useGameStore((state) => state.activeMissions);
+  const completedMissionIds = useGameStore((state) => state.completedMissionIds);
+  const failedMissionIds = useGameStore((state) => state.failedMissionIds);
+  const player = useGameStore((state) => state.player);
   const explorationState = useGameStore((state) => state.explorationState);
   const galaxyMapMode = useGameStore((state) => state.galaxyMapMode);
   const startJumpToStation = useGameStore((state) => state.startJumpToStation);
@@ -60,6 +66,22 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
   const selectedStationKnown = !!selectedStation && selectedPlanetKnown && (!selectedStation.hidden || isHiddenStationRevealed(selectedStation.id, explorationState));
   const selectedSameStation = !!selectedStation && selectedStation.id === currentStationId;
   const canTravel = mode !== "browse" && selectedKnown && selectedStationKnown && !selectedSameStation && !autopilot;
+  const storyObjective = getStoryObjectiveSummary({
+    arc: glassWakeProtocol,
+    missions: missionTemplates,
+    activeMissions,
+    completedMissionIds,
+    failedMissionIds,
+    currentSystemId,
+    currentStationId,
+    playerCargo: player.cargo,
+    getStationName: (stationId) => localizeStationName(stationId, locale, stationById[stationId]?.name),
+    getSystemName: (systemId) => localizeSystemName(systemId, locale, systems.find((system) => system.id === systemId)?.name),
+    getCommodityName: (commodityId) => localizeCommodityName(commodityId, locale, commodityById[commodityId]?.name)
+  });
+  const storyTargetSystemId = storyObjective.status !== "complete" ? storyObjective.targetSystemId : undefined;
+  const storyTargetStationId = storyObjective.status !== "complete" ? storyObjective.targetStationId : undefined;
+  const storyTargetSystemVisible = storyTargetSystemId && knownSystems.includes(storyTargetSystemId) ? storyTargetSystemId : undefined;
   const stars = useMemo(
     () =>
       Array.from({ length: 120 }, (_, index) => ({
@@ -178,7 +200,7 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                 return (
                   <button
                     key={system.id}
-                    className={`galaxy-system ${known ? "known" : "locked"} ${current ? "current" : ""} ${selected ? "selected" : ""}`}
+                    className={`galaxy-system ${known ? "known" : "locked"} ${current ? "current" : ""} ${selected ? "selected" : ""} ${storyTargetSystemVisible === system.id ? "story-pin" : ""}`}
                     style={{ left: point.x, top: point.y, "--system-tone": systemTone(index, system.risk) } as CSSProperties}
                     onClick={() => selectSystem(system.id)}
                     onDoubleClick={() => {
@@ -193,6 +215,7 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                     <span className="moon moon-one" />
                     <span className="moon moon-two" />
                     <span className="system-name">{known ? localizeSystemName(system.id, locale, system.name) : translateText("Unknown Signal", locale)}</span>
+                    {storyTargetSystemVisible === system.id ? <span className="story-map-pin">{translateText("Main Story", locale)}</span> : null}
                   </button>
                 );
               })}
@@ -207,23 +230,34 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                 <span>{translateText("Risk", locale)} {selectedKnown ? `${Math.round(selectedSystem.risk * 100)}%` : "--"}</span>
                 <span>{selectedCurrent ? translateText("Current", locale) : selectedKnown ? translateText("Known", locale) : translateText("Locked", locale)}</span>
               </div>
+              {storyObjective.status !== "complete" && storyTargetSystemVisible === selectedSystem.id ? (
+                <div className="story-map-brief" data-testid="story-map-brief">
+                  <span>{translateText("Main Story", locale)}</span>
+                  <b>{translateText(storyObjective.chapterLabel, locale)} · {translateText(storyObjective.title, locale)}</b>
+                  <p>{translateText(storyObjective.objectiveText, locale)}</p>
+                </div>
+              ) : null}
               {selectedKnown ? (
                 <div className="planet-list" role="list" aria-label={`${localizeSystemName(selectedSystem.id, locale, selectedSystem.name)} ${translateText("planets", locale)}`}>
                   {selectedPlanets.map((planet) => {
                     const known = knownPlanetIds.includes(planet.id);
                     const station = stationById[planet.stationId];
                     const selected = selectedStation?.id === station.id;
+                    const storyDestination = known && storyTargetStationId === station.id;
                     return (
                       <button
                         key={planet.id}
                         type="button"
-                        className={selected ? "selected" : ""}
+                        className={`${selected ? "selected" : ""} ${storyDestination ? "story-destination" : ""}`}
                         disabled={!known}
                         onClick={() => setSelectedStationId(station.id)}
                         onDoubleClick={() => executeTravel(station.id)}
                       >
                         <span>{known ? localizePlanetName(planet.id, locale, planet.name) : translateText("Unknown Beacon", locale)}</span>
-                        <small>{known ? `${translateText(planet.type, locale)} · ${localizeStationName(station.id, locale, station.name)} · ${formatTechLevel(locale, station.techLevel)}` : translateText("Local scan required", locale)}</small>
+                        <small>
+                          {known ? `${translateText(planet.type, locale)} · ${localizeStationName(station.id, locale, station.name)} · ${formatTechLevel(locale, station.techLevel)}` : translateText("Local scan required", locale)}
+                          {storyDestination ? ` · ${translateText("Main Story", locale)}` : ""}
+                        </small>
                       </button>
                     );
                   })}
@@ -231,17 +265,21 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                     const planet = planetById[station.planetId];
                     const known = !!planet && knownPlanetIds.includes(planet.id);
                     const selected = selectedStation?.id === station.id;
+                    const storyDestination = known && storyTargetStationId === station.id;
                     return (
                       <button
                         key={station.id}
                         type="button"
-                        className={`hidden-station ${selected ? "selected" : ""}`}
+                        className={`hidden-station ${selected ? "selected" : ""} ${storyDestination ? "story-destination" : ""}`}
                         disabled={!known}
                         onClick={() => setSelectedStationId(station.id)}
                         onDoubleClick={() => executeTravel(station.id)}
                       >
                         <span>{localizeStationName(station.id, locale, station.name)}</span>
-                        <small>{known && planet ? `${localizePlanetName(planet.id, locale, planet.name)} · ${hiddenStationFoundLabel(locale)} · ${formatTechLevel(locale, station.techLevel)}` : translateText("Signal masked", locale)}</small>
+                        <small>
+                          {known && planet ? `${localizePlanetName(planet.id, locale, planet.name)} · ${hiddenStationFoundLabel(locale)} · ${formatTechLevel(locale, station.techLevel)}` : translateText("Signal masked", locale)}
+                          {storyDestination ? ` · ${translateText("Main Story", locale)}` : ""}
+                        </small>
                       </button>
                     );
                   })}

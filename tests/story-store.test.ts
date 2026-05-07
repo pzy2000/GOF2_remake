@@ -67,6 +67,10 @@ describe("story mission store flow", () => {
     store.getState().acceptMission("story-clean-carrier");
     expect(store.getState().activeDialogue?.sceneId).toBe("dialogue-story-clean-carrier-accept");
     expect(store.getState().dialogueState.seenSceneIds).toContain("dialogue-story-clean-carrier-accept");
+    expect(store.getState().runtime.storyNotification).toMatchObject({
+      tone: "start",
+      title: "Glass Wake 01: Clean Carrier"
+    });
 
     store.getState().closeDialogue();
     store.setState({
@@ -76,6 +80,10 @@ describe("story mission store flow", () => {
     store.getState().completeMission("story-clean-carrier");
     expect(store.getState().activeDialogue?.sceneId).toBe("dialogue-story-clean-carrier-complete");
     expect(store.getState().dialogueState.seenSceneIds).toContain("dialogue-story-clean-carrier-complete");
+    expect(store.getState().runtime.storyNotification).toMatchObject({
+      tone: "complete",
+      title: "Glass Wake 01: Clean Carrier"
+    });
 
     store.getState().closeDialogue();
     store.setState({ activeMissions: [], completedMissionIds: [], currentSystemId: "helion-reach" });
@@ -118,6 +126,26 @@ describe("story mission store flow", () => {
 
     expect(store.getState().activeMissions[0].storyTargetDestroyedIds).toContain("glass-echo-drone");
     expect(store.getState().runtime.message).toContain("Story objective updated");
+    expect(store.getState().runtime.storyNotification).toMatchObject({
+      tone: "updated",
+      title: "Glass Wake 02: Probe in the Glass"
+    });
+  });
+
+  it("shows a failed story notification when a story deadline expires", async () => {
+    const store = await freshStore();
+    const { missionTemplates } = await import("../src/data/world");
+    const mission = missionTemplates.find((item) => item.id === "story-clean-carrier")!;
+    store.setState({ currentSystemId: "helion-reach", currentStationId: "helion-prime" });
+
+    store.getState().acceptMission("story-clean-carrier");
+    store.getState().advanceGameClock((mission.deadlineSeconds ?? 0) + 1);
+
+    expect(store.getState().failedMissionIds).toContain("story-clean-carrier");
+    expect(store.getState().runtime.storyNotification).toMatchObject({
+      tone: "failed",
+      title: "Glass Wake 01: Clean Carrier"
+    });
   });
 
   it("completes final story chapter after relay targets and salvage are done", async () => {

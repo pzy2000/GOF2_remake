@@ -8,6 +8,7 @@ import type {
   LootEntity,
   ProjectileEntity,
   RuntimeState,
+  StoryNotificationTone,
   Vec3
 } from "../types/game";
 import type { EconomyEvent, EconomyServiceStatus } from "../types/economy";
@@ -160,6 +161,16 @@ function writeStationAutoSave(state: GameStore, overrides: SavePayloadOverrides)
     hasSave: true,
     saveSlots: readSaveSlots(),
     activeSaveSlotId: "auto"
+  };
+}
+
+function createStoryNotification(tone: StoryNotificationTone, title: string, body: string, gameClock: number) {
+  return {
+    id: `story-${tone}-${Math.round(gameClock * 1000)}-${title}`,
+    tone,
+    title,
+    body,
+    expiresAt: gameClock + 5
   };
 }
 
@@ -920,6 +931,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const storyTargetMessage = destroyedStoryTargets.length > 0
       ? `${destroyedStoryTargets[destroyedStoryTargets.length - 1].name} destroyed. Story objective updated.`
       : undefined;
+    let storyNotification = state.runtime.storyNotification && state.runtime.storyNotification.expiresAt > gameClock
+      ? state.runtime.storyNotification
+      : undefined;
+    if (storyTargetMessage) {
+      const lastStoryTarget = destroyedStoryTargets[destroyedStoryTargets.length - 1];
+      const storyMission = activeMissions.find((mission) => mission.id === lastStoryTarget?.missionId);
+      if (storyMission?.storyCritical) {
+        storyNotification = createStoryNotification("updated", storyMission.title, storyTargetMessage, gameClock);
+      }
+    }
     activeMissions = activeMissions.map((mission) => {
       const convoy = runtime.convoys.find((item) => item.missionId === mission.id);
       return convoy?.arrived && mission.escort && !mission.escort.arrived ? markEscortArrived(mission) : mission;
@@ -949,6 +970,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
       });
       audioSystem.play("explosion");
       runtime.message = `${mission.title} failed: convoy destroyed.`;
+      if (mission.storyCritical) {
+        storyNotification = createStoryNotification("failed", mission.title, runtime.message, gameClock);
+      }
     }
     runtime = { ...runtime, convoys: runtime.convoys.filter((convoy) => convoy.hull > 0 && !failedMissionIds.includes(convoy.missionId)) };
     const planetDiscovery = discoverNearbyPlanets(state.currentSystemId, player.position, knownPlanetIds);
@@ -993,6 +1017,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
     });
     if (expiration.expiredMissionIds.length > 0) audioSystem.play("mission-fail");
     const missionFailedThisFrame = expiration.failedMissionIds.length > failedMissionIds.length;
+    const expiredStoryMission = expiration.expiredMissionIds
+      .map((missionId) => activeMissions.find((mission) => mission.id === missionId))
+      .find((mission) => mission?.storyCritical);
+    if (expiredStoryMission) {
+      storyNotification = createStoryNotification("failed", expiredStoryMission.title, expiration.runtime.message, gameClock);
+    }
     const explorationMessageActive = !!state.runtime.explorationScan || !!runtime.explorationScan || explorationState !== state.explorationState;
     const dialoguePatch = pendingDialogueSceneId ? dialogueOpenPatch(state, pendingDialogueSceneId) : {};
 
@@ -1019,7 +1049,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
                 ? expiration.runtime.message
               : graceActive
                 ? `Pirates are sizing you up · weapons free in ${Math.ceil(runtime.graceUntil - now)}s`
-              : expiration.runtime.message
+              : expiration.runtime.message,
+        storyNotification
       },
       gameClock,
       marketState,
@@ -1050,6 +1081,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
       gameClock
     });
     if (expiration.expiredMissionIds.length > 0) audioSystem.play("mission-fail");
+    const expiredStoryMission = expiration.expiredMissionIds
+      .map((missionId) => state.activeMissions.find((mission) => mission.id === missionId))
+      .find((mission) => mission?.storyCritical);
+    const storyNotification = expiredStoryMission
+      ? createStoryNotification("failed", expiredStoryMission.title, expiration.runtime.message, gameClock)
+      : state.runtime.storyNotification && state.runtime.storyNotification.expiresAt > gameClock
+        ? state.runtime.storyNotification
+        : undefined;
     set({
       gameClock,
       marketState: state.economyService.status === "connected" ? state.marketState : advanceMarketState(state.marketState, delta),
@@ -1057,7 +1096,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       reputation: expiration.reputation,
       activeMissions: expiration.activeMissions,
       failedMissionIds: expiration.failedMissionIds,
-      runtime: expiration.runtime
+      runtime: { ...expiration.runtime, storyNotification }
     });
   },
   cycleTarget: () => {
@@ -1407,12 +1446,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const runtime = result.mission ? addMissionRuntimeEntity(state.runtime, result.mission, state.currentSystemId) : state.runtime;
     const dialogueScene = result.ok && !generatedMarketMission ? getStoryMissionDialogueScene(mission.id, "accept") : undefined;
     const dialoguePatch = dialogueScene ? dialogueOpenPatch(state, dialogueScene.id) : {};
+    const storyNotification = result.ok && mission.storyCritical
+      ? createStoryNotification("start", mission.title, result.message, state.gameClock)
+      : runtime.storyNotification;
     if (result.ok) audioSystem.play("ui-click");
     set({
       player: result.player,
       activeMissions: result.activeMissions,
       failedMissionIds: result.ok && (mission.retryOnFailure || generatedMarketMission) ? state.failedMissionIds.filter((id) => id !== missionId) : state.failedMissionIds,
-      runtime: { ...runtime, message: result.message },
+      runtime: { ...runtime, message: result.message, storyNotification },
       ...dialoguePatch
     });
   },
@@ -1429,6 +1471,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const marketState = generatedMarketMission ? applyMarketGapMissionDelivery(state.marketState, mission) : state.marketState;
     const dialogueScene = generatedMarketMission ? undefined : getStoryMissionDialogueScene(mission.id, "complete");
     const dialoguePatch = dialogueScene ? dialogueOpenPatch(state, dialogueScene.id) : {};
+    const completeMessage = generatedMarketMission
+      ? `${mission.title} delivered. Market pressure eased. +${mission.reward} credits.`
+      : `${mission.title} complete. +${mission.reward} credits.`;
     audioSystem.play("mission-complete");
     set({
       player: result.player,
@@ -1440,9 +1485,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
         ...state.runtime,
         convoys: state.runtime.convoys.filter((convoy) => convoy.missionId !== missionId),
         salvage: state.runtime.salvage.filter((salvage) => salvage.missionId !== missionId),
-        message: generatedMarketMission
-          ? `${mission.title} delivered. Market pressure eased. +${mission.reward} credits.`
-          : `${mission.title} complete. +${mission.reward} credits.`
+        message: completeMessage,
+        storyNotification: mission.storyCritical
+          ? createStoryNotification("complete", mission.title, completeMessage, state.gameClock)
+          : state.runtime.storyNotification
       },
       ...dialoguePatch
     });

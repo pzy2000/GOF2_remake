@@ -35,7 +35,7 @@ import { GalaxyMap } from "./GalaxyMap";
 import { AtlasIcon } from "./AtlasIcon";
 import { SaveSlotsPanel } from "./SaveSlotsPanel";
 import { getCommodityIcon, getEquipmentIcon, getFactionIcon } from "../data/iconAtlas";
-import { getStoryProgress, storyStatusLabel } from "../systems/story";
+import { getStoryObjectiveSummary, getStoryProgress, storyStatusLabel } from "../systems/story";
 import { getDialogueLogEntries } from "../systems/dialogue";
 import { isExplorationSignalUnlocked } from "../systems/exploration";
 import {
@@ -776,6 +776,10 @@ function MissionBoardTab() {
 }
 
 function CaptainLogTab() {
+  const locale = useGameStore((state) => state.locale);
+  const currentSystemId = useGameStore((state) => state.currentSystemId);
+  const currentStationId = useGameStore((state) => state.currentStationId);
+  const player = useGameStore((state) => state.player);
   const activeMissions = useGameStore((state) => state.activeMissions);
   const completedMissionIds = useGameStore((state) => state.completedMissionIds);
   const failedMissionIds = useGameStore((state) => state.failedMissionIds);
@@ -785,8 +789,19 @@ function CaptainLogTab() {
   const progress = getStoryProgress(glassWakeProtocol, missionTemplates, activeMissions, completedMissionIds, failedMissionIds);
   const current = progress.current;
   const currentMission = current?.mission;
-  const currentOrigin = currentMission ? systemById[currentMission.originSystemId] : undefined;
-  const currentDestination = currentMission ? stationById[currentMission.destinationStationId] : undefined;
+  const storyObjective = getStoryObjectiveSummary({
+    arc: glassWakeProtocol,
+    missions: missionTemplates,
+    activeMissions,
+    completedMissionIds,
+    failedMissionIds,
+    currentSystemId,
+    currentStationId,
+    playerCargo: player.cargo,
+    getStationName: (stationId) => localizeStationName(stationId, locale, stationById[stationId]?.name),
+    getSystemName: (systemId) => localizeSystemName(systemId, locale, systemById[systemId]?.name),
+    getCommodityName: (commodityId) => localizeCommodityName(commodityId, locale, commodityById[commodityId]?.name)
+  });
   const completedExplorationLogs = explorationSignals.filter((signal) => explorationState.eventLogIds.includes(signal.id));
   const chainSummaries = getExplorationChainSummaries(explorationState);
   const currentFieldIntel = currentMission
@@ -808,7 +823,7 @@ function CaptainLogTab() {
         <p>{glassWakeProtocol.summary}</p>
         <div className="story-current-objective">
           <span>Current Objective</span>
-          <p>{current ? currentObjectiveText(current.status, currentMission, currentOrigin?.name, currentDestination?.name) : "Protocol complete. Glass Wake is quiet for now."}</p>
+          <p>{translateText(storyObjective.objectiveText, locale)}</p>
         </div>
         {currentFieldIntel.length > 0 ? (
           <div className="story-field-intel">
@@ -843,8 +858,8 @@ function CaptainLogTab() {
                 <b className="story-status">{storyStatusLabel(status)}</b>
               </header>
               <p>{status === "complete" ? chapter.log : locked ? "Signal masked. Complete prior protocol entries to resolve this trace." : chapter.briefing}</p>
-              {!locked ? <p className="story-field-line">Field objective: {chapter.fieldObjective}</p> : null}
-              {status === "complete" ? <p className="story-reveal-line">Reveal: {chapter.reveal}</p> : null}
+              {!locked ? <p className="story-field-line">{translateText("Field objective", locale)}: {translateText(chapter.fieldObjective, locale)}</p> : null}
+              {status === "complete" ? <p className="story-reveal-line">{translateText("Reveal", locale)}: {translateText(chapter.reveal, locale)}</p> : null}
               {mission && !locked ? (
                 <p className="story-route">
                   {`${origin?.name ?? mission.originSystemId} Mission Board -> ${destination?.name ?? mission.destinationStationId}`}
@@ -927,18 +942,6 @@ function DialogueReplayList({
       ))}
     </div>
   );
-}
-
-function currentObjectiveText(status: string, mission: typeof missionTemplates[number] | undefined, originName: string | undefined, destinationName: string | undefined): string {
-  if (!mission) return "Signal source missing from mission registry.";
-  if (status === "locked") return "Complete prior protocol entries to resolve the next trace.";
-  if (status === "active") {
-    const remaining = getStoryEncounterRemainingTargets(mission);
-    if (remaining.length > 0) return `Clear ${remaining.map((target) => target.name).join(", ")}; then report to ${destinationName ?? mission.destinationStationId}.`;
-    return mission.storyEncounter?.completionText ?? `Complete ${mission.title} and report to ${destinationName ?? mission.destinationStationId}.`;
-  }
-  if (status === "failed retry") return `Return to ${originName ?? mission.originSystemId} and retry ${mission.title}.`;
-  return `Accept ${mission.title} from the ${originName ?? mission.originSystemId} Mission Board.`;
 }
 
 function BlueprintTab() {

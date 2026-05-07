@@ -3,7 +3,8 @@ import { Html, Line, Stars, useGLTF } from "@react-three/drei";
 import { Component, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import * as THREE from "three";
-import { planetById, planets, shipById, systemById, useGameStore } from "../state/gameStore";
+import { planetById, planets, shipById, stationById, systemById, useGameStore } from "../state/gameStore";
+import { commodityById, glassWakeProtocol, missionTemplates } from "../data/world";
 import type { AsteroidEntity, ConvoyEntity, ExplorationSignalDefinition, FlightEntity, LootEntity, PlanetDefinition, ProjectileEntity, SalvageEntity, StationDefinition, Vec3, VisualEffectEntity } from "../types/game";
 import { add, forwardFromRotation, normalize, scale, sub } from "../systems/math";
 import { getOreColor } from "../systems/difficulty";
@@ -11,13 +12,16 @@ import { getJumpGatePosition } from "../systems/autopilot";
 import { getNavigationTargetCue, getNearestNavigationTarget } from "../systems/navigation";
 import type { NavigationCueTone, NavigationTarget } from "../systems/navigation";
 import { getIncompleteExplorationSignals, getVisibleStationsForSystem, isExplorationSignalDiscovered } from "../systems/exploration";
+import { getStoryObjectiveSummary } from "../systems/story";
 import {
   formatDistance,
   formatRuntimeText,
   formatTechLevel,
+  localizeCommodityName,
   localizeGenericName,
   localizePlanetName,
   localizeStationName,
+  localizeSystemName,
   translateDisplayName,
   translateText,
   type Locale
@@ -1198,6 +1202,61 @@ function WaypointMarker() {
   );
 }
 
+function StoryObjectiveMarker() {
+  const currentSystemId = useGameStore((state) => state.currentSystemId);
+  const currentStationId = useGameStore((state) => state.currentStationId);
+  const locale = useGameStore((state) => state.locale);
+  const player = useGameStore((state) => state.player);
+  const activeMissions = useGameStore((state) => state.activeMissions);
+  const completedMissionIds = useGameStore((state) => state.completedMissionIds);
+  const failedMissionIds = useGameStore((state) => state.failedMissionIds);
+  const clock = useGameStore((state) => state.runtime.clock);
+  const summary = getStoryObjectiveSummary({
+    arc: glassWakeProtocol,
+    missions: missionTemplates,
+    activeMissions,
+    completedMissionIds,
+    failedMissionIds,
+    currentSystemId,
+    currentStationId,
+    playerPosition: player.position,
+    playerCargo: player.cargo,
+    getStationName: (stationId) => localizeStationName(stationId, locale, stationById[stationId]?.name),
+    getSystemName: (systemId) => localizeSystemName(systemId, locale, systemById[systemId]?.name),
+    getCommodityName: (commodityId) => localizeCommodityName(commodityId, locale, commodityById[commodityId]?.name)
+  });
+  const stationTarget = summary.targetStationId ? stationById[summary.targetStationId] : undefined;
+  const targetPosition = summary.targetPosition ?? (stationTarget?.systemId === currentSystemId ? stationTarget.position : undefined);
+  const targetPositionSystemId = summary.targetPositionSystemId ?? summary.targetSystemId;
+  if (summary.status === "complete" || targetPositionSystemId !== currentSystemId || !targetPosition) return null;
+
+  const pulse = 0.5 + Math.sin(clock * 4.8) * 0.5;
+  const forward = forwardFromRotation(player.rotation);
+  const lineStart = add(player.position, scale(forward, 70));
+  const dist = Math.round(Math.hypot(player.position[0] - targetPosition[0], player.position[1] - targetPosition[1], player.position[2] - targetPosition[2]));
+  return (
+    <group>
+      <Line points={[lineStart, targetPosition]} color="#ff9bd5" lineWidth={2.2} transparent opacity={0.28 + pulse * 0.24} />
+      <Line points={[lineStart, targetPosition]} color="#9bffe8" lineWidth={0.9} transparent opacity={0.18 + pulse * 0.18} />
+      <group position={toThree(targetPosition)}>
+        <mesh rotation={[Math.PI / 2, 0, clock * 0.5]}>
+          <torusGeometry args={[72 + pulse * 13, 2.2, 8, 60]} />
+          <meshBasicMaterial color="#ff9bd5" transparent opacity={0.38 + pulse * 0.22} toneMapped={false} />
+        </mesh>
+        <mesh rotation={[0, Math.PI / 2, -clock * 0.34]}>
+          <torusGeometry args={[44 + pulse * 8, 1.4, 8, 48]} />
+          <meshBasicMaterial color="#9bffe8" transparent opacity={0.28 + pulse * 0.24} toneMapped={false} />
+        </mesh>
+        <pointLight color="#ff9bd5" intensity={1.2 + pulse * 1.2} distance={280} />
+        <Html center distanceFactor={11} className="story-waypoint-label">
+          <b>{translateText("Main Story", locale)}</b>
+          <span>{translateText(summary.visualCueLabel ?? summary.chapterLabel, locale)} · {formatDistance(locale, dist)}</span>
+        </Html>
+      </group>
+    </group>
+  );
+}
+
 function SceneContent({ onShipModelStatus }: { onShipModelStatus: (status: ShipModelStatus | null) => void }) {
   const runtime = useGameStore((state) => state.runtime);
   const currentSystemId = useGameStore((state) => state.currentSystemId);
@@ -1218,6 +1277,7 @@ function SceneContent({ onShipModelStatus }: { onShipModelStatus: (status: ShipM
       <WormholeTunnel />
       <TargetLock />
       <WaypointMarker />
+      <StoryObjectiveMarker />
       {runtime.enemies.map((ship) => (
         <NpcShip key={ship.id} ship={ship} />
       ))}

@@ -1,14 +1,15 @@
 import { commodities, stationById, systemById, useGameStore } from "../state/gameStore";
-import { commodityById } from "../data/world";
+import { commodityById, glassWakeProtocol, missionTemplates } from "../data/world";
 import { getOccupiedCargo } from "../systems/economy";
 import { getEquipmentEffects, hasMiningBeam } from "../systems/equipment";
-import { getMissionDeadlineRemaining, getStoryEncounterRemainingTargets } from "../systems/missions";
+import { getMissionDeadlineRemaining } from "../systems/missions";
 import { distance } from "../systems/math";
 import { getNearestNavigationTarget } from "../systems/navigation";
 import type { NavigationTarget } from "../systems/navigation";
 import { combatAiProfileLabels, getContrabandLawSummary } from "../systems/combatAi";
 import { combatLoadoutLabels } from "../systems/combatDoctrine";
 import { explorationSignalById, getEffectiveSignalScanBand } from "../systems/exploration";
+import { getStoryObjectiveSummary } from "../systems/story";
 import {
   formatCargoLabel,
   formatCommodityAmount,
@@ -56,7 +57,10 @@ export function Hud() {
   const target = useGameStore((state) => state.runtime.enemies.find((ship) => ship.id === state.targetId && ship.hull > 0 && ship.deathTimer === undefined));
   const manifest = useGameStore((state) => state.assetManifest);
   const activeMissions = useGameStore((state) => state.activeMissions);
+  const completedMissionIds = useGameStore((state) => state.completedMissionIds);
+  const failedMissionIds = useGameStore((state) => state.failedMissionIds);
   const gameClock = useGameStore((state) => state.gameClock);
+  const currentStationId = useGameStore((state) => state.currentStationId);
   const saveGame = useGameStore((state) => state.saveGame);
   const setScreen = useGameStore((state) => state.setScreen);
   const openGalaxyMap = useGameStore((state) => state.openGalaxyMap);
@@ -77,8 +81,20 @@ export function Hud() {
   const supportCount = runtime.enemies.filter((ship) => ship.supportWing && ship.hull > 0 && ship.deathTimer === undefined).length;
   const contrabandAmount = player.cargo["illegal-contraband"] ?? 0;
   const scanningPatrol = runtime.enemies.find((ship) => ship.role === "patrol" && ship.aiState === "scan" && (ship.scanProgress ?? 0) > 0);
-  const activeStoryMission = activeMissions.find((mission) => mission.storyCritical);
-  const activeStoryTargets = getStoryEncounterRemainingTargets(activeStoryMission);
+  const storyObjective = getStoryObjectiveSummary({
+    arc: glassWakeProtocol,
+    missions: missionTemplates,
+    activeMissions,
+    completedMissionIds,
+    failedMissionIds,
+    currentSystemId: currentSystem.id,
+    currentStationId,
+    playerPosition: player.position,
+    playerCargo: player.cargo,
+    getStationName: (stationId) => localizeStationName(stationId, locale, stationById[stationId]?.name),
+    getSystemName: (systemId) => localizeSystemName(systemId, locale, systemById[systemId]?.name),
+    getCommodityName: (commodityId) => localizeCommodityName(commodityId, locale, commodityById[commodityId]?.name)
+  });
   const graceRemaining = Math.max(0, Math.ceil(runtime.graceUntil - runtime.clock));
   const nearestMine = runtime.asteroids
     .filter((asteroid) => asteroid.amount > 0)
@@ -110,8 +126,15 @@ export function Hud() {
         {supportCount > 0 ? <p>{patrolSupportLabel(locale)}: {formatNumber(locale, supportCount)}</p> : null}
         {contrabandAmount > 0 ? <p>{contrabandLawLabel(locale)}: {translateText(getContrabandLawSummary(currentSystem.id), locale)}</p> : null}
         {scanningPatrol ? <p>{patrolScanLabel(locale)} {formatNumber(locale, Math.round((scanningPatrol.scanProgress ?? 0) * 100))}%</p> : null}
-        {activeStoryMission?.storyEncounter ? (
-          <p>{translateText("Main Story", locale)}: {activeStoryTargets.length > 0 ? clearTargetsLabel(activeStoryTargets.map((target) => translateDisplayName(target.name, locale)), locale) : translateText(activeStoryMission.storyEncounter.completionText, locale)}</p>
+        {storyObjective.status !== "complete" ? (
+          <div className={`story-tracker focus-${storyObjective.focus}`} data-testid="story-tracker">
+            <span>{translateText("Main Story", locale)}</span>
+            <b>{translateText(storyObjective.chapterLabel, locale)} · {translateText(storyObjective.title, locale)}</b>
+            <p>
+              {translateText(storyObjective.objectiveText, locale)}
+              {storyObjective.distanceMeters !== undefined ? ` · ${formatDistance(locale, storyObjective.distanceMeters)}` : ""}
+            </p>
+          </div>
         ) : null}
         {nearestNavigation ? (
           <p>
@@ -287,14 +310,6 @@ function patrolScanLabel(locale: Locale): string {
   if (locale === "ja") return "巡回スキャン";
   if (locale === "fr") return "Scan patrouille";
   return "Patrol scan";
-}
-
-function clearTargetsLabel(targets: string[], locale: Locale): string {
-  if (locale === "zh-CN") return `清除 ${targets.join("、")}`;
-  if (locale === "zh-TW") return `清除 ${targets.join("、")}`;
-  if (locale === "ja") return `${targets.join("、")} を排除`;
-  if (locale === "fr") return `neutraliser ${targets.join(", ")}`;
-  return `clear ${targets.join(", ")}`;
 }
 
 function nearestStationLabel(locale: Locale): string {

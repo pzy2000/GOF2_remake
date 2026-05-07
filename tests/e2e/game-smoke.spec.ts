@@ -47,7 +47,7 @@ async function startNewGame(page: Page) {
   await expect(page.getByRole("heading", { name: "GOF2 by pzy" })).toBeVisible();
   await page.getByRole("button", { name: "New Game" }).click();
   await expect(page.locator(".flight-canvas canvas")).toBeVisible();
-  await expect(page.getByText("Helion Reach")).toBeVisible();
+  await expect(page.locator(".hud-top-left")).toContainText("Helion Reach");
   await expect(page.locator(".dock-hint")).toBeVisible();
   await expect(page.locator(".station-tech-label").first()).toContainText("TECH");
 }
@@ -453,6 +453,28 @@ test.describe("browser smoke", () => {
     await dialogue.getByRole("button", { name: "Skip" }).click();
     await endLastCanceledVoice(page);
     await expect(dialogue).toHaveCount(0);
+  });
+
+  test("surfaces Glass Wake tracker, map pins, and flight waypoint", async ({ page }) => {
+    await resetApp(page);
+    await startNewGame(page);
+    await acceptCleanCarrierMission(page);
+
+    await expect(page.getByTestId("story-notification")).toContainText("Glass Wake 01: Clean Carrier");
+    await page.getByTestId("dialogue-overlay").getByRole("button", { name: "Skip" }).click();
+    await expect(page.getByTestId("dialogue-overlay")).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Launch" }).click();
+    await expect(page.getByTestId("story-tracker")).toContainText("Glass Wake 01");
+    await expect(page.getByTestId("story-tracker")).toContainText("Mirr Lattice");
+    await expect(page.locator(".story-waypoint-label")).toContainText("Main Story");
+
+    await page.keyboard.press("KeyM");
+    await expect(page.getByText("Route Planning")).toBeVisible();
+    await expect(page.locator(".galaxy-system.story-pin")).toContainText("Main Story");
+    await page.getByRole("button", { name: "Mirr Vale known" }).click();
+    await expect(page.getByTestId("story-map-brief")).toContainText("Glass Wake 01");
+    await expect(page.locator(".planet-list button.story-destination")).toContainText("Main Story");
   });
 
   test("covers station trade, mission accept, jump, save, and reload", async ({ page }) => {
