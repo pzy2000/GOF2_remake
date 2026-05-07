@@ -22,7 +22,7 @@ import { getCombatLoadout } from "../../systems/combatDoctrine";
 import { getPirateAiProfile } from "../../systems/combatAi";
 import { getPirateSpawnCount, getPirateSpawnPosition, STARTER_GRACE_SECONDS } from "../../systems/difficulty";
 import { getOccupiedCargo } from "../../systems/economy";
-import { getEffectiveShipStats } from "../../systems/equipment";
+import { getEffectiveShipStats, getStarterBlueprintIds } from "../../systems/equipment";
 import { isHiddenStationRevealed } from "../../systems/exploration";
 import { isDialogueSceneSeen, markDialogueSceneSeen } from "../../systems/dialogue";
 import { cloneMission } from "../../systems/missions";
@@ -44,6 +44,7 @@ export function createInitialPlayer(): PlayerState {
     cargo: { "basic-food": 3, "drinking-water": 2 },
     equipment: starter.equipment,
     equipmentInventory: {},
+    unlockedBlueprintIds: getStarterBlueprintIds(),
     missiles: 6,
     ownedShips: [starter.id],
     ownedShipRecords: [],

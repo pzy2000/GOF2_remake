@@ -1,4 +1,4 @@
-import { equipmentById } from "../data/equipment";
+import { blueprintByEquipmentId, blueprintDefinitions, equipmentById } from "../data/equipment";
 import { shipById, weapons } from "../data/ships";
 import type { CargoHold, EquipmentId, EquipmentInventory, EquipmentSlotType, PlayerState, ShipDefinition, ShipStats, WeaponDefinition } from "../types/game";
 
@@ -32,6 +32,33 @@ export interface EquipmentChangeResult {
   ok: boolean;
   message: string;
   player: PlayerState;
+}
+
+export interface BlueprintUnlockResult {
+  ok: boolean;
+  message: string;
+  player: PlayerState;
+}
+
+export interface EquipmentComparisonLine {
+  label: string;
+  before: string;
+  after: string;
+  tone: "positive" | "negative" | "neutral";
+}
+
+export interface EquipmentComparison {
+  equipmentId: EquipmentId;
+  mode: "installed" | "install" | "replace-preview" | "blocked";
+  canInstall: boolean;
+  installMessage: string;
+  sameSlotInstalled: EquipmentId[];
+  slotType: EquipmentSlotType;
+  slotUsage: number;
+  slotCapacity: number;
+  statLines: EquipmentComparisonLine[];
+  weaponLines: EquipmentComparisonLine[];
+  utilityLines: EquipmentComparisonLine[];
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -110,6 +137,19 @@ export function getEffectiveShipStats(baseStats: ShipStats, equipment: Equipment
   );
 }
 
+export function getStarterBlueprintIds(): EquipmentId[] {
+  return blueprintDefinitions.filter((blueprint) => blueprint.starterUnlocked).map((blueprint) => blueprint.equipmentId);
+}
+
+export function normalizeUnlockedBlueprintIds(ids: EquipmentId[] | undefined): EquipmentId[] {
+  const knownBlueprintIds = new Set(blueprintDefinitions.map((blueprint) => blueprint.equipmentId));
+  return Array.from(new Set([...getStarterBlueprintIds(), ...(ids ?? [])])).filter((id) => knownBlueprintIds.has(id));
+}
+
+export function isBlueprintUnlocked(player: PlayerState, equipmentId: EquipmentId): boolean {
+  return normalizeUnlockedBlueprintIds(player.unlockedBlueprintIds).includes(equipmentId);
+}
+
 export function normalizePlayerEquipmentStats(player: PlayerState): PlayerState {
   const baseStats = shipById[player.shipId]?.stats ?? player.stats;
   const equipment = player.equipment ?? [];
@@ -118,6 +158,7 @@ export function normalizePlayerEquipmentStats(player: PlayerState): PlayerState 
     ...player,
     equipment,
     equipmentInventory: player.equipmentInventory ?? {},
+    unlockedBlueprintIds: normalizeUnlockedBlueprintIds(player.unlockedBlueprintIds),
     ownedShips: player.ownedShips ?? [player.shipId],
     ownedShipRecords: player.ownedShipRecords ?? [],
     stats,
@@ -138,6 +179,7 @@ export function createPlayerShipLoadout(player: PlayerState, ship: ShipDefinitio
     energy: stats.energy,
     equipment: [...ship.equipment],
     equipmentInventory: player.equipmentInventory ?? {},
+    unlockedBlueprintIds: normalizeUnlockedBlueprintIds(player.unlockedBlueprintIds),
     ownedShipRecords: player.ownedShipRecords ?? []
   };
 }
@@ -171,6 +213,34 @@ export function formatCraftRequirement(cargo: CargoHold): string {
   return Object.entries(cargo)
     .map(([commodityId, amount]) => `${amount} ${commodityId.replace(/-/g, " ")}`)
     .join(", ");
+}
+
+export function canUnlockBlueprint(player: PlayerState, equipmentId: EquipmentId): { ok: boolean; message: string } {
+  const blueprint = blueprintByEquipmentId[equipmentId];
+  if (!blueprint) return { ok: false, message: "No blueprint research entry." };
+  const unlocked = normalizeUnlockedBlueprintIds(player.unlockedBlueprintIds);
+  if (unlocked.includes(equipmentId)) return { ok: false, message: "Blueprint already unlocked." };
+  const missingPrerequisites = (blueprint.prerequisiteEquipmentIds ?? []).filter((id) => !unlocked.includes(id));
+  if (missingPrerequisites.length > 0) return { ok: false, message: `Requires ${missingPrerequisites.map((id) => equipmentById[id].name).join(", ")} blueprint.` };
+  if (player.credits < blueprint.unlockCost.credits) return { ok: false, message: "Not enough credits to unlock blueprint." };
+  if (blueprint.unlockCost.cargo && !hasCraftMaterials(player.cargo, blueprint.unlockCost.cargo)) return { ok: false, message: "Missing research materials." };
+  return { ok: true, message: "Blueprint can be unlocked." };
+}
+
+export function unlockBlueprint(player: PlayerState, equipmentId: EquipmentId): BlueprintUnlockResult {
+  const availability = canUnlockBlueprint(player, equipmentId);
+  if (!availability.ok) return { ok: false, message: availability.message, player: normalizePlayerEquipmentStats(player) };
+  const blueprint = blueprintByEquipmentId[equipmentId];
+  return {
+    ok: true,
+    message: `Unlocked ${equipmentById[equipmentId].name} blueprint.`,
+    player: normalizePlayerEquipmentStats({
+      ...player,
+      credits: player.credits - blueprint.unlockCost.credits,
+      cargo: blueprint.unlockCost.cargo ? removeCargo(player.cargo, blueprint.unlockCost.cargo) : player.cargo,
+      unlockedBlueprintIds: [...normalizeUnlockedBlueprintIds(player.unlockedBlueprintIds), equipmentId]
+    })
+  };
 }
 
 export function canInstallEquipment(player: PlayerState, equipmentId: EquipmentId): { ok: boolean; message: string } {
@@ -234,4 +304,135 @@ export function hasMiningBeam(equipment: EquipmentId[]): boolean {
 
 export function getWeaponCooldown(weapon: WeaponDefinition, equipment: EquipmentId[]): number {
   return weapon.cooldown * getEquipmentEffects(equipment).weaponCooldownMultiplier;
+}
+
+function formatComparisonValue(value: number, suffix = ""): string {
+  const rounded = Math.abs(value) >= 10 ? Math.round(value).toString() : Number(value.toFixed(2)).toString();
+  return `${rounded}${suffix}`;
+}
+
+function comparisonTone(before: number, after: number, higherIsBetter = true): EquipmentComparisonLine["tone"] {
+  if (Math.abs(after - before) < 0.001) return "neutral";
+  return higherIsBetter ? (after > before ? "positive" : "negative") : after < before ? "positive" : "negative";
+}
+
+function createComparisonLine(label: string, before: number, after: number, suffix = "", higherIsBetter = true): EquipmentComparisonLine | undefined {
+  if (Math.abs(after - before) < 0.001) return undefined;
+  return {
+    label,
+    before: formatComparisonValue(before, suffix),
+    after: formatComparisonValue(after, suffix),
+    tone: comparisonTone(before, after, higherIsBetter)
+  };
+}
+
+function compactLines(lines: Array<EquipmentComparisonLine | undefined>): EquipmentComparisonLine[] {
+  return lines.filter((line): line is EquipmentComparisonLine => !!line);
+}
+
+function getProjectedEquipmentForComparison(player: PlayerState, equipmentId: EquipmentId): { equipment: EquipmentId[]; mode: EquipmentComparison["mode"] } {
+  const definition = equipmentById[equipmentId];
+  if (!definition) return { equipment: player.equipment, mode: "blocked" };
+  if (player.equipment.includes(equipmentId)) return { equipment: player.equipment, mode: "installed" };
+  if (definition.installableOn && !definition.installableOn.includes(player.shipId)) return { equipment: player.equipment, mode: "blocked" };
+  const capacity = getShipSlotCapacity(player.stats)[definition.slotType];
+  const usage = getEquipmentSlotUsage(player.equipment)[definition.slotType];
+  const size = definition.slotSize ?? 1;
+  if (usage + size <= capacity) return { equipment: [...player.equipment, equipmentId], mode: "install" };
+
+  const sameSlotInstalled = player.equipment.filter((id) => equipmentById[id]?.slotType === definition.slotType && id !== equipmentId);
+  const removed = new Set<EquipmentId>();
+  let freed = 0;
+  for (const installedId of sameSlotInstalled) {
+    removed.add(installedId);
+    freed += equipmentById[installedId]?.slotSize ?? 1;
+    if (usage - freed + size <= capacity) {
+      return { equipment: [...player.equipment.filter((id) => !removed.has(id)), equipmentId], mode: "replace-preview" };
+    }
+  }
+  return { equipment: player.equipment, mode: "blocked" };
+}
+
+function weaponLines(kind: "primary" | "secondary", currentEquipment: EquipmentId[], projectedEquipment: EquipmentId[]): EquipmentComparisonLine[] {
+  const currentWeapon = kind === "primary" ? getActivePrimaryWeapon(currentEquipment) : getActiveSecondaryWeapon(currentEquipment);
+  const projectedWeapon = kind === "primary" ? getActivePrimaryWeapon(projectedEquipment) : getActiveSecondaryWeapon(projectedEquipment);
+  if (!currentWeapon && !projectedWeapon) return [];
+  const currentEffects = getEquipmentEffects(currentEquipment);
+  const projectedEffects = getEquipmentEffects(projectedEquipment);
+  const heading = kind === "primary" ? "Primary" : "Secondary";
+  const lines: EquipmentComparisonLine[] = [];
+  if (currentWeapon?.id !== projectedWeapon?.id) {
+    lines.push({
+      label: `${heading} weapon`,
+      before: currentWeapon?.name ?? "None",
+      after: projectedWeapon?.name ?? "None",
+      tone: projectedWeapon ? "positive" : "negative"
+    });
+  }
+  if (currentWeapon && projectedWeapon) {
+    lines.push(
+      ...compactLines([
+        createComparisonLine(`${heading} damage`, currentWeapon.damage, projectedWeapon.damage),
+        createComparisonLine(`${heading} cooldown`, currentWeapon.cooldown * currentEffects.weaponCooldownMultiplier, projectedWeapon.cooldown * projectedEffects.weaponCooldownMultiplier, "s", false),
+        createComparisonLine(`${heading} range`, currentWeapon.range, projectedWeapon.range, "m"),
+        createComparisonLine(`${heading} energy`, currentWeapon.energyCost, projectedWeapon.energyCost, "", false)
+      ])
+    );
+  }
+  return lines;
+}
+
+export function getEquipmentComparison(player: PlayerState, equipmentId: EquipmentId): EquipmentComparison {
+  const definition = equipmentById[equipmentId];
+  const slotUsage = getEquipmentSlotUsage(player.equipment);
+  const slotCapacity = getShipSlotCapacity(player.stats);
+  const slotType = definition?.slotType ?? "utility";
+  const sameSlotInstalled = definition ? player.equipment.filter((id) => equipmentById[id]?.slotType === slotType && id !== equipmentId) : [];
+  const projected = getProjectedEquipmentForComparison(player, equipmentId);
+  const baseStats = shipById[player.shipId]?.stats ?? player.stats;
+  const currentStats = getEffectiveShipStats(baseStats, player.equipment);
+  const projectedStats = getEffectiveShipStats(baseStats, projected.equipment);
+  const currentEffects = getEquipmentEffects(player.equipment);
+  const projectedEffects = getEquipmentEffects(projected.equipment);
+  const installed = player.equipment.includes(equipmentId);
+  const canFit = definition ? slotUsage[slotType] + (definition.slotSize ?? 1) <= slotCapacity[slotType] : false;
+  const canInstall = !!definition && !installed && !(definition.installableOn && !definition.installableOn.includes(player.shipId)) && canFit;
+  const installMessage = !definition
+    ? "Unknown equipment."
+    : installed
+      ? "Already installed."
+      : definition.installableOn && !definition.installableOn.includes(player.shipId)
+        ? "Cannot be installed on this ship."
+        : canFit
+          ? "Fits an open slot."
+          : sameSlotInstalled.length > 0
+            ? "Slot full; comparison previews replacing same-slot equipment."
+            : "No compatible slot available.";
+
+  return {
+    equipmentId,
+    mode: projected.mode,
+    canInstall,
+    installMessage,
+    sameSlotInstalled,
+    slotType,
+    slotUsage: slotUsage[slotType],
+    slotCapacity: slotCapacity[slotType],
+    statLines: compactLines([
+      createComparisonLine("Hull", currentStats.hull, projectedStats.hull),
+      createComparisonLine("Shield", currentStats.shield, projectedStats.shield),
+      createComparisonLine("Energy", currentStats.energy, projectedStats.energy),
+      createComparisonLine("Cargo", currentStats.cargoCapacity, projectedStats.cargoCapacity)
+    ]),
+    weaponLines: [...weaponLines("primary", player.equipment, projected.equipment), ...weaponLines("secondary", player.equipment, projected.equipment)],
+    utilityLines: compactLines([
+      createComparisonLine("Boost", currentEffects.afterburnerMultiplier, projectedEffects.afterburnerMultiplier, "x"),
+      createComparisonLine("Afterburn drain", currentEffects.afterburnerEnergyDrain, projectedEffects.afterburnerEnergyDrain, "/s", false),
+      createComparisonLine("Energy regen", currentEffects.energyRegenPerSecond, projectedEffects.energyRegenPerSecond, "/s"),
+      createComparisonLine("Hull regen", currentEffects.hullRegenPerSecond, projectedEffects.hullRegenPerSecond, "/s"),
+      createComparisonLine("Loot scan", currentEffects.lootInteractionRange, projectedEffects.lootInteractionRange, "m"),
+      createComparisonLine("Mining HUD", currentEffects.miningHudRange, projectedEffects.miningHudRange, "m"),
+      createComparisonLine("Weapon cooldown", currentEffects.weaponCooldownMultiplier * 100, projectedEffects.weaponCooldownMultiplier * 100, "%", false)
+    ])
+  };
 }

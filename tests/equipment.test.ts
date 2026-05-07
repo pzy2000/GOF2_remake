@@ -3,16 +3,20 @@ import { equipmentById, shipById } from "../src/data/world";
 import {
   BASE_AFTERBURNER_ENERGY_DRAIN,
   BASE_AFTERBURNER_MULTIPLIER,
+  canUnlockBlueprint,
   getActivePrimaryWeapon,
   getActiveSecondaryWeapon,
   getEffectiveShipStats,
+  getEquipmentComparison,
   getEquipmentEffects,
   getEquipmentSlotUsage,
   getShipSlotCapacity,
   getWeaponCooldown,
   hasMiningBeam,
   installEquipmentFromInventory,
-  normalizePlayerEquipmentStats
+  isBlueprintUnlocked,
+  normalizePlayerEquipmentStats,
+  unlockBlueprint
 } from "../src/systems/equipment";
 import { createInitialMarketState } from "../src/systems/economy";
 import { createInitialDialogueState } from "../src/systems/dialogue";
@@ -193,6 +197,44 @@ describe("equipment definitions and helpers", () => {
     expect(shield.player.equipmentInventory?.["shield-booster"]).toBe(0);
     expect(shield.player.stats.shield).toBe(105);
   });
+
+  it("normalizes starter blueprints and unlocks progression nodes with prerequisites", () => {
+    const player = normalizePlayerEquipmentStats({
+      ...playerForShip(),
+      credits: 5000,
+      unlockedBlueprintIds: ["unknown-tool" as EquipmentId]
+    });
+    expect(isBlueprintUnlocked(player, "pulse-laser")).toBe(true);
+    expect(isBlueprintUnlocked(player, "plasma-cannon")).toBe(false);
+    expect(canUnlockBlueprint(player, "railgun").ok).toBe(false);
+
+    const plasma = unlockBlueprint(player, "plasma-cannon");
+    expect(plasma.ok).toBe(true);
+    expect(plasma.player.credits).toBe(4650);
+    expect(isBlueprintUnlocked(plasma.player, "plasma-cannon")).toBe(true);
+
+    const railgun = unlockBlueprint(plasma.player, "railgun");
+    expect(railgun.ok).toBe(true);
+    expect(isBlueprintUnlocked(railgun.player, "railgun")).toBe(true);
+  });
+
+  it("compares candidate equipment against current slot and ship stats", () => {
+    const player = normalizePlayerEquipmentStats({
+      ...playerForShip(),
+      equipment: ["pulse-laser", "homing-missile", "mining-beam"]
+    });
+
+    const plasma = getEquipmentComparison(player, "plasma-cannon");
+    expect(plasma.mode).toBe("replace-preview");
+    expect(plasma.canInstall).toBe(false);
+    expect(plasma.sameSlotInstalled).toContain("pulse-laser");
+    expect(plasma.weaponLines.some((line) => line.label === "Primary damage" && line.tone === "positive")).toBe(true);
+
+    const shield = getEquipmentComparison(player, "shield-booster");
+    expect(shield.mode).toBe("install");
+    expect(shield.canInstall).toBe(true);
+    expect(shield.statLines).toEqual(expect.arrayContaining([expect.objectContaining({ label: "Shield", after: "105", tone: "positive" })]));
+  });
 });
 
 describe("equipment gameplay wiring", () => {
@@ -207,13 +249,18 @@ describe("equipment gameplay wiring", () => {
     }));
 
     store.getState().craftEquipment("plasma-cannon");
+    expect(store.getState().player.equipmentInventory?.["plasma-cannon"]).toBeUndefined();
+    expect(store.getState().runtime.message).toBe("Plasma Cannon blueprint is locked.");
+
+    store.getState().unlockBlueprint("plasma-cannon");
+    store.getState().craftEquipment("plasma-cannon");
 
     const state = store.getState();
     expect(state.player.equipment).not.toContain("plasma-cannon");
     expect(state.player.equipmentInventory?.["plasma-cannon"]).toBe(1);
     expect(state.player.cargo.titanium).toBeUndefined();
     expect(state.player.cargo["energy-cells"]).toBeUndefined();
-    expect(state.player.credits).toBe(3700);
+    expect(state.player.credits).toBe(3350);
   });
 
   it("ship purchases park the old ship at PTD Home and apply the new stock loadout", async () => {

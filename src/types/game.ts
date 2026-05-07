@@ -206,6 +206,22 @@ export interface EquipmentCraftCost {
   cargo: CargoHold;
 }
 
+export type BlueprintPath = "combat" | "defense" | "exploration" | "engineering";
+
+export interface BlueprintUnlockCost {
+  credits: number;
+  cargo?: CargoHold;
+}
+
+export interface BlueprintDefinition {
+  equipmentId: EquipmentId;
+  path: BlueprintPath;
+  tier: number;
+  prerequisiteEquipmentIds?: EquipmentId[];
+  unlockCost: BlueprintUnlockCost;
+  starterUnlocked?: boolean;
+}
+
 export interface EquipmentModifiers {
   stats?: Partial<Pick<ShipStats, "hull" | "shield" | "energy" | "cargoCapacity">>;
   afterburnerMultiplier?: number;
@@ -513,6 +529,7 @@ export interface PlayerState {
   cargo: CargoHold;
   equipment: EquipmentId[];
   equipmentInventory?: EquipmentInventory;
+  unlockedBlueprintIds?: EquipmentId[];
   missiles: number;
   ownedShips: string[];
   ownedShipRecords?: OwnedShipRecord[];

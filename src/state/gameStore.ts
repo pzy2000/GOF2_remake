@@ -51,8 +51,10 @@ import {
   getWeaponCooldown,
   hasMiningBeam,
   installEquipmentFromInventory as installEquipmentFromInventoryPure,
+  isBlueprintUnlocked,
   createPlayerShipLoadout,
   uninstallEquipmentToInventory as uninstallEquipmentToInventoryPure,
+  unlockBlueprint as unlockBlueprintPure,
   addEquipmentToInventory,
   hasCraftMaterials,
   removeCargo as removeCraftCargo,
@@ -1511,6 +1513,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
       runtime: { ...state.runtime, message: `${ship.name} switched in from PTD Home.` }
     });
   },
+  unlockBlueprint: (equipmentId) => {
+    const state = get();
+    const result = unlockBlueprintPure(state.player, equipmentId);
+    if (result.ok) audioSystem.play("ui-click");
+    set({
+      player: result.player,
+      runtime: { ...state.runtime, message: result.message }
+    });
+  },
   craftEquipment: (equipmentId) => {
     const state = get();
     if (!(equipmentId in equipmentById)) {
@@ -1519,6 +1530,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
     const typedEquipmentId = equipmentId as EquipmentId;
     const equipment = equipmentById[typedEquipmentId];
+    if (!isBlueprintUnlocked(state.player, typedEquipmentId)) {
+      set({ runtime: { ...state.runtime, message: `${equipment.name} blueprint is locked.` } });
+      return;
+    }
     const station = state.currentStationId ? stationById[state.currentStationId] : undefined;
     if (station && station.techLevel < equipment.techLevel) {
       set({ runtime: { ...state.runtime, message: `Blueprint requires Tech Level ${equipment.techLevel} station.` } });

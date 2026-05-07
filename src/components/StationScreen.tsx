@@ -1,7 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent, MouseEvent as ReactMouseEvent, MutableRefObject, ReactNode } from "react";
 import { commodities, shipById, ships, stationById, systemById, useGameStore } from "../state/gameStore";
-import { commodityById, equipmentById, equipmentList, equipmentName, explorationSignals, factionNames, glassWakeProtocol, missionTemplates } from "../data/world";
+import {
+  blueprintByEquipmentId,
+  blueprintDefinitions,
+  blueprintPathLabels,
+  commodityById,
+  equipmentById,
+  equipmentList,
+  equipmentName,
+  explorationSignals,
+  factionNames,
+  glassWakeProtocol,
+  missionTemplates
+} from "../data/world";
 import { canCompleteMission, getAvailableMissionsForSystem, getMissionDeadlineRemaining, getStoryEncounterRemainingTargets } from "../systems/missions";
 import {
   canBuyCommodityAtStation,
@@ -28,12 +40,15 @@ import { getDialogueLogEntries } from "../systems/dialogue";
 import { isExplorationSignalUnlocked } from "../systems/exploration";
 import {
   canInstallEquipment,
+  canUnlockBlueprint,
+  getEquipmentComparison,
   getEquipmentSlotUsage,
   getShipSlotCapacity,
-  hasCraftMaterials
+  hasCraftMaterials,
+  isBlueprintUnlocked
 } from "../systems/equipment";
 import { getContrabandLawSummary } from "../systems/combatAi";
-import type { AssetManifest, CargoHold, CommodityId, EquipmentId, EquipmentSlotType, ExplorationSignalDefinition, ExplorationState, StationTab } from "../types/game";
+import type { AssetManifest, BlueprintPath, CargoHold, CommodityId, EquipmentId, EquipmentSlotType, ExplorationSignalDefinition, ExplorationState, StationTab } from "../types/game";
 
 const tabs: StationTab[] = ["Market", "Hangar", "Shipyard", "Mission Board", "Captain's Log", "Blueprint Workshop", "Lounge", "Galaxy Map"];
 const craftable: EquipmentId[] = equipmentList.filter((item) => !!item.craftCost).map((item) => item.id);
@@ -45,6 +60,7 @@ const equipmentSlotLabels: Record<EquipmentSlotType, string> = {
   defense: "Defense",
   engineering: "Engineering"
 };
+const blueprintPathOrder: BlueprintPath[] = ["combat", "defense", "exploration", "engineering"];
 const EQUIPMENT_POPOVER_HOVER_DELAY_MS = 2000;
 
 type EquipmentPopoverMode = "preview" | "pinned";
@@ -207,6 +223,8 @@ function EquipmentPopover({
   const slotCapacity = getShipSlotCapacity(player.stats);
   const sameSlotInstalled = player.equipment.filter((id) => equipmentById[id].slotType === equipment.slotType && id !== equipment.id);
   const canFit = slotUsage[equipment.slotType] + (equipment.slotSize ?? 1) <= slotCapacity[equipment.slotType] || player.equipment.includes(equipment.id);
+  const comparison = getEquipmentComparison(player, equipment.id);
+  const comparisonLines = [...comparison.statLines, ...comparison.weaponLines, ...comparison.utilityLines];
   return (
     <aside
       id="equipment-popover"
@@ -234,6 +252,22 @@ function EquipmentPopover({
       <p className={canFit ? "equipment-fit" : "equipment-fit warning-text"}>
         Slot {equipmentSlotLabels[equipment.slotType]} · {slotUsage[equipment.slotType]}/{slotCapacity[equipment.slotType]} used{sameSlotInstalled.length ? ` · Compare ${sameSlotInstalled.map(equipmentName).join(", ")}` : ""}
       </p>
+      <div className="equipment-comparison" data-testid="equipment-comparison">
+        <header>
+          <span>{comparison.mode === "replace-preview" ? "Replace Preview" : comparison.mode === "installed" ? "Installed Baseline" : "Install Preview"}</span>
+          <b>{comparison.installMessage}</b>
+        </header>
+        {comparisonLines.length > 0 ? (
+          comparisonLines.slice(0, 8).map((line) => (
+            <div key={`${equipment.id}-${line.label}`} className={`equipment-comparison-line ${line.tone}`}>
+              <span>{line.label}</span>
+              <b>{line.before} {"->"} {line.after}</b>
+            </div>
+          ))
+        ) : (
+          <p>No projected stat change for the current hull.</p>
+        )}
+      </div>
       <div className="equipment-stat-row">
         {equipment.displayStats.map((stat) => (
           <span key={`${equipment.id}-${stat.label}`}>
@@ -543,6 +577,17 @@ function shipCareerText(shipId: string): string {
   return careers[shipId] ?? "Career: general-purpose operations";
 }
 
+function shipBlueprintPathText(shipId: string): string {
+  const paths: Record<string, string> = {
+    "sparrow-mk1": "Recommended blueprints: Exploration Systems + starter Combat",
+    "mule-lx": "Recommended blueprints: Engineering & Trade + Exploration Systems",
+    "raptor-v": "Recommended blueprints: Combat Systems + Engineering fire-control",
+    "bastion-7": "Recommended blueprints: Defense Systems + heavy Combat",
+    "horizon-ark": "Recommended blueprints: Exploration Systems + Engineering & Trade"
+  };
+  return paths[shipId] ?? "Recommended blueprints: balanced development";
+}
+
 function ShipyardTab() {
   const player = useGameStore((state) => state.player);
   const currentStationId = useGameStore((state) => state.currentStationId);
@@ -567,6 +612,7 @@ function ShipyardTab() {
               <h3>{ship.name}</h3>
               <p>{ship.role}</p>
               <p>{shipCareerText(ship.id)}</p>
+              <p>{shipBlueprintPathText(ship.id)}</p>
               <p>Hull {ship.stats.hull} · Shield {ship.stats.shield} · Speed {ship.stats.speed} · Cargo {ship.stats.cargoCapacity}</p>
               <p>Slots {ship.stats.primarySlots}P / {ship.stats.secondarySlots}S / {ship.stats.utilitySlots}U / {ship.stats.defenseSlots}D / {ship.stats.engineeringSlots}E</p>
               <p>Stock loadout: {ship.equipment.map(equipmentName).join(", ")}</p>
@@ -872,37 +918,79 @@ function BlueprintTab() {
   const manifest = useGameStore((state) => state.assetManifest);
   const player = useGameStore((state) => state.player);
   const station = useGameStore((state) => stationById[state.currentStationId ?? "helion-prime"]);
+  const unlockBlueprint = useGameStore((state) => state.unlockBlueprint);
   const craftEquipment = useGameStore((state) => state.craftEquipment);
+  const [pathFilter, setPathFilter] = useState<BlueprintPath | "all">("all");
   const equipmentPopover = useEquipmentPopover();
+  const visibleBlueprints = blueprintDefinitions
+    .filter((blueprint) => craftable.includes(blueprint.equipmentId))
+    .filter((blueprint) => pathFilter === "all" || blueprint.path === pathFilter)
+    .sort((a, b) => a.path.localeCompare(b.path) || a.tier - b.tier || equipmentName(a.equipmentId).localeCompare(equipmentName(b.equipmentId)));
   return (
     <>
       <div className="blueprint-panel">
-        <h2>Blueprint Workshop</h2>
+        <header className="blueprint-toolbar">
+          <div>
+            <h2>Blueprint Workshop</h2>
+            <p>Research unlocks fabrication rights. Markets and NPC drops still provide physical equipment without requiring blueprints.</p>
+          </div>
+          <select value={pathFilter} onChange={(event) => setPathFilter(event.target.value as BlueprintPath | "all")} aria-label="Filter blueprint path">
+            <option value="all">All Paths</option>
+            {blueprintPathOrder.map((path) => (
+              <option key={path} value={path}>{blueprintPathLabels[path]}</option>
+            ))}
+          </select>
+        </header>
         <div className="ship-grid">
-          {craftable.map((id) => {
+          {visibleBlueprints.map((blueprint) => {
+            const id = blueprint.equipmentId;
             const equipment = equipmentById[id];
             const craftCost = equipment.craftCost;
             const inventoryCount = player.equipmentInventory?.[id] ?? 0;
             const installed = player.equipment.includes(id);
+            const blueprintUnlocked = isBlueprintUnlocked(player, id);
+            const unlockAvailability = canUnlockBlueprint(player, id);
+            const researchable = !blueprintUnlocked && unlockAvailability.ok;
             const techUnlocked = station.techLevel >= equipment.techLevel;
-            const canCraft = techUnlocked && !!craftCost && player.credits >= craftCost.credits && hasCraftMaterials(player.cargo, craftCost.cargo);
-            const missing = !techUnlocked ? `Requires Tech Level ${equipment.techLevel} station.` : craftCost ? getCraftMissingText(player, craftCost.credits, craftCost.cargo) : "No blueprint data.";
+            const canCraft = blueprintUnlocked && techUnlocked && !!craftCost && player.credits >= craftCost.credits && hasCraftMaterials(player.cargo, craftCost.cargo);
+            const blueprintStatus = canCraft ? "Craftable" : blueprintUnlocked ? "Unlocked" : researchable ? "Researchable" : "Locked";
+            const missing = !blueprintUnlocked
+              ? unlockAvailability.message
+              : !techUnlocked
+                ? `Requires Tech Level ${equipment.techLevel} station.`
+                : craftCost
+                  ? getCraftMissingText(player, craftCost.credits, craftCost.cargo)
+                  : "No blueprint data.";
             return (
               <article
-                className="ship-card equipment-card equipment-trigger"
+                className={`ship-card equipment-card blueprint-card ${blueprintStatus.toLowerCase()} equipment-trigger`}
                 key={id}
                 role="button"
                 tabIndex={0}
-                {...equipmentPopover.getTriggerProps(id, installed ? "Installed" : inventoryCount > 0 ? `Inventory x${inventoryCount}` : "Craftable")}
+                data-testid={`blueprint-card-${id}`}
+                {...equipmentPopover.getTriggerProps(id, installed ? "Installed" : inventoryCount > 0 ? `Inventory x${inventoryCount}` : blueprintStatus)}
               >
                 <AtlasIcon icon={getEquipmentIcon(id)} manifest={manifest} size={52} showTitle={false} />
+                <span className={`blueprint-status ${blueprintStatus.toLowerCase()}`}>{blueprintStatus}</span>
                 <h3>{equipmentName(id)}</h3>
-                <p>Tech {equipment.techLevel} · {equipment.category} · {equipmentSlotLabels[equipment.slotType]} slot</p>
+                <p>Tier {blueprint.tier} · {blueprintPathLabels[blueprint.path]} · Tech {equipment.techLevel}</p>
+                <p>{equipment.category} · {equipmentSlotLabels[equipment.slotType]} slot</p>
+                <p>Requires: {(blueprint.prerequisiteEquipmentIds ?? []).map(equipmentName).join(", ") || "Starter research"}</p>
+                <p>Unlock: {formatBlueprintUnlockCost(blueprint.unlockCost)}</p>
                 {craftCost ? (
-                  <p>{craftCost.credits.toLocaleString()} cr · {formatCargo(craftCost.cargo)}</p>
+                  <p>Craft: {craftCost.credits.toLocaleString()} cr · {formatCargo(craftCost.cargo)}</p>
                 ) : null}
                 <p>Installed {installed ? "yes" : "no"} · Inventory {inventoryCount}</p>
                 {missing ? <p className="warning-text">{missing}</p> : <p className="muted">Added to equipment inventory after fabrication.</p>}
+                <button
+                  disabled={!researchable}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    unlockBlueprint(id);
+                  }}
+                >
+                  {blueprintUnlocked ? "Unlocked" : "Research"}
+                </button>
                 <button
                   disabled={!canCraft}
                   onClick={(event) => {
@@ -935,6 +1023,12 @@ function getCraftMissingText(player: ReturnType<typeof useGameStore.getState>["p
     if (shortage > 0) missing.push(`${shortage} ${commodityById[id].name}`);
   }
   return missing.length > 0 ? `Missing ${missing.join(", ")}.` : "";
+}
+
+function formatBlueprintUnlockCost(cost: { credits: number; cargo?: CargoHold }): string {
+  const parts = [`${cost.credits.toLocaleString()} cr`];
+  if (cost.cargo && Object.keys(cost.cargo).length > 0) parts.push(formatCargo(cost.cargo));
+  return parts.join(" · ");
 }
 
 function LoungeTab() {

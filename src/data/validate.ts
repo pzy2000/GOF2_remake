@@ -2,7 +2,7 @@ import type { CommodityId, EquipmentId, FactionId } from "../types/game";
 import { commodities, commodityById } from "./commodities";
 import { contrabandLawBySystem } from "./contraband";
 import { dialogueScenes, dialogueSpeakers } from "./dialogues";
-import { equipmentById, equipmentList } from "./equipment";
+import { blueprintDefinitions, equipmentById, equipmentList } from "./equipment";
 import { explorationSignals } from "./exploration";
 import { factionNames } from "./factions";
 import { missionTemplates } from "./missions";
@@ -45,6 +45,7 @@ export function validateContentData(): ContentValidationResult {
   requireUnique(systems.map((item) => item.id), "system", errors);
   requireUnique(missionTemplates.map((item) => item.id), "mission", errors);
   requireUnique(equipmentList.map((item) => item.id), "equipment", errors);
+  requireUnique(blueprintDefinitions.map((item) => item.equipmentId), "blueprint", errors);
   requireUnique(explorationSignals.map((item) => item.id), "exploration signal", errors);
   requireUnique(dialogueSpeakers.map((item) => item.id), "dialogue speaker", errors);
   requireUnique(dialogueScenes.map((item) => item.id), "dialogue scene", errors);
@@ -153,6 +154,36 @@ export function validateContentData(): ContentValidationResult {
     for (const commodityId of Object.keys(equipment.craftCost?.cargo ?? {})) {
       if (!hasCommodity(commodityId)) errors.push(`Equipment ${equipment.id} craft cost references unknown cargo ${commodityId}`);
     }
+  }
+
+  const blueprintIds = new Set(blueprintDefinitions.map((blueprint) => blueprint.equipmentId));
+  const craftableEquipmentIds = equipmentList.filter((equipment) => !!equipment.craftCost).map((equipment) => equipment.id);
+  for (const equipmentId of craftableEquipmentIds) {
+    if (!blueprintIds.has(equipmentId)) errors.push(`Craftable equipment ${equipmentId} is missing a blueprint`);
+  }
+  for (const blueprint of blueprintDefinitions) {
+    if (!hasEquipment(blueprint.equipmentId)) errors.push(`Blueprint references unknown equipment ${blueprint.equipmentId}`);
+    if (blueprint.tier < 1) errors.push(`Blueprint ${blueprint.equipmentId} has invalid tier`);
+    if (blueprint.unlockCost.credits < 0) errors.push(`Blueprint ${blueprint.equipmentId} has invalid unlock credits`);
+    for (const prerequisiteId of blueprint.prerequisiteEquipmentIds ?? []) {
+      if (!blueprintIds.has(prerequisiteId)) errors.push(`Blueprint ${blueprint.equipmentId} requires unknown blueprint ${prerequisiteId}`);
+      if (prerequisiteId === blueprint.equipmentId) errors.push(`Blueprint ${blueprint.equipmentId} cannot require itself`);
+    }
+    for (const commodityId of Object.keys(blueprint.unlockCost.cargo ?? {})) {
+      if (!hasCommodity(commodityId)) errors.push(`Blueprint ${blueprint.equipmentId} unlock cost references unknown cargo ${commodityId}`);
+    }
+  }
+  for (const blueprint of blueprintDefinitions) {
+    const visiting = new Set<string>();
+    const visit = (equipmentId: string): boolean => {
+      if (visiting.has(equipmentId)) return true;
+      visiting.add(equipmentId);
+      const candidate = blueprintDefinitions.find((item) => item.equipmentId === equipmentId);
+      const cyclic = (candidate?.prerequisiteEquipmentIds ?? []).some(visit);
+      visiting.delete(equipmentId);
+      return cyclic;
+    };
+    if (visit(blueprint.equipmentId)) errors.push(`Blueprint ${blueprint.equipmentId} has a prerequisite cycle`);
   }
 
   for (const commodity of commodities) {

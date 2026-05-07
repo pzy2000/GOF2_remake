@@ -12,6 +12,7 @@ type Gof2E2EState = {
   player: {
     credits: number;
     cargo: Record<string, number | undefined>;
+    unlockedBlueprintIds?: string[];
   };
   activeMissions: Array<{ id: string }>;
 };
@@ -62,7 +63,8 @@ async function getGameState(page: Page): Promise<Gof2E2EState> {
         : undefined,
       player: {
         credits: state.player.credits,
-        cargo: { ...state.player.cargo }
+        cargo: { ...state.player.cargo },
+        unlockedBlueprintIds: [...(state.player.unlockedBlueprintIds ?? [])]
       },
       activeMissions: state.activeMissions.map((mission) => ({ id: mission.id }))
     };
@@ -300,6 +302,13 @@ test.describe("browser smoke", () => {
     await basicFoodRow.getByRole("button", { name: "Sell" }).click();
     expect((await getGameState(page)).player.cargo["basic-food"]).toBe(3);
 
+    await page.getByRole("button", { name: "Blueprint Workshop" }).click();
+    const plasmaBlueprint = page.getByTestId("blueprint-card-plasma-cannon");
+    await expect(plasmaBlueprint).toContainText("Researchable");
+    await plasmaBlueprint.getByRole("button", { name: "Research" }).click();
+    await expect(plasmaBlueprint).toContainText("Unlocked");
+    expect((await getGameState(page)).player.unlockedBlueprintIds).toContain("plasma-cannon");
+
     await page.getByRole("button", { name: "Mission Board" }).click();
     const storyMission = page.getByTestId("mission-card-story-clean-carrier");
     await expect(storyMission).toContainText("Glass Wake 01: Clean Carrier");
@@ -405,6 +414,7 @@ test.describe("browser smoke", () => {
     await expect(popover).toHaveCount(0);
 
     await expect(popoverTitle).toHaveText("Shield Matrix", { timeout: 2500 });
+    await expect(page.getByTestId("equipment-comparison")).toContainText("Install Preview");
 
     await homingMissileTrigger.hover();
     await page.waitForTimeout(500);

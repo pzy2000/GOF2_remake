@@ -89,6 +89,7 @@ describe("save system", () => {
         player: {
           ...player(),
           equipmentInventory: { "plasma-cannon": 1 },
+          unlockedBlueprintIds: ["plasma-cannon"],
           ownedShipRecords: [
             {
               shipId: "mule-lx",
@@ -121,6 +122,7 @@ describe("save system", () => {
     expect(loaded?.marketState["helion-prime"]?.["basic-food"]).toBeDefined();
     expect(loaded?.knownPlanetIds).toEqual(["helion-prime-world", "kuro-anvil"]);
     expect(loaded?.player.equipmentInventory?.["plasma-cannon"]).toBe(1);
+    expect(loaded?.player.unlockedBlueprintIds).toEqual(expect.arrayContaining(["pulse-laser", "homing-missile", "mining-beam", "scanner", "cargo-expansion", "shield-booster", "armor-plating", "plasma-cannon"]));
     expect(loaded?.player.ownedShipRecords?.[0]).toMatchObject({ shipId: "mule-lx", stationId: "ptd-home" });
     expect(loaded?.explorationState.completedSignalIds).toEqual(["quiet-signal-sundog-lattice"]);
     expect(loaded?.explorationState.revealedStationIds).toEqual(["parallax-hermitage"]);

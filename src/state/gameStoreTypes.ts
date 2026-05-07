@@ -93,6 +93,7 @@ export interface GameStore {
   repairAndRefill: () => void;
   buyShip: (shipId: string) => void;
   switchShip: (shipId: string) => void;
+  unlockBlueprint: (equipmentId: EquipmentId) => void;
   craftEquipment: (equipmentId: string) => void;
   installEquipmentFromInventory: (equipmentId: EquipmentId) => void;
   uninstallEquipmentToInventory: (equipmentId: EquipmentId) => void;

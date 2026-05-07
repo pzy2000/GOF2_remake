@@ -1049,6 +1049,54 @@ button.equipment-trigger {
   background: rgba(255, 255, 255, 0.04);
 }
 
+.equipment-comparison {
+  display: grid;
+  gap: 6px;
+  border: 1px solid rgba(128, 214, 255, 0.16);
+  border-radius: 6px;
+  background: rgba(5, 15, 29, 0.58);
+  padding: 8px;
+}
+
+.equipment-comparison header,
+.equipment-comparison-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.equipment-comparison header span {
+  color: #ffc167;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.equipment-comparison header b,
+.equipment-comparison p {
+  color: #9db7c9;
+  font-size: 0.76rem;
+}
+
+.equipment-comparison-line span {
+  color: #bcd2e4;
+  font-size: 0.78rem;
+}
+
+.equipment-comparison-line b {
+  color: #e8f4ff;
+  font-size: 0.78rem;
+  text-align: right;
+}
+
+.equipment-comparison-line.positive b {
+  color: #9bffe8;
+}
+
+.equipment-comparison-line.negative b {
+  color: #ffd69a;
+}
+
 .equipment-stat-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
@@ -1368,6 +1416,22 @@ button.equipment-trigger {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
+.blueprint-toolbar {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.blueprint-toolbar p {
+  color: #9db7c9;
+  line-height: 1.4;
+}
+
+.blueprint-toolbar select {
+  min-width: 190px;
+}
+
 .shipyard-panel .ship-grid,
 .blueprint-panel .ship-grid {
   min-height: 0;
@@ -1385,6 +1449,47 @@ button.equipment-trigger {
   padding: 14px;
   display: grid;
   gap: 10px;
+}
+
+.blueprint-card {
+  position: relative;
+}
+
+.blueprint-card.locked {
+  opacity: 0.76;
+}
+
+.blueprint-card.researchable {
+  border-color: rgba(255, 193, 103, 0.46);
+}
+
+.blueprint-card.craftable {
+  border-color: rgba(155, 255, 232, 0.46);
+}
+
+.blueprint-status {
+  justify-self: start;
+  border: 1px solid rgba(128, 214, 255, 0.24);
+  border-radius: 999px;
+  padding: 4px 8px;
+  color: #9db7c9;
+  font-size: 0.7rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.blueprint-status.researchable {
+  border-color: rgba(255, 193, 103, 0.48);
+  color: #ffd69a;
+}
+
+.blueprint-status.unlocked {
+  color: #80d6ff;
+}
+
+.blueprint-status.craftable {
+  border-color: rgba(155, 255, 232, 0.48);
+  color: #9bffe8;
 }
 
 .current-ship-card {

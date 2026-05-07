@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { commodities, contrabandLawBySystem, dialogueScenes, dialogueSpeakers, equipmentById, equipmentList, explorationSignals, glassWakeProtocol, missionTemplates, planetById, planets, ships, stationById, stations, systems } from "../src/data/world";
+import { blueprintDefinitions, commodities, contrabandLawBySystem, dialogueScenes, dialogueSpeakers, equipmentById, equipmentList, explorationSignals, glassWakeProtocol, missionTemplates, planetById, planets, ships, stationById, stations, systems } from "../src/data/world";
 import { fallbackAssetManifest } from "../src/systems/assets";
 import { createAsteroidsForSystem } from "../src/systems/asteroids";
 import { getEquipmentSlotUsage, getShipSlotCapacity } from "../src/systems/equipment";
@@ -30,6 +30,7 @@ describe("content data", () => {
     expect(idsAreUnique(stations.map((item) => item.id))).toBe(true);
     expect(idsAreUnique(systems.map((item) => item.id))).toBe(true);
     expect(idsAreUnique(missionTemplates.map((item) => item.id))).toBe(true);
+    expect(idsAreUnique(blueprintDefinitions.map((item) => item.equipmentId))).toBe(true);
     expect(idsAreUnique(explorationSignals.map((item) => item.id))).toBe(true);
     expect(idsAreUnique(dialogueSpeakers.map((item) => item.id))).toBe(true);
     expect(idsAreUnique(dialogueScenes.map((item) => item.id))).toBe(true);
@@ -204,6 +205,25 @@ describe("content data", () => {
     for (const equipment of Object.values(equipmentById)) {
       for (const commodityId of Object.keys(equipment.craftCost?.cargo ?? {})) {
         expect(commodities.some((commodity) => commodity.id === commodityId)).toBe(true);
+      }
+    }
+  });
+
+  it("defines a valid blueprint progression tree for every craftable equipment item", () => {
+    const blueprintIds = new Set(blueprintDefinitions.map((blueprint) => blueprint.equipmentId));
+    const craftableEquipment = equipmentList.filter((equipment) => !!equipment.craftCost);
+    expect(blueprintDefinitions).toHaveLength(craftableEquipment.length);
+    for (const equipment of craftableEquipment) expect(blueprintIds.has(equipment.id)).toBe(true);
+    for (const path of ["combat", "defense", "exploration", "engineering"]) {
+      const pathBlueprints = blueprintDefinitions.filter((blueprint) => blueprint.path === path);
+      expect(pathBlueprints.some((blueprint) => blueprint.starterUnlocked)).toBe(true);
+      expect(pathBlueprints.some((blueprint) => (blueprint.prerequisiteEquipmentIds ?? []).length > 0)).toBe(true);
+    }
+    for (const blueprint of blueprintDefinitions) {
+      expect(equipmentById[blueprint.equipmentId]).toBeDefined();
+      for (const prerequisiteId of blueprint.prerequisiteEquipmentIds ?? []) {
+        expect(blueprintIds.has(prerequisiteId)).toBe(true);
+        expect(prerequisiteId).not.toBe(blueprint.equipmentId);
       }
     }
   });

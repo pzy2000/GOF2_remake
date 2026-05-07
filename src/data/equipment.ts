@@ -1,4 +1,4 @@
-import type { EquipmentDefinition, EquipmentId } from "../types/game";
+import type { BlueprintDefinition, BlueprintPath, EquipmentDefinition, EquipmentId } from "../types/game";
 import { weapons } from "./ships";
 
 export const equipmentList: EquipmentDefinition[] = [
@@ -330,6 +330,38 @@ export const equipmentList: EquipmentDefinition[] = [
 export const equipmentById = Object.fromEntries(equipmentList.map((item) => [item.id, item])) as Record<
   EquipmentId,
   EquipmentDefinition
+>;
+
+export const blueprintPathLabels: Record<BlueprintPath, string> = {
+  combat: "Combat Systems",
+  defense: "Defense Systems",
+  exploration: "Exploration Systems",
+  engineering: "Engineering & Trade"
+};
+
+export const blueprintDefinitions: BlueprintDefinition[] = [
+  { equipmentId: "pulse-laser", path: "combat", tier: 1, unlockCost: { credits: 0 }, starterUnlocked: true },
+  { equipmentId: "homing-missile", path: "combat", tier: 1, unlockCost: { credits: 0 }, starterUnlocked: true },
+  { equipmentId: "plasma-cannon", path: "combat", tier: 2, prerequisiteEquipmentIds: ["pulse-laser"], unlockCost: { credits: 350 } },
+  { equipmentId: "torpedo-rack", path: "combat", tier: 3, prerequisiteEquipmentIds: ["homing-missile"], unlockCost: { credits: 800 } },
+  { equipmentId: "railgun", path: "combat", tier: 4, prerequisiteEquipmentIds: ["plasma-cannon"], unlockCost: { credits: 1400 } },
+  { equipmentId: "shield-booster", path: "defense", tier: 1, unlockCost: { credits: 0 }, starterUnlocked: true },
+  { equipmentId: "armor-plating", path: "defense", tier: 1, unlockCost: { credits: 0 }, starterUnlocked: true },
+  { equipmentId: "repair-drone", path: "defense", tier: 2, prerequisiteEquipmentIds: ["armor-plating"], unlockCost: { credits: 520 } },
+  { equipmentId: "shield-matrix", path: "defense", tier: 3, prerequisiteEquipmentIds: ["shield-booster"], unlockCost: { credits: 1200 } },
+  { equipmentId: "mining-beam", path: "exploration", tier: 1, unlockCost: { credits: 0 }, starterUnlocked: true },
+  { equipmentId: "scanner", path: "exploration", tier: 1, unlockCost: { credits: 0 }, starterUnlocked: true },
+  { equipmentId: "survey-array", path: "exploration", tier: 2, prerequisiteEquipmentIds: ["scanner"], unlockCost: { credits: 760 } },
+  { equipmentId: "cargo-expansion", path: "engineering", tier: 1, unlockCost: { credits: 0 }, starterUnlocked: true },
+  { equipmentId: "afterburner", path: "engineering", tier: 2, prerequisiteEquipmentIds: ["cargo-expansion"], unlockCost: { credits: 420 } },
+  { equipmentId: "energy-reactor", path: "engineering", tier: 2, prerequisiteEquipmentIds: ["cargo-expansion"], unlockCost: { credits: 620 } },
+  { equipmentId: "targeting-computer", path: "engineering", tier: 3, prerequisiteEquipmentIds: ["energy-reactor"], unlockCost: { credits: 900 } },
+  { equipmentId: "quantum-reactor", path: "engineering", tier: 4, prerequisiteEquipmentIds: ["energy-reactor", "targeting-computer"], unlockCost: { credits: 1800 } }
+];
+
+export const blueprintByEquipmentId = Object.fromEntries(blueprintDefinitions.map((item) => [item.equipmentId, item])) as Record<
+  EquipmentId,
+  BlueprintDefinition
 >;
 
 function titleize(id: string): string {
