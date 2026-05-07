@@ -282,9 +282,62 @@ function PlayerShip({ onModelStatus }: { onModelStatus: (status: ShipModelStatus
   );
 }
 
-function NpcShip({ ship }: { ship: FlightEntity }) {
-  const color = ship.role === "pirate" ? "#ff4e5f" : ship.role === "patrol" ? "#5dc8ff" : "#f6c96d";
+function FreighterNpcShip({ ship }: { ship: FlightEntity }) {
   const clock = useGameStore((state) => state.runtime.clock);
+  const textureUrl = useGameStore((state) => state.assetManifest.npcShipTextures.freighter);
+  const texture = useLoader(THREE.TextureLoader, textureUrl);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(2.2, 1.2);
+  texture.anisotropy = 4;
+  const direction = normalize(ship.velocity);
+  const yaw = Math.atan2(direction[0], -direction[2]);
+  const flashing = clock - ship.lastDamageAt < 0.18 || ship.deathTimer !== undefined;
+  const opacity = ship.deathTimer !== undefined ? 0.45 : 1;
+  const speed = Math.hypot(...ship.velocity);
+  const flameScale = Math.max(0.5, Math.min(1.7, speed / 100));
+  return (
+    <group position={toThree(ship.position)} rotation={[0, yaw, 0]} scale={ship.deathTimer !== undefined ? 0.86 : 1}>
+      <mesh castShadow>
+        <boxGeometry args={[30, 15, 58]} />
+        <meshStandardMaterial map={texture} color={flashing ? "#ffffff" : "#c9a86a"} metalness={0.44} roughness={0.5} emissive="#1b2b34" emissiveIntensity={flashing ? 0.7 : 0.12} transparent opacity={opacity} />
+      </mesh>
+      <mesh position={[0, 9, -18]} castShadow>
+        <boxGeometry args={[17, 8, 16]} />
+        <meshStandardMaterial color="#8fb6c8" metalness={0.35} roughness={0.34} emissive="#12384d" emissiveIntensity={0.2} transparent opacity={opacity} />
+      </mesh>
+      {[-1, 1].map((side) => (
+        <group key={side}>
+          <mesh position={[side * 27, -2, 2]} castShadow>
+            <boxGeometry args={[12, 11, 42]} />
+            <meshStandardMaterial map={texture} color="#a78455" metalness={0.38} roughness={0.58} transparent opacity={opacity} />
+          </mesh>
+          <mesh position={[side * 38, 3, -22]} rotation={[0, 0, side * 0.16]} castShadow>
+            <boxGeometry args={[22, 3.2, 15]} />
+            <meshStandardMaterial color="#d9a442" metalness={0.34} roughness={0.42} emissive="#3a2507" emissiveIntensity={0.16} transparent opacity={opacity} />
+          </mesh>
+          <mesh position={[side * 13, -5, 31]} rotation={[Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[4.4, 5.8, 7, 18]} />
+            <meshStandardMaterial color="#242b31" metalness={0.78} roughness={0.24} transparent opacity={opacity} />
+          </mesh>
+          <pointLight position={[side * 34, 4, -18]} color={side < 0 ? "#ff6b6b" : "#64e4ff"} intensity={0.32} distance={90} />
+        </group>
+      ))}
+      <mesh position={[0, -4, 35]} rotation={[Math.PI / 2, 0, 0]} scale={[1, 1, flameScale]}>
+        <coneGeometry args={[5.8, 20, 16]} />
+        <meshBasicMaterial color="#6ee7ff" transparent opacity={0.32} toneMapped={false} />
+      </mesh>
+      <Html center distanceFactor={13} className="target-label npc-label">
+        FREIGHTER · {Math.round(ship.hull)}/{ship.maxHull}
+      </Html>
+    </group>
+  );
+}
+
+function NpcShip({ ship }: { ship: FlightEntity }) {
+  const clock = useGameStore((state) => state.runtime.clock);
+  if (ship.role === "freighter") return <FreighterNpcShip ship={ship} />;
+  const color = ship.role === "pirate" ? "#ff4e5f" : ship.role === "patrol" ? "#5dc8ff" : ship.role === "smuggler" ? "#ff9b52" : ship.role === "courier" ? "#9bffe8" : ship.role === "miner" ? "#ffd166" : "#f6c96d";
   const direction = normalize(ship.velocity);
   const yaw = Math.atan2(direction[0], -direction[2]);
   const flashing = clock - ship.lastDamageAt < 0.18 || ship.deathTimer !== undefined;
@@ -295,7 +348,13 @@ function NpcShip({ ship }: { ship: FlightEntity }) {
       ? { cone: [7, 25, 3] as [number, number, number], wing: [26, 1.8, 8] as [number, number, number], offset: 6, tail: "#3a111c" }
       : ship.role === "patrol"
         ? { cone: [7.5, 23, 4] as [number, number, number], wing: [22, 2.4, 12] as [number, number, number], offset: 5, tail: "#12344b" }
-        : { cone: [9, 20, 6] as [number, number, number], wing: [28, 3.8, 15] as [number, number, number], offset: 3, tail: "#4a3820" };
+        : ship.role === "courier"
+          ? { cone: [6.5, 24, 5] as [number, number, number], wing: [34, 1.8, 8] as [number, number, number], offset: 3, tail: "#1f4a42" }
+          : ship.role === "miner"
+            ? { cone: [9.5, 18, 7] as [number, number, number], wing: [24, 4.2, 18] as [number, number, number], offset: 4, tail: "#5a4520" }
+            : ship.role === "smuggler"
+              ? { cone: [7, 23, 4] as [number, number, number], wing: [30, 2.2, 9] as [number, number, number], offset: 5, tail: "#4a2418" }
+              : { cone: [9, 20, 6] as [number, number, number], wing: [28, 3.8, 15] as [number, number, number], offset: 3, tail: "#4a3820" };
   return (
     <group position={toThree(ship.position)} rotation={[0, yaw, 0]} scale={ship.deathTimer !== undefined ? 0.82 : 1}>
       <mesh castShadow>
@@ -648,6 +707,9 @@ function StationGeometry({ station }: { station: StationDefinition }) {
         </>
       ) : null}
       <pointLight color={accent} intensity={0.75} distance={240} />
+      <Html center distanceFactor={13} className="target-label station-tech-label" position={[0, 92, 0]}>
+        TECH {station.techLevel} · {station.name}
+      </Html>
     </group>
   );
 }
@@ -681,7 +743,7 @@ function Asteroid({ asteroid }: { asteroid: AsteroidEntity }) {
 }
 
 function Projectile({ projectile }: { projectile: ProjectileEntity }) {
-  const color = projectile.kind === "missile" ? "#ffb657" : projectile.owner === "enemy" ? "#ff4c6a" : "#64e4ff";
+  const color = projectile.kind === "missile" ? "#ffb657" : projectile.owner === "enemy" ? "#ff4c6a" : projectile.owner === "npc" ? "#ffd166" : "#64e4ff";
   return (
     <mesh position={toThree(projectile.position)}>
       <sphereGeometry args={[projectile.kind === "missile" ? 4 : 2, 10, 8]} />
@@ -970,6 +1032,7 @@ function WaypointMarker() {
         <pointLight color={tone.color} intensity={cue.inRange ? 1.7 : 0.8} distance={cue.inRange ? 320 : 220} />
         <Html center distanceFactor={11} className={`waypoint-label waypoint-${cue.tone} ${cue.inRange ? "in-range" : ""}`}>
           <b>{cue.label}</b>
+          {target.kind === "station" ? <span>Tech {target.station.techLevel}</span> : null}
           <span>{cue.actionLabel} · {cue.distanceLabel}</span>
         </Html>
       </group>

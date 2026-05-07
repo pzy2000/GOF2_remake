@@ -1,6 +1,7 @@
 export type Vec3 = [number, number, number];
 
 export type OreRarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
+export type TechLevel = 1 | 2 | 3 | 4 | 5;
 
 export type SaveSlotId = "manual-1" | "manual-2" | "manual-3" | "auto";
 
@@ -122,14 +123,19 @@ export type CommodityId =
 export type EquipmentId =
   | "pulse-laser"
   | "plasma-cannon"
+  | "railgun"
   | "homing-missile"
+  | "torpedo-rack"
   | "mining-beam"
   | "shield-booster"
+  | "shield-matrix"
   | "cargo-expansion"
   | "afterburner"
   | "scanner"
+  | "survey-array"
   | "armor-plating"
   | "energy-reactor"
+  | "quantum-reactor"
   | "repair-drone"
   | "targeting-computer";
 
@@ -146,6 +152,9 @@ export interface AssetManifest {
   systemSkyboxes: Record<string, string>;
   planetTextures: Record<string, string>;
   shipModels: Record<string, string>;
+  npcShipTextures: {
+    freighter: string;
+  };
   speakerPortraits: Record<string, string>;
   asteroidTextures: string;
   factionEmblems: string;
@@ -212,6 +221,10 @@ export interface EquipmentModifiers {
 export interface EquipmentDefinition {
   id: EquipmentId;
   name: string;
+  techLevel: TechLevel;
+  marketPrice: number;
+  marketStock?: number;
+  dropWeight?: number;
   category: "Primary Weapon" | "Secondary Weapon" | "Utility" | "Defense" | "Engineering";
   role: string;
   description: string;
@@ -228,6 +241,7 @@ export interface EquipmentDefinition {
 export interface CommodityDefinition {
   id: CommodityId;
   name: string;
+  techLevel: TechLevel;
   description?: string;
   basePrice: number;
   mass: number;
@@ -255,6 +269,7 @@ export type CargoHold = Partial<Record<CommodityId, number>>;
 export interface StationDefinition {
   id: string;
   name: string;
+  techLevel: TechLevel;
   archetype: StationArchetype;
   factionId: FactionId;
   systemId: string;
@@ -422,7 +437,7 @@ export interface OwnedShipRecord {
 export interface FlightEntity {
   id: string;
   name: string;
-  role: "pirate" | "patrol" | "trader";
+  role: "pirate" | "patrol" | "trader" | "freighter" | "courier" | "miner" | "smuggler";
   factionId: FactionId;
   position: Vec3;
   velocity: Vec3;
@@ -432,11 +447,12 @@ export interface FlightEntity {
   maxShield: number;
   lastDamageAt: number;
   fireCooldown: number;
-  aiProfileId: "raider" | "interceptor" | "gunner" | "law-patrol" | "hauler" | "elite-ace";
+  aiProfileId: "raider" | "interceptor" | "gunner" | "law-patrol" | "hauler" | "freighter" | "courier" | "miner" | "smuggler" | "elite-ace";
   aiState: "patrol" | "scan" | "intercept" | "attack" | "evade" | "retreat";
   aiTargetId?: string;
   aiTimer: number;
   elite?: boolean;
+  provokedByPlayer?: boolean;
   scanProgress?: number;
   deathTimer?: number;
 }
@@ -452,14 +468,23 @@ export interface AsteroidEntity {
   hardness: number;
 }
 
-export interface LootEntity {
+interface BaseLootEntity {
   id: string;
-  commodityId: CommodityId;
   amount: number;
   position: Vec3;
   velocity: Vec3;
   rarity: OreRarity;
 }
+
+export type LootEntity =
+  | (BaseLootEntity & {
+      kind: "commodity";
+      commodityId: CommodityId;
+    })
+  | (BaseLootEntity & {
+      kind: "equipment";
+      equipmentId: EquipmentId;
+    });
 
 export interface ConvoyEntity {
   id: string;
@@ -508,7 +533,7 @@ export interface ActiveDialogueState {
 
 export interface ProjectileEntity {
   id: string;
-  owner: "player" | "enemy" | "patrol";
+  owner: "player" | "enemy" | "patrol" | "npc";
   kind: "laser" | "missile" | "mining";
   position: Vec3;
   direction: Vec3;
@@ -575,7 +600,8 @@ export interface MarketEntry {
   baselineDemand: number;
 }
 
-export type MarketState = Record<string, Partial<Record<CommodityId, MarketEntry>>>;
+export type MarketItemId = CommodityId | EquipmentId;
+export type MarketState = Record<string, Partial<Record<MarketItemId, MarketEntry>>>;
 
 export interface FlightInput {
   throttleUp: boolean;

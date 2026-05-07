@@ -49,6 +49,9 @@
     "bastion-7": "/assets/generated/ships/bastion-7.glb",
     "horizon-ark": "/assets/generated/ships/horizon-ark.glb"
   },
+  "npcShipTextures": {
+    "freighter": "/assets/generated/npc-freighter-hull.svg"
+  },
   "speakerPortraits": {
     "captain": "/assets/generated/portraits/captain.webp",
     "ship-ai": "/assets/generated/portraits/ship-ai.webp",

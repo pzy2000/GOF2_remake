@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { commodities, contrabandLawBySystem, dialogueScenes, dialogueSpeakers, equipmentById, explorationSignals, glassWakeProtocol, missionTemplates, planetById, planets, ships, stationById, stations, systems } from "../src/data/world";
+import { commodities, contrabandLawBySystem, dialogueScenes, dialogueSpeakers, equipmentById, equipmentList, explorationSignals, glassWakeProtocol, missionTemplates, planetById, planets, ships, stationById, stations, systems } from "../src/data/world";
 import { fallbackAssetManifest } from "../src/systems/assets";
 import { getEquipmentSlotUsage, getShipSlotCapacity } from "../src/systems/equipment";
 import { distance, orbitPoint } from "../src/systems/math";
@@ -46,6 +46,18 @@ describe("content data", () => {
       for (const commodity of commodities) {
         expect(market[station.id]?.[commodity.id]).toBeDefined();
       }
+      for (const equipment of equipmentList) {
+        expect(market[station.id]?.[equipment.id]).toBeDefined();
+      }
+    }
+  });
+
+  it("assigns tech levels to stations, commodities, and equipment", () => {
+    for (const station of stations) expect(station.techLevel).toBeGreaterThanOrEqual(1);
+    for (const commodity of commodities) expect(commodity.techLevel).toBeGreaterThanOrEqual(1);
+    for (const equipment of equipmentList) {
+      expect(equipment.techLevel).toBeGreaterThanOrEqual(1);
+      expect(equipment.marketPrice).toBeGreaterThan(0);
     }
   });
 

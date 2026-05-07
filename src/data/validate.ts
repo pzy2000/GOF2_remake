@@ -65,6 +65,7 @@ export function validateContentData(): ContentValidationResult {
   }
 
   for (const station of stations) {
+    if (station.techLevel < 1 || station.techLevel > 5) errors.push(`Station ${station.id} has invalid tech level`);
     if (!systemById[station.systemId]) errors.push(`Station ${station.id} references unknown system ${station.systemId}`);
     const planet = planetById[station.planetId];
     if (!planet) errors.push(`Station ${station.id} references unknown planet ${station.planetId}`);
@@ -147,9 +148,15 @@ export function validateContentData(): ContentValidationResult {
   }
 
   for (const equipment of equipmentList) {
+    if (equipment.techLevel < 1 || equipment.techLevel > 5) errors.push(`Equipment ${equipment.id} has invalid tech level`);
+    if (equipment.marketPrice <= 0) errors.push(`Equipment ${equipment.id} must have a positive market price`);
     for (const commodityId of Object.keys(equipment.craftCost?.cargo ?? {})) {
       if (!hasCommodity(commodityId)) errors.push(`Equipment ${equipment.id} craft cost references unknown cargo ${commodityId}`);
     }
+  }
+
+  for (const commodity of commodities) {
+    if (commodity.techLevel < 1 || commodity.techLevel > 5) errors.push(`Commodity ${commodity.id} has invalid tech level`);
   }
 
   for (const signal of explorationSignals) {

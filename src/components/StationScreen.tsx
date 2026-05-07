@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, FocusEvent, KeyboardEvent, MouseEvent as ReactMouseEvent, MutableRefObject, ReactNode } from "react";
 import { commodities, shipById, ships, stationById, systemById, useGameStore } from "../state/gameStore";
-import { commodityById, equipmentById, equipmentName, explorationSignals, factionNames, glassWakeProtocol, missionTemplates } from "../data/world";
+import { commodityById, equipmentById, equipmentList, equipmentName, explorationSignals, factionNames, glassWakeProtocol, missionTemplates } from "../data/world";
 import { canCompleteMission, getAvailableMissionsForSystem, getMissionDeadlineRemaining } from "../systems/missions";
 import {
   canBuyCommodityAtStation,
+  canBuyEquipmentAtStation,
   getCommodityPrice,
+  getEquipmentPrice,
   getMarketEntry,
   getMarketTag,
   getOccupiedCargo,
@@ -29,7 +31,7 @@ import { getContrabandLawSummary } from "../systems/combatAi";
 import type { AssetManifest, CargoHold, CommodityId, EquipmentId, EquipmentSlotType, StationTab } from "../types/game";
 
 const tabs: StationTab[] = ["Market", "Hangar", "Shipyard", "Mission Board", "Captain's Log", "Blueprint Workshop", "Lounge", "Galaxy Map"];
-const craftable: EquipmentId[] = ["plasma-cannon", "shield-booster", "cargo-expansion", "scanner", "targeting-computer"];
+const craftable: EquipmentId[] = equipmentList.filter((item) => !!item.craftCost).map((item) => item.id);
 const equipmentSlotOrder: EquipmentSlotType[] = ["primary", "secondary", "utility", "defense", "engineering"];
 const equipmentSlotLabels: Record<EquipmentSlotType, string> = {
   primary: "Primary",
@@ -135,8 +137,13 @@ function EquipmentPopover({
   popoverRef: MutableRefObject<HTMLElement | null>;
   onClose: () => void;
 }) {
+  const player = useGameStore((state) => state.player);
   if (!popover) return null;
   const equipment = equipmentById[popover.id];
+  const slotUsage = getEquipmentSlotUsage(player.equipment);
+  const slotCapacity = getShipSlotCapacity(player.stats);
+  const sameSlotInstalled = player.equipment.filter((id) => equipmentById[id].slotType === equipment.slotType && id !== equipment.id);
+  const canFit = slotUsage[equipment.slotType] + (equipment.slotSize ?? 1) <= slotCapacity[equipment.slotType] || player.equipment.includes(equipment.id);
   return (
     <aside
       id="equipment-popover"
@@ -151,7 +158,7 @@ function EquipmentPopover({
         <div>
           <span>{popover.status}</span>
           <h3>{equipment.name}</h3>
-          <p>{equipment.category} · {equipment.role}</p>
+          <p>Tech {equipment.techLevel} · {equipment.category} · {equipment.role}</p>
         </div>
         {popover.mode === "pinned" ? (
           <button className="equipment-popover-close" onClick={onClose} aria-label="Close equipment details">
@@ -161,6 +168,9 @@ function EquipmentPopover({
       </div>
       <p>{equipment.description}</p>
       <p className="equipment-effect">{equipment.effect}</p>
+      <p className={canFit ? "equipment-fit" : "equipment-fit warning-text"}>
+        Slot {equipmentSlotLabels[equipment.slotType]} · {slotUsage[equipment.slotType]}/{slotCapacity[equipment.slotType]} used{sameSlotInstalled.length ? ` · Compare ${sameSlotInstalled.map(equipmentName).join(", ")}` : ""}
+      </p>
       <div className="equipment-stat-row">
         {equipment.displayStats.map((stat) => (
           <span key={`${equipment.id}-${stat.label}`}>
@@ -218,7 +228,7 @@ export function StationScreen() {
           </p>
           <p className="eyebrow">{station.archetype}</p>
           <h1>{station.name}</h1>
-          <p>{factionNames[station.factionId]}</p>
+          <p>Tech Level {station.techLevel} · {factionNames[station.factionId]}</p>
         </div>
         <div className="station-actions">
           <button onClick={() => saveGame()}>Quick Save</button>
@@ -257,14 +267,20 @@ function MarketTab() {
   const activeMissions = useGameStore((state) => state.activeMissions);
   const buy = useGameStore((state) => state.buy);
   const sell = useGameStore((state) => state.sell);
-  const listed = commodities.filter((item) => isCommodityVisibleInMarket(item.id, station, player.cargo));
+  const buyEquipmentAction = useGameStore((state) => state.buyEquipment);
+  const sellEquipmentAction = useGameStore((state) => state.sellEquipment);
+  const equipmentPopover = useEquipmentPopover();
+  const listedCommodities = commodities.filter((item) => isCommodityVisibleInMarket(item.id, station, player.cargo));
+  const listedEquipment = equipmentList.filter((item) => canBuyEquipmentAtStation(item.id, station) || (player.equipmentInventory?.[item.id] ?? 0) > 0);
   const occupiedCargo = getOccupiedCargo(player.cargo, activeMissions);
   return (
-    <div className="table-panel">
+    <>
+      <div className="table-panel">
         <h2>Market</h2>
-        <p>Credits {player.credits.toLocaleString()} · Cargo {occupiedCargo}/{player.stats.cargoCapacity}</p>
+        <p>Tech Level {station.techLevel} · Credits {player.credits.toLocaleString()} · Cargo {occupiedCargo}/{player.stats.cargoCapacity}</p>
         <div className="market-list">
-          {listed.map((commodity) => {
+          <h3 className="market-section-title">Commodities</h3>
+          {listedCommodities.map((commodity) => {
             const canBuy = canBuyCommodityAtStation(commodity.id, station);
             const entry = getMarketEntry(marketState, station.id, commodity.id);
             const buyPrice = getCommodityPrice(commodity.id, station, system, reputation, "buy", entry);
@@ -275,7 +291,7 @@ function MarketTab() {
                 <AtlasIcon icon={getCommodityIcon(commodity.id)} manifest={manifest} />
                 <div>
                   <strong>{commodity.name}</strong>
-                  <span>{commodity.legal ? "Licensed" : "Restricted"} · Hold {player.cargo[commodity.id] ?? 0}</span>
+                  <span>Tech {commodity.techLevel} · {commodity.legal ? "Licensed" : "Restricted"} · Hold {player.cargo[commodity.id] ?? 0}</span>
                   {commodity.description ? <span>{commodity.description}</span> : null}
                   {commodity.id === "illegal-contraband" ? <span>Local law: {getContrabandLawSummary(system.id)}</span> : null}
                   <span>Stock {Math.floor(entry.stock)}/{entry.maxStock} · Demand {entry.demand.toFixed(2)} · {tag}</span>
@@ -292,8 +308,49 @@ function MarketTab() {
               </div>
             );
           })}
+          <h3 className="market-section-title">Equipment</h3>
+          {listedEquipment.map((equipment) => {
+            const canBuy = canBuyEquipmentAtStation(equipment.id, station);
+            const entry = getMarketEntry(marketState, station.id, equipment.id);
+            const buyPrice = getEquipmentPrice(equipment.id, station, system, reputation, "buy", entry);
+            const sellPrice = getEquipmentPrice(equipment.id, station, system, reputation, "sell", entry);
+            const inventoryCount = player.equipmentInventory?.[equipment.id] ?? 0;
+            return (
+              <div className="market-row equipment-market-row" data-testid={`market-equipment-row-${equipment.id}`} key={equipment.id}>
+                <AtlasIcon icon={getEquipmentIcon(equipment.id)} manifest={manifest} />
+                <EquipmentTrigger
+                  className="equipment-row-trigger"
+                  equipmentId={equipment.id}
+                  getTriggerProps={equipmentPopover.getTriggerProps}
+                  status={`Market · Tech ${equipment.techLevel}`}
+                >
+                  <span>
+                    <strong>{equipment.name}</strong>
+                    <small>Tech {equipment.techLevel} · {equipment.category} · Inventory {inventoryCount}</small>
+                    <small>Stock {Math.floor(entry.stock)}/{entry.maxStock} · Demand {entry.demand.toFixed(2)}</small>
+                  </span>
+                </EquipmentTrigger>
+                <b>{canBuy ? buyPrice : "—"}/{sellPrice} cr</b>
+                <button
+                  onClick={() => buyEquipmentAction(equipment.id, 1)}
+                  disabled={!canBuy || entry.stock < 1 || player.credits < buyPrice}
+                  title={!canBuy ? `Requires Tech Level ${equipment.techLevel} station` : entry.stock < 1 ? "Out of stock" : undefined}
+                >
+                  Buy
+                </button>
+                <button onClick={() => sellEquipmentAction(equipment.id, 1)} disabled={inventoryCount <= 0}>Sell</button>
+              </div>
+            );
+          })}
         </div>
-    </div>
+      </div>
+      <EquipmentPopover
+        manifest={manifest}
+        onClose={equipmentPopover.close}
+        popover={equipmentPopover.popover}
+        popoverRef={equipmentPopover.popoverRef}
+      />
+    </>
   );
 }
 
@@ -412,6 +469,17 @@ function HangarTab() {
   );
 }
 
+function shipCareerText(shipId: string): string {
+  const careers: Record<string, string> = {
+    "sparrow-mk1": "Career: scout, starter bounties, light exploration",
+    "mule-lx": "Career: trade routes, mining support, cargo contracts",
+    "raptor-v": "Career: bounty hunting, fast interception, light combat",
+    "bastion-7": "Career: heavy combat, escort duty, hostile lanes",
+    "horizon-ark": "Career: late-game exploration, hybrid trade, advanced systems"
+  };
+  return careers[shipId] ?? "Career: general-purpose operations";
+}
+
 function ShipyardTab() {
   const player = useGameStore((state) => state.player);
   const currentStationId = useGameStore((state) => state.currentStationId);
@@ -435,6 +503,7 @@ function ShipyardTab() {
             <article key={ship.id} className={`ship-card ${current ? "current-ship-card" : ""}`}>
               <h3>{ship.name}</h3>
               <p>{ship.role}</p>
+              <p>{shipCareerText(ship.id)}</p>
               <p>Hull {ship.stats.hull} · Shield {ship.stats.shield} · Speed {ship.stats.speed} · Cargo {ship.stats.cargoCapacity}</p>
               <p>Slots {ship.stats.primarySlots}P / {ship.stats.secondarySlots}S / {ship.stats.utilitySlots}U / {ship.stats.defenseSlots}D / {ship.stats.engineeringSlots}E</p>
               <p>Stock loadout: {ship.equipment.map(equipmentName).join(", ")}</p>
@@ -679,6 +748,7 @@ function currentObjectiveText(status: string, mission: typeof missionTemplates[n
 function BlueprintTab() {
   const manifest = useGameStore((state) => state.assetManifest);
   const player = useGameStore((state) => state.player);
+  const station = useGameStore((state) => stationById[state.currentStationId ?? "helion-prime"]);
   const craftEquipment = useGameStore((state) => state.craftEquipment);
   const equipmentPopover = useEquipmentPopover();
   return (
@@ -691,8 +761,9 @@ function BlueprintTab() {
             const craftCost = equipment.craftCost;
             const inventoryCount = player.equipmentInventory?.[id] ?? 0;
             const installed = player.equipment.includes(id);
-            const canCraft = !!craftCost && player.credits >= craftCost.credits && hasCraftMaterials(player.cargo, craftCost.cargo);
-            const missing = craftCost ? getCraftMissingText(player, craftCost.credits, craftCost.cargo) : "No blueprint data.";
+            const techUnlocked = station.techLevel >= equipment.techLevel;
+            const canCraft = techUnlocked && !!craftCost && player.credits >= craftCost.credits && hasCraftMaterials(player.cargo, craftCost.cargo);
+            const missing = !techUnlocked ? `Requires Tech Level ${equipment.techLevel} station.` : craftCost ? getCraftMissingText(player, craftCost.credits, craftCost.cargo) : "No blueprint data.";
             return (
               <article
                 className="ship-card equipment-card equipment-trigger"
@@ -703,7 +774,7 @@ function BlueprintTab() {
               >
                 <AtlasIcon icon={getEquipmentIcon(id)} manifest={manifest} size={52} showTitle={false} />
                 <h3>{equipmentName(id)}</h3>
-                <p>{equipment.category} · {equipmentSlotLabels[equipment.slotType]} slot</p>
+                <p>Tech {equipment.techLevel} · {equipment.category} · {equipmentSlotLabels[equipment.slotType]} slot</p>
                 {craftCost ? (
                   <p>{craftCost.credits.toLocaleString()} cr · {formatCargo(craftCost.cargo)}</p>
                 ) : null}

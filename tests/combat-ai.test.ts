@@ -46,6 +46,7 @@ describe("combat AI", () => {
       now: 12,
       graceUntil: 0,
       pirates: [pirate],
+      ships: [pirate],
       convoys: []
     });
 
@@ -65,6 +66,7 @@ describe("combat AI", () => {
       now: 10,
       graceUntil: 0,
       pirates: [pirate],
+      ships: [pirate],
       convoys: []
     });
 
@@ -83,6 +85,7 @@ describe("combat AI", () => {
       now: 10,
       graceUntil: 0,
       pirates: [],
+      ships: [patrol],
       convoys: []
     });
     expect(idle.ship.aiState).toBe("patrol");
@@ -98,13 +101,14 @@ describe("combat AI", () => {
       now: 10,
       graceUntil: 0,
       pirates: [pirate],
+      ships: [patrol, pirate],
       convoys: []
     });
     expect(intercept.ship.aiState).toBe("intercept");
     expect(intercept.ship.aiTargetId).toBe("pirate-threat");
   });
 
-  it("makes traders flee the nearest pirate", () => {
+  it("makes traders fight the nearest pirate", () => {
     const trader = entity("trader", { position: [0, 0, 0] });
     const pirate = entity("pirate", { id: "near-pirate", position: [0, 0, -100] });
     const result = resolveCombatAiStep({
@@ -117,11 +121,14 @@ describe("combat AI", () => {
       now: 10,
       graceUntil: 0,
       pirates: [pirate],
+      ships: [trader, pirate],
       convoys: []
     });
 
-    expect(result.ship.aiState).toBe("evade");
-    expect(dot(result.desiredDirection, normalize(sub(pirate.position, trader.position)))).toBeLessThan(-0.8);
+    expect(result.ship.aiState).toBe("attack");
+    expect(result.ship.aiTargetId).toBe("near-pirate");
+    expect(dot(result.desiredDirection, normalize(sub(pirate.position, trader.position)))).toBeGreaterThan(0.7);
+    expect(result.fire?.targetId).toBe("near-pirate");
   });
 
   it("uses deterministic high-risk elite pirate profiles", () => {

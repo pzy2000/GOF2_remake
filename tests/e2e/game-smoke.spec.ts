@@ -23,6 +23,7 @@ async function startNewGame(page: Page) {
   await expect(page.locator(".flight-canvas canvas")).toBeVisible();
   await expect(page.getByText("Helion Reach")).toBeVisible();
   await expect(page.locator(".dock-hint")).toBeVisible();
+  await expect(page.locator(".station-tech-label").first()).toContainText("TECH");
 }
 
 async function getGameState(page: Page): Promise<Gof2E2EState> {
@@ -146,9 +147,12 @@ test.describe("browser smoke", () => {
       state.dockAt("helion-prime");
     });
     await expect(page.getByRole("heading", { name: "Helion Prime Exchange" })).toBeVisible();
+    await expect(page.locator(".station-header")).toContainText("Tech Level 2");
 
     const basicFoodRow = page.getByTestId("market-row-basic-food");
     await expect(basicFoodRow).toContainText("Basic Food");
+    await expect(page.locator(".market-section-title", { hasText: "Equipment" })).toBeVisible();
+    await expect(page.getByTestId("market-equipment-row-pulse-laser")).toContainText("Pulse Laser");
     await basicFoodRow.getByRole("button", { name: "Buy" }).click();
     expect((await getGameState(page)).player.cargo["basic-food"]).toBe(4);
     await basicFoodRow.getByRole("button", { name: "Sell" }).click();

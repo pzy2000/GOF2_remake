@@ -52,6 +52,7 @@ function patrol(position: [number, number, number] = [0, 0, 120]): FlightEntity 
 }
 
 beforeEach(() => {
+  vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
@@ -136,6 +137,44 @@ describe("combat AI store wiring", () => {
 
     const state = store.getState();
     expect(state.runtime.destroyedPirates).toBe(1);
-    expect(state.runtime.loot[0]).toMatchObject({ commodityId: "illegal-contraband", amount: 2, rarity: "epic" });
+    expect(state.runtime.loot[0]).toMatchObject({ kind: "commodity", commodityId: "illegal-contraband", amount: 2, rarity: "epic" });
+  });
+
+  it("lets player attacks destroy civilian NPCs and drop cargo or equipment", async () => {
+    const randomSpy = vi.spyOn(Math, "random").mockReturnValue(0);
+    const store = await freshStore();
+    const freighter = store.getState().runtime.enemies.find((ship) => ship.role === "freighter");
+    expect(freighter).toBeDefined();
+
+    store.setState((state) => ({
+      targetId: freighter!.id,
+      runtime: {
+        ...state.runtime,
+        enemies: state.runtime.enemies.map((ship) => (ship.id === freighter!.id ? { ...ship, position: [0, 0, 0] } : { ...ship, position: [900, 0, 900] })),
+        projectiles: [
+          {
+            id: "test-freighter-shot",
+            owner: "player",
+            kind: "laser",
+            position: [0, 0, 0],
+            direction: [0, 0, 0],
+            speed: 0,
+            damage: 999,
+            life: 1,
+            targetId: freighter!.id
+          }
+        ],
+        loot: []
+      }
+    }));
+
+    store.getState().tick(0.05);
+
+    const state = store.getState();
+    expect(state.runtime.loot.some((loot) => loot.kind === "commodity")).toBe(true);
+    expect(state.runtime.loot.some((loot) => loot.kind === "equipment")).toBe(true);
+    expect(state.reputation.factions["free-belt-union"]).toBeLessThan(4);
+    expect(state.runtime.enemies.find((ship) => ship.role === "patrol")?.aiTargetId).toBe("player");
+    randomSpy.mockRestore();
   });
 });

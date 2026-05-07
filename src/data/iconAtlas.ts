@@ -65,6 +65,14 @@ const commodityFallbacks: Partial<Record<CommodityId, number>> = {
   "illegal-contraband": 15
 };
 
+const equipmentFallbacks: Partial<Record<EquipmentId, number>> = {
+  railgun: 1,
+  "torpedo-rack": 2,
+  "shield-matrix": 4,
+  "survey-array": 7,
+  "quantum-reactor": 9
+};
+
 function titleize(id: string): string {
   return id
     .split("-")
@@ -95,10 +103,11 @@ export function getCommodityIcon(id: CommodityId | string): AtlasIconDefinition 
 }
 
 export function getEquipmentIcon(id: EquipmentId | string): AtlasIconDefinition {
-  const orderedIndex = equipmentOrder.indexOf(id as EquipmentId);
+  const equipmentId = id as EquipmentId;
+  const orderedIndex = equipmentOrder.indexOf(equipmentId);
   return {
     atlas: "equipment",
-    index: orderedIndex >= 0 ? orderedIndex : 7,
+    index: orderedIndex >= 0 ? orderedIndex : equipmentFallbacks[equipmentId] ?? 7,
     columns: 4,
     rows: 3,
     label: titleize(id)

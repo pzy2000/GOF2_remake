@@ -269,6 +269,16 @@ h3 {
   color: #d7fff7;
 }
 
+.station-tech-label {
+  border-color: rgba(116, 224, 255, 0.44);
+  color: #dff6ff;
+}
+
+.npc-label {
+  border-color: rgba(255, 209, 102, 0.5);
+  color: #fff2c5;
+}
+
 .waypoint-label {
   min-width: 126px;
   padding: 6px 8px;
@@ -997,6 +1007,13 @@ button.equipment-trigger {
   color: #e8f4ff;
 }
 
+.equipment-fit {
+  border: 1px solid rgba(128, 214, 255, 0.16);
+  border-radius: 6px;
+  padding: 8px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
 .equipment-stat-row {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
@@ -1184,6 +1201,14 @@ button.equipment-trigger {
   padding-right: 4px;
 }
 
+.market-section-title {
+  margin: 12px 0 2px;
+  color: #e8f4ff;
+  font-size: 0.84rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .market-row {
   display: grid;
   grid-template-columns: 46px 1fr 110px 72px 72px;
@@ -1196,6 +1221,18 @@ button.equipment-trigger {
 .market-row div {
   display: grid;
   gap: 2px;
+}
+
+.equipment-market-row {
+  grid-template-columns: 46px minmax(0, 1fr) 110px 72px 72px;
+}
+
+.equipment-market-row .equipment-row-trigger {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
 }
 
 .ship-grid,

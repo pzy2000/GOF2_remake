@@ -1,14 +1,17 @@
-import { commodities, commodityById, stations, systemById } from "../data/world";
+import { commodities, commodityById, equipmentById, equipmentList, stations, systemById } from "../data/world";
 import type {
   CargoHold,
   CommodityId,
+  EquipmentId,
   MarketEntry,
+  MarketItemId,
   MarketState,
   MissionDefinition,
   PlayerState,
   StarSystemDefinition,
   StationDefinition,
-  StationArchetype
+  StationArchetype,
+  EquipmentSlotType
 } from "../types/game";
 
 const archetypeBias: Record<StationArchetype, Partial<Record<CommodityId, number>>> = {
@@ -59,11 +62,30 @@ const archetypeBias: Record<StationArchetype, Partial<Record<CommodityId, number
 const oreMarketArchetypes = new Set<StationArchetype>(["Mining Station", "Pirate Black Market"]);
 const restrictedMarketArchetypes = new Set<StationArchetype>(["Pirate Black Market", "Frontier Port"]);
 
+const equipmentSlotBias: Record<StationArchetype, Partial<Record<EquipmentSlotType, number>>> = {
+  "Trade Hub": { engineering: 0.96, utility: 1.02 },
+  "Mining Station": { utility: 0.88, engineering: 0.92, primary: 1.08 },
+  "Research Station": { utility: 0.9, engineering: 0.9, defense: 1.06 },
+  "Military Outpost": { primary: 0.88, secondary: 0.9, defense: 0.92 },
+  "Frontier Port": { engineering: 0.96, utility: 0.98, primary: 1.08 },
+  "Pirate Black Market": { primary: 0.94, secondary: 0.88, utility: 1.04 }
+};
+
+function isEquipmentMarketItem(itemId: MarketItemId): itemId is EquipmentId {
+  return itemId in equipmentById;
+}
+
 export function canBuyCommodityAtStation(commodityId: CommodityId, station: StationDefinition): boolean {
   const commodity = commodityById[commodityId];
+  if (station.techLevel < commodity.techLevel) return false;
   if (commodity.category === "ore") return oreMarketArchetypes.has(station.archetype);
   if (!commodity.legal) return restrictedMarketArchetypes.has(station.archetype);
   return true;
+}
+
+export function canBuyEquipmentAtStation(equipmentId: EquipmentId, station: StationDefinition): boolean {
+  const equipment = equipmentById[equipmentId];
+  return !!equipment && station.techLevel >= equipment.techLevel;
 }
 
 export function isCommodityVisibleInMarket(
@@ -71,12 +93,7 @@ export function isCommodityVisibleInMarket(
   station: StationDefinition,
   cargo: CargoHold
 ): boolean {
-  const commodity = commodityById[commodityId];
-  return (
-    canBuyCommodityAtStation(commodityId, station) ||
-    (cargo[commodityId] ?? 0) > 0 ||
-    commodity.category !== "ore"
-  );
+  return canBuyCommodityAtStation(commodityId, station) || (cargo[commodityId] ?? 0) > 0;
 }
 
 export function getCargoUsed(cargo: CargoHold): number {
@@ -119,11 +136,30 @@ function entryForStationCommodity(station: StationDefinition, commodityId: Commo
   };
 }
 
+function entryForStationEquipment(station: StationDefinition, equipmentId: EquipmentId): MarketEntry {
+  const equipment = equipmentById[equipmentId];
+  const canBuy = canBuyEquipmentAtStation(equipmentId, station);
+  const baseStock = equipment.marketStock ?? 2;
+  const archetypeMultiplier = equipmentSlotBias[station.archetype][equipment.slotType] ?? 1;
+  const stockRatio = !canBuy ? 0 : Math.min(0.9, Math.max(0.28, 0.58 / archetypeMultiplier));
+  const demand = Math.max(0.7, Math.min(1.55, archetypeMultiplier + equipment.techLevel * 0.04));
+  return {
+    stock: Math.round(baseStock * stockRatio),
+    maxStock: baseStock,
+    baselineStock: Math.round(baseStock * stockRatio),
+    demand,
+    baselineDemand: demand
+  };
+}
+
 export function createInitialMarketState(): MarketState {
   return Object.fromEntries(
     stations.map((station) => [
       station.id,
-      Object.fromEntries(commodities.map((commodity) => [commodity.id, entryForStationCommodity(station, commodity.id)]))
+      Object.fromEntries([
+        ...commodities.map((commodity) => [commodity.id, entryForStationCommodity(station, commodity.id)]),
+        ...equipmentList.map((equipment) => [equipment.id, entryForStationEquipment(station, equipment.id)])
+      ])
     ])
   ) as MarketState;
 }
@@ -145,14 +181,18 @@ export function cloneMarketState(marketState: MarketState): MarketState {
 export function getMarketEntry(
   marketState: MarketState,
   stationId: string,
-  commodityId: CommodityId
+  itemId: MarketItemId
 ): MarketEntry {
   const station = stations.find((candidate) => candidate.id === stationId);
-  const fallback = station ? entryForStationCommodity(station, commodityId) : { stock: 0, maxStock: 1, baselineStock: 0, demand: 1, baselineDemand: 1 };
-  return marketState[stationId]?.[commodityId] ?? fallback;
+  const fallback = station
+    ? isEquipmentMarketItem(itemId)
+      ? entryForStationEquipment(station, itemId)
+      : entryForStationCommodity(station, itemId)
+    : { stock: 0, maxStock: 1, baselineStock: 0, demand: 1, baselineDemand: 1 };
+  return marketState[stationId]?.[itemId] ?? fallback;
 }
 
-function marketPriceMultiplier(entry: MarketEntry | undefined, mode: "buy" | "sell", station: StationDefinition, commodityId: CommodityId): number {
+function marketPriceMultiplier(entry: MarketEntry | undefined, mode: "buy" | "sell"): number {
   if (!entry) return 1;
   const stockRatio = entry.maxStock > 0 ? entry.stock / entry.maxStock : 0;
   const demandOffset = entry.demand - 1;
@@ -161,6 +201,11 @@ function marketPriceMultiplier(entry: MarketEntry | undefined, mode: "buy" | "se
     mode === "buy"
       ? 0.92 + inventoryPressure * 0.42 + demandOffset * 0.18
       : 0.74 + inventoryPressure * 0.34 + demandOffset * 0.2;
+  return Math.max(0.42, multiplier);
+}
+
+function commodityMarketPriceMultiplier(entry: MarketEntry | undefined, mode: "buy" | "sell", station: StationDefinition, commodityId: CommodityId): number {
+  const multiplier = marketPriceMultiplier(entry, mode);
   const illegalPenalty =
     mode === "sell" && !commodityById[commodityId].legal && station.archetype !== "Pirate Black Market" && station.archetype !== "Frontier Port"
       ? 0.82
@@ -181,8 +226,24 @@ export function getCommodityPrice(
   const stationMultiplier = archetypeBias[station.archetype][commodityId] ?? 1;
   const riskPremium = commodity.legal ? 1 + system.risk * commodity.volatility : 1 + system.risk * 0.7;
   const repAdjustment = mode === "buy" ? 1 - Math.max(0, reputation) * 0.0015 : 0.82 + Math.max(0, reputation) * 0.001;
-  const marketMultiplier = marketPriceMultiplier(marketEntry, mode, station, commodityId);
+  const marketMultiplier = commodityMarketPriceMultiplier(marketEntry, mode, station, commodityId);
   return Math.max(1, Math.round(commodity.basePrice * systemMultiplier * stationMultiplier * riskPremium * repAdjustment * marketMultiplier));
+}
+
+export function getEquipmentPrice(
+  equipmentId: EquipmentId,
+  station: StationDefinition,
+  system: StarSystemDefinition,
+  reputation = 0,
+  mode: "buy" | "sell" = "buy",
+  marketEntry?: MarketEntry
+): number {
+  const equipment = equipmentById[equipmentId];
+  const stationMultiplier = equipmentSlotBias[station.archetype][equipment.slotType] ?? 1;
+  const techPremium = 1 + Math.max(0, equipment.techLevel - station.techLevel) * 0.08;
+  const riskPremium = 1 + system.risk * (equipment.category.includes("Weapon") ? 0.18 : 0.08);
+  const repAdjustment = mode === "buy" ? 1 - Math.max(0, reputation) * 0.0012 : 0.62 + Math.max(0, reputation) * 0.0008;
+  return Math.max(1, Math.round(equipment.marketPrice * stationMultiplier * techPremium * riskPremium * repAdjustment * marketPriceMultiplier(marketEntry, mode)));
 }
 
 export interface TransactionResult {
@@ -234,6 +295,44 @@ export function buyCommodity(
   };
 }
 
+export function buyEquipment(
+  player: PlayerState,
+  station: StationDefinition,
+  system: StarSystemDefinition,
+  equipmentId: EquipmentId,
+  amount: number,
+  reputation = 0,
+  marketState?: MarketState
+): TransactionResult {
+  const entry = marketState ? getMarketEntry(marketState, station.id, equipmentId) : undefined;
+  const unitPrice = getEquipmentPrice(equipmentId, station, system, reputation, "buy", entry);
+  const total = unitPrice * amount;
+  if (amount <= 0) return { ok: false, player, total: 0, message: "Select a positive amount." };
+  if (!canBuyEquipmentAtStation(equipmentId, station)) {
+    return { ok: false, player, total, message: `Requires Tech Level ${equipmentById[equipmentId].techLevel} station.` };
+  }
+  if (entry && entry.stock < amount) return { ok: false, player, total, message: "Equipment stock is depleted." };
+  if (player.credits < total) return { ok: false, player, total, message: "Not enough credits." };
+  const nextMarket = marketState ? cloneMarketState(marketState) : undefined;
+  if (nextMarket) {
+    const nextEntry = getMarketEntry(nextMarket, station.id, equipmentId);
+    nextEntry.stock = Math.max(0, nextEntry.stock - amount);
+    nextEntry.demand = Math.min(2.3, nextEntry.demand + amount / Math.max(5, nextEntry.maxStock) + 0.03);
+    nextMarket[station.id] = { ...nextMarket[station.id], [equipmentId]: nextEntry };
+  }
+  return {
+    ok: true,
+    total,
+    message: `Bought ${amount} ${equipmentById[equipmentId].name}.`,
+    marketState: nextMarket,
+    player: {
+      ...player,
+      credits: player.credits - total,
+      equipmentInventory: { ...(player.equipmentInventory ?? {}), [equipmentId]: (player.equipmentInventory?.[equipmentId] ?? 0) + amount }
+    }
+  };
+}
+
 export function sellCommodity(
   player: PlayerState,
   station: StationDefinition,
@@ -267,6 +366,43 @@ export function sellCommodity(
       ...player,
       credits: player.credits + total,
       cargo: nextCargo
+    }
+  };
+}
+
+export function sellEquipment(
+  player: PlayerState,
+  station: StationDefinition,
+  system: StarSystemDefinition,
+  equipmentId: EquipmentId,
+  amount: number,
+  reputation = 0,
+  marketState?: MarketState
+): TransactionResult {
+  const held = player.equipmentInventory?.[equipmentId] ?? 0;
+  const actualAmount = Math.min(held, amount);
+  if (actualAmount <= 0) return { ok: false, player, total: 0, message: "No spare equipment to sell." };
+  const entry = marketState ? getMarketEntry(marketState, station.id, equipmentId) : undefined;
+  const unitPrice = getEquipmentPrice(equipmentId, station, system, reputation, "sell", entry);
+  const total = unitPrice * actualAmount;
+  const nextInventory = { ...(player.equipmentInventory ?? {}), [equipmentId]: held - actualAmount };
+  if (nextInventory[equipmentId] === 0) delete nextInventory[equipmentId];
+  const nextMarket = marketState ? cloneMarketState(marketState) : undefined;
+  if (nextMarket) {
+    const nextEntry = getMarketEntry(nextMarket, station.id, equipmentId);
+    nextEntry.stock = Math.min(nextEntry.maxStock, nextEntry.stock + actualAmount);
+    nextEntry.demand = Math.max(0.35, nextEntry.demand - actualAmount / Math.max(5, nextEntry.maxStock) - 0.02);
+    nextMarket[station.id] = { ...nextMarket[station.id], [equipmentId]: nextEntry };
+  }
+  return {
+    ok: true,
+    total,
+    message: `Sold ${actualAmount} ${equipmentById[equipmentId].name}.`,
+    marketState: nextMarket,
+    player: {
+      ...player,
+      credits: player.credits + total,
+      equipmentInventory: nextInventory
     }
   };
 }

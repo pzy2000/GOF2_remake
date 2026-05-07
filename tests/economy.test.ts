@@ -3,14 +3,18 @@ import { commodityById, stationById, systemById, shipById } from "../src/data/wo
 import {
   advanceMarketState,
   buyCommodity,
+  buyEquipment,
   canBuyCommodityAtStation,
+  canBuyEquipmentAtStation,
   createInitialMarketState,
   getCargoUsed,
   getCommodityPrice,
+  getEquipmentPrice,
   getMarketEntry,
   getTradeHints,
   isCommodityVisibleInMarket,
-  sellCommodity
+  sellCommodity,
+  sellEquipment
 } from "../src/systems/economy";
 import type { PlayerState } from "../src/types/game";
 
@@ -79,11 +83,54 @@ describe("economy", () => {
     expect(canBuyCommodityAtStation("basic-food", tradeHub)).toBe(true);
   });
 
+  it("gates commodity listings by station tech level", () => {
+    const lowTechStation = stationById["helion-prime"];
+    const highTechStation = stationById["pearl-consulate"];
+    const start = player();
+
+    expect(lowTechStation.techLevel).toBeLessThan(commodityById["data-cores"].techLevel);
+    expect(canBuyCommodityAtStation("data-cores", lowTechStation)).toBe(false);
+    expect(isCommodityVisibleInMarket("data-cores", lowTechStation, start.cargo)).toBe(false);
+    expect(isCommodityVisibleInMarket("data-cores", lowTechStation, { "data-cores": 1 })).toBe(true);
+
+    expect(canBuyCommodityAtStation("data-cores", highTechStation)).toBe(true);
+  });
+
   it("initializes stock entries for every station market", () => {
     const market = createInitialMarketState();
     expect(market["helion-prime"]?.["basic-food"]?.maxStock).toBeGreaterThan(0);
     expect(market["kuro-deep"]?.iron?.stock).toBeGreaterThan(0);
     expect(market["celest-vault"]?.["data-cores"]?.demand).toBeGreaterThan(1);
+    expect(market["pearl-consulate"]?.["quantum-reactor"]?.maxStock).toBeGreaterThan(0);
+  });
+
+  it("buys and sells equipment as market inventory without using cargo", () => {
+    const market = createInitialMarketState();
+    const system = systemById["helion-reach"];
+    const station = stationById["helion-prime"];
+    const start = { ...player(), credits: 5000 };
+    const entry = getMarketEntry(market, station.id, "shield-booster");
+    const price = getEquipmentPrice("shield-booster", station, system, 0, "buy", entry);
+
+    expect(canBuyEquipmentAtStation("shield-booster", station)).toBe(true);
+    const bought = buyEquipment(start, station, system, "shield-booster", 1, 0, market);
+    expect(bought.ok).toBe(true);
+    expect(bought.total).toBe(price);
+    expect(bought.player.equipmentInventory?.["shield-booster"]).toBe(1);
+    expect(getCargoUsed(bought.player.cargo)).toBe(0);
+
+    const sold = sellEquipment(bought.player, station, system, "shield-booster", 1, 0, bought.marketState);
+    expect(sold.ok).toBe(true);
+    expect(sold.player.equipmentInventory?.["shield-booster"]).toBeUndefined();
+    expect(sold.player.credits).toBeGreaterThan(start.credits - price);
+  });
+
+  it("blocks equipment above station tech level", () => {
+    const market = createInitialMarketState();
+    const station = stationById["helion-prime"];
+    const system = systemById["helion-reach"];
+    expect(canBuyEquipmentAtStation("quantum-reactor", station)).toBe(false);
+    expect(buyEquipment({ ...player(), credits: 100000 }, station, system, "quantum-reactor", 1, 0, market).ok).toBe(false);
   });
 
   it("updates stock and prices after player buy and sell transactions", () => {
@@ -106,8 +153,8 @@ describe("economy", () => {
 
   it("finds profitable route hints across biased systems", () => {
     const hints = getTradeHints(createInitialMarketState(), 200);
-    expect(hints.some((hint) => hint.fromStationId === "kuro-deep" && ["mirr-lattice", "celest-vault"].includes(hint.toStationId))).toBe(true);
-    expect(hints.some((hint) => stationById[hint.fromStationId].systemId === "helion-reach" && stationById[hint.toStationId].systemId === "ashen-drift")).toBe(true);
+    expect(hints.some((hint) => hint.fromStationId === "zenith-skydock" && hint.toStationId === "mirr-lattice" && hint.commodityId === "voidglass")).toBe(true);
+    expect(hints.some((hint) => stationById[hint.fromStationId].systemId === "ashen-drift" && stationById[hint.toStationId].systemId === "vantara")).toBe(true);
     expect(hints.some((hint) => hint.fromStationId === "black-arcade" && hint.profit > 0)).toBe(true);
   });
 

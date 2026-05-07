@@ -122,14 +122,19 @@ describe("equipment definitions and helpers", () => {
     const ids: EquipmentId[] = [
       "pulse-laser",
       "plasma-cannon",
+      "railgun",
       "homing-missile",
+      "torpedo-rack",
       "mining-beam",
       "shield-booster",
+      "shield-matrix",
       "cargo-expansion",
       "afterburner",
       "scanner",
+      "survey-array",
       "armor-plating",
       "energy-reactor",
+      "quantum-reactor",
       "repair-drone",
       "targeting-computer"
     ];

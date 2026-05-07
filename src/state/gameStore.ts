@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { commodities, commodityById, dialogueSceneById, equipmentById, missionTemplates, planetById, planets, shipById, ships, stationById, stations, systemById, systems } from "../data/world";
+import { commodities, commodityById, dialogueSceneById, equipmentById, equipmentList, missionTemplates, planetById, planets, shipById, ships, stationById, stations, systemById, systems } from "../data/world";
 import type {
   ActiveDialogueState,
   AssetManifest,
@@ -54,7 +54,7 @@ import {
   WORMHOLE_SECONDS,
   rotationToward
 } from "../systems/autopilot";
-import { advanceMarketState, buyCommodity, createInitialMarketState, getCargoUsed, getOccupiedCargo, sellCommodity } from "../systems/economy";
+import { advanceMarketState, buyCommodity, buyEquipment, createInitialMarketState, getCargoUsed, getOccupiedCargo, sellCommodity, sellEquipment } from "../systems/economy";
 import { createInitialReputation, updateReputation } from "../systems/reputation";
 import {
   acceptMission as acceptMissionPure,
@@ -76,7 +76,8 @@ import {
   getPirateAiProfile,
   isHostileToPlayer,
   resolveCombatAiStep,
-  sortPirateTargets
+  sortPirateTargets,
+  sortTargetableShips
 } from "../systems/combatAi";
 import {
   getActivePrimaryWeapon,
@@ -173,14 +174,35 @@ function createShipEntity(id: string, role: FlightEntity["role"], position: Vec3
   const roleStats = {
     pirate: { hull: 70, shield: 42, factionId: "independent-pirates" as const },
     patrol: { hull: 115, shield: 85, factionId: "solar-directorate" as const },
-    trader: { hull: 85, shield: 55, factionId: "free-belt-union" as const }
+    trader: { hull: 85, shield: 55, factionId: "free-belt-union" as const },
+    freighter: { hull: 170, shield: 70, factionId: "free-belt-union" as const },
+    courier: { hull: 72, shield: 48, factionId: "solar-directorate" as const },
+    miner: { hull: 125, shield: 58, factionId: "free-belt-union" as const },
+    smuggler: { hull: 96, shield: 68, factionId: "vossari-clans" as const }
   }[role];
+  const names: Record<FlightEntity["role"], string> = {
+    pirate: "Knife Wing Pirate",
+    patrol: "Directorate Patrol",
+    trader: "Belt Trader",
+    freighter: "Union Bulk Freighter",
+    courier: "Gate Courier",
+    miner: "Ore Cutter",
+    smuggler: "Vossari Smuggler"
+  };
+  const profiles: Record<Exclude<FlightEntity["role"], "pirate">, FlightEntity["aiProfileId"]> = {
+    patrol: "law-patrol",
+    trader: "hauler",
+    freighter: "freighter",
+    courier: "courier",
+    miner: "miner",
+    smuggler: "smuggler"
+  };
   const elite = !!pirateProfile?.elite;
   const hull = elite ? Math.round(roleStats.hull * 1.72) : roleStats.hull;
   const shield = elite ? Math.round(roleStats.shield * 1.88) : roleStats.shield;
   return {
     id,
-    name: elite ? "Elite Knife Wing Ace" : role === "pirate" ? "Knife Wing Pirate" : role === "patrol" ? "Directorate Patrol" : "Belt Trader",
+    name: elite ? "Elite Knife Wing Ace" : names[role],
     role,
     factionId: roleStats.factionId,
     position,
@@ -191,11 +213,28 @@ function createShipEntity(id: string, role: FlightEntity["role"], position: Vec3
     maxShield: shield,
     lastDamageAt: -999,
     fireCooldown: 0.6,
-    aiProfileId: pirateProfile?.aiProfileId ?? (role === "patrol" ? "law-patrol" : role === "trader" ? "hauler" : "raider"),
+    aiProfileId: pirateProfile?.aiProfileId ?? (role === "pirate" ? "raider" : profiles[role]),
     aiState: "patrol",
     aiTimer: 0,
     elite
   };
+}
+
+function trafficPosition(systemId: string, index: number): Vec3 {
+  const system = systemById[systemId];
+  const station = stationById[system.stationIds[0]];
+  const gate = getJumpGatePosition(systemId);
+  const anchor = station ? scale(add(station.position, gate), 0.5) : gate;
+  const angle = index * 1.72 + system.risk * 2.4;
+  const radius = 220 + index * 58;
+  return add(anchor, [Math.cos(angle) * radius, (index % 3 - 1) * 38, Math.sin(angle) * radius]);
+}
+
+function createTrafficForSystem(systemId: string): FlightEntity[] {
+  const risk = systemById[systemId].risk;
+  const roles: FlightEntity["role"][] = ["trader", "freighter", "courier", "miner"];
+  if (risk >= 0.35 || systemId === "ashen-drift") roles.push("smuggler");
+  return roles.map((role, index) => createShipEntity(`${systemId}-${role}-${index}`, role, trafficPosition(systemId, index), systemId, index));
 }
 
 function createConvoyEntity(mission: MissionDefinition): ConvoyEntity | undefined {
@@ -264,7 +303,7 @@ function createRuntimeForSystem(systemId: string, activeMissions: MissionDefinit
         createShipEntity(`${systemId}-pirate-${index}`, "pirate", getPirateSpawnPosition(systemId, index), systemId, index)
       ),
       createShipEntity(`${systemId}-patrol-0`, "patrol", [-190, 55, -360], systemId),
-      createShipEntity(`${systemId}-trader-0`, "trader", [180, -25, -430], systemId)
+      ...createTrafficForSystem(systemId)
     ],
     convoys: missionEntities.convoys,
     salvage: missionEntities.salvage,
@@ -447,6 +486,76 @@ function dockCorridorEffect(startPosition: Vec3, endPosition: Vec3, label = "DOC
   };
 }
 
+function lootVelocity(): Vec3 {
+  return [18 - Math.random() * 36, 24 + Math.random() * 18, 18 - Math.random() * 36];
+}
+
+function systemTechCeiling(systemId: string): number {
+  const system = systemById[systemId];
+  return Math.max(1, ...system.stationIds.map((stationId) => stationById[stationId]?.techLevel ?? 1), ...(system.hiddenStationIds ?? []).map((stationId) => stationById[stationId]?.techLevel ?? 1));
+}
+
+function commodityDropForShip(ship: FlightEntity): { commodityId: CommodityId; amount: number; rarity: LootEntity["rarity"] } {
+  if (ship.role === "pirate") return { commodityId: "illegal-contraband", amount: ship.elite ? 2 : 1, rarity: ship.elite ? "epic" : "rare" };
+  if (ship.role === "smuggler") return { commodityId: Math.random() > 0.45 ? "illegal-contraband" : "data-cores", amount: 1, rarity: "rare" };
+  if (ship.role === "freighter") return { commodityId: Math.random() > 0.5 ? "ship-components" : "mechanical-parts", amount: 2 + Math.floor(Math.random() * 2), rarity: "uncommon" };
+  if (ship.role === "courier") return { commodityId: Math.random() > 0.5 ? "microchips" : "electronics", amount: 1, rarity: "uncommon" };
+  if (ship.role === "miner") return { commodityId: Math.random() > 0.55 ? "titanium" : "iron", amount: 2, rarity: "uncommon" };
+  if (ship.role === "patrol") return { commodityId: "ship-components", amount: 2, rarity: "rare" };
+  return { commodityId: "mechanical-parts", amount: 2, rarity: "uncommon" };
+}
+
+function equipmentDropForShip(ship: FlightEntity, systemId: string): EquipmentId | undefined {
+  const chanceByRole: Record<FlightEntity["role"], number> = {
+    pirate: ship.elite ? 0.45 : 0.26,
+    patrol: 0.18,
+    trader: 0.12,
+    freighter: 0.18,
+    courier: 0.14,
+    miner: 0.12,
+    smuggler: 0.32
+  };
+  if (Math.random() > chanceByRole[ship.role]) return undefined;
+  const ceiling = Math.min(5, systemTechCeiling(systemId) + (ship.role === "pirate" || ship.role === "smuggler" ? 1 : 0));
+  const candidates = equipmentList.filter((equipment) => (equipment.dropWeight ?? 0) > 0 && equipment.techLevel <= ceiling);
+  const totalWeight = candidates.reduce((total, equipment) => total + (equipment.dropWeight ?? 0), 0);
+  if (totalWeight <= 0) return undefined;
+  let roll = Math.random() * totalWeight;
+  for (const equipment of candidates) {
+    roll -= equipment.dropWeight ?? 0;
+    if (roll <= 0) return equipment.id;
+  }
+  return candidates[candidates.length - 1]?.id;
+}
+
+function lootDropsForDestroyedShip(ship: FlightEntity, systemId: string): LootEntity[] {
+  const commodity = commodityDropForShip(ship);
+  const drops: LootEntity[] = [
+    {
+      id: projectileId("loot"),
+      kind: "commodity",
+      commodityId: commodity.commodityId,
+      amount: commodity.amount,
+      position: ship.position,
+      velocity: lootVelocity(),
+      rarity: commodity.rarity
+    }
+  ];
+  const equipmentId = equipmentDropForShip(ship, systemId);
+  if (equipmentId) {
+    drops.push({
+      id: projectileId("equipment-loot"),
+      kind: "equipment",
+      equipmentId,
+      amount: 1,
+      position: add(ship.position, [8 - Math.random() * 16, 6, 8 - Math.random() * 16]),
+      velocity: lootVelocity(),
+      rarity: equipmentById[equipmentId].techLevel >= 4 ? "epic" : equipmentById[equipmentId].techLevel >= 3 ? "rare" : "uncommon"
+    });
+  }
+  return drops;
+}
+
 function launchPositionForStation(stationId: string | undefined, fallback: Vec3): Vec3 {
   const station = stationId ? stationById[stationId] : undefined;
   const planet = station ? planetById[station.planetId] : undefined;
@@ -623,6 +732,8 @@ interface GameStore {
   jumpToSystem: (systemId: string) => void;
   buy: (commodityId: CommodityId, amount?: number) => void;
   sell: (commodityId: CommodityId, amount?: number) => void;
+  buyEquipment: (equipmentId: EquipmentId, amount?: number) => void;
+  sellEquipment: (equipmentId: EquipmentId, amount?: number) => void;
   acceptMission: (missionId: string) => void;
   completeMission: (missionId: string) => void;
   repairAndRefill: () => void;
@@ -1236,6 +1347,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         now,
         graceUntil: runtime.graceUntil,
         pirates,
+        ships: runtime.enemies,
         convoys: runtime.convoys
       });
       let moved = {
@@ -1351,6 +1463,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const remainingProjectiles: ProjectileEntity[] = [];
     const lootDrops: LootEntity[] = [];
     let destroyedPirates = runtime.destroyedPirates;
+    let patrolsShouldAttackPlayer = false;
+    let playerAggressionMessage: string | undefined;
     for (const projectile of runtime.projectiles) {
       if (projectile.life <= 0) continue;
       let direction = projectile.direction;
@@ -1382,7 +1496,53 @@ export const useGameStore = create<GameStore>((set, get) => ({
           });
           return damaged;
         });
-      } else if (projectile.owner === "enemy" && distance(movedProjectile.position, player.position) < 22) {
+      }
+
+      if (!consumed && projectile.targetId && projectile.owner !== "player") {
+        runtime.enemies = runtime.enemies.map((ship) => {
+          if (ship.id !== projectile.targetId || ship.hull <= 0 || ship.deathTimer !== undefined || consumed || distance(movedProjectile.position, ship.position) > 25) return ship;
+          const shielded = ship.shield > 0;
+          const damaged = applyDamage(ship, projectile.damage, now);
+          consumed = true;
+          runtime.effects.push({
+            id: projectileId(shielded ? "shield-hit" : "hit"),
+            kind: shielded ? "shield-hit" : "hit",
+            position: movedProjectile.position,
+            color: shielded ? "#69e4ff" : "#ff8a6a",
+            secondaryColor: shielded ? "#eaffff" : "#ffd166",
+            label: `-${Math.round(projectile.damage)}`,
+            particleCount: 5,
+            spread: 12,
+            size: 12,
+            life: 0.34,
+            maxLife: 0.34,
+            velocity: [0, 10, 0]
+          });
+          if (damaged.hull <= 0 && ship.hull > 0) {
+            if (ship.role === "pirate") destroyedPirates += 1;
+            lootDrops.push(...lootDropsForDestroyedShip(ship, state.currentSystemId));
+            runtime.effects.push({
+              id: projectileId("explosion"),
+              kind: "explosion",
+              position: ship.position,
+              color: ship.role === "pirate" ? "#ff784f" : ship.role === "patrol" ? "#64e4ff" : "#ffd166",
+              secondaryColor: "#ffd166",
+              label: "Destroyed",
+              particleCount: 22,
+              spread: 58,
+              size: 46,
+              life: 0.85,
+              maxLife: 0.85,
+              velocity: [0, 6, 0]
+            });
+            audioSystem.play("explosion");
+            return { ...damaged, deathTimer: 0.42 };
+          }
+          return damaged;
+        });
+      }
+
+      if (!consumed && projectile.owner === "enemy" && distance(movedProjectile.position, player.position) < 22) {
         const shielded = player.shield > 0;
         const previousShield = player.shield;
         const previousHullRatio = player.hull / player.stats.hull;
@@ -1404,12 +1564,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
           velocity: [0, 12, 0]
         });
         consumed = true;
-      } else if (projectile.owner === "player" || projectile.owner === "patrol") {
+      } else if (!consumed && projectile.owner === "player") {
         runtime.enemies = runtime.enemies.map((ship) => {
-          const validTarget = projectile.owner === "patrol" ? ship.role === "pirate" : ship.role === "pirate" || isHostileToPlayer(ship);
+          const validTarget = ship.hull > 0 && ship.deathTimer === undefined;
           if (!validTarget || ship.hull <= 0 || ship.deathTimer !== undefined || consumed || distance(movedProjectile.position, ship.position) > 25) return ship;
           const shielded = ship.shield > 0;
-          const damaged = applyDamage(ship, projectile.damage, now);
+          let damaged = applyDamage(ship, projectile.damage, now);
+          if (ship.role !== "pirate" && !ship.provokedByPlayer && !isHostileToPlayer(ship)) {
+            const penalty = ship.role === "patrol" ? -8 : ship.role === "smuggler" ? -2 : -4;
+            reputation = updateReputation(reputation, ship.factionId, penalty);
+            patrolsShouldAttackPlayer = ship.role !== "smuggler";
+            playerAggressionMessage = `${ship.name} returns fire. ${ship.role === "patrol" ? "Security response active." : "Local reputation damaged."}`;
+            damaged = { ...damaged, aiState: "attack", aiTargetId: "player", provokedByPlayer: true };
+          }
           consumed = true;
           runtime.effects.push({
             id: projectileId(shielded ? "shield-hit" : "hit"),
@@ -1427,20 +1594,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
           });
           if (damaged.hull <= 0 && ship.hull > 0) {
             if (ship.role === "pirate") destroyedPirates += 1;
-            const eliteLoot = ship.role === "pirate" && ship.elite;
-            lootDrops.push({
-              id: projectileId("loot"),
-              commodityId: ship.role === "pirate" ? "illegal-contraband" : "mechanical-parts",
-              amount: eliteLoot ? 2 : ship.role === "pirate" ? 1 : 2,
-              position: ship.position,
-              velocity: [18 - Math.random() * 36, 24 + Math.random() * 18, 18 - Math.random() * 36],
-              rarity: eliteLoot ? "epic" : ship.role === "pirate" ? "rare" : "uncommon"
-            });
+            lootDrops.push(...lootDropsForDestroyedShip(ship, state.currentSystemId));
             runtime.effects.push({
               id: projectileId("explosion"),
               kind: "explosion",
               position: ship.position,
-              color: ship.role === "pirate" ? "#ff784f" : "#64e4ff",
+              color: ship.role === "pirate" ? "#ff784f" : ship.role === "patrol" ? "#64e4ff" : "#ffd166",
               secondaryColor: "#ffd166",
               label: "Destroyed",
               particleCount: 22,
@@ -1458,12 +1617,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }
       if (!consumed) remainingProjectiles.push(movedProjectile);
     }
+    if (patrolsShouldAttackPlayer) {
+      runtime.enemies = runtime.enemies.map((ship) =>
+        ship.role === "patrol" && ship.hull > 0 && ship.deathTimer === undefined
+          ? { ...ship, aiState: "attack", aiTargetId: "player", scanProgress: 1 }
+          : ship
+      );
+    }
     runtime = {
       ...runtime,
       projectiles: remainingProjectiles,
       enemies: runtime.enemies.filter((ship) => ship.hull > 0 || (ship.deathTimer ?? 0) > 0),
       loot: [...runtime.loot, ...lootDrops],
-      destroyedPirates
+      destroyedPirates,
+      message: playerAggressionMessage ?? runtime.message
     };
 
     let activeMissions = state.activeMissions.map((mission) => {
@@ -1575,7 +1742,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       screen: expiration.player.hull <= 0 ? "gameOver" : get().screen,
       targetId: runtime.enemies.some((ship) => ship.id === state.targetId && ship.hull > 0 && ship.deathTimer === undefined)
         ? state.targetId
-        : sortPirateTargets(runtime.enemies)[0]?.id
+        : sortTargetableShips(runtime.enemies)[0]?.id
     });
   },
   advanceGameClock: (delta) => {
@@ -1601,10 +1768,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
     });
   },
   cycleTarget: () => {
-    const pirates = sortPirateTargets(get().runtime.enemies);
-    if (pirates.length === 0) return set({ targetId: undefined });
-    const currentIndex = pirates.findIndex((ship) => ship.id === get().targetId);
-    set({ targetId: pirates[(currentIndex + 1) % pirates.length].id });
+    const targets = sortTargetableShips(get().runtime.enemies);
+    if (targets.length === 0) return set({ targetId: undefined });
+    const currentIndex = targets.findIndex((ship) => ship.id === get().targetId);
+    set({ targetId: targets[(currentIndex + 1) % targets.length].id });
   },
   interact: () => {
     const state = get();
@@ -1653,22 +1820,33 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (nearLoot.length > 0) {
       let player = state.player;
       const collectedIds = new Set<string>();
-      let collected = 0;
+      let collectedCargo = 0;
+      const collectedEquipment: string[] = [];
       for (const loot of nearLoot) {
-        const result = addCargoWithinCapacity(player, loot.commodityId, loot.amount, state.activeMissions);
-        player = result.player;
-        collected += result.collected;
-        if (result.collected > 0) collectedIds.add(loot.id);
+        if (loot.kind === "equipment") {
+          player = { ...player, equipmentInventory: addEquipmentToInventory(player.equipmentInventory, loot.equipmentId, loot.amount) };
+          collectedEquipment.push(equipmentById[loot.equipmentId].name);
+          collectedIds.add(loot.id);
+        } else {
+          const result = addCargoWithinCapacity(player, loot.commodityId, loot.amount, state.activeMissions);
+          player = result.player;
+          collectedCargo += result.collected;
+          if (result.collected > 0) collectedIds.add(loot.id);
+        }
       }
+      const messageParts = [
+        collectedCargo > 0 ? `Collected ${collectedCargo} cargo unit(s)` : "",
+        collectedEquipment.length > 0 ? `Recovered ${collectedEquipment.join(", ")}` : ""
+      ].filter(Boolean);
       set({
         player,
         runtime: {
           ...state.runtime,
           loot: state.runtime.loot.filter((loot) => !collectedIds.has(loot.id)),
-          message: collected > 0 ? `Collected ${collected} cargo unit(s).` : "Cargo hold full."
+          message: messageParts.length > 0 ? `${messageParts.join(" · ")}.` : "Cargo hold full."
         }
       });
-      if (collected > 0) audioSystem.play("loot");
+      if (messageParts.length > 0) audioSystem.play("loot");
       return;
     }
     if (navigationTarget?.inRange && navigationTarget.kind === "exploration-signal") {
@@ -2006,6 +2184,22 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const completedCargo: CargoHold = { ...state.runtime.mined };
     set({ player: result.player, marketState: result.marketState ?? state.marketState, runtime: { ...state.runtime, mined: completedCargo, message: result.message } });
   },
+  buyEquipment: (equipmentId, amount = 1) => {
+    const state = get();
+    if (!state.currentStationId) return;
+    const station = stationById[state.currentStationId];
+    const system = systemById[state.currentSystemId];
+    const result = buyEquipment(state.player, station, system, equipmentId, amount, state.reputation.factions[station.factionId], state.marketState);
+    set({ player: result.player, marketState: result.marketState ?? state.marketState, runtime: { ...state.runtime, message: result.message } });
+  },
+  sellEquipment: (equipmentId, amount = 1) => {
+    const state = get();
+    if (!state.currentStationId) return;
+    const station = stationById[state.currentStationId];
+    const system = systemById[state.currentSystemId];
+    const result = sellEquipment(state.player, station, system, equipmentId, amount, state.reputation.factions[station.factionId], state.marketState);
+    set({ player: result.player, marketState: result.marketState ?? state.marketState, runtime: { ...state.runtime, message: result.message } });
+  },
   acceptMission: (missionId) => {
     const state = get();
     const mission = missionTemplates.find((candidate) => candidate.id === missionId);
@@ -2134,6 +2328,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
     const typedEquipmentId = equipmentId as EquipmentId;
     const equipment = equipmentById[typedEquipmentId];
+    const station = state.currentStationId ? stationById[state.currentStationId] : undefined;
+    if (station && station.techLevel < equipment.techLevel) {
+      set({ runtime: { ...state.runtime, message: `Blueprint requires Tech Level ${equipment.techLevel} station.` } });
+      return;
+    }
     const cost = equipment.craftCost;
     if (!cost) {
       set({ runtime: { ...state.runtime, message: "That blueprint is not craftable." } });

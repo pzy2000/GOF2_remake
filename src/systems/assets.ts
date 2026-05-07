@@ -51,6 +51,9 @@ const rawFallbackAssetManifest: AssetManifest = {
     "bastion-7": "/assets/generated/ships/bastion-7.glb",
     "horizon-ark": "/assets/generated/ships/horizon-ark.glb"
   },
+  npcShipTextures: {
+    freighter: "/assets/generated/npc-freighter-hull.svg"
+  },
   speakerPortraits: {
     captain: "/assets/generated/portraits/captain.webp",
     "ship-ai": "/assets/generated/portraits/ship-ai.webp",
@@ -122,6 +125,9 @@ export function resolveAssetManifest(manifest: AssetManifest, baseUrl?: string):
     systemSkyboxes: resolveAssetRecord(manifest.systemSkyboxes, baseUrl),
     planetTextures: resolveAssetRecord(manifest.planetTextures, baseUrl),
     shipModels: resolveAssetRecord(manifest.shipModels, baseUrl),
+    npcShipTextures: {
+      freighter: resolvePublicAssetPath(manifest.npcShipTextures.freighter, baseUrl)
+    },
     speakerPortraits: resolveAssetRecord(manifest.speakerPortraits, baseUrl),
     asteroidTextures: resolvePublicAssetPath(manifest.asteroidTextures, baseUrl),
     factionEmblems: resolvePublicAssetPath(manifest.factionEmblems, baseUrl),
@@ -142,6 +148,7 @@ export async function loadAssetManifest(): Promise<AssetManifest> {
     systemSkyboxes: { ...rawFallbackAssetManifest.systemSkyboxes, ...loaded.systemSkyboxes },
     planetTextures: { ...rawFallbackAssetManifest.planetTextures, ...loaded.planetTextures },
     shipModels: { ...rawFallbackAssetManifest.shipModels, ...loaded.shipModels },
+    npcShipTextures: { ...rawFallbackAssetManifest.npcShipTextures, ...loaded.npcShipTextures },
     speakerPortraits: { ...rawFallbackAssetManifest.speakerPortraits, ...loaded.speakerPortraits },
     musicTracks: {
       systems: { ...rawFallbackAssetManifest.musicTracks.systems, ...loaded.musicTracks?.systems },

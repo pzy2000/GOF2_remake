@@ -48,6 +48,8 @@ export const shipById = Object.fromEntries(ships.map((ship) => [ship.id, ship]))
 export const weapons: Partial<Record<EquipmentId, WeaponDefinition>> = {
   "pulse-laser": { id: "pulse-laser", name: "Pulse Laser", damage: 16, energyCost: 5, cooldown: 0.16, range: 900, speed: 740, kind: "primary" },
   "plasma-cannon": { id: "plasma-cannon", name: "Plasma Cannon", damage: 34, energyCost: 12, cooldown: 0.42, range: 780, speed: 520, kind: "primary" },
+  railgun: { id: "railgun", name: "Railgun", damage: 52, energyCost: 18, cooldown: 0.65, range: 1050, speed: 900, kind: "primary" },
   "homing-missile": { id: "homing-missile", name: "Homing Missile", damage: 72, energyCost: 0, cooldown: 1.15, range: 1300, speed: 360, kind: "secondary" },
+  "torpedo-rack": { id: "torpedo-rack", name: "Torpedo Rack", damage: 112, energyCost: 0, cooldown: 1.8, range: 1450, speed: 300, kind: "secondary" },
   "mining-beam": { id: "mining-beam", name: "Mining Beam", damage: 0, energyCost: 7, cooldown: 0.2, range: 360, speed: 0, kind: "utility" }
 };
