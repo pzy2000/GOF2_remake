@@ -16,6 +16,20 @@ type Gof2E2EState = {
   activeMissions: Array<{ id: string }>;
 };
 
+type ExplorationScanE2E = {
+  signalId: string;
+  frequency: number;
+  progress: number;
+  inBand: boolean;
+  distance: number;
+};
+
+type ScanKeyboardState = {
+  screen: string;
+  afterburner: boolean;
+  scan?: ExplorationScanE2E;
+};
+
 async function resetApp(page: Page) {
   await page.goto("/");
   await page.evaluate(() => localStorage.clear());
@@ -51,6 +65,21 @@ async function getGameState(page: Page): Promise<Gof2E2EState> {
         cargo: { ...state.player.cargo }
       },
       activeMissions: state.activeMissions.map((mission) => ({ id: mission.id }))
+    };
+  });
+}
+
+async function getScanKeyboardState(page: Page): Promise<ScanKeyboardState> {
+  return page.evaluate(() => {
+    const state = window.__GOF2_E2E__!.getState() as {
+      screen: string;
+      input: { afterburner: boolean };
+      runtime: { explorationScan?: ExplorationScanE2E };
+    };
+    return {
+      screen: state.screen,
+      afterburner: state.input.afterburner,
+      scan: state.runtime.explorationScan ? { ...state.runtime.explorationScan } : undefined
     };
   });
 }
@@ -152,6 +181,58 @@ test.describe("browser smoke", () => {
     await expect(page.locator(".ship-model-status")).toHaveCount(0);
   });
 
+  test("tunes active frequency scans from the keyboard", async ({ page }) => {
+    await resetApp(page);
+    await startNewGame(page);
+
+    await page.evaluate(() => {
+      const state = window.__GOF2_E2E__!.getState() as { runtime: Record<string, unknown> };
+      window.__GOF2_E2E__!.setState({
+        screen: "flight",
+        runtime: {
+          ...state.runtime,
+          explorationScan: {
+            signalId: "quiet-signal-sundog-lattice",
+            frequency: 27,
+            progress: 0,
+            inBand: false,
+            distance: 0
+          }
+        }
+      });
+    });
+
+    await expect(page.locator(".scan-panel")).toContainText("Frequency Scan");
+    expect((await getScanKeyboardState(page)).scan?.frequency).toBe(27);
+
+    await page.keyboard.press("ArrowRight");
+    expect((await getScanKeyboardState(page)).scan?.frequency).toBe(28);
+
+    await page.keyboard.press("Shift+ArrowRight");
+    expect((await getScanKeyboardState(page)).scan?.frequency).toBe(33);
+    expect((await getScanKeyboardState(page)).afterburner).toBe(false);
+
+    await page.keyboard.press("ArrowLeft");
+    expect((await getScanKeyboardState(page)).scan?.frequency).toBe(32);
+
+    await page.keyboard.press("Shift+ArrowLeft");
+    expect((await getScanKeyboardState(page)).scan?.frequency).toBe(27);
+
+    await page.keyboard.press("Escape");
+    await expect(page.locator(".scan-panel")).toHaveCount(0);
+    expect(await getScanKeyboardState(page)).toMatchObject({
+      screen: "flight",
+      scan: undefined
+    });
+
+    await page.keyboard.press("Escape");
+    await expect(page.getByRole("heading", { name: "Flight Suspended" })).toBeVisible();
+    expect(await getScanKeyboardState(page)).toMatchObject({
+      screen: "pause",
+      scan: undefined
+    });
+  });
+
   test("renders visible economy NPC mining status in flight", async ({ page }) => {
     await resetApp(page);
     await startNewGame(page);
@@ -243,7 +324,9 @@ test.describe("browser smoke", () => {
     expect((await getGameState(page)).currentSystemId).toBe("kuro-belt");
 
     await page.getByRole("button", { name: "Save" }).click();
-    await expect(page.getByText("Game saved to auto.")).toBeVisible();
+    await expect.poll(() =>
+      page.evaluate(() => JSON.parse(localStorage.getItem("gof2-by-pzy-save-slot:auto") ?? "null")?.currentSystemId)
+    ).toBe("kuro-belt");
     await page.reload();
     await expect(page.getByRole("button", { name: "Continue" })).toBeEnabled();
     await page.getByRole("button", { name: "Continue" }).click();

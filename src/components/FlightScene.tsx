@@ -34,6 +34,22 @@ function FlightControls() {
       Space: "fireSecondary"
     };
     const onKeyDown = (event: KeyboardEvent) => {
+      const state = useGameStore.getState();
+      const scanActive = state.screen === "flight" && !!state.runtime.explorationScan;
+      if (scanActive && (event.code === "ArrowLeft" || event.code === "ArrowRight")) {
+        event.preventDefault();
+        state.adjustExplorationScanFrequency((event.code === "ArrowLeft" ? -1 : 1) * (event.shiftKey ? 5 : 1));
+        return;
+      }
+      if (scanActive && event.code === "Escape") {
+        event.preventDefault();
+        state.cancelExplorationScan();
+        return;
+      }
+      if (scanActive && (event.code === "ShiftLeft" || event.code === "ShiftRight")) {
+        event.preventDefault();
+        return;
+      }
       const mapped = keyMap[event.code];
       if (mapped) {
         event.preventDefault();

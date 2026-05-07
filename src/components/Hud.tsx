@@ -168,7 +168,7 @@ export function Hud() {
         <section className="hud-panel scan-panel">
           <div className="scan-panel-header">
             <span>Frequency Scan</span>
-            <button onClick={cancelExplorationScan}>Cancel</button>
+            <button onClick={cancelExplorationScan} aria-keyshortcuts="Escape" title="Cancel scan (Esc)">Cancel</button>
           </div>
           <h3>{activeScanSignal.title}</h3>
           <div className="frequency-track" aria-label="Signal frequency">
@@ -176,11 +176,11 @@ export function Hud() {
             <b style={{ left: `${activeScan.frequency}%` }} />
           </div>
           <div className="scan-controls">
-            <button onClick={() => adjustExplorationScanFrequency(-5)}>-5</button>
-            <button onClick={() => adjustExplorationScanFrequency(-1)}>-1</button>
+            <button onClick={() => adjustExplorationScanFrequency(-5)} aria-keyshortcuts="Shift+ArrowLeft" title="Decrease frequency by 5 (Shift+ArrowLeft)">-5</button>
+            <button onClick={() => adjustExplorationScanFrequency(-1)} aria-keyshortcuts="ArrowLeft" title="Decrease frequency by 1 (ArrowLeft)">-1</button>
             <span>{Math.round(activeScan.frequency)}</span>
-            <button onClick={() => adjustExplorationScanFrequency(1)}>+1</button>
-            <button onClick={() => adjustExplorationScanFrequency(5)}>+5</button>
+            <button onClick={() => adjustExplorationScanFrequency(1)} aria-keyshortcuts="ArrowRight" title="Increase frequency by 1 (ArrowRight)">+1</button>
+            <button onClick={() => adjustExplorationScanFrequency(5)} aria-keyshortcuts="Shift+ArrowRight" title="Increase frequency by 5 (Shift+ArrowRight)">+5</button>
           </div>
           <div className="scan-progress">
             <span>{activeScan.inBand ? "LOCKED" : "TUNING"}</span>
