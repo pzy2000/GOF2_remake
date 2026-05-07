@@ -7,7 +7,8 @@ import { StationScreen } from "./components/StationScreen";
 import { SaveSlotsPanel } from "./components/SaveSlotsPanel";
 import { audioSystem, getAudioSettings, saveAudioSettings } from "./systems/audio";
 import { loadAssetManifest } from "./systems/assets";
-import { useGameStore } from "./state/gameStore";
+import { resolveMusicCue } from "./systems/music";
+import { stationById, useGameStore } from "./state/gameStore";
 import "./styles.css";
 
 function PauseMenu() {
@@ -117,7 +118,11 @@ function GameClockTicker() {
 
 function AudioRuntime() {
   const screen = useGameStore((state) => state.screen);
-  const pirateCount = useGameStore((state) => state.runtime.enemies.filter((ship) => ship.role === "pirate" && ship.hull > 0 && ship.deathTimer === undefined).length);
+  const currentSystemId = useGameStore((state) => state.currentSystemId);
+  const currentStationId = useGameStore((state) => state.currentStationId);
+  const runtime = useGameStore((state) => state.runtime);
+  const player = useGameStore((state) => state.player);
+  const assetManifest = useGameStore((state) => state.assetManifest);
   useEffect(() => {
     const unlock = () => audioSystem.unlock();
     const click = (event: MouseEvent) => {
@@ -131,10 +136,17 @@ function AudioRuntime() {
       window.removeEventListener("keydown", unlock);
     };
   }, []);
+  const musicCue = resolveMusicCue({
+    screen,
+    currentSystemId,
+    currentStation: currentStationId ? stationById[currentStationId] : undefined,
+    runtime,
+    player,
+    assetManifest
+  });
   useEffect(() => {
-    const mode = screen === "station" ? "station" : screen === "flight" ? (pirateCount > 0 ? "combat" : "safe") : "silent";
-    audioSystem.setMusicMode(mode);
-  }, [pirateCount, screen]);
+    audioSystem.setMusicCue(musicCue);
+  }, [musicCue.id, musicCue.mode, musicCue.trackUrl]);
   return null;
 }
 

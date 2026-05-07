@@ -1,0 +1,10 @@
+{
+  "ok": true,
+  "run_dir": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112",
+  "spritesheet": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/final/spritesheet.webp",
+  "validation": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/final/validation.json",
+  "contact_sheet": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/qa/contact-sheet.png",
+  "review": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/qa/review.json",
+  "videos": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/qa/videos",
+  "package": "/Users/pzy/.codex/pets/golden-shaded-cat"
+}

@@ -1,4 +1,5 @@
 import type { AudioEventName, AudioSettings, MusicMode } from "../types/game";
+import type { MusicCue } from "./music";
 
 export const AUDIO_SETTINGS_KEY = "gof2-by-pzy-audio-settings";
 
@@ -61,6 +62,14 @@ class ProceduralAudioSystem {
   private lastEventAt = new Map<AudioEventName, number>();
   private settings = defaultSettings;
   private mode: MusicMode = "silent";
+  private proceduralMode: MusicMode = "silent";
+  private cue: MusicCue = { id: "silent", mode: "silent" };
+  private currentTrack?: HTMLAudioElement;
+  private currentTrackUrl?: string;
+  private currentTrackPlaying = false;
+  private failedTrackUrls = new Set<string>();
+  private externalFade = 0;
+  private fadeTimer?: number;
   private unlocked = false;
 
   constructor() {
@@ -72,6 +81,10 @@ class ProceduralAudioSystem {
       hasContext: !!this.context,
       unlocked: this.unlocked,
       mode: this.mode,
+      proceduralMode: this.proceduralMode,
+      cueId: this.cue.id,
+      currentTrackUrl: this.currentTrackUrl,
+      currentTrackPlaying: this.currentTrackPlaying,
       settings: this.settings
     };
   }
@@ -82,16 +95,19 @@ class ProceduralAudioSystem {
     this.masterGain?.gain.setTargetAtTime(master, this.context?.currentTime ?? 0, 0.025);
     this.sfxGain?.gain.setTargetAtTime(settings.sfxVolume, this.context?.currentTime ?? 0, 0.025);
     this.musicGain?.gain.setTargetAtTime(settings.musicVolume, this.context?.currentTime ?? 0, 0.08);
+    this.updateExternalTrackVolume();
   }
 
   unlock() {
     const context = this.ensureContext();
-    if (!context) return false;
-    void context.resume?.();
+    if (context) {
+      void context.resume?.();
+      this.startMusicGraph();
+    }
     this.unlocked = true;
-    this.startMusicGraph();
+    this.startCurrentTrack();
     this.applySettings(this.settings);
-    return true;
+    return !!context || !!this.currentTrack;
   }
 
   play(event: AudioEventName) {
@@ -120,13 +136,34 @@ class ProceduralAudioSystem {
   }
 
   setMusicMode(mode: MusicMode) {
-    this.mode = mode;
-    const context = this.ensureContext();
-    if (!context || !this.unlocked) return;
-    this.startMusicGraph();
-    for (const [candidate, gain] of this.modeGains) {
-      const target = candidate === mode && mode !== "silent" ? 1 : 0;
-      gain.gain.setTargetAtTime(target, context.currentTime, 0.55);
+    this.setMusicCue({ id: mode, mode });
+  }
+
+  setMusicCue(cue: MusicCue) {
+    this.cue = cue;
+    this.mode = cue.mode;
+    if (!cue.trackUrl || this.failedTrackUrls.has(cue.trackUrl)) {
+      this.currentTrackUrl = undefined;
+      this.currentTrackPlaying = false;
+      this.fadeOutCurrentTrack();
+      this.applyProceduralMode(cue.mode);
+      return;
+    }
+
+    if (this.currentTrackUrl !== cue.trackUrl) {
+      this.fadeOutCurrentTrack();
+      this.currentTrack = this.createExternalTrack(cue.trackUrl);
+      this.currentTrackUrl = this.currentTrack ? cue.trackUrl : undefined;
+      this.currentTrackPlaying = false;
+      this.externalFade = 0;
+      this.updateExternalTrackVolume();
+    }
+
+    if (this.currentTrack && this.unlocked) {
+      this.startCurrentTrack();
+    }
+    if (!this.currentTrackPlaying) {
+      this.applyProceduralMode(cue.mode);
     }
   }
 
@@ -148,6 +185,121 @@ class ProceduralAudioSystem {
     this.musicGain = musicGain;
     this.applySettings(this.settings);
     return context;
+  }
+
+  private createExternalTrack(url: string): HTMLAudioElement | undefined {
+    if (typeof Audio === "undefined") return undefined;
+    const track = new Audio(url);
+    track.loop = true;
+    track.preload = "auto";
+    track.volume = 0;
+    track.onerror = () => this.handleTrackFailure(track);
+    return track;
+  }
+
+  private startCurrentTrack() {
+    const track = this.currentTrack;
+    if (!track || this.currentTrackPlaying) return;
+    try {
+      const playback = track.play();
+      if (playback && typeof playback.then === "function") {
+        void playback.then(() => this.markExternalTrackPlaying(track)).catch(() => this.handleTrackFailure(track));
+      } else {
+        this.markExternalTrackPlaying(track);
+      }
+    } catch {
+      this.handleTrackFailure(track);
+    }
+  }
+
+  private markExternalTrackPlaying(track: HTMLAudioElement) {
+    if (track !== this.currentTrack) return;
+    this.currentTrackPlaying = true;
+    this.applyProceduralMode("silent");
+    this.fadeExternalTrackTo(1);
+  }
+
+  private handleTrackFailure(track: HTMLAudioElement) {
+    if (track !== this.currentTrack) return;
+    if (this.currentTrackUrl) this.failedTrackUrls.add(this.currentTrackUrl);
+    this.currentTrackUrl = undefined;
+    this.currentTrackPlaying = false;
+    this.currentTrack = undefined;
+    this.externalFade = 0;
+    this.applyProceduralMode(this.mode);
+  }
+
+  private fadeOutCurrentTrack() {
+    const track = this.currentTrack;
+    if (!track) return;
+    this.currentTrack = undefined;
+    this.currentTrackPlaying = false;
+    if (typeof window === "undefined") {
+      track.pause();
+      this.resetTrackTime(track);
+      return;
+    }
+    const startVolume = track.volume;
+    const startedAt = performance.now();
+    const durationMs = 450;
+    const timer = window.setInterval(() => {
+      const progress = Math.min(1, (performance.now() - startedAt) / durationMs);
+      track.volume = startVolume * (1 - progress);
+      if (progress >= 1) {
+        window.clearInterval(timer);
+        track.pause();
+        this.resetTrackTime(track);
+      }
+    }, 40);
+  }
+
+  private fadeExternalTrackTo(target: number) {
+    if (typeof window === "undefined") {
+      this.externalFade = target;
+      this.updateExternalTrackVolume();
+      return;
+    }
+    if (this.fadeTimer !== undefined) {
+      window.clearInterval(this.fadeTimer);
+      this.fadeTimer = undefined;
+    }
+    const start = this.externalFade;
+    const startedAt = performance.now();
+    const durationMs = 650;
+    this.fadeTimer = window.setInterval(() => {
+      const progress = Math.min(1, (performance.now() - startedAt) / durationMs);
+      this.externalFade = start + (target - start) * progress;
+      this.updateExternalTrackVolume();
+      if (progress >= 1 && this.fadeTimer !== undefined) {
+        window.clearInterval(this.fadeTimer);
+        this.fadeTimer = undefined;
+      }
+    }, 40);
+  }
+
+  private updateExternalTrackVolume() {
+    if (!this.currentTrack) return;
+    const volume = this.settings.muted ? 0 : this.settings.masterVolume * this.settings.musicVolume * this.externalFade;
+    this.currentTrack.volume = clamp01(volume);
+  }
+
+  private resetTrackTime(track: HTMLAudioElement) {
+    try {
+      track.currentTime = 0;
+    } catch {
+      // Some browser-backed media objects disallow currentTime writes before metadata loads.
+    }
+  }
+
+  private applyProceduralMode(mode: MusicMode) {
+    this.proceduralMode = mode;
+    const context = this.ensureContext();
+    if (!context || !this.unlocked) return;
+    this.startMusicGraph();
+    for (const [candidate, gain] of this.modeGains) {
+      const target = candidate === mode && mode !== "silent" ? 1 : 0;
+      gain.gain.setTargetAtTime(target, context.currentTime, 0.55);
+    }
   }
 
   private zap(startHz: number, endHz: number, duration: number, _label: string, gainAmount = 0.2) {

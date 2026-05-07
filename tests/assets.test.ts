@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import manifest from "../public/assets/generated/manifest.json";
-import { ships } from "../src/data/world";
+import { ships, systems } from "../src/data/world";
 import { fallbackAssetManifest, resolveAssetManifest, resolvePublicAssetPath } from "../src/systems/assets";
 import type { AssetManifest } from "../src/types/game";
+
+const stationArchetypes = ["Trade Hub", "Mining Station", "Research Station", "Military Outpost", "Frontier Port", "Pirate Black Market"] as const;
 
 describe("asset manifest", () => {
   it("provides a project-local skybox panorama fallback", () => {
@@ -20,6 +22,8 @@ describe("asset manifest", () => {
     expect(pagesManifest.keyArt).toBe("/GOF2_remake/assets/generated/key-art.webp");
     expect(pagesManifest.skyboxPanorama).toBe("/GOF2_remake/assets/generated/skybox-panorama.webp");
     expect(pagesManifest.shipModels["sparrow-mk1"]).toBe("/GOF2_remake/assets/generated/ships/sparrow-mk1.glb");
+    expect(pagesManifest.musicTracks.systems["helion-reach"]).toBe("/GOF2_remake/assets/music/magic-space.mp3");
+    expect(pagesManifest.musicTracks.combat).toBe("/GOF2_remake/assets/music/infestation-control-room.mp3");
     expect(Object.values(pagesManifest.planetTextures).every((assetPath) => assetPath.startsWith("/GOF2_remake/assets/generated/"))).toBe(true);
   });
 
@@ -45,5 +49,19 @@ describe("asset manifest", () => {
       expect(assetManifest.shipModels[ship.id]).toMatch(/^\/assets\/generated\/ships\/.+\.glb$/);
       expect(fallbackAssetManifest.shipModels[ship.id]).toBe(assetManifest.shipModels[ship.id]);
     }
+  });
+
+  it("maps every system and station archetype to a local music track", () => {
+    const assetManifest = manifest as AssetManifest;
+    for (const system of systems) {
+      expect(assetManifest.musicTracks.systems[system.id]).toMatch(/^\/assets\/music\/.+\.(mp3|ogg)$/);
+      expect(fallbackAssetManifest.musicTracks.systems[system.id]).toBe(assetManifest.musicTracks.systems[system.id]);
+    }
+    for (const archetype of stationArchetypes) {
+      expect(assetManifest.musicTracks.stationArchetypes[archetype]).toMatch(/^\/assets\/music\/.+\.(mp3|ogg)$/);
+      expect(fallbackAssetManifest.musicTracks.stationArchetypes[archetype]).toBe(assetManifest.musicTracks.stationArchetypes[archetype]);
+    }
+    expect(assetManifest.musicTracks.combat).toMatch(/^\/assets\/music\/.+\.(mp3|ogg)$/);
+    expect(fallbackAssetManifest.musicTracks.combat).toBe(assetManifest.musicTracks.combat);
   });
 });

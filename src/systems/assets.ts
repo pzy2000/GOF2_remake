@@ -1,4 +1,4 @@
-import type { AssetManifest } from "../types/game";
+import type { AssetManifest, MusicTrackManifest } from "../types/game";
 
 const rawFallbackAssetManifest: AssetManifest = {
   keyArt: "/assets/generated/key-art.webp",
@@ -53,7 +53,27 @@ const rawFallbackAssetManifest: AssetManifest = {
   },
   asteroidTextures: "/assets/generated/asteroid-textures.webp",
   factionEmblems: "/assets/generated/faction-emblems.webp",
-  hudOverlay: "/assets/generated/hud-overlay.webp"
+  hudOverlay: "/assets/generated/hud-overlay.webp",
+  musicTracks: {
+    systems: {
+      "helion-reach": "/assets/music/magic-space.mp3",
+      "kuro-belt": "/assets/music/pynchon.mp3",
+      vantara: "/assets/music/out-there.ogg",
+      "mirr-vale": "/assets/music/galactic-temple.ogg",
+      "ashen-drift": "/assets/music/space-graveyard.mp3",
+      "celest-gate": "/assets/music/observing-the-star.ogg",
+      "ptd-home": "/assets/music/loaben.mp3"
+    },
+    stationArchetypes: {
+      "Trade Hub": "/assets/music/magic-space.mp3",
+      "Mining Station": "/assets/music/pynchon.mp3",
+      "Research Station": "/assets/music/galactic-temple.ogg",
+      "Military Outpost": "/assets/music/tense-future-loop.ogg",
+      "Frontier Port": "/assets/music/outer-space.mp3",
+      "Pirate Black Market": "/assets/music/space-graveyard.mp3"
+    },
+    combat: "/assets/music/infestation-control-room.mp3"
+  }
 };
 
 type AssetRecord = Record<string, string>;
@@ -73,6 +93,14 @@ function resolveAssetRecord(record: AssetRecord, baseUrl?: string): AssetRecord 
   return Object.fromEntries(Object.entries(record).map(([key, value]) => [key, resolvePublicAssetPath(value, baseUrl)]));
 }
 
+function resolveMusicTrackManifest(manifest: MusicTrackManifest, baseUrl?: string): MusicTrackManifest {
+  return {
+    systems: resolveAssetRecord(manifest.systems, baseUrl),
+    stationArchetypes: resolveAssetRecord(manifest.stationArchetypes as AssetRecord, baseUrl) as MusicTrackManifest["stationArchetypes"],
+    combat: resolvePublicAssetPath(manifest.combat, baseUrl)
+  };
+}
+
 export function resolveAssetManifest(manifest: AssetManifest, baseUrl?: string): AssetManifest {
   return {
     keyArt: resolvePublicAssetPath(manifest.keyArt, baseUrl),
@@ -85,7 +113,8 @@ export function resolveAssetManifest(manifest: AssetManifest, baseUrl?: string):
     shipModels: resolveAssetRecord(manifest.shipModels, baseUrl),
     asteroidTextures: resolvePublicAssetPath(manifest.asteroidTextures, baseUrl),
     factionEmblems: resolvePublicAssetPath(manifest.factionEmblems, baseUrl),
-    hudOverlay: resolvePublicAssetPath(manifest.hudOverlay, baseUrl)
+    hudOverlay: resolvePublicAssetPath(manifest.hudOverlay, baseUrl),
+    musicTracks: resolveMusicTrackManifest(manifest.musicTracks, baseUrl)
   };
 }
 
@@ -100,6 +129,11 @@ export async function loadAssetManifest(): Promise<AssetManifest> {
     ...loaded,
     systemSkyboxes: { ...rawFallbackAssetManifest.systemSkyboxes, ...loaded.systemSkyboxes },
     planetTextures: { ...rawFallbackAssetManifest.planetTextures, ...loaded.planetTextures },
-    shipModels: { ...rawFallbackAssetManifest.shipModels, ...loaded.shipModels }
+    shipModels: { ...rawFallbackAssetManifest.shipModels, ...loaded.shipModels },
+    musicTracks: {
+      systems: { ...rawFallbackAssetManifest.musicTracks.systems, ...loaded.musicTracks?.systems },
+      stationArchetypes: { ...rawFallbackAssetManifest.musicTracks.stationArchetypes, ...loaded.musicTracks?.stationArchetypes },
+      combat: loaded.musicTracks?.combat ?? rawFallbackAssetManifest.musicTracks.combat
+    }
   });
 }

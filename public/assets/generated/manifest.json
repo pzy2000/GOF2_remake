@@ -51,5 +51,25 @@
   },
   "asteroidTextures": "/assets/generated/asteroid-textures.webp",
   "factionEmblems": "/assets/generated/faction-emblems.webp",
-  "hudOverlay": "/assets/generated/hud-overlay.webp"
+  "hudOverlay": "/assets/generated/hud-overlay.webp",
+  "musicTracks": {
+    "systems": {
+      "helion-reach": "/assets/music/magic-space.mp3",
+      "kuro-belt": "/assets/music/pynchon.mp3",
+      "vantara": "/assets/music/out-there.ogg",
+      "mirr-vale": "/assets/music/galactic-temple.ogg",
+      "ashen-drift": "/assets/music/space-graveyard.mp3",
+      "celest-gate": "/assets/music/observing-the-star.ogg",
+      "ptd-home": "/assets/music/loaben.mp3"
+    },
+    "stationArchetypes": {
+      "Trade Hub": "/assets/music/magic-space.mp3",
+      "Mining Station": "/assets/music/pynchon.mp3",
+      "Research Station": "/assets/music/galactic-temple.ogg",
+      "Military Outpost": "/assets/music/tense-future-loop.ogg",
+      "Frontier Port": "/assets/music/outer-space.mp3",
+      "Pirate Black Market": "/assets/music/space-graveyard.mp3"
+    },
+    "combat": "/assets/music/infestation-control-room.mp3"
+  }
 }

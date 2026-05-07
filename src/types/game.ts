@@ -85,6 +85,12 @@ export type StationArchetype =
   | "Frontier Port"
   | "Pirate Black Market";
 
+export interface MusicTrackManifest {
+  systems: Record<string, string>;
+  stationArchetypes: Partial<Record<StationArchetype, string>>;
+  combat: string;
+}
+
 export type CommodityId =
   | "basic-food"
   | "drinking-water"
@@ -142,6 +148,7 @@ export interface AssetManifest {
   asteroidTextures: string;
   factionEmblems: string;
   hudOverlay: string;
+  musicTracks: MusicTrackManifest;
 }
 
 export interface ShipStats {

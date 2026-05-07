@@ -189,83 +189,87 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
             </div>
           </div>
           <aside className="galaxy-details">
-            <p className="eyebrow">{selectedKnown ? factionNames[selectedSystem.factionId] : "Uncharted"}</p>
-            <h3>{selectedKnown ? selectedSystem.name : "Unknown Signal"}</h3>
-            <p>{selectedKnown ? selectedSystem.description : "A faint jump signature sits beyond current registry data."}</p>
-            <div className="galaxy-stat-row">
-              <span>Risk {selectedKnown ? `${Math.round(selectedSystem.risk * 100)}%` : "--"}</span>
-              <span>{selectedCurrent ? "Current" : selectedKnown ? "Known" : "Locked"}</span>
+            <div className="galaxy-details-content">
+              <p className="eyebrow">{selectedKnown ? factionNames[selectedSystem.factionId] : "Uncharted"}</p>
+              <h3>{selectedKnown ? selectedSystem.name : "Unknown Signal"}</h3>
+              <p>{selectedKnown ? selectedSystem.description : "A faint jump signature sits beyond current registry data."}</p>
+              <div className="galaxy-stat-row">
+                <span>Risk {selectedKnown ? `${Math.round(selectedSystem.risk * 100)}%` : "--"}</span>
+                <span>{selectedCurrent ? "Current" : selectedKnown ? "Known" : "Locked"}</span>
+              </div>
+              {selectedKnown ? (
+                <div className="planet-list" role="list" aria-label={`${selectedSystem.name} planets`}>
+                  {selectedPlanets.map((planet) => {
+                    const known = knownPlanetIds.includes(planet.id);
+                    const station = stationById[planet.stationId];
+                    const selected = selectedStation?.id === station.id;
+                    return (
+                      <button
+                        key={planet.id}
+                        type="button"
+                        className={selected ? "selected" : ""}
+                        disabled={!known}
+                        onClick={() => setSelectedStationId(station.id)}
+                        onDoubleClick={() => executeTravel(station.id)}
+                      >
+                        <span>{known ? planet.name : "Unknown Beacon"}</span>
+                        <small>{known ? `${planet.type} · ${station.name}` : "Local scan required"}</small>
+                      </button>
+                    );
+                  })}
+                  {visibleHiddenStations.map((station) => {
+                    const planet = planetById[station.planetId];
+                    const known = !!planet && knownPlanetIds.includes(planet.id);
+                    const selected = selectedStation?.id === station.id;
+                    return (
+                      <button
+                        key={station.id}
+                        type="button"
+                        className={`hidden-station ${selected ? "selected" : ""}`}
+                        disabled={!known}
+                        onClick={() => setSelectedStationId(station.id)}
+                        onDoubleClick={() => executeTravel(station.id)}
+                      >
+                        <span>{station.name}</span>
+                        <small>{known ? `${planet.name} · Hidden Station Found` : "Signal masked"}</small>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <p>Station: Signal masked</p>
+              )}
+              {selectedKnown ? (
+                <div className="exploration-signal-list" aria-label={`${selectedSystem.name} exploration signals`}>
+                  <h4>Exploration Signals</h4>
+                  {selectedSignals.map((signal) => {
+                    const complete = explorationState.completedSignalIds.includes(signal.id);
+                    const discovered = isExplorationSignalDiscovered(signal.id, explorationState);
+                    return (
+                      <article key={signal.id} className={complete ? "complete" : discovered ? "discovered" : ""}>
+                        <strong>{discovered ? signal.title : "Masked Signal"}</strong>
+                        <span>{complete ? "Resolved" : discovered ? "Discovered" : signal.maskedTitle}</span>
+                        {complete ? <p>{signal.log}</p> : null}
+                      </article>
+                    );
+                  })}
+                </div>
+              ) : null}
             </div>
-            {selectedKnown ? (
-              <div className="planet-list" role="list" aria-label={`${selectedSystem.name} planets`}>
-                {selectedPlanets.map((planet) => {
-                  const known = knownPlanetIds.includes(planet.id);
-                  const station = stationById[planet.stationId];
-                  const selected = selectedStation?.id === station.id;
-                  return (
-                    <button
-                      key={planet.id}
-                      type="button"
-                      className={selected ? "selected" : ""}
-                      disabled={!known}
-                      onClick={() => setSelectedStationId(station.id)}
-                      onDoubleClick={() => executeTravel(station.id)}
-                    >
-                      <span>{known ? planet.name : "Unknown Beacon"}</span>
-                      <small>{known ? `${planet.type} · ${station.name}` : "Local scan required"}</small>
-                    </button>
-                  );
-                })}
-                {visibleHiddenStations.map((station) => {
-                  const planet = planetById[station.planetId];
-                  const known = !!planet && knownPlanetIds.includes(planet.id);
-                  const selected = selectedStation?.id === station.id;
-                  return (
-                    <button
-                      key={station.id}
-                      type="button"
-                      className={`hidden-station ${selected ? "selected" : ""}`}
-                      disabled={!known}
-                      onClick={() => setSelectedStationId(station.id)}
-                      onDoubleClick={() => executeTravel(station.id)}
-                    >
-                      <span>{station.name}</span>
-                      <small>{known ? `${planet.name} · Hidden Station Found` : "Signal masked"}</small>
-                    </button>
-                  );
-                })}
-              </div>
-            ) : (
-              <p>Station: Signal masked</p>
-            )}
-            {selectedKnown ? (
-              <div className="exploration-signal-list" aria-label={`${selectedSystem.name} exploration signals`}>
-                <h4>Exploration Signals</h4>
-                {selectedSignals.map((signal) => {
-                  const complete = explorationState.completedSignalIds.includes(signal.id);
-                  const discovered = isExplorationSignalDiscovered(signal.id, explorationState);
-                  return (
-                    <article key={signal.id} className={complete ? "complete" : discovered ? "discovered" : ""}>
-                      <strong>{discovered ? signal.title : "Masked Signal"}</strong>
-                      <span>{complete ? "Resolved" : discovered ? "Discovered" : signal.maskedTitle}</span>
-                      {complete ? <p>{signal.log}</p> : null}
-                    </article>
-                  );
-                })}
-              </div>
-            ) : null}
-            <p>
-              Destination:{" "}
-              {selectedKnown && selectedStationKnown && selectedStation && selectedPlanet
-                ? `${selectedPlanet.name} · ${selectedStation.name}`
-                : selectedKnown
-                  ? "Select a scanned planet beacon"
-                  : "Signal masked"}
-            </p>
-            <button className="primary" disabled={!canTravel} onClick={() => executeTravel()}>
-              {travelLabel(mode, selectedSameStation, selectedKnown && selectedStationKnown, !!autopilot)}
-            </button>
-            <p className="galaxy-help">{helpText(mode)}</p>
+            <div className="galaxy-actions">
+              <p>
+                Destination:{" "}
+                {selectedKnown && selectedStationKnown && selectedStation && selectedPlanet
+                  ? `${selectedPlanet.name} · ${selectedStation.name}`
+                  : selectedKnown
+                    ? "Select a scanned planet beacon"
+                    : "Signal masked"}
+              </p>
+              <button className="primary" disabled={!canTravel} onClick={() => executeTravel()}>
+                {travelLabel(mode, selectedSameStation, selectedKnown && selectedStationKnown, !!autopilot)}
+              </button>
+              <p className="galaxy-help">{helpText(mode)}</p>
+            </div>
           </aside>
         </div>
       </div>

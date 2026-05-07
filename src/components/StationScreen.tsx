@@ -202,12 +202,14 @@ export function StationScreen() {
   const saveGame = useGameStore((state) => state.saveGame);
   const autoSaveSlot = useGameStore((state) => state.saveSlots.find((slot) => slot.id === "auto"));
   const autoSaveTime = autoSaveSlot?.savedAt ? new Date(autoSaveSlot.savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : undefined;
+  const isHangarTab = tab === "Hangar";
+  const isGalaxyMapTab = tab === "Galaxy Map";
   if (!station) return null;
   const stationBackground: CSSProperties = {
     backgroundImage: `linear-gradient(rgba(3, 7, 18, 0.88), rgba(3, 7, 18, 0.96)), url(${manifest.nebulaBg})`
   };
   return (
-    <main className="station-screen" style={stationBackground}>
+    <main className={`station-screen ${isHangarTab ? "station-screen--hangar" : ""} ${isGalaxyMapTab ? "station-screen--galaxy" : ""}`} style={stationBackground}>
       <header className="station-header">
         <div>
           <p className="station-autosave-note">
@@ -229,7 +231,7 @@ export function StationScreen() {
           </button>
         ))}
       </nav>
-      <section className="station-body">
+      <section className={`station-body ${isHangarTab ? "station-body--hangar" : ""} ${isGalaxyMapTab ? "station-body--galaxy" : ""}`}>
         {tab === "Market" ? <MarketTab /> : null}
         {tab === "Hangar" ? <HangarTab /> : null}
         {tab === "Shipyard" ? <ShipyardTab /> : null}

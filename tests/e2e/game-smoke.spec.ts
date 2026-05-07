@@ -48,6 +48,45 @@ async function expectWebGlCanvasHasPixels(page: Page) {
   expect(uniqueBytes).toBeGreaterThan(80);
 }
 
+async function dockAtStation(page: Page, stationId: string) {
+  await page.evaluate((targetStationId) => {
+    const state = window.__GOF2_E2E__!.getState() as { dockAt: (stationId: string) => void };
+    state.dockAt(targetStationId);
+  }, stationId);
+}
+
+async function expectRouteActionInsideStationBody(page: Page) {
+  const routeButton = page.getByRole("button", { name: "Set Route" });
+  await expect(routeButton).toBeVisible();
+  await expect(routeButton).toBeEnabled();
+
+  const metrics = await page.evaluate(() => {
+    const routeButton = [...document.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Set Route");
+    const stationBody = document.querySelector(".station-body");
+    const details = document.querySelector(".galaxy-details");
+    const actions = document.querySelector(".galaxy-actions");
+    if (!routeButton || !stationBody || !details || !actions) return null;
+    const routeRect = routeButton.getBoundingClientRect();
+    const bodyRect = stationBody.getBoundingClientRect();
+    const detailsRect = details.getBoundingClientRect();
+    const actionsRect = actions.getBoundingClientRect();
+    return {
+      actionsBottom: actionsRect.bottom,
+      bodyBottom: bodyRect.bottom,
+      bodyTop: bodyRect.top,
+      detailsBottom: detailsRect.bottom,
+      routeBottom: routeRect.bottom,
+      routeTop: routeRect.top,
+      viewportHeight: window.innerHeight
+    };
+  });
+
+  expect(metrics).not.toBeNull();
+  expect(metrics!.routeTop).toBeGreaterThanOrEqual(metrics!.bodyTop);
+  expect(metrics!.routeBottom).toBeLessThanOrEqual(Math.min(metrics!.bodyBottom, metrics!.viewportHeight));
+  expect(metrics!.actionsBottom).toBeLessThanOrEqual(metrics!.detailsBottom);
+}
+
 test.describe("browser smoke", () => {
   test("starts flight and renders a non-empty WebGL scene", async ({ page }) => {
     await resetApp(page);
@@ -96,5 +135,52 @@ test.describe("browser smoke", () => {
     await page.getByRole("button", { name: "Continue" }).click();
     await expect(page.locator(".hud-top-left")).toContainText("Kuro Belt");
     expect((await getGameState(page)).currentSystemId).toBe("kuro-belt");
+  });
+
+  test("keeps the station galaxy route action visible at desktop zoom", async ({ page }) => {
+    for (const viewport of [
+      { width: 2048, height: 1138 },
+      { width: 2048, height: 1330 }
+    ]) {
+      await page.setViewportSize(viewport);
+      await resetApp(page);
+      await startNewGame(page);
+      await dockAtStation(page, "helion-prime");
+      await expect(page.getByRole("heading", { name: "Helion Prime Exchange" })).toBeVisible();
+
+      await page.getByRole("button", { name: "Galaxy Map" }).click();
+      await page.getByRole("button", { name: "Mirr Vale known" }).click();
+      await expectRouteActionInsideStationBody(page);
+    }
+  });
+
+  test("keeps hangar content from overlapping save slots", async ({ page }) => {
+    await page.setViewportSize({ width: 2048, height: 1138 });
+    await resetApp(page);
+    await startNewGame(page);
+    await dockAtStation(page, "helion-prime");
+
+    await page.getByRole("button", { name: "Hangar" }).click();
+    await expect(page.getByRole("heading", { name: "Current Ship" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Save Slots" })).toBeVisible();
+
+    const metrics = await page.evaluate(() => {
+      const repairButton = [...document.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Repair Hull and Refill Missiles");
+      const hangarGrid = document.querySelector(".hangar-build-grid");
+      const saveSlots = document.querySelector(".save-slots-panel");
+      if (!repairButton || !hangarGrid || !saveSlots) return null;
+      const repairRect = repairButton.getBoundingClientRect();
+      const hangarRect = hangarGrid.getBoundingClientRect();
+      const saveRect = saveSlots.getBoundingClientRect();
+      return {
+        hangarBottom: hangarRect.bottom,
+        repairBottom: repairRect.bottom,
+        saveTop: saveRect.top
+      };
+    });
+
+    expect(metrics).not.toBeNull();
+    expect(metrics!.repairBottom).toBeLessThanOrEqual(metrics!.saveTop);
+    expect(metrics!.hangarBottom).toBeLessThanOrEqual(metrics!.saveTop);
   });
 });

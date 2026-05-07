@@ -1,0 +1,962 @@
+{
+  "ok": true,
+  "frames_root": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames",
+  "errors": [],
+  "warnings": [],
+  "rows": [
+    {
+      "state": "idle",
+      "expected_frames": 6,
+      "actual_frames": 6,
+      "extraction_method": "components",
+      "ok": true,
+      "errors": [],
+      "warnings": [],
+      "frames": [
+        {
+          "index": 0,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/idle/00.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 24605,
+          "bbox": [
+            19,
+            5,
+            173,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 227
+        },
+        {
+          "index": 1,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/idle/01.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 24579,
+          "bbox": [
+            19,
+            5,
+            173,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 251
+        },
+        {
+          "index": 2,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/idle/02.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 23993,
+          "bbox": [
+            21,
+            5,
+            171,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 219
+        },
+        {
+          "index": 3,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/idle/03.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 24009,
+          "bbox": [
+            21,
+            5,
+            170,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 232
+        },
+        {
+          "index": 4,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/idle/04.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 23614,
+          "bbox": [
+            22,
+            5,
+            169,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 226
+        },
+        {
+          "index": 5,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/idle/05.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 23989,
+          "bbox": [
+            21,
+            5,
+            171,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 237
+        }
+      ]
+    },
+    {
+      "state": "running-right",
+      "expected_frames": 8,
+      "actual_frames": 8,
+      "extraction_method": "components",
+      "ok": true,
+      "errors": [],
+      "warnings": [],
+      "frames": [
+        {
+          "index": 0,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/running-right/00.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 20755,
+          "bbox": [
+            5,
+            28,
+            187,
+            180
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 324
+        },
+        {
+          "index": 1,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/running-right/01.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 17446,
+          "bbox": [
+            5,
+            33,
+            187,
+            175
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 314
+        },
+        {
+          "index": 2,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/running-right/02.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 15801,
+          "bbox": [
+            5,
+            41,
+            187,
+            166
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 235
+        },
+        {
+          "index": 3,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/running-right/03.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 16556,
+          "bbox": [
+            5,
+            39,
+            187,
+            168
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 280
+        },
+        {
+          "index": 4,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/running-right/04.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 21459,
+          "bbox": [
+            5,
+            23,
+            187,
+            184
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 327
+        },
+        {
+          "index": 5,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/running-right/05.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 22435,
+          "bbox": [
+            5,
+            27,
+            187,
+            180
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 363
+        },
+        {
+          "index": 6,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/running-right/06.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 23519,
+          "bbox": [
+            7,
+            5,
+            184,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 407
+        },
+        {
+          "index": 7,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/running-right/07.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 26210,
+          "bbox": [
+            5,
+            5,
+            187,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 426
+        }
+      ]
+    },
+    {
+      "state": "running-left",
+      "expected_frames": 8,
+      "actual_frames": 8,
+      "extraction_method": "components",
+      "ok": true,
+      "errors": [],
+      "warnings": [],
+      "frames": [
+        {
+          "index": 0,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/running-left/00.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 26210,
+          "bbox": [
+            5,
+            5,
+            187,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 426
+        },
+        {
+          "index": 1,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/running-left/01.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 23519,
+          "bbox": [
+            7,
+            5,
+            184,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 407
+        },
+        {
+          "index": 2,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/running-left/02.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 22435,
+          "bbox": [
+            5,
+            27,
+            187,
+            180
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 363
+        },
+        {
+          "index": 3,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/running-left/03.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 21459,
+          "bbox": [
+            5,
+            23,
+            187,
+            184
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 327
+        },
+        {
+          "index": 4,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/running-left/04.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 16556,
+          "bbox": [
+            5,
+            39,
+            187,
+            168
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 280
+        },
+        {
+          "index": 5,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/running-left/05.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 15801,
+          "bbox": [
+            5,
+            41,
+            187,
+            166
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 235
+        },
+        {
+          "index": 6,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/running-left/06.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 17446,
+          "bbox": [
+            5,
+            33,
+            187,
+            175
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 314
+        },
+        {
+          "index": 7,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/running-left/07.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 20755,
+          "bbox": [
+            5,
+            28,
+            187,
+            180
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 324
+        }
+      ]
+    },
+    {
+      "state": "waving",
+      "expected_frames": 4,
+      "actual_frames": 4,
+      "extraction_method": "components",
+      "ok": true,
+      "errors": [],
+      "warnings": [],
+      "frames": [
+        {
+          "index": 0,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/waving/00.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 23585,
+          "bbox": [
+            25,
+            5,
+            167,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 148
+        },
+        {
+          "index": 1,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/waving/01.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 23894,
+          "bbox": [
+            18,
+            5,
+            173,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 110
+        },
+        {
+          "index": 2,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/waving/02.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 23799,
+          "bbox": [
+            15,
+            5,
+            177,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 142
+        },
+        {
+          "index": 3,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/waving/03.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 23316,
+          "bbox": [
+            26,
+            5,
+            165,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 110
+        }
+      ]
+    },
+    {
+      "state": "jumping",
+      "expected_frames": 5,
+      "actual_frames": 5,
+      "extraction_method": "components",
+      "ok": true,
+      "errors": [],
+      "warnings": [],
+      "frames": [
+        {
+          "index": 0,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/jumping/00.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 23294,
+          "bbox": [
+            5,
+            22,
+            187,
+            185
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 169
+        },
+        {
+          "index": 1,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/jumping/01.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 24094,
+          "bbox": [
+            18,
+            5,
+            174,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 134
+        },
+        {
+          "index": 2,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/jumping/02.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 24586,
+          "bbox": [
+            18,
+            5,
+            173,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 100
+        },
+        {
+          "index": 3,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/jumping/03.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 24634,
+          "bbox": [
+            17,
+            5,
+            174,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 154
+        },
+        {
+          "index": 4,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/jumping/04.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 27817,
+          "bbox": [
+            7,
+            5,
+            184,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 251
+        }
+      ]
+    },
+    {
+      "state": "failed",
+      "expected_frames": 8,
+      "actual_frames": 8,
+      "extraction_method": "components",
+      "ok": true,
+      "errors": [],
+      "warnings": [],
+      "frames": [
+        {
+          "index": 0,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/failed/00.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 22282,
+          "bbox": [
+            29,
+            5,
+            162,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 308
+        },
+        {
+          "index": 1,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/failed/01.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 25924,
+          "bbox": [
+            15,
+            5,
+            176,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 299
+        },
+        {
+          "index": 2,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/failed/02.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 27116,
+          "bbox": [
+            10,
+            5,
+            182,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 367
+        },
+        {
+          "index": 3,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/failed/03.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 19756,
+          "bbox": [
+            5,
+            34,
+            186,
+            174
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 175
+        },
+        {
+          "index": 4,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/failed/04.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 17832,
+          "bbox": [
+            6,
+            39,
+            185,
+            169
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 175
+        },
+        {
+          "index": 5,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/failed/05.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 24130,
+          "bbox": [
+            11,
+            9,
+            181,
+            198
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 199
+        },
+        {
+          "index": 6,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/failed/06.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 24926,
+          "bbox": [
+            22,
+            5,
+            169,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 291
+        },
+        {
+          "index": 7,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/failed/07.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 22636,
+          "bbox": [
+            29,
+            5,
+            162,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 241
+        }
+      ]
+    },
+    {
+      "state": "waiting",
+      "expected_frames": 6,
+      "actual_frames": 6,
+      "extraction_method": "components",
+      "ok": true,
+      "errors": [],
+      "warnings": [],
+      "frames": [
+        {
+          "index": 0,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/waiting/00.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 25670,
+          "bbox": [
+            16,
+            5,
+            175,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 136
+        },
+        {
+          "index": 1,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/waiting/01.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 25090,
+          "bbox": [
+            20,
+            5,
+            172,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 182
+        },
+        {
+          "index": 2,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/waiting/02.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 24765,
+          "bbox": [
+            22,
+            5,
+            169,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 153
+        },
+        {
+          "index": 3,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/waiting/03.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 22313,
+          "bbox": [
+            26,
+            5,
+            165,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 183
+        },
+        {
+          "index": 4,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/waiting/04.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 25418,
+          "bbox": [
+            18,
+            5,
+            174,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 176
+        },
+        {
+          "index": 5,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/waiting/05.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 24984,
+          "bbox": [
+            21,
+            5,
+            170,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 170
+        }
+      ]
+    },
+    {
+      "state": "running",
+      "expected_frames": 6,
+      "actual_frames": 6,
+      "extraction_method": "components",
+      "ok": true,
+      "errors": [],
+      "warnings": [],
+      "frames": [
+        {
+          "index": 0,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/running/00.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 23616,
+          "bbox": [
+            27,
+            5,
+            164,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 324
+        },
+        {
+          "index": 1,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/running/01.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 23015,
+          "bbox": [
+            29,
+            5,
+            163,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 262
+        },
+        {
+          "index": 2,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/running/02.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 22976,
+          "bbox": [
+            28,
+            5,
+            163,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 221
+        },
+        {
+          "index": 3,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/running/03.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 23192,
+          "bbox": [
+            28,
+            5,
+            164,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 208
+        },
+        {
+          "index": 4,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/running/04.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 22837,
+          "bbox": [
+            29,
+            5,
+            162,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 250
+        },
+        {
+          "index": 5,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/running/05.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 22718,
+          "bbox": [
+            28,
+            5,
+            163,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 255
+        }
+      ]
+    },
+    {
+      "state": "review",
+      "expected_frames": 6,
+      "actual_frames": 6,
+      "extraction_method": "components",
+      "ok": true,
+      "errors": [],
+      "warnings": [],
+      "frames": [
+        {
+          "index": 0,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/review/00.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 25041,
+          "bbox": [
+            16,
+            5,
+            175,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 207
+        },
+        {
+          "index": 1,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/review/01.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 22279,
+          "bbox": [
+            21,
+            5,
+            171,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 209
+        },
+        {
+          "index": 2,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/review/02.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 25359,
+          "bbox": [
+            14,
+            5,
+            178,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 251
+        },
+        {
+          "index": 3,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/review/03.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 20624,
+          "bbox": [
+            26,
+            5,
+            166,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 218
+        },
+        {
+          "index": 4,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/review/04.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 25872,
+          "bbox": [
+            14,
+            5,
+            177,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 255
+        },
+        {
+          "index": 5,
+          "file": "/Users/pzy/Desktop/GOF2_pzy/pet-runs/golden-shaded-cat-20260507-014112/frames/review/05.png",
+          "width": 192,
+          "height": 208,
+          "nontransparent_pixels": 21931,
+          "bbox": [
+            23,
+            5,
+            169,
+            203
+          ],
+          "edge_pixels": 0,
+          "chroma_adjacent_pixels": 217
+        }
+      ]
+    }
+  ]
+}
