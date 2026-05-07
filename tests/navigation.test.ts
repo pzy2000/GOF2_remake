@@ -6,6 +6,8 @@ import {
   discoverNearbyPlanets,
   getInitialKnownPlanetIds,
   getInitialKnownSystems,
+  getNavigationHintText,
+  getNavigationTargetCue,
   getNearestNavigationTarget,
   PLANET_SCAN_RANGE,
   revealNeighborSystems,
@@ -42,6 +44,56 @@ describe("navigation targets and discovery", () => {
     const target = getNearestNavigationTarget("helion-reach", [gate[0] + STARGATE_INTERACTION_RANGE + 8, gate[1], gate[2]]);
     expect(target?.kind).toBe("stargate");
     expect(target?.inRange).toBe(false);
+  });
+
+  it("builds readable cue copy for in-range local POIs", () => {
+    const station = stationById["kuro-deep"];
+    const stationTarget = getNearestNavigationTarget("kuro-belt", station.position, ["kuro-anvil"]);
+    expect(getNavigationTargetCue(stationTarget)).toMatchObject({
+      actionLabel: "E Dock",
+      label: "Kuro Deepworks",
+      tone: "station",
+      inRange: true
+    });
+    expect(getNavigationHintText(stationTarget)).toBe("E Dock: Kuro Deepworks");
+
+    const gate = getJumpGatePosition("helion-reach");
+    const gateTarget = getNearestNavigationTarget("helion-reach", gate, ["helion-prime-world"]);
+    expect(getNavigationTargetCue(gateTarget)).toMatchObject({
+      actionLabel: "E Activate",
+      label: "Stargate",
+      tone: "gate",
+      inRange: true
+    });
+  });
+
+  it("uses signal-specific cue copy outside interaction range", () => {
+    const planet = planetById["lode-minor"];
+    const beaconTarget = getNearestNavigationTarget("kuro-belt", [planet.beaconPosition[0] + PLANET_SCAN_RANGE + 20, planet.beaconPosition[1], planet.beaconPosition[2]], ["kuro-anvil"]);
+    expect(getNavigationTargetCue(beaconTarget)).toMatchObject({
+      actionLabel: "Beacon",
+      label: "Unknown Beacon",
+      tone: "unknown",
+      inRange: false
+    });
+    expect(getNavigationHintText(beaconTarget)).toContain("Unknown Beacon");
+
+    const signal = explorationSignalById["quiet-signal-sundog-lattice"];
+    const signalTarget = {
+      kind: "exploration-signal" as const,
+      id: signal.id,
+      name: signal.maskedTitle,
+      signal,
+      position: signal.position,
+      distance: 330,
+      inRange: false
+    };
+    expect(getNavigationTargetCue(signalTarget)).toMatchObject({
+      actionLabel: "Signal",
+      label: signal.maskedTitle,
+      tone: "exploration",
+      inRange: false
+    });
   });
 
   it("starts with the current system and nearby systems known", () => {

@@ -8,7 +8,8 @@ import type { AsteroidEntity, ConvoyEntity, ExplorationSignalDefinition, FlightE
 import { add, forwardFromRotation, normalize, scale, sub } from "../systems/math";
 import { getOreColor } from "../systems/difficulty";
 import { getJumpGatePosition } from "../systems/autopilot";
-import { getNearestNavigationTarget } from "../systems/navigation";
+import { getNavigationHintText, getNavigationTargetCue, getNearestNavigationTarget } from "../systems/navigation";
+import type { NavigationCueTone } from "../systems/navigation";
 import { getIncompleteExplorationSignals, getVisibleStationsForSystem, isExplorationSignalDiscovered } from "../systems/exploration";
 
 function toThree(position: Vec3): [number, number, number] {
@@ -758,6 +759,10 @@ function VisualEffect({ effect }: { effect: VisualEffectEntity }) {
           <torusGeometry args={[effect.size, 1.6, 8, 48]} />
           <meshBasicMaterial color={effect.color} transparent opacity={alpha * 0.55} toneMapped={false} />
         </mesh>
+        <mesh rotation={[0, Math.PI / 2, 0]}>
+          <torusGeometry args={[effect.size * (0.64 + alpha * 0.14), 0.9, 8, 42]} />
+          <meshBasicMaterial color={effect.secondaryColor ?? effect.color} transparent opacity={alpha * 0.28} toneMapped={false} />
+        </mesh>
         <mesh>
           <sphereGeometry args={[7 + alpha * 7, 12, 8]} />
           <meshBasicMaterial color={effect.secondaryColor ?? effect.color} transparent opacity={alpha * 0.3} toneMapped={false} />
@@ -777,6 +782,10 @@ function VisualEffect({ effect }: { effect: VisualEffectEntity }) {
         <mesh rotation={[Math.PI / 2, 0, 0]}>
           <torusGeometry args={[effect.size * (1.12 - alpha * 0.2), 4.2, 10, 64]} />
           <meshBasicMaterial color={effect.color} transparent opacity={alpha * 0.58} toneMapped={false} />
+        </mesh>
+        <mesh rotation={[0, Math.PI / 2, 0]}>
+          <torusGeometry args={[effect.size * (0.66 + (1 - alpha) * 0.18), 2.4, 8, 48]} />
+          <meshBasicMaterial color={effect.secondaryColor ?? effect.color} transparent opacity={alpha * 0.36} toneMapped={false} />
         </mesh>
         <mesh>
           <sphereGeometry args={[effect.size * 0.2 + (1 - alpha) * 24, 18, 12]} />
@@ -810,6 +819,40 @@ function VisualEffect({ effect }: { effect: VisualEffectEntity }) {
           <sphereGeometry args={[effect.size * (1.1 - alpha * 0.35), 18, 12]} />
           <meshBasicMaterial color={effect.color} transparent opacity={alpha * 0.14} wireframe toneMapped={false} />
         </mesh>
+        <mesh rotation={[Math.PI / 2, 0, 0]}>
+          <torusGeometry args={[effect.size * (0.45 + (1 - alpha) * 0.35), 2.2, 8, 42]} />
+          <meshBasicMaterial color={effect.secondaryColor ?? "#eaffff"} transparent opacity={alpha * 0.3} toneMapped={false} />
+        </mesh>
+      </group>
+    );
+  }
+
+  if ((effect.kind === "launch-trail" || effect.kind === "dock-corridor") && effect.endPosition) {
+    const vector = sub(effect.endPosition, effect.position);
+    const rings = effect.kind === "dock-corridor" ? [0.28, 0.48, 0.68, 0.88] : [0.35, 0.68, 0.92];
+    return (
+      <group>
+        <Line points={[effect.position, effect.endPosition]} color={effect.color} lineWidth={effect.kind === "dock-corridor" ? 2.4 : 3.2} transparent opacity={alpha * 0.64} />
+        <Line points={[effect.position, effect.endPosition]} color={effect.secondaryColor ?? "#ffffff"} lineWidth={0.9} transparent opacity={alpha * 0.34} />
+        {rings.map((progress) => {
+          const position = add(effect.position, scale(vector, progress));
+          const size = effect.size * (effect.kind === "dock-corridor" ? 0.58 + progress * 0.42 : 0.45 + progress * 0.36);
+          return (
+            <mesh key={progress} position={toThree(position)} rotation={[Math.PI / 2, 0, 0]}>
+              <torusGeometry args={[size, effect.kind === "dock-corridor" ? 1.1 : 1.6, 8, 36]} />
+              <meshBasicMaterial color={progress > 0.7 ? effect.secondaryColor ?? effect.color : effect.color} transparent opacity={alpha * (0.24 + progress * 0.3)} toneMapped={false} />
+            </mesh>
+          );
+        })}
+        <mesh position={toThree(effect.endPosition)}>
+          <sphereGeometry args={[effect.size * 0.22 + alpha * 4, 12, 8]} />
+          <meshBasicMaterial color={effect.secondaryColor ?? effect.color} transparent opacity={alpha * 0.38} toneMapped={false} />
+        </mesh>
+        {effect.label ? (
+          <Html center distanceFactor={10} className="effect-label" position={toThree(effect.endPosition)} style={{ opacity: alpha }}>
+            {effect.label}
+          </Html>
+        ) : null}
       </group>
     );
   }
@@ -881,6 +924,59 @@ function TargetLock() {
   );
 }
 
+function waypointTone(tone: NavigationCueTone) {
+  if (tone === "gate") return { color: "#6ee7ff", secondary: "#9b7bff" };
+  if (tone === "unknown") return { color: "#ffd166", secondary: "#fff2c5" };
+  if (tone === "exploration") return { color: "#9bffe8", secondary: "#ff9bd5" };
+  return { color: "#80d6ff", secondary: "#dff8ff" };
+}
+
+function WaypointMarker() {
+  const currentSystemId = useGameStore((state) => state.currentSystemId);
+  const player = useGameStore((state) => state.player);
+  const knownPlanetIds = useGameStore((state) => state.knownPlanetIds);
+  const explorationState = useGameStore((state) => state.explorationState);
+  const autopilot = useGameStore((state) => state.autopilot);
+  const clock = useGameStore((state) => state.runtime.clock);
+  const target = getNearestNavigationTarget(currentSystemId, player.position, knownPlanetIds, {
+    explorationState,
+    installedEquipment: player.equipment
+  });
+  const cue = getNavigationTargetCue(target);
+  if (!target || !cue || autopilot?.phase === "wormhole") return null;
+
+  const tone = waypointTone(cue.tone);
+  const pulse = 0.5 + Math.sin(clock * (cue.inRange ? 5.6 : 2.8)) * 0.5;
+  const forward = forwardFromRotation(player.rotation);
+  const lineStart = add(player.position, scale(forward, 52));
+  const ringRadius = cue.inRange ? 58 + pulse * 16 : 38 + pulse * 10;
+  const lineOpacity = cue.inRange ? 0.58 + pulse * 0.18 : 0.28 + pulse * 0.12;
+  return (
+    <group>
+      <Line points={[lineStart, target.position]} color={tone.color} lineWidth={cue.inRange ? 2.6 : 1.4} transparent opacity={lineOpacity} />
+      <group position={toThree(target.position)}>
+        <mesh rotation={[Math.PI / 2, 0, clock * 0.45]}>
+          <torusGeometry args={[ringRadius, cue.inRange ? 2.6 : 1.6, 8, 56]} />
+          <meshBasicMaterial color={tone.color} transparent opacity={cue.inRange ? 0.64 : 0.38} toneMapped={false} />
+        </mesh>
+        <mesh rotation={[0, Math.PI / 2, -clock * 0.32]}>
+          <torusGeometry args={[ringRadius * 0.64, 1.2, 8, 42]} />
+          <meshBasicMaterial color={tone.secondary} transparent opacity={0.22 + pulse * 0.24} toneMapped={false} />
+        </mesh>
+        <mesh>
+          <sphereGeometry args={[cue.inRange ? 8 + pulse * 5 : 5 + pulse * 3, 12, 8]} />
+          <meshBasicMaterial color={tone.secondary} transparent opacity={cue.inRange ? 0.46 : 0.28} toneMapped={false} />
+        </mesh>
+        <pointLight color={tone.color} intensity={cue.inRange ? 1.7 : 0.8} distance={cue.inRange ? 320 : 220} />
+        <Html center distanceFactor={11} className={`waypoint-label waypoint-${cue.tone} ${cue.inRange ? "in-range" : ""}`}>
+          <b>{cue.label}</b>
+          <span>{cue.actionLabel} · {cue.distanceLabel}</span>
+        </Html>
+      </group>
+    </group>
+  );
+}
+
 function SceneContent({ onShipModelStatus }: { onShipModelStatus: (status: ShipModelStatus | null) => void }) {
   const runtime = useGameStore((state) => state.runtime);
   const currentSystemId = useGameStore((state) => state.currentSystemId);
@@ -900,6 +996,7 @@ function SceneContent({ onShipModelStatus }: { onShipModelStatus: (status: ShipM
       <PlayerShip onModelStatus={onShipModelStatus} />
       <WormholeTunnel />
       <TargetLock />
+      <WaypointMarker />
       {runtime.enemies.map((ship) => (
         <NpcShip key={ship.id} ship={ship} />
       ))}
@@ -942,17 +1039,8 @@ export function FlightScene() {
     explorationState,
     installedEquipment: player.equipment
   });
-  const hint = navigationTarget
-    ? navigationTarget.inRange
-      ? navigationTarget.kind === "station"
-        ? `E Dock: ${navigationTarget.name}`
-        : navigationTarget.kind === "planet-signal"
-          ? "Scanning: Unknown Beacon"
-          : navigationTarget.kind === "exploration-signal"
-            ? `E Scan: ${navigationTarget.name}`
-            : "E Activate: Stargate"
-      : `${navigationTarget.name} ${Math.round(navigationTarget.distance)}m`
-    : undefined;
+  const navigationCue = getNavigationTargetCue(navigationTarget);
+  const hint = getNavigationHintText(navigationTarget);
   return (
     <div
       ref={canvasRef}
@@ -970,7 +1058,7 @@ export function FlightScene() {
         </Suspense>
       </Canvas>
       {shipModelStatus ? <div className={`ship-model-status ${shipModelStatus.kind}`}>{shipModelStatus.text}</div> : null}
-      {hint ? <div className={`dock-hint ${navigationTarget?.kind === "stargate" ? "gate-hint" : navigationTarget?.kind === "planet-signal" || navigationTarget?.kind === "exploration-signal" ? "scan-hint" : ""}`}>{hint}</div> : null}
+      {hint ? <div className={`dock-hint ${navigationCue ? `dock-hint-${navigationCue.tone}` : ""} ${navigationCue?.inRange ? "in-range" : ""}`}>{hint}</div> : null}
     </div>
   );
 }

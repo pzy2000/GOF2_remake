@@ -51,7 +51,7 @@ Generated project assets:
 - `faction-emblems.webp`
 - `hud-overlay.webp`
 
-No external copyrighted image or model packs are included. The flight scene uses per-system generated skyboxes as camera-locked inside-sphere backgrounds, with `skybox-panorama.webp` and `nebula-bg.webp` kept as fallbacks. Planets use generated equirectangular WebP surface textures on large Three.js spheres so each station sits beside its own visible world. Player ship models are local generated GLB files created by `scripts/generate-ship-models.mjs`; the runtime loads them through the asset manifest and falls back to procedural geometry if a model is unavailable. Stations, asteroids, projectiles, loot, and fallback ships use Three.js primitives.
+No external copyrighted image or model packs are included. The flight scene uses per-system generated skyboxes as camera-locked inside-sphere backgrounds, with `skybox-panorama.webp` and `nebula-bg.webp` kept as fallbacks. Planets use generated equirectangular WebP surface textures on large Three.js spheres so each station sits beside its own visible world. Player ship models are local generated GLB files created by `scripts/generate-ship-models.mjs`; the runtime loads them through the asset manifest and falls back to procedural geometry if a model is unavailable. Stations, asteroids, projectiles, loot, and fallback ships use Three.js primitives. Background music files under `public/assets/music/` are CC0 tracks, with source and license metadata recorded in `public/assets/music/credits.json`.
 
 ## Jump Travel
 
@@ -77,8 +77,8 @@ The browser save system uses three manual slots plus one auto/quick slot. Older 
 
 Game content is split into strongly typed data modules for commodities, ships/equipment, systems/stations, factions, and missions, with validation tests for duplicate ids and broken references.
 
-Audio is generated at runtime with the Web Audio API. No audio files are required. Settings include master, SFX, music, and mute controls, while flight/market interactions trigger synthesized lasers, missiles, mining, explosions, UI clicks, warnings, and simple safe/combat/station music layers.
+Audio uses a hybrid runtime: SFX, warnings, and fallback music are synthesized with the Web Audio API, while authored CC0 background tracks are routed by current system, station archetype, and combat state. The asset manifest maps flight themes, station themes, and combat music to files in `public/assets/music/`; if an external track cannot play, the procedural music layer takes over. Settings include master, SFX, music, voice, and mute controls.
 
 ## Known Limitations
 
-This is a vertical slice, not a full campaign. Dynamic markets react to player trades and drift back toward station baselines, but NPC trade fleets do not globally simulate supply chains yet. Escort routes are currently same-system contracts so they stay independent from jump-gate autopilot. Commodity, equipment, and faction sprite sheets are sliced in the UI with CSS atlas positioning. Procedural audio is intentionally lightweight and can later be replaced or layered with authored assets.
+This is a vertical slice, not a full campaign. Dynamic markets react to player trades and drift back toward station baselines, but NPC trade fleets do not globally simulate supply chains yet. Escort routes are currently same-system contracts so they stay independent from jump-gate autopilot. Commodity, equipment, and faction sprite sheets are sliced in the UI with CSS atlas positioning. Procedural SFX and fallback music are intentionally lightweight, while authored BGM coverage is limited to the current CC0 track set.

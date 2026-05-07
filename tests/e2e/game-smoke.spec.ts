@@ -22,6 +22,7 @@ async function startNewGame(page: Page) {
   await page.getByRole("button", { name: "New Game" }).click();
   await expect(page.locator(".flight-canvas canvas")).toBeVisible();
   await expect(page.getByText("Helion Reach")).toBeVisible();
+  await expect(page.locator(".dock-hint")).toBeVisible();
 }
 
 async function getGameState(page: Page): Promise<Gof2E2EState> {
@@ -167,6 +168,8 @@ test.describe("browser smoke", () => {
 
     await page.getByRole("button", { name: "Launch" }).click();
     await expect(page.locator(".flight-canvas canvas")).toBeVisible();
+    await expect(page.locator(".hud-bottom-right")).toContainText("Launch vector clear");
+    await expect(page.locator(".dock-hint")).toBeVisible();
     await page.evaluate(() => {
       const state = window.__GOF2_E2E__!.getState() as { jumpToSystem: (systemId: string) => void };
       state.jumpToSystem("kuro-belt");

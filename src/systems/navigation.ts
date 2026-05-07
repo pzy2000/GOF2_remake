@@ -48,6 +48,18 @@ export type NavigationTarget =
       inRange: boolean;
     };
 
+export type NavigationCueTone = "station" | "gate" | "unknown" | "exploration";
+
+export interface NavigationTargetCue {
+  targetId: string;
+  kind: NavigationTarget["kind"];
+  label: string;
+  actionLabel: string;
+  distanceLabel: string;
+  tone: NavigationCueTone;
+  inRange: boolean;
+}
+
 export interface NavigationOptions {
   explorationState?: ExplorationState;
   installedEquipment?: EquipmentId[];
@@ -115,6 +127,63 @@ export function getNearestNavigationTarget(
   };
 
   return [stationTarget, signalTarget, explorationTarget, gateTarget].filter((target): target is NavigationTarget => !!target).sort((a, b) => a.distance - b.distance)[0];
+}
+
+export function formatNavigationDistance(distanceMeters: number): string {
+  if (distanceMeters >= 1000) return `${(distanceMeters / 1000).toFixed(1)}km`;
+  return `${Math.round(distanceMeters)}m`;
+}
+
+export function getNavigationTargetCue(target: NavigationTarget | undefined): NavigationTargetCue | undefined {
+  if (!target) return undefined;
+  if (target.kind === "station") {
+    return {
+      targetId: target.id,
+      kind: target.kind,
+      label: target.name,
+      actionLabel: target.inRange ? "E Dock" : "Waypoint",
+      distanceLabel: formatNavigationDistance(target.distance),
+      tone: "station",
+      inRange: target.inRange
+    };
+  }
+  if (target.kind === "planet-signal") {
+    return {
+      targetId: target.id,
+      kind: target.kind,
+      label: target.name,
+      actionLabel: target.inRange ? "E Scan" : "Beacon",
+      distanceLabel: formatNavigationDistance(target.distance),
+      tone: "unknown",
+      inRange: target.inRange
+    };
+  }
+  if (target.kind === "exploration-signal") {
+    return {
+      targetId: target.id,
+      kind: target.kind,
+      label: target.name,
+      actionLabel: target.inRange ? "E Scan" : "Signal",
+      distanceLabel: formatNavigationDistance(target.distance),
+      tone: "exploration",
+      inRange: target.inRange
+    };
+  }
+  return {
+    targetId: target.id,
+    kind: target.kind,
+    label: target.name,
+    actionLabel: target.inRange ? "E Activate" : "Stargate",
+    distanceLabel: formatNavigationDistance(target.distance),
+    tone: "gate",
+    inRange: target.inRange
+  };
+}
+
+export function getNavigationHintText(target: NavigationTarget | undefined): string | undefined {
+  const cue = getNavigationTargetCue(target);
+  if (!cue) return undefined;
+  return cue.inRange ? `${cue.actionLabel}: ${cue.label}` : `${cue.label} ${cue.distanceLabel}`;
 }
 
 export function isKnownSystem(knownSystems: string[], systemId: string): boolean {

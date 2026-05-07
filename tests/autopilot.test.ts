@@ -120,6 +120,38 @@ describe("autopilot jump flow", () => {
     expect(save?.currentSystemId).toBe("helion-reach");
   });
 
+  it("renders docking corridor feedback before autopilot completes docking", async () => {
+    const store = await freshStore();
+    const station = stationById["helion-prime"];
+    store.setState((state) => ({
+      screen: "flight",
+      autopilot: {
+        phase: "docking",
+        originSystemId: "helion-reach",
+        targetSystemId: "helion-reach",
+        targetStationId: station.id,
+        targetPosition: station.position,
+        timer: 0.1,
+        cancelable: false
+      },
+      player: { ...state.player, position: [station.position[0], station.position[1], station.position[2] + 420], velocity: [0, 0, 0] }
+    }));
+    store.getState().tick(0.05);
+    expect(store.getState().screen).toBe("flight");
+    expect(store.getState().runtime.effects.some((effect) => effect.kind === "dock-corridor" && effect.label === "DOCKING")).toBe(true);
+  });
+
+  it("shows launch feedback when leaving a station", async () => {
+    const store = await freshStore();
+    store.getState().dockAt("helion-prime");
+    store.getState().undock();
+    const state = store.getState();
+    expect(state.screen).toBe("flight");
+    expect(state.currentStationId).toBeUndefined();
+    expect(state.runtime.message).toContain("Launch vector clear");
+    expect(state.runtime.effects.some((effect) => effect.kind === "launch-trail" && effect.label === "LAUNCH")).toBe(true);
+  });
+
   it("starts from a station by launching into flight toward the origin gate", async () => {
     const store = await freshStore();
     store.getState().dockAt("helion-prime");
@@ -189,6 +221,7 @@ describe("autopilot jump flow", () => {
     }));
     store.getState().tick(0.05);
     expect(store.getState().autopilot?.phase).toBe("wormhole");
+    expect(store.getState().runtime.effects.some((effect) => effect.kind === "gate-spool")).toBe(true);
   });
 
   it("switches systems after wormhole transit and exits near the target station without auto-docking", async () => {
@@ -204,6 +237,7 @@ describe("autopilot jump flow", () => {
     expect(state.currentStationId).toBeUndefined();
     expect(state.targetId).toBeUndefined();
     expect(state.autopilot).toBeUndefined();
+    expect(state.runtime.message).toBe("Arrived near Lode Spindle. Press E to dock.");
     expect(distance(state.player.position, stationById["lode-spindle"].position)).toBeLessThan(360);
     expect(state.knownSystems).toContain("ashen-drift");
     expect(state.knownPlanetIds).toContain("lode-minor");

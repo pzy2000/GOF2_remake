@@ -413,6 +413,40 @@ function wormholeEffect(position: Vec3): RuntimeState["effects"][number] {
   };
 }
 
+function launchTrailEffect(startPosition: Vec3, endPosition: Vec3): RuntimeState["effects"][number] {
+  return {
+    id: projectileId("launch-trail"),
+    kind: "launch-trail",
+    position: startPosition,
+    endPosition,
+    color: "#6ee7ff",
+    secondaryColor: "#ffd166",
+    label: "LAUNCH",
+    particleCount: 10,
+    spread: 28,
+    size: 18,
+    life: 1.1,
+    maxLife: 1.1
+  };
+}
+
+function dockCorridorEffect(startPosition: Vec3, endPosition: Vec3, label = "DOCKING"): RuntimeState["effects"][number] {
+  return {
+    id: projectileId("dock-corridor"),
+    kind: "dock-corridor",
+    position: startPosition,
+    endPosition,
+    color: "#9bffe8",
+    secondaryColor: "#dff8ff",
+    label,
+    particleCount: 0,
+    spread: 1,
+    size: 36,
+    life: 0.2,
+    maxLife: 0.2
+  };
+}
+
 function launchPositionForStation(stationId: string | undefined, fallback: Vec3): Vec3 {
   const station = stationId ? stationById[stationId] : undefined;
   const planet = station ? planetById[station.planetId] : undefined;
@@ -899,7 +933,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
           runtime = {
             ...createRuntimeForSystem(targetSystem.id, state.activeMissions),
             message: `Arrived near ${targetStation.name}. Press E to dock.`,
-            effects: [wormholeEffect(player.position)]
+            effects: [
+              wormholeEffect(player.position),
+              navEffect(targetStation.position, "E Dock"),
+              dockCorridorEffect(player.position, targetStation.position, "ARRIVAL")
+            ]
           };
           autopilot = undefined;
         }
@@ -913,6 +951,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         });
         player = drainAutopilotAfterburner(step.player);
         runtime.effects.push(navEffect(targetStation.position, `Dock ${Math.round(step.distanceToTarget)}m`));
+        runtime.effects.push(dockCorridorEffect(player.position, targetStation.position, "APPROACH"));
         runtime.message = `Autopilot: approaching ${targetStation.name} · ${Math.round(step.distanceToTarget)}m`;
         if (step.distanceToTarget <= STATION_DOCK_DISTANCE) {
           autopilot = undefined;
@@ -928,6 +967,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           arriveDistance: 150
         });
         player = step.player;
+        runtime.effects.push(dockCorridorEffect(player.position, targetStation.position));
         runtime.message = `Docking with ${targetStation.name}...`;
         if (autopilot.timer >= 0.9 || step.distanceToTarget <= 220) {
           screen = "station";
@@ -1749,18 +1789,34 @@ export const useGameStore = create<GameStore>((set, get) => ({
       stationTab: "Market",
       previousScreen: "flight",
       autopilot: undefined,
+      runtime: {
+        ...state.runtime,
+        effects: [...state.runtime.effects, dockCorridorEffect(state.player.position, station.position, "DOCK")],
+        message: `Docked at ${station.name}. Auto-saved to Auto / Quick Slot.`
+      },
       ...stationAutoSave
     });
   },
   undock: () =>
     set((state) => {
       audioSystem.play("undock");
+      const station = state.currentStationId ? stationById[state.currentStationId] : undefined;
+      const launchPosition = launchPositionForStation(state.currentStationId, state.player.position);
       return {
         screen: "flight",
         currentStationId: undefined,
         previousScreen: "station",
         autopilot: undefined,
-        player: { ...state.player, position: launchPositionForStation(state.currentStationId, state.player.position), throttle: 0.2 }
+        player: { ...state.player, position: launchPosition, throttle: 0.2 },
+        runtime: {
+          ...state.runtime,
+          effects: [
+            ...state.runtime.effects,
+            launchTrailEffect(station?.position ?? state.player.position, launchPosition),
+            navEffect(launchPosition, "Launch")
+          ],
+          message: station ? `Launch vector clear from ${station.name}.` : "Launch vector clear."
+        }
       };
     }),
   startJumpToStation: (stationId) => {
@@ -1773,6 +1829,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const launchPosition = state.screen === "station" ? launchPositionForStation(state.currentStationId, state.player.position) : state.player.position;
     const sameSystem = targetSystem.id === state.currentSystemId;
     const targetPosition = sameSystem ? targetStation.position : originGate;
+    const launchEffects = state.screen === "station"
+      ? [launchTrailEffect(stationById[state.currentStationId ?? ""]?.position ?? state.player.position, launchPosition)]
+      : [];
     set({
       screen: "flight",
       previousScreen: state.screen,
@@ -1798,7 +1857,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
       runtime: {
         ...state.runtime,
         graceUntil: Math.max(state.runtime.graceUntil, state.runtime.clock + 5),
-        effects: [...state.runtime.effects, navEffect(targetPosition, sameSystem ? targetStation.name : "Jump Gate")],
+        effects: [
+          ...state.runtime.effects,
+          ...launchEffects,
+          navEffect(targetPosition, sameSystem ? targetStation.name : "Jump Gate")
+        ],
         message: sameSystem
           ? `Autopilot: plotting local route to ${targetStation.name}. Manual input cancels.`
           : `Autopilot: plotting jump to ${targetStation.name}. Manual input cancels.`
