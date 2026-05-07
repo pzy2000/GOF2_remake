@@ -6,6 +6,7 @@ import { getEquipmentSlotUsage, getShipSlotCapacity } from "../src/systems/equip
 import { distance } from "../src/systems/math";
 import { validateContentData } from "../src/data/validate";
 import { createInitialMarketState } from "../src/systems/economy";
+import { voiceProfiles } from "../src/systems/voice";
 import type { PlanetDefinition, StationDefinition } from "../src/types/game";
 
 function idsAreUnique(ids: string[]): boolean {
@@ -261,8 +262,12 @@ describe("content data", () => {
 
   it("defines voiced dialogue coverage for story chapters and exploration signals", () => {
     const speakerIds = new Set(dialogueSpeakers.map((speaker) => speaker.id));
+    const voiceProfileIds = new Set(Object.keys(voiceProfiles));
+    const speakerProfileIds = dialogueSpeakers.map((speaker) => speaker.voiceProfile);
+    expect(idsAreUnique(speakerProfileIds)).toBe(true);
     for (const speaker of dialogueSpeakers) {
       expect(fallbackAssetManifest.speakerPortraits[speaker.id]).toMatch(/^\/assets\/generated\/portraits\/.+\.webp$/);
+      expect(voiceProfileIds.has(speaker.voiceProfile)).toBe(true);
     }
     for (const scene of dialogueScenes) {
       expect(scene.lines.length).toBeGreaterThan(0);

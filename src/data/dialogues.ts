@@ -1,4 +1,5 @@
 import type { FactionId } from "../types/game";
+import type { VoiceProfileId } from "../systems/voice";
 import { explorationSignals } from "./exploration";
 import { glassWakeProtocol } from "./story";
 
@@ -15,7 +16,7 @@ export interface DialogueSpeakerDefinition {
   kind: "npc" | "player" | "ai";
   factionId?: FactionId;
   color: string;
-  voiceHint: "calm" | "firm" | "rough" | "bright" | "synthetic";
+  voiceProfile: VoiceProfileId;
 }
 
 export interface DialogueLineDefinition {
@@ -33,15 +34,15 @@ export interface DialogueSceneDefinition {
 }
 
 export const dialogueSpeakers: DialogueSpeakerDefinition[] = [
-  { id: "captain", name: "Captain", role: "Player ship", kind: "player", color: "#80d6ff", voiceHint: "firm" },
-  { id: "ship-ai", name: "Ship AI", role: "Navigation core", kind: "ai", color: "#9bffe8", voiceHint: "synthetic" },
-  { id: "helion-handler", name: "Rhea Vale", role: "Helion traffic handler", kind: "npc", factionId: "solar-directorate", color: "#f8c15d", voiceHint: "firm" },
-  { id: "mirr-analyst", name: "Sera Voss", role: "Mirr signal analyst", kind: "npc", factionId: "mirr-collective", color: "#bda7ff", voiceHint: "calm" },
-  { id: "kuro-foreman", name: "Mako Dren", role: "Kuro belt foreman", kind: "npc", factionId: "free-belt-union", color: "#f0a45b", voiceHint: "rough" },
-  { id: "vantara-officer", name: "Cmdr. Hale", role: "Directorate spectrum officer", kind: "npc", factionId: "solar-directorate", color: "#7bc8ff", voiceHint: "firm" },
-  { id: "ashen-broker", name: "Nyx Calder", role: "Ashen information broker", kind: "npc", factionId: "vossari-clans", color: "#ff8a6a", voiceHint: "rough" },
-  { id: "celest-archivist", name: "Ione Sel", role: "Celest archive keeper", kind: "npc", factionId: "solar-directorate", color: "#fff0a8", voiceHint: "bright" },
-  { id: "union-witness", name: "Talla Rook", role: "Union witness", kind: "npc", factionId: "free-belt-union", color: "#ffd166", voiceHint: "rough" }
+  { id: "captain", name: "Captain", role: "Player ship", kind: "player", color: "#80d6ff", voiceProfile: "captain" },
+  { id: "ship-ai", name: "Ship AI", role: "Navigation core", kind: "ai", color: "#9bffe8", voiceProfile: "ship-ai" },
+  { id: "helion-handler", name: "Rhea Vale", role: "Helion traffic handler", kind: "npc", factionId: "solar-directorate", color: "#f8c15d", voiceProfile: "helion-handler" },
+  { id: "mirr-analyst", name: "Sera Voss", role: "Mirr signal analyst", kind: "npc", factionId: "mirr-collective", color: "#bda7ff", voiceProfile: "mirr-analyst" },
+  { id: "kuro-foreman", name: "Mako Dren", role: "Kuro belt foreman", kind: "npc", factionId: "free-belt-union", color: "#f0a45b", voiceProfile: "kuro-foreman" },
+  { id: "vantara-officer", name: "Cmdr. Hale", role: "Directorate spectrum officer", kind: "npc", factionId: "solar-directorate", color: "#7bc8ff", voiceProfile: "vantara-officer" },
+  { id: "ashen-broker", name: "Nyx Calder", role: "Ashen information broker", kind: "npc", factionId: "vossari-clans", color: "#ff8a6a", voiceProfile: "ashen-broker" },
+  { id: "celest-archivist", name: "Ione Sel", role: "Celest archive keeper", kind: "npc", factionId: "solar-directorate", color: "#fff0a8", voiceProfile: "celest-archivist" },
+  { id: "union-witness", name: "Talla Rook", role: "Union witness", kind: "npc", factionId: "free-belt-union", color: "#ffd166", voiceProfile: "union-witness" }
 ];
 
 const storyScenes: DialogueSceneDefinition[] = [

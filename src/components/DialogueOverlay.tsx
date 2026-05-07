@@ -54,7 +54,7 @@ export function DialogueOverlay() {
 
   useEffect(() => {
     if (!line || !speaker) return undefined;
-    voiceSystem.speak(line.text, speaker.voiceHint, {
+    voiceSystem.speak(line.text, speaker.voiceProfile, {
       onEnd: () => {
         setVoiceStatus(voiceSystem.debugState);
         advanceDialogue();
@@ -83,13 +83,13 @@ export function DialogueOverlay() {
 
   function playPause() {
     const state = voiceSystem.pauseOrResume();
-    if (state === "idle" && line && speaker) voiceSystem.speak(line.text, speaker.voiceHint);
+    if (state === "idle" && line && speaker) voiceSystem.speak(line.text, speaker.voiceProfile);
     setVoiceStatus(voiceSystem.debugState);
   }
 
   function replayVoice() {
     if (!line || !speaker) return;
-    voiceSystem.speak(line.text, speaker.voiceHint);
+    voiceSystem.speak(line.text, speaker.voiceProfile);
     setVoiceStatus(voiceSystem.debugState);
   }
 

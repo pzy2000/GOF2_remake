@@ -15,6 +15,16 @@ class FakeUtterance {
   }
 }
 
+function fakeVoice(name: string, lang = "en-US"): SpeechSynthesisVoice {
+  return {
+    default: false,
+    lang,
+    localService: true,
+    name,
+    voiceURI: name
+  } as SpeechSynthesisVoice;
+}
+
 async function freshVoice() {
   vi.resetModules();
   return import("../src/systems/voice");
@@ -37,7 +47,7 @@ describe("browser voice system", () => {
     const synthesis = {
       speaking: false,
       paused: false,
-      getVoices: vi.fn(() => [{ lang: "en-US" }]),
+      getVoices: vi.fn(() => [fakeVoice("Generic English")]),
       speak: vi.fn((utterance: FakeUtterance) => {
         spoken.push(utterance);
         synthesis.speaking = true;
@@ -59,7 +69,7 @@ describe("browser voice system", () => {
     const { voiceSystem } = await freshVoice();
     voiceSystem.applySettings({ masterVolume: 0.5, sfxVolume: 0.8, musicVolume: 0.4, voiceVolume: 0.6, muted: false });
 
-    expect(voiceSystem.speak("Glass Wake confirmed.", "calm")).toBe(true);
+    expect(voiceSystem.speak("Glass Wake confirmed.", "mirr-analyst")).toBe(true);
     expect(synthesis.speak).toHaveBeenCalledOnce();
     expect(spoken[0].volume).toBeCloseTo(0.405);
     expect(spoken[0].lang).toBe("en-US");
@@ -81,7 +91,7 @@ describe("browser voice system", () => {
     const synthesis = {
       speaking: false,
       paused: false,
-      getVoices: vi.fn(() => [{ lang: "en-US" }]),
+      getVoices: vi.fn(() => [fakeVoice("Generic English")]),
       speak: vi.fn((utterance: FakeUtterance) => {
         spoken.push(utterance);
         synthesis.speaking = true;
@@ -99,13 +109,13 @@ describe("browser voice system", () => {
     const { voiceSystem } = await freshVoice();
     const onEnd = vi.fn();
 
-    expect(voiceSystem.speak("First line.", "firm", { onEnd })).toBe(true);
+    expect(voiceSystem.speak("First line.", "helion-handler", { onEnd })).toBe(true);
     const first = spoken[0];
     voiceSystem.cancel();
     first.onend?.();
     expect(onEnd).not.toHaveBeenCalled();
 
-    expect(voiceSystem.speak("Second line.", "firm", { onEnd })).toBe(true);
+    expect(voiceSystem.speak("Second line.", "helion-handler", { onEnd })).toBe(true);
     spoken[1].onend?.();
     expect(onEnd).toHaveBeenCalledOnce();
     spoken[1].onend?.();
@@ -117,7 +127,7 @@ describe("browser voice system", () => {
     const synthesis = {
       speaking: false,
       paused: false,
-      getVoices: vi.fn(() => [{ lang: "en-US" }]),
+      getVoices: vi.fn(() => [fakeVoice("Generic English")]),
       speak: vi.fn((utterance: FakeUtterance) => {
         spoken.push(utterance);
       }),
@@ -133,5 +143,84 @@ describe("browser voice system", () => {
 
     expect(voiceSystem.speak("Louder line.")).toBe(true);
     expect(spoken[0].volume).toBe(1);
+  });
+
+  it("uses a young female voice profile for the captain when available", async () => {
+    const spoken: FakeUtterance[] = [];
+    const synthesis = {
+      speaking: false,
+      paused: false,
+      getVoices: vi.fn(() => [fakeVoice("Microsoft David"), fakeVoice("Samantha"), fakeVoice("Google UK English Female")]),
+      speak: vi.fn((utterance: FakeUtterance) => {
+        spoken.push(utterance);
+      }),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      cancel: vi.fn()
+    };
+    vi.stubGlobal("SpeechSynthesisUtterance", FakeUtterance);
+    vi.stubGlobal("window", { speechSynthesis: synthesis });
+
+    const { voiceSystem } = await freshVoice();
+
+    expect(voiceSystem.speak("Captain on channel.", "captain")).toBe(true);
+    expect(spoken[0].voice?.name).toBe("Samantha");
+    expect(spoken[0].pitch).toBeCloseTo(1.24);
+    expect(spoken[0].rate).toBeCloseTo(1.04);
+  });
+
+  it("applies distinct profile parameters and voice preferences per role", async () => {
+    const spoken: FakeUtterance[] = [];
+    const synthesis = {
+      speaking: false,
+      paused: false,
+      getVoices: vi.fn(() => [fakeVoice("Samantha"), fakeVoice("Microsoft David")]),
+      speak: vi.fn((utterance: FakeUtterance) => {
+        spoken.push(utterance);
+      }),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      cancel: vi.fn()
+    };
+    vi.stubGlobal("SpeechSynthesisUtterance", FakeUtterance);
+    vi.stubGlobal("window", { speechSynthesis: synthesis });
+
+    const { voiceSystem } = await freshVoice();
+
+    expect(voiceSystem.speak("Captain line.", "captain")).toBe(true);
+    expect(voiceSystem.speak("AI line.", "ship-ai")).toBe(true);
+
+    expect(spoken[0].voice?.name).toBe("Samantha");
+    expect(spoken[1].voice?.name).toBe("Microsoft David");
+    expect(spoken[0].pitch).not.toBe(spoken[1].pitch);
+    expect(spoken[0].rate).not.toBe(spoken[1].rate);
+  });
+
+  it("falls back to available English voices or null while keeping profile parameters", async () => {
+    const spoken: FakeUtterance[] = [];
+    const synthesis = {
+      speaking: false,
+      paused: false,
+      getVoices: vi.fn(() => [fakeVoice("Generic English"), fakeVoice("Mónica", "es-ES")]),
+      speak: vi.fn((utterance: FakeUtterance) => {
+        spoken.push(utterance);
+      }),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      cancel: vi.fn()
+    };
+    vi.stubGlobal("SpeechSynthesisUtterance", FakeUtterance);
+    vi.stubGlobal("window", { speechSynthesis: synthesis });
+
+    const { voiceSystem } = await freshVoice();
+
+    expect(voiceSystem.speak("No preferred voice.", "captain")).toBe(true);
+    expect(spoken[0].voice?.name).toBe("Generic English");
+    expect(spoken[0].pitch).toBeCloseTo(1.24);
+
+    synthesis.getVoices.mockReturnValueOnce([fakeVoice("Mónica", "es-ES")]);
+    expect(voiceSystem.speak("No English voice.", "captain")).toBe(true);
+    expect(spoken[1].voice).toBeNull();
+    expect(spoken[1].rate).toBeCloseTo(1.04);
   });
 });
