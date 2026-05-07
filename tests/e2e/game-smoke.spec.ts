@@ -117,6 +117,10 @@ test.describe("browser smoke", () => {
     const storyMission = page.getByTestId("mission-card-story-clean-carrier");
     await expect(storyMission).toContainText("Glass Wake 01: Clean Carrier");
     await storyMission.getByRole("button", { name: "Accept" }).click();
+    await expect(page.getByTestId("dialogue-overlay")).toContainText("Clean Carrier Briefing");
+    await expect(page.getByTestId("dialogue-overlay")).toContainText("Captain, Helion traffic is handing you a clean sync key.");
+    await page.getByTestId("dialogue-overlay").getByRole("button", { name: "Skip" }).click();
+    await expect(page.getByTestId("dialogue-overlay")).toHaveCount(0);
     expect((await getGameState(page)).activeMissions.map((mission) => mission.id)).toContain("story-clean-carrier");
 
     await page.getByRole("button", { name: "Launch" }).click();
@@ -134,6 +138,7 @@ test.describe("browser smoke", () => {
     await expect(page.getByRole("button", { name: "Continue" })).toBeEnabled();
     await page.getByRole("button", { name: "Continue" }).click();
     await expect(page.locator(".hud-top-left")).toContainText("Kuro Belt");
+    await expect(page.getByTestId("dialogue-overlay")).toHaveCount(0);
     expect((await getGameState(page)).currentSystemId).toBe("kuro-belt");
   });
 

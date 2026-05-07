@@ -1633,6 +1633,170 @@ button.equipment-trigger {
   height: 100%;
 }
 
+.dialogue-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  align-items: end;
+  padding: 20px;
+  background: linear-gradient(rgba(1, 5, 12, 0.28), rgba(1, 5, 12, 0.72));
+  pointer-events: auto;
+}
+
+.dialogue-panel {
+  width: min(920px, 100%);
+  margin: 0 auto;
+  border: 1px solid rgba(128, 214, 255, 0.32);
+  border-radius: 8px;
+  background: rgba(4, 12, 24, 0.94);
+  box-shadow: 0 22px 70px rgba(0, 0, 0, 0.48);
+  padding: 16px;
+}
+
+.dialogue-header,
+.dialogue-actions,
+.dialogue-current {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.dialogue-header {
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.dialogue-header h2 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.dialogue-close {
+  width: 38px;
+  height: 38px;
+  padding: 0;
+}
+
+.dialogue-current {
+  align-items: flex-start;
+  border: 1px solid rgba(128, 214, 255, 0.22);
+  border-radius: 8px;
+  background: linear-gradient(90deg, rgba(11, 39, 64, 0.74), rgba(8, 19, 34, 0.72));
+  padding: 14px;
+}
+
+.dialogue-current.player-line {
+  background: linear-gradient(90deg, rgba(29, 63, 82, 0.7), rgba(8, 19, 34, 0.72));
+}
+
+.dialogue-current span,
+.dialogue-actions span,
+.dialogue-replay-entry span {
+  color: #9db7c9;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
+.dialogue-current p {
+  margin-top: 6px;
+  color: #f4f9ff;
+  font-size: 1.02rem;
+  line-height: 1.45;
+}
+
+.dialogue-badge {
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  border: 1px solid rgba(128, 214, 255, 0.28);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.dialogue-badge-text {
+  color: #e8f4ff;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.dialogue-transcript {
+  display: grid;
+  gap: 8px;
+  max-height: 180px;
+  overflow-y: auto;
+  margin: 12px 0;
+  padding-right: 4px;
+}
+
+.dialogue-transcript p {
+  display: grid;
+  gap: 3px;
+  border-left: 3px solid rgba(128, 214, 255, 0.18);
+  padding: 7px 10px;
+  color: #bcd0df;
+}
+
+.dialogue-transcript p.active {
+  border-left-color: rgba(255, 214, 128, 0.86);
+  color: #f4f9ff;
+}
+
+.dialogue-transcript b {
+  color: #e8f4ff;
+  font-size: 0.78rem;
+}
+
+.dialogue-actions {
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.dialogue-actions span {
+  margin-right: auto;
+}
+
+.dialogue-log-section,
+.dialogue-replay-list {
+  display: grid;
+  gap: 10px;
+}
+
+.dialogue-log-section {
+  border: 1px solid rgba(128, 214, 255, 0.18);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.035);
+  padding: 14px;
+}
+
+.dialogue-log-section header h3,
+.dialogue-replay-list h4 {
+  margin: 0;
+}
+
+.dialogue-replay-entry {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid rgba(128, 214, 255, 0.14);
+  border-radius: 6px;
+  padding: 9px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.dialogue-replay-entry div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.dialogue-replay-entry.locked {
+  opacity: 0.62;
+}
+
 @media (max-width: 900px) {
   body {
     overflow: auto;
@@ -1697,6 +1861,19 @@ button.equipment-trigger {
     flex-wrap: wrap;
     justify-content: flex-start;
   }
+
+  .dialogue-backdrop {
+    padding: 12px;
+  }
+
+  .dialogue-current,
+  .dialogue-actions {
+    align-items: stretch;
+  }
+
+  .dialogue-actions button {
+    flex: 1;
+  }
 }
 
 @media (max-width: 720px) {
@@ -1725,5 +1902,14 @@ button.equipment-trigger {
 
   .modal-actions button {
     flex: 1;
+  }
+
+  .dialogue-current,
+  .dialogue-replay-entry {
+    grid-template-columns: 1fr;
+  }
+
+  .dialogue-current {
+    display: grid;
   }
 }

@@ -59,4 +59,27 @@ describe("story mission store flow", () => {
     expect(store.getState().activeMissions.some((mission) => mission.id === "story-probe-in-glass")).toBe(true);
     expect(store.getState().failedMissionIds).not.toContain("story-probe-in-glass");
   });
+
+  it("opens story dialogue once on accept and complete", async () => {
+    const store = await freshStore();
+    store.setState({ currentSystemId: "helion-reach", currentStationId: "helion-prime" });
+
+    store.getState().acceptMission("story-clean-carrier");
+    expect(store.getState().activeDialogue?.sceneId).toBe("dialogue-story-clean-carrier-accept");
+    expect(store.getState().dialogueState.seenSceneIds).toContain("dialogue-story-clean-carrier-accept");
+
+    store.getState().closeDialogue();
+    store.setState({
+      currentSystemId: "mirr-vale",
+      currentStationId: "mirr-lattice"
+    });
+    store.getState().completeMission("story-clean-carrier");
+    expect(store.getState().activeDialogue?.sceneId).toBe("dialogue-story-clean-carrier-complete");
+    expect(store.getState().dialogueState.seenSceneIds).toContain("dialogue-story-clean-carrier-complete");
+
+    store.getState().closeDialogue();
+    store.setState({ activeMissions: [], completedMissionIds: [], currentSystemId: "helion-reach" });
+    store.getState().acceptMission("story-clean-carrier");
+    expect(store.getState().activeDialogue).toBeUndefined();
+  });
 });

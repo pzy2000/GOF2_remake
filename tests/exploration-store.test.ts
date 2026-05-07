@@ -75,11 +75,15 @@ describe("exploration store flow", () => {
     expect(state.player.credits).toBe(2120);
     expect(state.player.cargo.optics).toBe(2);
     expect(state.runtime.explorationScan).toBeUndefined();
+    expect(state.activeDialogue?.sceneId).toBe("dialogue-exploration-quiet-signal-sundog-lattice");
+    expect(state.dialogueState.seenSceneIds).toContain("dialogue-exploration-quiet-signal-sundog-lattice");
 
     const creditsAfterFirstScan = state.player.credits;
+    store.getState().closeDialogue();
     store.getState().interact();
     store.getState().tick(3);
     expect(store.getState().player.credits).toBe(creditsAfterFirstScan);
+    expect(store.getState().activeDialogue).toBeUndefined();
   });
 
   it("reveals Parallax Hermitage and unlocks Hush Orbit from the Mirr anomaly", async () => {

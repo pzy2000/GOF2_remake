@@ -1,6 +1,7 @@
 import type { CommodityId, EquipmentId, FactionId } from "../types/game";
 import { commodities, commodityById } from "./commodities";
 import { contrabandLawBySystem } from "./contraband";
+import { dialogueScenes, dialogueSpeakers } from "./dialogues";
 import { equipmentById, equipmentList } from "./equipment";
 import { explorationSignals } from "./exploration";
 import { factionNames } from "./factions";
@@ -45,6 +46,8 @@ export function validateContentData(): ContentValidationResult {
   requireUnique(missionTemplates.map((item) => item.id), "mission", errors);
   requireUnique(equipmentList.map((item) => item.id), "equipment", errors);
   requireUnique(explorationSignals.map((item) => item.id), "exploration signal", errors);
+  requireUnique(dialogueSpeakers.map((item) => item.id), "dialogue speaker", errors);
+  requireUnique(dialogueScenes.map((item) => item.id), "dialogue scene", errors);
   requireUnique(storyArcs.map((item) => item.id), "story arc", errors);
   for (const arc of storyArcs) {
     requireUnique(arc.chapters.map((item) => item.id), `${arc.id} chapter`, errors);
@@ -52,6 +55,8 @@ export function validateContentData(): ContentValidationResult {
   }
 
   const missionIds = new Set(missionTemplates.map((mission) => mission.id));
+  const speakerIds = new Set(dialogueSpeakers.map((speaker) => speaker.id));
+  const explorationSignalIds = new Set(explorationSignals.map((signal) => signal.id));
 
   for (const ship of ships) {
     for (const equipmentId of ship.equipment) {
@@ -185,6 +190,27 @@ export function validateContentData(): ContentValidationResult {
       }
       if (mission.storyArcId !== arc.id) errors.push(`Story chapter ${chapter.id} mission ${mission.id} is not tagged for arc ${arc.id}`);
       if (mission.storyChapterId !== chapter.id) errors.push(`Story chapter ${chapter.id} mission ${mission.id} has story chapter ${mission.storyChapterId}`);
+    }
+  }
+
+  for (const speaker of dialogueSpeakers) {
+    if (speaker.factionId && !hasFaction(speaker.factionId)) errors.push(`Dialogue speaker ${speaker.id} references unknown faction ${speaker.factionId}`);
+  }
+
+  for (const scene of dialogueScenes) {
+    if (scene.lines.length === 0) errors.push(`Dialogue scene ${scene.id} has no lines`);
+    for (const line of scene.lines) {
+      if (!speakerIds.has(line.speakerId)) errors.push(`Dialogue scene ${scene.id} references unknown speaker ${line.speakerId}`);
+      if (!line.text.trim()) errors.push(`Dialogue scene ${scene.id} has an empty line`);
+    }
+    if (scene.trigger.kind === "story-accept" || scene.trigger.kind === "story-complete") {
+      const trigger = scene.trigger;
+      if (!missionIds.has(trigger.missionId)) errors.push(`Dialogue scene ${scene.id} references unknown mission ${trigger.missionId}`);
+      const chapter = storyArcs.flatMap((arc) => arc.chapters).find((item) => item.id === trigger.chapterId);
+      if (!chapter) errors.push(`Dialogue scene ${scene.id} references unknown story chapter ${trigger.chapterId}`);
+      if (chapter && chapter.missionId !== trigger.missionId) errors.push(`Dialogue scene ${scene.id} chapter ${chapter.id} does not match mission ${trigger.missionId}`);
+    } else if (!explorationSignalIds.has(scene.trigger.signalId)) {
+      errors.push(`Dialogue scene ${scene.id} references unknown exploration signal ${scene.trigger.signalId}`);
     }
   }
 

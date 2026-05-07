@@ -1,5 +1,6 @@
 import type { AudioEventName, AudioSettings, MusicMode } from "../types/game";
 import type { MusicCue } from "./music";
+import { voiceSystem } from "./voice";
 
 export const AUDIO_SETTINGS_KEY = "gof2-by-pzy-audio-settings";
 
@@ -7,6 +8,7 @@ const defaultSettings: AudioSettings = {
   masterVolume: 0.8,
   sfxVolume: 0.75,
   musicVolume: 0.35,
+  voiceVolume: 0.85,
   muted: false
 };
 
@@ -33,6 +35,7 @@ export function getAudioSettings(): AudioSettings {
       masterVolume: clamp01(parsed.masterVolume ?? defaultSettings.masterVolume),
       sfxVolume: clamp01(parsed.sfxVolume ?? defaultSettings.sfxVolume),
       musicVolume: clamp01(parsed.musicVolume ?? defaultSettings.musicVolume),
+      voiceVolume: clamp01(parsed.voiceVolume ?? defaultSettings.voiceVolume),
       muted: parsed.muted ?? defaultSettings.muted
     };
   } catch {
@@ -45,10 +48,12 @@ export function saveAudioSettings(settings: AudioSettings): AudioSettings {
     masterVolume: clamp01(settings.masterVolume),
     sfxVolume: clamp01(settings.sfxVolume),
     musicVolume: clamp01(settings.musicVolume),
+    voiceVolume: clamp01(settings.voiceVolume),
     muted: settings.muted
   };
   storage()?.setItem(AUDIO_SETTINGS_KEY, JSON.stringify(next));
   audioSystem.applySettings(next);
+  voiceSystem.applySettings(next);
   return next;
 }
 
@@ -74,6 +79,7 @@ class ProceduralAudioSystem {
 
   constructor() {
     this.settings = getAudioSettings();
+    voiceSystem.applySettings(this.settings);
   }
 
   get debugState() {
@@ -96,6 +102,7 @@ class ProceduralAudioSystem {
     this.sfxGain?.gain.setTargetAtTime(settings.sfxVolume, this.context?.currentTime ?? 0, 0.025);
     this.musicGain?.gain.setTargetAtTime(settings.musicVolume, this.context?.currentTime ?? 0, 0.08);
     this.updateExternalTrackVolume();
+    voiceSystem.applySettings(settings);
   }
 
   unlock() {

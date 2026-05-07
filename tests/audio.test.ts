@@ -74,10 +74,11 @@ describe("procedural audio system", () => {
     const { AUDIO_SETTINGS_KEY, getAudioSettings, saveAudioSettings } = await freshAudio();
     const storage = new MemoryStorage();
     vi.stubGlobal("localStorage", storage);
-    const saved = saveAudioSettings({ masterVolume: 2, sfxVolume: -1, musicVolume: 0.5, muted: true });
+    const saved = saveAudioSettings({ masterVolume: 2, sfxVolume: -1, musicVolume: 0.5, voiceVolume: 1.4, muted: true });
     expect(saved.masterVolume).toBe(1);
     expect(saved.sfxVolume).toBe(0);
     expect(saved.musicVolume).toBe(0.5);
+    expect(saved.voiceVolume).toBe(1);
     expect(saved.muted).toBe(true);
     expect(storage.getItem(AUDIO_SETTINGS_KEY)).toContain("\"muted\":true");
     expect(getAudioSettings()).toEqual(saved);
@@ -96,9 +97,9 @@ describe("procedural audio system", () => {
     expect(audioSystem.debugState.proceduralMode).toBe("silent");
     expect(FakeAudio.instances[0].volume).toBeCloseTo(0.28);
 
-    saveAudioSettings({ masterVolume: 0.5, sfxVolume: 0.75, musicVolume: 0.4, muted: false });
+    saveAudioSettings({ masterVolume: 0.5, sfxVolume: 0.75, musicVolume: 0.4, voiceVolume: 0.85, muted: false });
     expect(FakeAudio.instances[0].volume).toBeCloseTo(0.2);
-    saveAudioSettings({ masterVolume: 0.5, sfxVolume: 0.75, musicVolume: 0.4, muted: true });
+    saveAudioSettings({ masterVolume: 0.5, sfxVolume: 0.75, musicVolume: 0.4, voiceVolume: 0.85, muted: true });
     expect(FakeAudio.instances[0].volume).toBe(0);
   });
 

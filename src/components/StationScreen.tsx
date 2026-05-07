@@ -18,6 +18,7 @@ import { AtlasIcon } from "./AtlasIcon";
 import { SaveSlotsPanel } from "./SaveSlotsPanel";
 import { getCommodityIcon, getEquipmentIcon, getFactionIcon } from "../data/iconAtlas";
 import { getStoryProgress, storyStatusLabel } from "../systems/story";
+import { getDialogueLogEntries } from "../systems/dialogue";
 import {
   canInstallEquipment,
   getEquipmentSlotUsage,
@@ -562,12 +563,17 @@ function CaptainLogTab() {
   const completedMissionIds = useGameStore((state) => state.completedMissionIds);
   const failedMissionIds = useGameStore((state) => state.failedMissionIds);
   const explorationState = useGameStore((state) => state.explorationState);
+  const dialogueState = useGameStore((state) => state.dialogueState);
+  const openDialogueScene = useGameStore((state) => state.openDialogueScene);
   const progress = getStoryProgress(glassWakeProtocol, missionTemplates, activeMissions, completedMissionIds, failedMissionIds);
   const current = progress.current;
   const currentMission = current?.mission;
   const currentOrigin = currentMission ? systemById[currentMission.originSystemId] : undefined;
   const currentDestination = currentMission ? stationById[currentMission.destinationStationId] : undefined;
   const completedExplorationLogs = explorationSignals.filter((signal) => explorationState.eventLogIds.includes(signal.id));
+  const dialogueEntries = getDialogueLogEntries({ activeMissions, completedMissionIds, explorationState, dialogueState });
+  const storyDialogueEntries = dialogueEntries.filter((entry) => entry.scene.group === "story");
+  const explorationDialogueEntries = dialogueEntries.filter((entry) => entry.scene.group === "exploration");
   return (
     <div className="story-log">
       <aside className="story-overview">
@@ -624,7 +630,40 @@ function CaptainLogTab() {
             ))
           )}
         </div>
+        <div className="dialogue-log-section">
+          <header>
+            <span>Comms Archive</span>
+            <h3>Voiced Dialogue</h3>
+          </header>
+          <DialogueReplayList title="Glass Wake Protocol" entries={storyDialogueEntries} onReplay={openDialogueScene} />
+          <DialogueReplayList title="Quiet Signals" entries={explorationDialogueEntries} onReplay={openDialogueScene} />
+        </div>
       </section>
+    </div>
+  );
+}
+
+function DialogueReplayList({
+  entries,
+  onReplay,
+  title
+}: {
+  entries: ReturnType<typeof getDialogueLogEntries>;
+  onReplay: (sceneId: string, replay?: boolean) => void;
+  title: string;
+}) {
+  return (
+    <div className="dialogue-replay-list">
+      <h4>{title}</h4>
+      {entries.map(({ scene, unlocked, seen }) => (
+        <article key={scene.id} className={`dialogue-replay-entry ${unlocked ? "unlocked" : "locked"}`}>
+          <div>
+            <b>{unlocked ? scene.title : scene.maskedTitle}</b>
+            <span>{unlocked ? seen ? "Unlocked" : "Available" : "Signal masked"}</span>
+          </div>
+          <button disabled={!unlocked} onClick={() => onReplay(scene.id, true)}>Replay</button>
+        </article>
+      ))}
     </div>
   );
 }

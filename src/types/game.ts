@@ -44,6 +44,7 @@ export interface AudioSettings {
   masterVolume: number;
   sfxVolume: number;
   musicVolume: number;
+  voiceVolume: number;
   muted: boolean;
 }
 
@@ -494,6 +495,16 @@ export interface ExplorationScanRuntime {
   distance: number;
 }
 
+export interface DialogueState {
+  seenSceneIds: string[];
+}
+
+export interface ActiveDialogueState {
+  sceneId: string;
+  lineIndex: number;
+  replay?: boolean;
+}
+
 export interface ProjectileEntity {
   id: string;
   owner: "player" | "enemy" | "patrol";
@@ -597,6 +608,7 @@ export interface SaveGameData {
   knownSystems: string[];
   knownPlanetIds: string[];
   explorationState: ExplorationState;
+  dialogueState: DialogueState;
 }
 
 declare global {

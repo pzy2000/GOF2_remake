@@ -1,6 +1,7 @@
 import { create } from "zustand";
-import { commodities, commodityById, equipmentById, missionTemplates, planetById, planets, shipById, ships, stationById, stations, systemById, systems } from "../data/world";
+import { commodities, commodityById, dialogueSceneById, equipmentById, missionTemplates, planetById, planets, shipById, ships, stationById, stations, systemById, systems } from "../data/world";
 import type {
+  ActiveDialogueState,
   AssetManifest,
   AsteroidEntity,
   AutoPilotState,
@@ -12,6 +13,7 @@ import type {
   FlightEntity,
   FlightInput,
   GalaxyMapMode,
+  DialogueState,
   ExplorationState,
   LootEntity,
   MarketState,
@@ -104,6 +106,14 @@ import {
   isHiddenStationRevealed,
   normalizeExplorationState
 } from "../systems/exploration";
+import {
+  createInitialDialogueState,
+  getExplorationDialogueScene,
+  getStoryMissionDialogueScene,
+  isDialogueSceneSeen,
+  markDialogueSceneSeen,
+  normalizeDialogueState
+} from "../systems/dialogue";
 import {
   getInitialKnownSystems,
   getInitialKnownPlanetIds,
@@ -447,6 +457,19 @@ function addUniqueIds(existing: string[], additions: string[]): string[] {
   return Array.from(new Set([...existing, ...additions]));
 }
 
+function dialogueOpenPatch(
+  state: { dialogueState: DialogueState; activeDialogue?: ActiveDialogueState },
+  sceneId: string,
+  replay = false
+): { dialogueState?: DialogueState; activeDialogue?: ActiveDialogueState } {
+  if (!dialogueSceneById[sceneId]) return {};
+  if (!replay && (state.activeDialogue || isDialogueSceneSeen(state.dialogueState, sceneId))) return {};
+  return {
+    dialogueState: replay ? state.dialogueState : markDialogueSceneSeen(state.dialogueState, sceneId),
+    activeDialogue: { sceneId, lineIndex: 0, replay }
+  };
+}
+
 function applyExplorationReward(snapshot: {
   signalId: string;
   player: PlayerState;
@@ -529,6 +552,8 @@ interface GameStore {
   knownSystems: string[];
   knownPlanetIds: string[];
   explorationState: ExplorationState;
+  dialogueState: DialogueState;
+  activeDialogue?: ActiveDialogueState;
   primaryCooldown: number;
   secondaryCooldown: number;
   hasSave: boolean;
@@ -551,6 +576,9 @@ interface GameStore {
   interact: () => void;
   adjustExplorationScanFrequency: (delta: number) => void;
   cancelExplorationScan: () => void;
+  openDialogueScene: (sceneId: string, replay?: boolean) => void;
+  advanceDialogue: () => void;
+  closeDialogue: () => void;
   dockAt: (stationId: string) => void;
   undock: () => void;
   startJumpToStation: (stationId: string) => void;
@@ -587,6 +615,7 @@ type SavePayloadOverrides = Partial<
     | "knownSystems"
     | "knownPlanetIds"
     | "explorationState"
+    | "dialogueState"
   >
 >;
 
@@ -603,7 +632,8 @@ function savePayload(state: GameStore, overrides: SavePayloadOverrides = {}): Om
     reputation: overrides.reputation ?? state.reputation,
     knownSystems: overrides.knownSystems ?? state.knownSystems,
     knownPlanetIds: overrides.knownPlanetIds ?? state.knownPlanetIds,
-    explorationState: overrides.explorationState ?? state.explorationState
+    explorationState: overrides.explorationState ?? state.explorationState,
+    dialogueState: overrides.dialogueState ?? state.dialogueState
   };
 }
 
@@ -638,6 +668,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   knownSystems: getInitialKnownSystems("helion-reach"),
   knownPlanetIds: getInitialKnownPlanetIds(getInitialKnownSystems("helion-reach")),
   explorationState: createInitialExplorationState(),
+  dialogueState: createInitialDialogueState(),
+  activeDialogue: undefined,
   primaryCooldown: 0,
   secondaryCooldown: 0,
   hasSave: readSave() !== null,
@@ -666,6 +698,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       knownSystems: getInitialKnownSystems("helion-reach"),
       knownPlanetIds: getInitialKnownPlanetIds(getInitialKnownSystems("helion-reach")),
       explorationState: createInitialExplorationState(),
+      dialogueState: createInitialDialogueState(),
+      activeDialogue: undefined,
       primaryCooldown: 0,
       secondaryCooldown: 0,
       activeSaveSlotId: undefined
@@ -690,6 +724,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       knownSystems: save.knownSystems,
       knownPlanetIds: save.knownPlanetIds,
       explorationState: normalizeExplorationState(save.explorationState),
+      dialogueState: normalizeDialogueState(save.dialogueState),
+      activeDialogue: undefined,
       runtime: createRuntimeForSystem(save.currentSystemId, save.activeMissions),
       autopilot: undefined,
       hasSave: true,
@@ -1022,6 +1058,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     let knownPlanetIds = state.knownPlanetIds;
     let primaryCooldown = Math.max(0, state.primaryCooldown - delta);
     let secondaryCooldown = Math.max(0, state.secondaryCooldown - delta);
+    let pendingDialogueSceneId: string | undefined;
     const target = runtime.enemies.find((ship) => ship.id === state.targetId && ship.hull > 0);
 
     const nearestAsteroid = runtime.asteroids
@@ -1219,6 +1256,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           reputation = result.reputation;
           explorationState = result.explorationState;
           knownPlanetIds = result.knownPlanetIds;
+          pendingDialogueSceneId = getExplorationDialogueScene(signal.id)?.id;
           runtime = {
             ...runtime,
             explorationScan: undefined,
@@ -1451,6 +1489,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     });
     const missionFailedThisFrame = expiration.failedMissionIds.length > failedMissionIds.length;
     const explorationMessageActive = !!state.runtime.explorationScan || !!runtime.explorationScan || explorationState !== state.explorationState;
+    const dialoguePatch = pendingDialogueSceneId ? dialogueOpenPatch(state, pendingDialogueSceneId) : {};
 
     set({
       player: expiration.player,
@@ -1480,6 +1519,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       failedMissionIds: expiration.failedMissionIds,
       reputation: expiration.reputation,
       explorationState,
+      ...dialoguePatch,
       primaryCooldown,
       secondaryCooldown,
       screen: expiration.player.hull <= 0 ? "gameOver" : get().screen,
@@ -1658,6 +1698,22 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (!state.runtime.explorationScan) return;
     set({ runtime: { ...state.runtime, explorationScan: undefined, message: "Signal scan canceled." } });
   },
+  openDialogueScene: (sceneId, replay = true) => {
+    const state = get();
+    set(dialogueOpenPatch(state, sceneId, replay));
+  },
+  advanceDialogue: () => {
+    const state = get();
+    const activeDialogue = state.activeDialogue;
+    if (!activeDialogue) return;
+    const scene = dialogueSceneById[activeDialogue.sceneId];
+    if (!scene || activeDialogue.lineIndex >= scene.lines.length - 1) {
+      set({ activeDialogue: undefined });
+      return;
+    }
+    set({ activeDialogue: { ...activeDialogue, lineIndex: activeDialogue.lineIndex + 1 } });
+  },
+  closeDialogue: () => set({ activeDialogue: undefined }),
   dockAt: (stationId) => {
     const state = get();
     const station = stationById[stationId];
@@ -1891,12 +1947,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
     const result = acceptMissionPure(state.player, state.activeMissions, mission, state.gameClock);
     const runtime = result.mission ? addMissionRuntimeEntity(state.runtime, result.mission, state.currentSystemId) : state.runtime;
+    const dialogueScene = result.ok ? getStoryMissionDialogueScene(mission.id, "accept") : undefined;
+    const dialoguePatch = dialogueScene ? dialogueOpenPatch(state, dialogueScene.id) : {};
     if (result.ok) audioSystem.play("ui-click");
     set({
       player: result.player,
       activeMissions: result.activeMissions,
       failedMissionIds: result.ok && mission.retryOnFailure ? state.failedMissionIds.filter((id) => id !== missionId) : state.failedMissionIds,
-      runtime: { ...runtime, message: result.message }
+      runtime: { ...runtime, message: result.message },
+      ...dialoguePatch
     });
   },
   completeMission: (missionId) => {
@@ -1908,6 +1967,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       return;
     }
     const result = completeMissionPure(mission, state.player, state.reputation);
+    const dialogueScene = getStoryMissionDialogueScene(mission.id, "complete");
+    const dialoguePatch = dialogueScene ? dialogueOpenPatch(state, dialogueScene.id) : {};
     audioSystem.play("mission-complete");
     set({
       player: result.player,
@@ -1919,7 +1980,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
         convoys: state.runtime.convoys.filter((convoy) => convoy.missionId !== missionId),
         salvage: state.runtime.salvage.filter((salvage) => salvage.missionId !== missionId),
         message: `${mission.title} complete. +${mission.reward} credits.`
-      }
+      },
+      ...dialoguePatch
     });
   },
   repairAndRefill: () => {

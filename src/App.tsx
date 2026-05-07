@@ -5,6 +5,7 @@ import { Hud } from "./components/Hud";
 import { MainMenu } from "./components/MainMenu";
 import { StationScreen } from "./components/StationScreen";
 import { SaveSlotsPanel } from "./components/SaveSlotsPanel";
+import { DialogueOverlay } from "./components/DialogueOverlay";
 import { audioSystem, getAudioSettings, saveAudioSettings } from "./systems/audio";
 import { loadAssetManifest } from "./systems/assets";
 import { resolveMusicCue } from "./systems/music";
@@ -79,6 +80,10 @@ function SimpleScreen({ type }: { type: "settings" | "credits" }) {
               <label>
                 <span>Music</span>
                 <input type="range" min="0" max="1" step="0.01" value={audioSettings.musicVolume} onChange={(event) => updateAudio({ musicVolume: Number(event.target.value) })} />
+              </label>
+              <label>
+                <span>Voice</span>
+                <input type="range" min="0" max="1" step="0.01" value={audioSettings.voiceVolume} onChange={(event) => updateAudio({ voiceVolume: Number(event.target.value) })} />
               </label>
               <label className="toggle-line">
                 <input type="checkbox" checked={audioSettings.muted} onChange={(event) => updateAudio({ muted: event.target.checked })} />
@@ -157,14 +162,15 @@ export default function App() {
     loadAssetManifest().then(setAssetManifest).catch(() => undefined);
   }, [setAssetManifest]);
 
-  if (screen === "menu") return <><AudioRuntime /><MainMenu /></>;
-  if (screen === "settings" || screen === "credits") return <><AudioRuntime /><SimpleScreen type={screen} /></>;
+  if (screen === "menu") return <><AudioRuntime /><MainMenu /><DialogueOverlay /></>;
+  if (screen === "settings" || screen === "credits") return <><AudioRuntime /><SimpleScreen type={screen} /><DialogueOverlay /></>;
   if (screen === "station") {
     return (
       <>
         <AudioRuntime />
         <GameClockTicker />
         <StationScreen />
+        <DialogueOverlay />
       </>
     );
   }
@@ -178,6 +184,7 @@ export default function App() {
       {screen === "pause" ? <PauseMenu /> : null}
       {screen === "galaxyMap" ? <GalaxyMap /> : null}
       {screen === "gameOver" ? <GameOver /> : null}
+      <DialogueOverlay />
     </main>
   );
 }

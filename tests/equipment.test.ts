@@ -15,6 +15,7 @@ import {
   normalizePlayerEquipmentStats
 } from "../src/systems/equipment";
 import { createInitialMarketState } from "../src/systems/economy";
+import { createInitialDialogueState } from "../src/systems/dialogue";
 import { createInitialExplorationState } from "../src/systems/exploration";
 import { createInitialReputation } from "../src/systems/reputation";
 import { writeSave } from "../src/systems/save";
@@ -255,7 +256,8 @@ describe("equipment gameplay wiring", () => {
         reputation: createInitialReputation(),
         knownSystems: ["helion-reach"],
         knownPlanetIds: ["helion-prime-world"],
-        explorationState: createInitialExplorationState()
+        explorationState: createInitialExplorationState(),
+        dialogueState: createInitialDialogueState()
       },
       storage,
       "manual-1"

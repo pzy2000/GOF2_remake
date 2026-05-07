@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { commodities, contrabandLawBySystem, equipmentById, explorationSignals, glassWakeProtocol, missionTemplates, planetById, planets, ships, stationById, stations, systems } from "../src/data/world";
+import { commodities, contrabandLawBySystem, dialogueScenes, dialogueSpeakers, equipmentById, explorationSignals, glassWakeProtocol, missionTemplates, planetById, planets, ships, stationById, stations, systems } from "../src/data/world";
 import { fallbackAssetManifest } from "../src/systems/assets";
 import { getEquipmentSlotUsage, getShipSlotCapacity } from "../src/systems/equipment";
 import { validateContentData } from "../src/data/validate";
@@ -18,6 +18,8 @@ describe("content data", () => {
     expect(idsAreUnique(systems.map((item) => item.id))).toBe(true);
     expect(idsAreUnique(missionTemplates.map((item) => item.id))).toBe(true);
     expect(idsAreUnique(explorationSignals.map((item) => item.id))).toBe(true);
+    expect(idsAreUnique(dialogueSpeakers.map((item) => item.id))).toBe(true);
+    expect(idsAreUnique(dialogueScenes.map((item) => item.id))).toBe(true);
   });
 
   it("passes cross-reference validation", () => {
@@ -145,6 +147,21 @@ describe("content data", () => {
       } else {
         expect(mission?.prerequisiteMissionIds).toContain(glassWakeProtocol.chapters[index - 1].missionId);
       }
+    }
+  });
+
+  it("defines voiced dialogue coverage for story chapters and exploration signals", () => {
+    const speakerIds = new Set(dialogueSpeakers.map((speaker) => speaker.id));
+    for (const scene of dialogueScenes) {
+      expect(scene.lines.length).toBeGreaterThan(0);
+      expect(scene.lines.every((line) => speakerIds.has(line.speakerId) && line.text.trim().length > 0)).toBe(true);
+    }
+    for (const chapter of glassWakeProtocol.chapters) {
+      expect(dialogueScenes.some((scene) => scene.trigger.kind === "story-accept" && scene.trigger.missionId === chapter.missionId)).toBe(true);
+      expect(dialogueScenes.some((scene) => scene.trigger.kind === "story-complete" && scene.trigger.missionId === chapter.missionId)).toBe(true);
+    }
+    for (const signal of explorationSignals) {
+      expect(dialogueScenes.filter((scene) => scene.trigger.kind === "exploration-complete" && scene.trigger.signalId === signal.id)).toHaveLength(1);
     }
   });
 });

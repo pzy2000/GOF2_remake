@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { glassWakeProtocol, missionTemplates, shipById } from "../src/data/world";
+import { createInitialDialogueState } from "../src/systems/dialogue";
 import { createInitialMarketState } from "../src/systems/economy";
 import { createInitialExplorationState } from "../src/systems/exploration";
 import { createInitialReputation } from "../src/systems/reputation";
@@ -76,7 +77,8 @@ describe("save system", () => {
       knownSystems: ["helion-reach", "kuro-belt"],
       knownPlanetIds: ["helion-prime-world", "kuro-anvil"],
       ...overrides,
-      explorationState: overrides.explorationState ?? createInitialExplorationState()
+      explorationState: overrides.explorationState ?? createInitialExplorationState(),
+      dialogueState: overrides.dialogueState ?? createInitialDialogueState()
     };
   }
 
@@ -103,7 +105,8 @@ describe("save system", () => {
           completedSignalIds: ["quiet-signal-sundog-lattice"],
           revealedStationIds: ["parallax-hermitage"],
           eventLogIds: ["quiet-signal-sundog-lattice"]
-        }
+        },
+        dialogueState: { seenSceneIds: ["dialogue-story-clean-carrier-accept"] }
       }),
       storage,
       "manual-1"
@@ -121,6 +124,7 @@ describe("save system", () => {
     expect(loaded?.player.ownedShipRecords?.[0]).toMatchObject({ shipId: "mule-lx", stationId: "ptd-home" });
     expect(loaded?.explorationState.completedSignalIds).toEqual(["quiet-signal-sundog-lattice"]);
     expect(loaded?.explorationState.revealedStationIds).toEqual(["parallax-hermitage"]);
+    expect(loaded?.dialogueState.seenSceneIds).toEqual(["dialogue-story-clean-carrier-accept"]);
     expect(loaded?.version).toBe(SAVE_VERSION);
   });
 
@@ -176,6 +180,7 @@ describe("save system", () => {
     const loaded = readSave(storage, "auto");
     expect(loaded?.knownPlanetIds).toEqual(["helion-prime-world", "ashen-harbor", "black-arc"]);
     expect(loaded?.explorationState).toEqual(createInitialExplorationState());
+    expect(loaded?.dialogueState).toEqual(createInitialDialogueState());
   });
 
   it("ignores bad legacy saves without corrupting empty slots", () => {

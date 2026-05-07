@@ -1,4 +1,5 @@
 import type { SaveGameData, SaveIndex, SaveSlotId, SaveSlotSummary } from "../types/game";
+import { normalizeDialogueState } from "./dialogue";
 import { createInitialMarketState } from "./economy";
 import { normalizePlayerEquipmentStats } from "./equipment";
 import { normalizeExplorationState } from "./exploration";
@@ -58,7 +59,8 @@ function normalizeSave(parsed: Partial<SaveGameData> | null): SaveGameData | nul
     reputation: parsed.reputation,
     knownSystems,
     knownPlanetIds: parsed.knownPlanetIds ?? getInitialKnownPlanetIds(knownSystems, parsed.currentStationId),
-    explorationState: normalizeExplorationState(parsed.explorationState)
+    explorationState: normalizeExplorationState(parsed.explorationState),
+    dialogueState: normalizeDialogueState(parsed.dialogueState)
   } as SaveGameData;
 }
 
