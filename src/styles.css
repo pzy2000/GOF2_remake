@@ -1239,7 +1239,7 @@ button.equipment-trigger {
 
 .galaxy-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 320px);
   gap: 16px;
   height: 100%;
   min-height: 0;
@@ -1456,6 +1456,33 @@ button.equipment-trigger {
   scrollbar-gutter: stable;
 }
 
+.galaxy-details-content,
+.planet-list,
+.exploration-signal-list {
+  scrollbar-color: rgba(128, 214, 255, 0.42) rgba(6, 15, 28, 0.62);
+  scrollbar-width: thin;
+}
+
+.galaxy-details-content::-webkit-scrollbar,
+.planet-list::-webkit-scrollbar,
+.exploration-signal-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.galaxy-details-content::-webkit-scrollbar-track,
+.planet-list::-webkit-scrollbar-track,
+.exploration-signal-list::-webkit-scrollbar-track {
+  background: rgba(6, 15, 28, 0.62);
+  border-radius: 999px;
+}
+
+.galaxy-details-content::-webkit-scrollbar-thumb,
+.planet-list::-webkit-scrollbar-thumb,
+.exploration-signal-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(128, 214, 255, 0.42);
+}
+
 .galaxy-actions {
   border-top: 1px solid rgba(128, 214, 255, 0.12);
   padding-top: 12px;
@@ -1476,12 +1503,16 @@ button.equipment-trigger {
   max-height: 230px;
   overflow: auto;
   padding-right: 4px;
+  scrollbar-gutter: stable;
 }
 
 .planet-list button {
   display: grid;
   gap: 3px;
+  align-content: center;
+  width: 100%;
   min-height: 58px;
+  min-width: 0;
   border: 1px solid rgba(128, 214, 255, 0.18);
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.04);
@@ -1512,6 +1543,7 @@ button.equipment-trigger {
   color: #92a9bd;
   font-size: 0.74rem;
   line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .planet-list button.hidden-station {
@@ -1525,6 +1557,7 @@ button.equipment-trigger {
   max-height: 210px;
   overflow: auto;
   padding-right: 4px;
+  scrollbar-gutter: stable;
 }
 
 .exploration-signal-list h4 {
@@ -1536,6 +1569,7 @@ button.equipment-trigger {
 .exploration-signal-list article {
   display: grid;
   gap: 3px;
+  min-width: 0;
   border: 1px solid rgba(128, 214, 255, 0.16);
   border-radius: 6px;
   background: rgba(255, 255, 255, 0.04);

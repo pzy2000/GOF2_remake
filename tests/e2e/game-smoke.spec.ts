@@ -87,6 +87,35 @@ async function expectRouteActionInsideStationBody(page: Page) {
   expect(metrics!.actionsBottom).toBeLessThanOrEqual(metrics!.detailsBottom);
 }
 
+async function expectGalaxyPlanetListReadable(page: Page) {
+  const metrics = await page.evaluate(() => {
+    const details = document.querySelector(".galaxy-details");
+    const list = document.querySelector(".planet-list");
+    const selected = document.querySelector(".planet-list button.selected");
+    const selectedMeta = selected?.querySelector("small");
+    if (!details || !list || !selected || !selectedMeta) return null;
+    const detailsRect = details.getBoundingClientRect();
+    const listRect = list.getBoundingClientRect();
+    const selectedRect = selected.getBoundingClientRect();
+    const metaRect = selectedMeta.getBoundingClientRect();
+    const listStyle = getComputedStyle(list);
+    return {
+      detailsWidth: detailsRect.width,
+      listRight: listRect.right,
+      metaBottom: metaRect.bottom,
+      selectedRight: selectedRect.right,
+      selectedBottom: selectedRect.bottom,
+      scrollbarGutter: listStyle.scrollbarGutter
+    };
+  });
+
+  expect(metrics).not.toBeNull();
+  expect(metrics!.detailsWidth).toBeGreaterThanOrEqual(300);
+  expect(metrics!.scrollbarGutter).toContain("stable");
+  expect(metrics!.selectedRight).toBeLessThanOrEqual(metrics!.listRight);
+  expect(metrics!.metaBottom).toBeLessThanOrEqual(metrics!.selectedBottom + 1);
+}
+
 test.describe("browser smoke", () => {
   test("starts flight and renders a non-empty WebGL scene", async ({ page }) => {
     await resetApp(page);
@@ -158,6 +187,7 @@ test.describe("browser smoke", () => {
       await page.getByRole("button", { name: "Galaxy Map" }).click();
       await page.getByRole("button", { name: "Mirr Vale known" }).click();
       await expectRouteActionInsideStationBody(page);
+      await expectGalaxyPlanetListReadable(page);
     }
   });
 
