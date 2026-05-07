@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { CSSProperties, FocusEvent, KeyboardEvent, MouseEvent as ReactMouseEvent, MutableRefObject, ReactNode } from "react";
+import type { CSSProperties, KeyboardEvent, MouseEvent as ReactMouseEvent, MutableRefObject, ReactNode } from "react";
 import { commodities, shipById, ships, stationById, systemById, useGameStore } from "../state/gameStore";
 import { commodityById, equipmentById, equipmentList, equipmentName, explorationSignals, factionNames, glassWakeProtocol, missionTemplates } from "../data/world";
 import { canCompleteMission, getAvailableMissionsForSystem, getMissionDeadlineRemaining } from "../systems/missions";
@@ -40,6 +40,7 @@ const equipmentSlotLabels: Record<EquipmentSlotType, string> = {
   defense: "Defense",
   engineering: "Engineering"
 };
+const EQUIPMENT_POPOVER_HOVER_DELAY_MS = 2000;
 
 type EquipmentPopoverMode = "preview" | "pinned";
 
@@ -53,10 +54,20 @@ interface EquipmentPopoverState {
 function useEquipmentPopover() {
   const [popover, setPopover] = useState<EquipmentPopoverState | null>(null);
   const popoverRef = useRef<HTMLElement | null>(null);
+  const hoverTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+
+  function clearHoverTimer() {
+    if (hoverTimerRef.current === null) return;
+    window.clearTimeout(hoverTimerRef.current);
+    hoverTimerRef.current = null;
+  }
 
   useEffect(() => {
     function handleKeyDown(event: globalThis.KeyboardEvent) {
-      if (event.key === "Escape") setPopover(null);
+      if (event.key === "Escape") {
+        clearHoverTimer();
+        setPopover(null);
+      }
     }
 
     function handlePointerDown(event: PointerEvent) {
@@ -74,20 +85,38 @@ function useEquipmentPopover() {
     };
   }, [popover]);
 
+  useEffect(() => clearHoverTimer, []);
+
   function open(id: EquipmentId, status: string, mode: EquipmentPopoverMode, element: HTMLElement) {
     setPopover({ id, status, mode, rect: element.getBoundingClientRect() });
   }
 
-  function preview(id: EquipmentId, status: string, element: HTMLElement) {
+  function schedulePreview(id: EquipmentId, status: string, element: HTMLElement) {
+    clearHoverTimer();
     if (popover?.mode === "pinned") return;
-    open(id, status, "preview", element);
+    hoverTimerRef.current = window.setTimeout(() => {
+      hoverTimerRef.current = null;
+      if (!element.isConnected) return;
+      setPopover((current) =>
+        current?.mode === "pinned"
+          ? current
+          : {
+              id,
+              status,
+              mode: "preview",
+              rect: element.getBoundingClientRect()
+            }
+      );
+    }, EQUIPMENT_POPOVER_HOVER_DELAY_MS);
   }
 
   function clearPreview() {
+    clearHoverTimer();
     setPopover((current) => (current?.mode === "preview" ? null : current));
   }
 
   function togglePinned(id: EquipmentId, status: string, element: HTMLElement) {
+    clearHoverTimer();
     setPopover((current) =>
       current?.id === id && current.mode === "pinned" ? null : { id, status, mode: "pinned", rect: element.getBoundingClientRect() }
     );
@@ -95,9 +124,8 @@ function useEquipmentPopover() {
 
   function getTriggerProps(id: EquipmentId, status: string) {
     return {
-      onMouseEnter: (event: ReactMouseEvent<HTMLElement>) => preview(id, status, event.currentTarget),
+      onMouseEnter: (event: ReactMouseEvent<HTMLElement>) => schedulePreview(id, status, event.currentTarget),
       onMouseLeave: clearPreview,
-      onFocus: (event: FocusEvent<HTMLElement>) => preview(id, status, event.currentTarget),
       onBlur: clearPreview,
       onClick: (event: ReactMouseEvent<HTMLElement>) => togglePinned(id, status, event.currentTarget),
       onKeyDown: (event: KeyboardEvent<HTMLElement>) => {

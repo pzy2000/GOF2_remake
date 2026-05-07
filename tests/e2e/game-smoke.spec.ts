@@ -256,6 +256,39 @@ test.describe("browser smoke", () => {
     });
   });
 
+  test("delays market equipment details until hover intent or click", async ({ page }) => {
+    await page.setViewportSize({ width: 2048, height: 1138 });
+    await resetApp(page);
+    await startNewGame(page);
+    await dockAtStation(page, "hush-array");
+    await expect(page.getByRole("heading", { name: "Hush Array" })).toBeVisible();
+
+    const shieldMatrixTrigger = page.getByTestId("market-equipment-row-shield-matrix").locator(".equipment-row-trigger");
+    const homingMissileTrigger = page.getByTestId("market-equipment-row-homing-missile").locator(".equipment-row-trigger");
+    const shieldBoosterTrigger = page.getByTestId("market-equipment-row-shield-booster").locator(".equipment-row-trigger");
+    const popover = page.locator("#equipment-popover");
+    const popoverTitle = popover.locator("h3");
+
+    await shieldMatrixTrigger.scrollIntoViewIfNeeded();
+    await shieldMatrixTrigger.hover();
+    await page.waitForTimeout(500);
+    await expect(popover).toHaveCount(0);
+
+    await expect(popoverTitle).toHaveText("Shield Matrix", { timeout: 2500 });
+
+    await homingMissileTrigger.hover();
+    await page.waitForTimeout(500);
+    await expect(popover).toHaveCount(0);
+    await expect(popoverTitle).toHaveText("Homing Missile", { timeout: 2500 });
+
+    await shieldBoosterTrigger.click();
+    await expect(popoverTitle).toHaveText("Shield Booster");
+    await expect(popover).toHaveClass(/pinned/);
+    await page.locator(".station-header").hover();
+    await page.waitForTimeout(500);
+    await expect(popoverTitle).toHaveText("Shield Booster");
+  });
+
   test("keeps hangar content from overlapping save slots", async ({ page }) => {
     await page.setViewportSize({ width: 2048, height: 1138 });
     await resetApp(page);
