@@ -1,8 +1,14 @@
 import { expect, test, type Page } from "@playwright/test";
 
 type Gof2E2EState = {
+  screen: string;
   currentSystemId: string;
   currentStationId?: string;
+  autopilot?: {
+    phase: string;
+    targetStationId: string;
+    targetSystemId: string;
+  };
   player: {
     credits: number;
     cargo: Record<string, number | undefined>;
@@ -30,8 +36,16 @@ async function getGameState(page: Page): Promise<Gof2E2EState> {
   return page.evaluate(() => {
     const state = window.__GOF2_E2E__!.getState() as Gof2E2EState;
     return {
+      screen: state.screen,
       currentSystemId: state.currentSystemId,
       currentStationId: state.currentStationId,
+      autopilot: state.autopilot
+        ? {
+            phase: state.autopilot.phase,
+            targetStationId: state.autopilot.targetStationId,
+            targetSystemId: state.autopilot.targetSystemId
+          }
+        : undefined,
       player: {
         credits: state.player.credits,
         cargo: { ...state.player.cargo }
@@ -208,6 +222,38 @@ test.describe("browser smoke", () => {
       await expectRouteActionInsideStationBody(page);
       await expectGalaxyPlanetListReadable(page, "Mirr Glass");
     }
+  });
+
+  test("opens the flight galaxy map as a route planner from HUD and keyboard", async ({ page }) => {
+    await resetApp(page);
+    await startNewGame(page);
+
+    await page.keyboard.press("KeyM");
+    await expect(page.getByText("Route Planning")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Set Route" })).toBeVisible();
+    await page.getByRole("button", { name: "Return" }).click();
+    await expect(page.locator(".flight-canvas canvas")).toBeVisible();
+
+    await page.locator(".hud-bottom-right").getByRole("button", { name: "Map" }).click();
+    await expect(page.getByText("Route Planning")).toBeVisible();
+    await page.getByRole("button", { name: "Mirr Vale known" }).click();
+    await expect(page.locator(".planet-list button.selected")).toContainText("Tech Level 3");
+    await expect(page.locator(".galaxy-actions")).toContainText("Mirr Glass · Mirr Lattice · Tech Level 3");
+
+    const routeButton = page.getByRole("button", { name: "Set Route" });
+    await expect(routeButton).toBeEnabled();
+    await routeButton.click();
+
+    await expect(page.locator(".flight-canvas canvas")).toBeVisible();
+    await expect(page.locator(".hud-top-right")).toContainText("Autopilot: Aligning to gate");
+    expect(await getGameState(page)).toMatchObject({
+      screen: "flight",
+      autopilot: {
+        phase: "to-origin-gate",
+        targetStationId: "mirr-lattice",
+        targetSystemId: "mirr-vale"
+      }
+    });
   });
 
   test("keeps hangar content from overlapping save slots", async ({ page }) => {

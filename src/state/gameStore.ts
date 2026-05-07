@@ -1685,7 +1685,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       set((latest) => ({ input: { ...latest.input, cycleTarget: false } }));
     }
     if (input.toggleMap) {
-      set({ screen: "galaxyMap", previousScreen: "flight", galaxyMapMode: "browse" });
+      set({ screen: "galaxyMap", previousScreen: "flight", galaxyMapMode: "station-route" });
       set((latest) => ({ input: { ...latest.input, toggleMap: false } }));
     }
     if (input.toggleCamera) {

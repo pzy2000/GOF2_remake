@@ -213,7 +213,7 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                         onDoubleClick={() => executeTravel(station.id)}
                       >
                         <span>{known ? planet.name : "Unknown Beacon"}</span>
-                        <small>{known ? `${planet.type} · ${station.name}` : "Local scan required"}</small>
+                        <small>{known ? `${planet.type} · ${station.name} · Tech Level ${station.techLevel}` : "Local scan required"}</small>
                       </button>
                     );
                   })}
@@ -231,7 +231,7 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                         onDoubleClick={() => executeTravel(station.id)}
                       >
                         <span>{station.name}</span>
-                        <small>{known ? `${planet.name} · Hidden Station Found` : "Signal masked"}</small>
+                        <small>{known && planet ? `${planet.name} · Hidden Station Found · Tech Level ${station.techLevel}` : "Signal masked"}</small>
                       </button>
                     );
                   })}
@@ -260,7 +260,7 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
               <p>
                 Destination:{" "}
                 {selectedKnown && selectedStationKnown && selectedStation && selectedPlanet
-                  ? `${selectedPlanet.name} · ${selectedStation.name}`
+                  ? `${selectedPlanet.name} · ${selectedStation.name} · Tech Level ${selectedStation.techLevel}`
                   : selectedKnown
                     ? "Select a scanned planet beacon"
                     : "Signal masked"}
