@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { commodities, contrabandLawBySystem, dialogueScenes, dialogueSpeakers, equipmentById, equipmentList, explorationSignals, glassWakeProtocol, missionTemplates, planetById, planets, ships, stationById, stations, systems } from "../src/data/world";
 import { fallbackAssetManifest } from "../src/systems/assets";
+import { createAsteroidsForSystem } from "../src/systems/asteroids";
 import { getEquipmentSlotUsage, getShipSlotCapacity } from "../src/systems/equipment";
-import { distance, orbitPoint } from "../src/systems/math";
+import { distance } from "../src/systems/math";
 import { validateContentData } from "../src/data/validate";
 import { createInitialMarketState } from "../src/systems/economy";
 import type { PlanetDefinition, StationDefinition } from "../src/types/game";
@@ -117,14 +118,11 @@ describe("content data", () => {
         if (gateClearance <= 0) violations.push(`${system.id}: jump gate overlaps planet ${planet.id} by ${formatClearance(gateClearance)}`);
       }
 
-      const asteroidCount = system.id === "kuro-belt" ? 16 : 10;
-      for (let index = 0; index < asteroidCount; index += 1) {
-        const asteroidPosition = orbitPoint(index + system.risk * 10, 240 + index * 22);
-        const asteroidRadius = 20 + (index % 4) * 7;
+      for (const asteroid of createAsteroidsForSystem(system.id, system.risk)) {
         for (const planet of systemPlanets) {
-          const clearance = distance(asteroidPosition, planet.position) - planet.radius - asteroidRadius;
+          const clearance = distance(asteroid.position, planet.position) - planet.radius - asteroid.radius;
           if (clearance <= ASTEROID_PLANET_CLEARANCE) {
-            violations.push(`${system.id}: asteroid ${index} is too close to planet ${planet.id} by ${formatClearance(clearance)}`);
+            violations.push(`${system.id}: asteroid ${asteroid.id} is too close to planet ${planet.id} by ${formatClearance(clearance)}`);
           }
         }
       }

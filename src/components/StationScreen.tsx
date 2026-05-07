@@ -54,7 +54,7 @@ interface EquipmentPopoverState {
 function useEquipmentPopover() {
   const [popover, setPopover] = useState<EquipmentPopoverState | null>(null);
   const popoverRef = useRef<HTMLElement | null>(null);
-  const hoverTimerRef = useRef<ReturnType<typeof window.setTimeout> | null>(null);
+  const hoverTimerRef = useRef<number | null>(null);
 
   function clearHoverTimer() {
     if (hoverTimerRef.current === null) return;

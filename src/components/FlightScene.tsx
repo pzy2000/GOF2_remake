@@ -328,7 +328,7 @@ function FreighterNpcShip({ ship }: { ship: FlightEntity }) {
         <meshBasicMaterial color="#6ee7ff" transparent opacity={0.32} toneMapped={false} />
       </mesh>
       <Html center distanceFactor={13} className="target-label npc-label">
-        FREIGHTER · {Math.round(ship.hull)}/{ship.maxHull}
+        {ship.economyStatus ?? `FREIGHTER · ${Math.round(ship.hull)}/${ship.maxHull}`}
       </Html>
     </group>
   );
@@ -399,6 +399,11 @@ function RelayNpcCore({ ship }: { ship: FlightEntity }) {
 
 function NpcShip({ ship }: { ship: FlightEntity }) {
   const clock = useGameStore((state) => state.runtime.clock);
+  const miningTarget = useGameStore((state) =>
+    ship.economyTaskKind === "mining" && ship.economyTargetId
+      ? state.runtime.asteroids.find((asteroid) => asteroid.id === ship.economyTargetId)
+      : undefined
+  );
   if (ship.role === "freighter") return <FreighterNpcShip ship={ship} />;
   if (ship.role === "drone") return <DroneNpcShip ship={ship} />;
   if (ship.role === "relay") return <RelayNpcCore ship={ship} />;
@@ -421,55 +426,64 @@ function NpcShip({ ship }: { ship: FlightEntity }) {
               ? { cone: [7, 23, 4] as [number, number, number], wing: [30, 2.2, 9] as [number, number, number], offset: 5, tail: "#4a2418" }
               : { cone: [9, 20, 6] as [number, number, number], wing: [28, 3.8, 15] as [number, number, number], offset: 3, tail: "#4a3820" };
   return (
-    <group position={toThree(ship.position)} rotation={[0, yaw, 0]} scale={ship.deathTimer !== undefined ? 0.82 : 1}>
-      <mesh castShadow>
-        <coneGeometry args={body.cone} />
-        <meshStandardMaterial color={flashing ? "#ffffff" : color} metalness={0.35} roughness={0.44} emissive={color} emissiveIntensity={flashing ? 0.85 : 0.16} transparent opacity={ship.deathTimer !== undefined ? 0.45 : 1} />
-      </mesh>
-      <mesh position={[0, 0, body.offset]} castShadow>
-        <boxGeometry args={body.wing} />
-        <meshStandardMaterial color={body.tail} metalness={0.28} roughness={0.5} transparent opacity={ship.deathTimer !== undefined ? 0.45 : 1} />
-      </mesh>
-      {ship.role === "pirate" ? (
-        <>
-          <mesh position={[-8, 1, -3]} rotation={[0, 0, 0.7]}>
-            <boxGeometry args={[3, 1.4, 18]} />
-            <meshStandardMaterial color="#711f2d" metalness={0.32} roughness={0.44} emissive="#23050a" />
-          </mesh>
-          <mesh position={[8, 1, -3]} rotation={[0, 0, -0.7]}>
-            <boxGeometry args={[3, 1.4, 18]} />
-            <meshStandardMaterial color="#711f2d" metalness={0.32} roughness={0.44} emissive="#23050a" />
-          </mesh>
-        </>
+    <>
+      {miningTarget ? (
+        <Line points={[ship.position, miningTarget.position]} color={ship.economyCommodityId ? getOreColor(ship.economyCommodityId) : "#ffd166"} lineWidth={2.4} transparent opacity={0.72} />
       ) : null}
-      {ship.role === "patrol" ? (
-        <mesh position={[0, 4.5, -6]}>
-          <boxGeometry args={[4, 7, 2]} />
-          <meshStandardMaterial color="#84d8ff" metalness={0.4} roughness={0.35} emissive="#1b719d" emissiveIntensity={0.25} />
+      <group position={toThree(ship.position)} rotation={[0, yaw, 0]} scale={ship.deathTimer !== undefined ? 0.82 : 1}>
+        <mesh castShadow>
+          <coneGeometry args={body.cone} />
+          <meshStandardMaterial color={flashing ? "#ffffff" : color} metalness={0.35} roughness={0.44} emissive={color} emissiveIntensity={flashing ? 0.85 : 0.16} transparent opacity={ship.deathTimer !== undefined ? 0.45 : 1} />
         </mesh>
-      ) : null}
-      {ship.role === "trader" ? (
-        <>
-          <mesh position={[-12, -1, -1]}>
-            <boxGeometry args={[6, 6, 13]} />
-            <meshStandardMaterial color="#6b522c" metalness={0.25} roughness={0.58} />
+        <mesh position={[0, 0, body.offset]} castShadow>
+          <boxGeometry args={body.wing} />
+          <meshStandardMaterial color={body.tail} metalness={0.28} roughness={0.5} transparent opacity={ship.deathTimer !== undefined ? 0.45 : 1} />
+        </mesh>
+        {ship.role === "pirate" ? (
+          <>
+            <mesh position={[-8, 1, -3]} rotation={[0, 0, 0.7]}>
+              <boxGeometry args={[3, 1.4, 18]} />
+              <meshStandardMaterial color="#711f2d" metalness={0.32} roughness={0.44} emissive="#23050a" />
+            </mesh>
+            <mesh position={[8, 1, -3]} rotation={[0, 0, -0.7]}>
+              <boxGeometry args={[3, 1.4, 18]} />
+              <meshStandardMaterial color="#711f2d" metalness={0.32} roughness={0.44} emissive="#23050a" />
+            </mesh>
+          </>
+        ) : null}
+        {ship.role === "patrol" ? (
+          <mesh position={[0, 4.5, -6]}>
+            <boxGeometry args={[4, 7, 2]} />
+            <meshStandardMaterial color="#84d8ff" metalness={0.4} roughness={0.35} emissive="#1b719d" emissiveIntensity={0.25} />
           </mesh>
-          <mesh position={[12, -1, -1]}>
-            <boxGeometry args={[6, 6, 13]} />
-            <meshStandardMaterial color="#6b522c" metalness={0.25} roughness={0.58} />
-          </mesh>
-        </>
-      ) : null}
-      <mesh position={[0, -1.4, 13]} rotation={[Math.PI / 2, 0, 0]} scale={[1, 1, flameScale]}>
-        <coneGeometry args={[ship.role === "trader" ? 4.2 : 3, 13, 12]} />
-        <meshBasicMaterial color={ship.role === "pirate" ? "#ff5f6d" : "#64e4ff"} transparent opacity={0.36} toneMapped={false} />
-      </mesh>
-      {ship.storyTarget ? (
-        <Html center distanceFactor={12} className="target-label story-target-label">
-          {ship.elite ? "ELITE · " : ""}{ship.name.toUpperCase()}
-        </Html>
-      ) : null}
-    </group>
+        ) : null}
+        {ship.role === "trader" ? (
+          <>
+            <mesh position={[-12, -1, -1]}>
+              <boxGeometry args={[6, 6, 13]} />
+              <meshStandardMaterial color="#6b522c" metalness={0.25} roughness={0.58} />
+            </mesh>
+            <mesh position={[12, -1, -1]}>
+              <boxGeometry args={[6, 6, 13]} />
+              <meshStandardMaterial color="#6b522c" metalness={0.25} roughness={0.58} />
+            </mesh>
+          </>
+        ) : null}
+        <mesh position={[0, -1.4, 13]} rotation={[Math.PI / 2, 0, 0]} scale={[1, 1, flameScale]}>
+          <coneGeometry args={[ship.role === "trader" ? 4.2 : 3, 13, 12]} />
+          <meshBasicMaterial color={ship.role === "pirate" ? "#ff5f6d" : "#64e4ff"} transparent opacity={0.36} toneMapped={false} />
+        </mesh>
+        {ship.economyStatus ? (
+          <Html center distanceFactor={12} className="target-label npc-label">
+            {ship.economyStatus}
+          </Html>
+        ) : ship.storyTarget ? (
+          <Html center distanceFactor={12} className="target-label story-target-label">
+            {ship.elite ? "ELITE · " : ""}{ship.name.toUpperCase()}
+          </Html>
+        ) : null}
+      </group>
+    </>
   );
 }
 

@@ -26,6 +26,7 @@ function Bar({ label, value, max, tone }: { label: string; value: number; max: n
 export function Hud() {
   const player = useGameStore((state) => state.player);
   const runtime = useGameStore((state) => state.runtime);
+  const economyService = useGameStore((state) => state.economyService);
   const autopilot = useGameStore((state) => state.autopilot);
   const currentSystem = useGameStore((state) => systemById[state.currentSystemId]);
   const target = useGameStore((state) => state.runtime.enemies.find((ship) => ship.id === state.targetId && ship.hull > 0 && ship.deathTimer === undefined));
@@ -153,6 +154,9 @@ export function Hud() {
       <section className="hud-panel hud-bottom-right">
         <h3>Comms</h3>
         <p>{runtime.message}</p>
+        <p>
+          Economy {economyService.status === "connected" ? `live #${economyService.snapshotId ?? 0}` : `${economyService.status} · local fallback`}
+        </p>
         {autopilot?.cancelable ? <p>W/S/A/D or weapons cancel autopilot. Shift boosts. Mouse is ignored.</p> : null}
         <div className="quick-actions">
           <button onClick={() => openGalaxyMap("station-route")} disabled={!!autopilot}>Map</button>

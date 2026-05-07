@@ -152,6 +152,53 @@ test.describe("browser smoke", () => {
     await expect(page.locator(".ship-model-status")).toHaveCount(0);
   });
 
+  test("renders visible economy NPC mining status in flight", async ({ page }) => {
+    await resetApp(page);
+    await startNewGame(page);
+
+    await page.evaluate(() => {
+      const current = window.__GOF2_E2E__!.getState() as {
+        runtime: {
+          asteroids: Array<{ id: string; resource: string; position: [number, number, number] }>;
+          enemies: unknown[];
+        };
+      };
+      const asteroid = current.runtime.asteroids[0];
+      window.__GOF2_E2E__!.setState({
+        runtime: {
+          ...current.runtime,
+          enemies: [
+            ...current.runtime.enemies,
+            {
+              id: "econ-e2e-miner",
+              name: "Ore Cutter",
+              role: "miner",
+              factionId: "free-belt-union",
+              position: [0, 12, 20],
+              velocity: [0, 0, 0],
+              hull: 125,
+              shield: 58,
+              maxHull: 125,
+              maxShield: 58,
+              lastDamageAt: -999,
+              fireCooldown: 0.6,
+              aiProfileId: "miner",
+              aiState: "patrol",
+              aiTimer: 0,
+              economyTaskKind: "mining",
+              economyStatus: "MINING · Iron",
+              economyCargo: {},
+              economyCommodityId: asteroid.resource,
+              economyTargetId: asteroid.id
+            }
+          ]
+        }
+      });
+    });
+
+    await expect(page.getByText("MINING · Iron")).toBeVisible();
+  });
+
   test("covers station trade, mission accept, jump, save, and reload", async ({ page }) => {
     await resetApp(page);
     await startNewGame(page);

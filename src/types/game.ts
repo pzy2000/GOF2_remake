@@ -371,6 +371,15 @@ export type FlightAiProfileId =
   | "drone-hunter"
   | "relay-core";
 
+export type EconomyNpcTaskKind =
+  | "idle"
+  | "mining"
+  | "returning"
+  | "buying"
+  | "hauling"
+  | "selling"
+  | "destroyed";
+
 export type StoryEncounterTargetKind = "drone" | "relay" | "pirate-relay" | "jammer" | "guard";
 
 export interface StoryEncounterTargetDefinition {
@@ -513,6 +522,11 @@ export interface FlightEntity {
   storyTarget?: boolean;
   storyTargetKind?: StoryEncounterTargetKind;
   provokedByPlayer?: boolean;
+  economyTaskKind?: EconomyNpcTaskKind;
+  economyStatus?: string;
+  economyCargo?: CargoHold;
+  economyCommodityId?: CommodityId;
+  economyTargetId?: string;
   scanProgress?: number;
   deathTimer?: number;
 }
@@ -691,6 +705,7 @@ export interface SaveGameData {
   completedMissionIds: string[];
   failedMissionIds: string[];
   marketState: MarketState;
+  economySnapshotId?: number;
   reputation: ReputationState;
   knownSystems: string[];
   knownPlanetIds: string[];

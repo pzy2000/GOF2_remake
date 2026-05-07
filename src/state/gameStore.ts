@@ -29,14 +29,13 @@ import type {
   StationTab,
   Vec3
 } from "../types/game";
+import type { EconomyEvent, EconomyNpcEntity, EconomyServiceStatus, EconomySnapshot } from "../types/economy";
 import { fallbackAssetManifest } from "../systems/assets";
-import { add, clamp, distance, forwardFromRotation, normalize, orbitPoint, scale, sub } from "../systems/math";
+import { add, clamp, distance, forwardFromRotation, normalize, scale, sub } from "../systems/math";
 import { applyDamage, regenerateShield } from "../systems/combat";
 import {
   getMiningProgressIncrement,
   getOreColor,
-  getOreHardness,
-  getOreRarity,
   getPirateSpawnCount,
   getPirateSpawnPosition,
   STARTER_GRACE_SECONDS
@@ -125,6 +124,14 @@ import {
   revealNeighborSystems,
   STARGATE_INTERACTION_RANGE
 } from "../systems/navigation";
+import { createAsteroidsForSystem } from "../systems/asteroids";
+import {
+  connectEconomyEvents,
+  ECONOMY_SERVICE_URL,
+  fetchEconomySnapshot,
+  postNpcDestroyed,
+  postPlayerTrade
+} from "../systems/economyClient";
 
 const emptyInput: FlightInput = {
   throttleUp: false,
@@ -143,8 +150,9 @@ const emptyInput: FlightInput = {
   mouseDY: 0
 };
 
-const oreCycle: CommodityId[] = ["iron", "titanium", "cesogen", "gold", "voidglass"];
 const SHIP_STORAGE_STATION_ID = "ptd-home";
+let closeEconomyStream: (() => void) | undefined;
+let economyRefreshInFlight = false;
 
 function createInitialPlayer(): PlayerState {
   const starter = shipById["sparrow-mk1"];
@@ -225,6 +233,51 @@ function createShipEntity(id: string, role: FlightEntity["role"], position: Vec3
     aiTimer: 0,
     elite
   };
+}
+
+function isEconomyTrafficRole(role: FlightEntity["role"]): role is EconomyNpcEntity["role"] {
+  return role === "trader" || role === "freighter" || role === "courier" || role === "miner" || role === "smuggler";
+}
+
+function aiProfileForEconomyRole(role: EconomyNpcEntity["role"]): FlightEntity["aiProfileId"] {
+  const profiles = {
+    trader: "hauler",
+    freighter: "freighter",
+    courier: "courier",
+    miner: "miner",
+    smuggler: "smuggler"
+  } satisfies Record<EconomyNpcEntity["role"], FlightEntity["aiProfileId"]>;
+  return profiles[role];
+}
+
+function materializeEconomyNpc(npc: EconomyNpcEntity): FlightEntity {
+  return {
+    id: npc.id,
+    name: npc.name,
+    role: npc.role,
+    factionId: npc.factionId,
+    position: [...npc.position],
+    velocity: [...npc.velocity],
+    hull: npc.hull,
+    shield: npc.shield,
+    maxHull: npc.maxHull,
+    maxShield: npc.maxShield,
+    lastDamageAt: -999,
+    fireCooldown: 0.6,
+    aiProfileId: aiProfileForEconomyRole(npc.role),
+    aiState: "patrol",
+    aiTimer: 0,
+    economyTaskKind: npc.task.kind,
+    economyStatus: npc.statusLabel,
+    economyCargo: { ...npc.cargo },
+    economyCommodityId: npc.task.commodityId,
+    economyTargetId: npc.task.asteroidId ?? npc.task.destinationStationId ?? npc.task.originStationId
+  };
+}
+
+function reportEconomyNpcDestroyed(ship: FlightEntity, systemId: string): void {
+  if (!ship.economyStatus) return;
+  void postNpcDestroyed({ npcId: ship.id, systemId }).catch(() => undefined);
 }
 
 function trafficPosition(systemId: string, index: number): Vec3 {
@@ -348,16 +401,7 @@ function missionRuntimeEntities(systemId: string, activeMissions: MissionDefinit
 function createRuntimeForSystem(systemId: string, activeMissions: MissionDefinition[] = []): RuntimeState {
   const system = systemById[systemId];
   const pirateCount = getPirateSpawnCount(systemId, system.risk);
-  const asteroids: AsteroidEntity[] = Array.from({ length: systemId === "kuro-belt" ? 16 : 10 }, (_, index) => ({
-    id: `${systemId}-asteroid-${index}`,
-    resource: oreCycle[index % oreCycle.length],
-    position: orbitPoint(index + system.risk * 10, 240 + index * 22),
-    radius: 20 + (index % 4) * 7,
-    amount: 4 + (index % 5) * 2,
-    miningProgress: 0,
-    rarity: getOreRarity(oreCycle[index % oreCycle.length]),
-    hardness: getOreHardness(oreCycle[index % oreCycle.length])
-  }));
+  const asteroids: AsteroidEntity[] = createAsteroidsForSystem(systemId, system.risk);
   const missionEntities = missionRuntimeEntities(systemId, activeMissions);
   return {
     enemies: [
@@ -768,6 +812,7 @@ interface GameStore {
   assetManifest: AssetManifest;
   player: PlayerState;
   runtime: RuntimeState;
+  economyService: EconomyServiceStatus;
   autopilot?: AutoPilotState;
   input: FlightInput;
   gameClock: number;
@@ -792,6 +837,9 @@ interface GameStore {
   saveGame: (slotId?: SaveSlotId) => void;
   deleteSave: (slotId: SaveSlotId) => void;
   refreshSaveSlots: () => void;
+  refreshEconomySnapshot: () => Promise<void>;
+  startEconomyStream: () => void;
+  stopEconomyStream: () => void;
   setScreen: (screen: Screen) => void;
   setStationTab: (tab: StationTab) => void;
   openGalaxyMap: (mode: GalaxyMapMode) => void;
@@ -858,6 +906,7 @@ function savePayload(state: GameStore, overrides: SavePayloadOverrides = {}): Om
     completedMissionIds: overrides.completedMissionIds ?? state.completedMissionIds,
     failedMissionIds: overrides.failedMissionIds ?? state.failedMissionIds,
     marketState: overrides.marketState ?? state.marketState,
+    economySnapshotId: state.economyService.snapshotId,
     reputation: overrides.reputation ?? state.reputation,
     knownSystems: overrides.knownSystems ?? state.knownSystems,
     knownPlanetIds: overrides.knownPlanetIds ?? state.knownPlanetIds,
@@ -875,6 +924,49 @@ function writeStationAutoSave(state: GameStore, overrides: SavePayloadOverrides)
   };
 }
 
+function applyEconomySnapshotPatch(
+  state: GameStore,
+  snapshot: EconomySnapshot,
+  lastEvent?: string
+): Pick<GameStore, "marketState" | "runtime" | "economyService"> {
+  const backendNpcIds = new Set(snapshot.visibleNpcs.map((npc) => npc.id));
+  const preservedEnemies = state.runtime.enemies.filter((ship) => {
+    if (ship.storyTarget) return true;
+    if (ship.economyStatus || ship.id.startsWith("econ-")) return backendNpcIds.has(ship.id);
+    return !isEconomyTrafficRole(ship.role);
+  });
+  const backendShips = snapshot.visibleNpcs.map(materializeEconomyNpc);
+  const resourceBelt = snapshot.resourceBelts.find((belt) => belt.systemId === state.currentSystemId);
+  return {
+    marketState: snapshot.marketState,
+    runtime: {
+      ...state.runtime,
+      asteroids: resourceBelt?.asteroids ?? state.runtime.asteroids,
+      enemies: [
+        ...preservedEnemies.filter((ship) => !backendNpcIds.has(ship.id)),
+        ...backendShips
+      ]
+    },
+    economyService: {
+      status: "connected",
+      url: ECONOMY_SERVICE_URL,
+      snapshotId: snapshot.snapshotId,
+      lastEvent,
+      lastError: undefined
+    }
+  };
+}
+
+function offlineEconomyPatch(state: GameStore, message: string): Pick<GameStore, "economyService"> {
+  return {
+    economyService: {
+      ...state.economyService,
+      status: "offline",
+      lastError: message
+    }
+  };
+}
+
 export const useGameStore = create<GameStore>((set, get) => ({
   screen: "menu",
   previousScreen: "menu",
@@ -886,6 +978,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   assetManifest: fallbackAssetManifest,
   player: createInitialPlayer(),
   runtime: createRuntimeForSystem("helion-reach"),
+  economyService: { status: "offline", url: ECONOMY_SERVICE_URL },
   autopilot: undefined,
   input: emptyInput,
   gameClock: 0,
@@ -917,6 +1010,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       cameraMode: "chase",
       player: createInitialPlayer(),
       runtime: createRuntimeForSystem("helion-reach"),
+      economyService: { status: "offline", url: ECONOMY_SERVICE_URL },
       autopilot: undefined,
       gameClock: 0,
       marketState: createInitialMarketState(),
@@ -957,6 +1051,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       dialogueState: normalizeDialogueState(save.dialogueState),
       activeDialogue: undefined,
       runtime: createRuntimeForSystem(save.currentSystemId, activeMissions),
+      economyService: { status: "offline", url: ECONOMY_SERVICE_URL, snapshotId: save.economySnapshotId },
       autopilot: undefined,
       hasSave: true,
       saveSlots: readSaveSlots(),
@@ -983,6 +1078,46 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }));
   },
   refreshSaveSlots: () => set({ saveSlots: readSaveSlots(), hasSave: readSave() !== null }),
+  refreshEconomySnapshot: async () => {
+    if (economyRefreshInFlight) return;
+    economyRefreshInFlight = true;
+    const requestedSystemId = get().currentSystemId;
+    try {
+      const snapshot = await fetchEconomySnapshot(requestedSystemId);
+      set((state) => (state.currentSystemId === requestedSystemId ? applyEconomySnapshotPatch(state, snapshot, "snapshot") : {}));
+    } catch (error) {
+      set((state) => offlineEconomyPatch(state, error instanceof Error ? error.message : "Economy service offline."));
+    } finally {
+      economyRefreshInFlight = false;
+    }
+  },
+  startEconomyStream: () => {
+    if (closeEconomyStream) return;
+    const close = connectEconomyEvents(
+      (event: EconomyEvent) => {
+        set((state) => ({
+          economyService: {
+            ...state.economyService,
+            status: "connected",
+            lastEvent: event.message,
+            snapshotId: event.snapshotId ?? state.economyService.snapshotId,
+            lastError: undefined
+          }
+        }));
+        void get().refreshEconomySnapshot();
+      },
+      (message) => {
+        closeEconomyStream?.();
+        closeEconomyStream = undefined;
+        set((state) => offlineEconomyPatch(state, message));
+      }
+    );
+    if (close) closeEconomyStream = close;
+  },
+  stopEconomyStream: () => {
+    closeEconomyStream?.();
+    closeEconomyStream = undefined;
+  },
   setScreen: (screen) => set((state) => ({ previousScreen: state.screen, screen })),
   setStationTab: (stationTab) => set({ stationTab, galaxyMapMode: stationTab === "Galaxy Map" ? "station-route" : get().galaxyMapMode }),
   openGalaxyMap: (galaxyMapMode) => set((state) => ({ previousScreen: state.screen, screen: "galaxyMap", galaxyMapMode })),
@@ -997,7 +1132,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (state.screen !== "flight") return;
     const now = state.runtime.clock + delta;
     const gameClock = state.gameClock + delta;
-    const marketState = advanceMarketState(state.marketState, delta);
+    const marketState = state.economyService.status === "connected" ? state.marketState : advanceMarketState(state.marketState, delta);
     const input = state.input;
     const { dx, dy } = state.consumeMouse();
 
@@ -1422,6 +1557,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
     let contrabandScanMessage: string | undefined;
     runtime.enemies = runtime.enemies.map((ship) => {
       if (ship.hull <= 0 || ship.deathTimer !== undefined) return ship;
+      if (ship.economyStatus && !isHostileToPlayer(ship)) {
+        return regenerateShield(
+          {
+            ...ship,
+            position: add(ship.position, scale(ship.velocity, delta))
+          },
+          ship.maxShield,
+          now,
+          delta,
+          5
+        );
+      }
       const ai = resolveCombatAiStep({
         ship,
         systemId: state.currentSystemId,
@@ -1623,6 +1770,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
               velocity: [0, 6, 0]
             });
             audioSystem.play("explosion");
+            reportEconomyNpcDestroyed(ship, state.currentSystemId);
             return { ...damaged, deathTimer: 0.42 };
           }
           return damaged;
@@ -1698,6 +1846,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
               velocity: [0, 6, 0]
             });
             audioSystem.play("explosion");
+            reportEconomyNpcDestroyed(ship, state.currentSystemId);
             return { ...damaged, deathTimer: 0.42 };
           }
           return damaged;
@@ -1858,7 +2007,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     });
     set({
       gameClock,
-      marketState: advanceMarketState(state.marketState, delta),
+      marketState: state.economyService.status === "connected" ? state.marketState : advanceMarketState(state.marketState, delta),
       player: expiration.player,
       reputation: expiration.reputation,
       activeMissions: expiration.activeMissions,
@@ -2271,17 +2420,89 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const station = stationById[state.currentStationId];
     const system = systemById[state.currentSystemId];
     const reservedCargo = getOccupiedCargo(state.player.cargo, state.activeMissions) - getCargoUsed(state.player.cargo);
-    const result = buyCommodity(state.player, station, system, commodityId, amount, state.reputation.factions[station.factionId], state.marketState, reservedCargo);
-    set({ player: result.player, marketState: result.marketState ?? state.marketState, runtime: { ...state.runtime, message: result.message } });
+    const applyLocalBuy = (latest: GameStore, reason?: string) => {
+      const localStation = stationById[latest.currentStationId ?? ""];
+      const localSystem = systemById[latest.currentSystemId];
+      if (!localStation || !localSystem) return;
+      const localReservedCargo = getOccupiedCargo(latest.player.cargo, latest.activeMissions) - getCargoUsed(latest.player.cargo);
+      const result = buyCommodity(latest.player, localStation, localSystem, commodityId, amount, latest.reputation.factions[localStation.factionId], latest.marketState, localReservedCargo);
+      set({
+        player: result.player,
+        marketState: result.marketState ?? latest.marketState,
+        economyService: reason ? { ...latest.economyService, status: "fallback", lastError: reason } : latest.economyService,
+        runtime: { ...latest.runtime, message: result.message }
+      });
+    };
+    if (state.economyService.status !== "connected") {
+      applyLocalBuy(state);
+      return;
+    }
+    void postPlayerTrade({
+      action: "buy",
+      stationId: station.id,
+      systemId: system.id,
+      commodityId,
+      amount,
+      player: state.player,
+      reputation: state.reputation.factions[station.factionId],
+      reservedCargo
+    })
+      .then((result) => {
+        set((latest) => {
+          const patch = result.snapshot ? applyEconomySnapshotPatch(latest, result.snapshot, result.message) : undefined;
+          return {
+            player: result.player,
+            marketState: patch?.marketState ?? result.marketState,
+            economyService: patch?.economyService ?? latest.economyService,
+            runtime: { ...(patch?.runtime ?? latest.runtime), message: result.message }
+          };
+        });
+      })
+      .catch((error) => applyLocalBuy(get(), error instanceof Error ? error.message : "Economy backend unavailable."));
   },
   sell: (commodityId, amount = 1) => {
     const state = get();
     if (!state.currentStationId) return;
     const station = stationById[state.currentStationId];
     const system = systemById[state.currentSystemId];
-    const result = sellCommodity(state.player, station, system, commodityId, amount, state.reputation.factions[station.factionId], state.marketState);
-    const completedCargo: CargoHold = { ...state.runtime.mined };
-    set({ player: result.player, marketState: result.marketState ?? state.marketState, runtime: { ...state.runtime, mined: completedCargo, message: result.message } });
+    const applyLocalSell = (latest: GameStore, reason?: string) => {
+      const localStation = stationById[latest.currentStationId ?? ""];
+      const localSystem = systemById[latest.currentSystemId];
+      if (!localStation || !localSystem) return;
+      const result = sellCommodity(latest.player, localStation, localSystem, commodityId, amount, latest.reputation.factions[localStation.factionId], latest.marketState);
+      const completedCargo: CargoHold = { ...latest.runtime.mined };
+      set({
+        player: result.player,
+        marketState: result.marketState ?? latest.marketState,
+        economyService: reason ? { ...latest.economyService, status: "fallback", lastError: reason } : latest.economyService,
+        runtime: { ...latest.runtime, mined: completedCargo, message: result.message }
+      });
+    };
+    if (state.economyService.status !== "connected") {
+      applyLocalSell(state);
+      return;
+    }
+    void postPlayerTrade({
+      action: "sell",
+      stationId: station.id,
+      systemId: system.id,
+      commodityId,
+      amount,
+      player: state.player,
+      reputation: state.reputation.factions[station.factionId]
+    })
+      .then((result) => {
+        set((latest) => {
+          const patch = result.snapshot ? applyEconomySnapshotPatch(latest, result.snapshot, result.message) : undefined;
+          return {
+            player: result.player,
+            marketState: patch?.marketState ?? result.marketState,
+            economyService: patch?.economyService ?? latest.economyService,
+            runtime: { ...(patch?.runtime ?? latest.runtime), mined: { ...latest.runtime.mined }, message: result.message }
+          };
+        });
+      })
+      .catch((error) => applyLocalSell(get(), error instanceof Error ? error.message : "Economy backend unavailable."));
   },
   buyEquipment: (equipmentId, amount = 1) => {
     const state = get();

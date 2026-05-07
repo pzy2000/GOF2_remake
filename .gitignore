@@ -1,5 +1,7 @@
 node_modules/
 dist/
+dist-server/
+.gof2/
 test-results/
 *.tsbuildinfo
 vite.config.js

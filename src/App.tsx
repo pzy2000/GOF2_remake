@@ -121,6 +121,21 @@ function GameClockTicker() {
   return null;
 }
 
+function EconomyBackendRuntime() {
+  const currentSystemId = useGameStore((state) => state.currentSystemId);
+  const refreshEconomySnapshot = useGameStore((state) => state.refreshEconomySnapshot);
+  const startEconomyStream = useGameStore((state) => state.startEconomyStream);
+  const stopEconomyStream = useGameStore((state) => state.stopEconomyStream);
+  useEffect(() => {
+    startEconomyStream();
+    return stopEconomyStream;
+  }, [startEconomyStream, stopEconomyStream]);
+  useEffect(() => {
+    void refreshEconomySnapshot();
+  }, [currentSystemId, refreshEconomySnapshot]);
+  return null;
+}
+
 function AudioRuntime() {
   const screen = useGameStore((state) => state.screen);
   const currentSystemId = useGameStore((state) => state.currentSystemId);
@@ -162,12 +177,13 @@ export default function App() {
     loadAssetManifest().then(setAssetManifest).catch(() => undefined);
   }, [setAssetManifest]);
 
-  if (screen === "menu") return <><AudioRuntime /><MainMenu /><DialogueOverlay /></>;
-  if (screen === "settings" || screen === "credits") return <><AudioRuntime /><SimpleScreen type={screen} /><DialogueOverlay /></>;
+  if (screen === "menu") return <><AudioRuntime /><EconomyBackendRuntime /><MainMenu /><DialogueOverlay /></>;
+  if (screen === "settings" || screen === "credits") return <><AudioRuntime /><EconomyBackendRuntime /><SimpleScreen type={screen} /><DialogueOverlay /></>;
   if (screen === "station") {
     return (
       <>
         <AudioRuntime />
+        <EconomyBackendRuntime />
         <GameClockTicker />
         <StationScreen />
         <DialogueOverlay />
@@ -178,6 +194,7 @@ export default function App() {
   return (
     <main className="game-shell">
       <AudioRuntime />
+      <EconomyBackendRuntime />
       <GameClockTicker />
       <FlightScene />
       <Hud />
