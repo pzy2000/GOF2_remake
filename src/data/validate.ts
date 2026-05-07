@@ -165,6 +165,14 @@ export function validateContentData(): ContentValidationResult {
       errors.push(`Exploration signal ${signal.id} has invalid scan band`);
     }
     if (signal.scanRange <= 0 || signal.scanTime <= 0) errors.push(`Exploration signal ${signal.id} has invalid scan parameters`);
+    if (signal.stage !== undefined && signal.stage < 1) errors.push(`Exploration signal ${signal.id} has invalid chain stage`);
+    for (const prerequisiteId of signal.prerequisiteSignalIds ?? []) {
+      if (!explorationSignalIds.has(prerequisiteId)) errors.push(`Exploration signal ${signal.id} requires unknown signal ${prerequisiteId}`);
+      if (prerequisiteId === signal.id) errors.push(`Exploration signal ${signal.id} cannot require itself`);
+    }
+    if (signal.storyInfluence && !missionIds.has(signal.storyInfluence.missionId)) {
+      errors.push(`Exploration signal ${signal.id} influences unknown mission ${signal.storyInfluence.missionId}`);
+    }
     for (const commodityId of Object.keys(signal.rewards.cargo ?? {})) {
       if (!hasCommodity(commodityId)) errors.push(`Exploration signal ${signal.id} rewards unknown cargo ${commodityId}`);
     }

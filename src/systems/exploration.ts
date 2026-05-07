@@ -30,9 +30,17 @@ export function getExplorationSignalsForSystem(systemId: string): ExplorationSig
   return explorationSignals.filter((signal) => signal.systemId === systemId);
 }
 
+export function isExplorationSignalUnlocked(signal: ExplorationSignalDefinition, explorationState: ExplorationState): boolean {
+  return (signal.prerequisiteSignalIds ?? []).every((signalId) => explorationState.completedSignalIds.includes(signalId));
+}
+
+export function getUnlockedExplorationSignalsForSystem(systemId: string, explorationState: ExplorationState): ExplorationSignalDefinition[] {
+  return getExplorationSignalsForSystem(systemId).filter((signal) => isExplorationSignalUnlocked(signal, explorationState));
+}
+
 export function getIncompleteExplorationSignals(systemId: string, explorationState: ExplorationState): ExplorationSignalDefinition[] {
   const completed = new Set(explorationState.completedSignalIds);
-  return getExplorationSignalsForSystem(systemId).filter((signal) => !completed.has(signal.id));
+  return getUnlockedExplorationSignalsForSystem(systemId, explorationState).filter((signal) => !completed.has(signal.id));
 }
 
 export function isExplorationSignalCompleted(signalId: string, explorationState: ExplorationState): boolean {

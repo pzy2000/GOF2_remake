@@ -160,12 +160,21 @@ describe("content data", () => {
     expect(station.planetId).toBe(planet.id);
   });
 
-  it("defines one Quiet Signals exploration target for every system", () => {
-    expect(explorationSignals).toHaveLength(systems.length);
+  it("defines multi-stage Quiet Signals exploration chains for every system", () => {
+    const signalIds = new Set(explorationSignals.map((signal) => signal.id));
+    const missionIds = new Set(missionTemplates.map((mission) => mission.id));
     for (const system of systems) {
-      expect(explorationSignals.filter((signal) => signal.systemId === system.id)).toHaveLength(1);
+      const systemSignals = explorationSignals.filter((signal) => signal.systemId === system.id);
+      expect(systemSignals.length).toBeGreaterThanOrEqual(2);
+      expect(systemSignals.some((signal) => (signal.prerequisiteSignalIds ?? []).length === 0)).toBe(true);
     }
     for (const signal of explorationSignals) {
+      for (const prerequisiteId of signal.prerequisiteSignalIds ?? []) {
+        expect(signalIds.has(prerequisiteId)).toBe(true);
+        expect(prerequisiteId).not.toBe(signal.id);
+      }
+      if (signal.stage !== undefined) expect(signal.stage).toBeGreaterThanOrEqual(1);
+      if (signal.storyInfluence) expect(missionIds.has(signal.storyInfluence.missionId)).toBe(true);
       for (const commodityId of Object.keys(signal.rewards.cargo ?? {})) {
         expect(commodities.some((commodity) => commodity.id === commodityId)).toBe(true);
       }

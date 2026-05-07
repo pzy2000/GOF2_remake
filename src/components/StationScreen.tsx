@@ -25,6 +25,7 @@ import { SaveSlotsPanel } from "./SaveSlotsPanel";
 import { getCommodityIcon, getEquipmentIcon, getFactionIcon } from "../data/iconAtlas";
 import { getStoryProgress, storyStatusLabel } from "../systems/story";
 import { getDialogueLogEntries } from "../systems/dialogue";
+import { isExplorationSignalUnlocked } from "../systems/exploration";
 import {
   canInstallEquipment,
   getEquipmentSlotUsage,
@@ -32,7 +33,7 @@ import {
   hasCraftMaterials
 } from "../systems/equipment";
 import { getContrabandLawSummary } from "../systems/combatAi";
-import type { AssetManifest, CargoHold, CommodityId, EquipmentId, EquipmentSlotType, StationTab } from "../types/game";
+import type { AssetManifest, CargoHold, CommodityId, EquipmentId, EquipmentSlotType, ExplorationSignalDefinition, ExplorationState, StationTab } from "../types/game";
 
 const tabs: StationTab[] = ["Market", "Hangar", "Shipyard", "Mission Board", "Captain's Log", "Blueprint Workshop", "Lounge", "Galaxy Map"];
 const craftable: EquipmentId[] = equipmentList.filter((item) => !!item.craftCost).map((item) => item.id);
@@ -47,6 +48,36 @@ const equipmentSlotLabels: Record<EquipmentSlotType, string> = {
 const EQUIPMENT_POPOVER_HOVER_DELAY_MS = 2000;
 
 type EquipmentPopoverMode = "preview" | "pinned";
+
+interface ExplorationChainSummary {
+  id: string;
+  title: string;
+  systemName: string;
+  signals: ExplorationSignalDefinition[];
+  completed: ExplorationSignalDefinition[];
+  next?: ExplorationSignalDefinition;
+}
+
+function getExplorationChainSummaries(explorationState: ExplorationState): ExplorationChainSummary[] {
+  const chains = new Map<string, ExplorationSignalDefinition[]>();
+  for (const signal of explorationSignals) {
+    const chainId = signal.chainId ?? signal.id;
+    chains.set(chainId, [...(chains.get(chainId) ?? []), signal]);
+  }
+  return Array.from(chains.entries())
+    .map(([id, signals]) => {
+      const ordered = [...signals].sort((a, b) => (a.stage ?? 1) - (b.stage ?? 1) || a.title.localeCompare(b.title));
+      return {
+        id,
+        title: ordered[0]?.chainTitle ?? ordered[0]?.title ?? id,
+        systemName: systemById[ordered[0]?.systemId ?? ""]?.name ?? ordered[0]?.systemId ?? "Unknown System",
+        signals: ordered,
+        completed: ordered.filter((signal) => explorationState.completedSignalIds.includes(signal.id)),
+        next: ordered.find((signal) => !explorationState.completedSignalIds.includes(signal.id) && isExplorationSignalUnlocked(signal, explorationState))
+      };
+    })
+    .sort((a, b) => a.systemName.localeCompare(b.systemName) || a.title.localeCompare(b.title));
+}
 
 interface EquipmentPopoverState {
   id: EquipmentId;
@@ -684,6 +715,10 @@ function CaptainLogTab() {
   const currentOrigin = currentMission ? systemById[currentMission.originSystemId] : undefined;
   const currentDestination = currentMission ? stationById[currentMission.destinationStationId] : undefined;
   const completedExplorationLogs = explorationSignals.filter((signal) => explorationState.eventLogIds.includes(signal.id));
+  const chainSummaries = getExplorationChainSummaries(explorationState);
+  const currentFieldIntel = currentMission
+    ? completedExplorationLogs.filter((signal) => signal.storyInfluence?.missionId === currentMission.id)
+    : [];
   const dialogueEntries = getDialogueLogEntries({ activeMissions, completedMissionIds, explorationState, dialogueState });
   const storyDialogueEntries = dialogueEntries.filter((entry) => entry.scene.group === "story");
   const explorationDialogueEntries = dialogueEntries.filter((entry) => entry.scene.group === "exploration");
@@ -702,6 +737,17 @@ function CaptainLogTab() {
           <span>Current Objective</span>
           <p>{current ? currentObjectiveText(current.status, currentMission, currentOrigin?.name, currentDestination?.name) : "Protocol complete. Glass Wake is quiet for now."}</p>
         </div>
+        {currentFieldIntel.length > 0 ? (
+          <div className="story-field-intel">
+            <span>Field Intelligence</span>
+            {currentFieldIntel.map((signal) => (
+              <p key={signal.id}>
+                <b>{signal.storyInfluence?.headline}</b>
+                {signal.storyInfluence?.note ? ` ${signal.storyInfluence.note}` : ""}
+              </p>
+            ))}
+          </div>
+        ) : null}
         {progress.completedCount === progress.totalCount ? (
           <div className="story-epilogue" data-testid="glass-wake-epilogue">
             <span>Epilogue</span>
@@ -740,12 +786,33 @@ function CaptainLogTab() {
             <h3>Quiet Signals</h3>
           </header>
           <p>{explorationState.completedSignalIds.length}/{explorationSignals.length} signals resolved.</p>
+          <div className="exploration-chain-list">
+            {chainSummaries.map((chain) => (
+              <article key={chain.id} className={chain.completed.length === chain.signals.length ? "complete" : ""}>
+                <header>
+                  <div>
+                    <b>{chain.title}</b>
+                    <span>{chain.systemName}</span>
+                  </div>
+                  <strong>{chain.completed.length}/{chain.signals.length}</strong>
+                </header>
+                <p>
+                  {chain.next
+                    ? `Next trace: ${chain.next.maskedTitle}`
+                    : chain.completed.length === chain.signals.length
+                      ? "Chain resolved."
+                      : "Next trace locked behind a prior signal."}
+                </p>
+              </article>
+            ))}
+          </div>
           {completedExplorationLogs.length === 0 ? (
             <p className="muted">No exploration logs recovered.</p>
           ) : (
             completedExplorationLogs.map((signal) => (
               <article key={signal.id} className="exploration-log-entry">
                 <b>{signal.title}</b>
+                {signal.storyInfluence ? <span>Field intelligence: {signal.storyInfluence.headline}</span> : null}
                 <p>{signal.log}</p>
               </article>
             ))

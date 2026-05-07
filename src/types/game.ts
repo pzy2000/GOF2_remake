@@ -315,6 +315,12 @@ export interface ExplorationSignalRewards {
   reputation?: Partial<Record<FactionId, number>>;
 }
 
+export interface ExplorationStoryInfluence {
+  missionId: string;
+  headline: string;
+  note: string;
+}
+
 export interface ExplorationSignalDefinition {
   id: string;
   systemId: string;
@@ -328,6 +334,11 @@ export interface ExplorationSignalDefinition {
   scanTime: number;
   rewards: ExplorationSignalRewards;
   log: string;
+  chainId?: string;
+  chainTitle?: string;
+  stage?: number;
+  prerequisiteSignalIds?: string[];
+  storyInfluence?: ExplorationStoryInfluence;
   revealStationId?: string;
   revealPlanetIds?: string[];
 }

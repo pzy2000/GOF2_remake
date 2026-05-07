@@ -67,6 +67,7 @@ import {
   explorationSignalById,
   getEffectiveSignalScanBand,
   getEffectiveSignalScanRange,
+  isExplorationSignalUnlocked,
   isFrequencyInSignalBand,
   normalizeExplorationState
 } from "../systems/exploration";
@@ -654,7 +655,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
     if (runtime.explorationScan) {
       const signal = explorationSignalById[runtime.explorationScan.signalId];
-      if (!signal || explorationState.completedSignalIds.includes(runtime.explorationScan.signalId)) {
+      if (!signal || explorationState.completedSignalIds.includes(runtime.explorationScan.signalId) || !isExplorationSignalUnlocked(signal, explorationState)) {
         runtime = { ...runtime, explorationScan: undefined };
       } else {
         const scanDistance = distance(player.position, signal.position);

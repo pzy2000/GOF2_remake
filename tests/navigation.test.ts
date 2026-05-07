@@ -96,6 +96,23 @@ describe("navigation targets and discovery", () => {
     });
   });
 
+  it("hides locked exploration stages from local navigation until their prerequisite is complete", () => {
+    const followUp = explorationSignalById["quiet-signal-meridian-afterimage"];
+    const lockedTarget = getNearestNavigationTarget("helion-reach", followUp.position, ["helion-prime-world"], {
+      explorationState: createInitialExplorationState()
+    });
+    expect(lockedTarget?.id).not.toBe(followUp.id);
+
+    const unlockedTarget = getNearestNavigationTarget("helion-reach", followUp.position, ["helion-prime-world"], {
+      explorationState: {
+        ...createInitialExplorationState(),
+        completedSignalIds: ["quiet-signal-sundog-lattice"]
+      }
+    });
+    expect(unlockedTarget?.kind).toBe("exploration-signal");
+    expect(unlockedTarget?.id).toBe(followUp.id);
+  });
+
   it("starts with the current system and nearby systems known", () => {
     expect(getInitialKnownSystems("helion-reach")).toEqual(["helion-reach", "kuro-belt", "vantara", "mirr-vale", "ptd-home"]);
   });

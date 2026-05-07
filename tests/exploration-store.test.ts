@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { explorationSignalById, stationById } from "../src/data/world";
+import { getIncompleteExplorationSignals } from "../src/systems/exploration";
 
 class MemoryStorage implements Storage {
   private data = new Map<string, string>();
@@ -64,6 +65,43 @@ beforeEach(() => {
 });
 
 describe("exploration store flow", () => {
+  it("keeps later anomaly stages locked until their prerequisite signal is resolved", async () => {
+    const store = await freshStore();
+    const followUp = explorationSignalById["quiet-signal-meridian-afterimage"];
+
+    expect(getIncompleteExplorationSignals("helion-reach", store.getState().explorationState).map((signal) => signal.id)).not.toContain(followUp.id);
+
+    store.setState((state) => ({
+      screen: "flight",
+      currentSystemId: followUp.systemId,
+      currentStationId: undefined,
+      player: {
+        ...state.player,
+        position: followUp.position,
+        velocity: [0, 0, 0],
+        throttle: 0
+      },
+      runtime: {
+        ...state.runtime,
+        enemies: [],
+        projectiles: [],
+        effects: [],
+        message: "",
+        explorationScan: undefined
+      }
+    }));
+    store.getState().interact();
+    expect(store.getState().runtime.explorationScan?.signalId).not.toBe(followUp.id);
+
+    await completeSignal(store, "quiet-signal-sundog-lattice");
+    expect(getIncompleteExplorationSignals("helion-reach", store.getState().explorationState).map((signal) => signal.id)).toContain(followUp.id);
+
+    await completeSignal(store, followUp.id);
+    const state = store.getState();
+    expect(state.explorationState.completedSignalIds).toContain("quiet-signal-sundog-lattice");
+    expect(state.explorationState.completedSignalIds).toContain(followUp.id);
+  });
+
   it("completes a frequency scan once and applies rewards", async () => {
     const store = await freshStore();
     await completeSignal(store, "quiet-signal-sundog-lattice");

@@ -4,7 +4,7 @@ import { factionNames } from "../data/world";
 import { planetById, stationById, systems, useGameStore } from "../state/gameStore";
 import type { GalaxyMapMode } from "../types/game";
 import { GALAXY_DISCOVERY_DISTANCE, systemDistance } from "../systems/navigation";
-import { getExplorationSignalsForSystem, getVisibleStationsForSystem, isExplorationSignalDiscovered, isHiddenStationRevealed } from "../systems/exploration";
+import { getExplorationSignalsForSystem, getVisibleStationsForSystem, isExplorationSignalDiscovered, isExplorationSignalUnlocked, isHiddenStationRevealed } from "../systems/exploration";
 
 const MAP_WIDTH = 840;
 const MAP_HEIGHT = 560;
@@ -244,11 +244,12 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                   <h4>Exploration Signals</h4>
                   {selectedSignals.map((signal) => {
                     const complete = explorationState.completedSignalIds.includes(signal.id);
+                    const unlocked = isExplorationSignalUnlocked(signal, explorationState);
                     const discovered = isExplorationSignalDiscovered(signal.id, explorationState);
                     return (
-                      <article key={signal.id} className={complete ? "complete" : discovered ? "discovered" : ""}>
-                        <strong>{discovered ? signal.title : "Masked Signal"}</strong>
-                        <span>{complete ? "Resolved" : discovered ? "Discovered" : signal.maskedTitle}</span>
+                      <article key={signal.id} className={complete ? "complete" : discovered ? "discovered" : unlocked ? "" : "locked"}>
+                        <strong>{unlocked ? (discovered ? signal.title : "Masked Signal") : "Locked Signal"}</strong>
+                        <span>{complete ? "Resolved" : unlocked ? (discovered ? "Discovered" : signal.maskedTitle) : "Follow the prior Quiet Signal stage"}</span>
                         {complete ? <p>{signal.log}</p> : null}
                       </article>
                     );

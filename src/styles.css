@@ -1142,7 +1142,8 @@ button.equipment-trigger {
 }
 
 .story-current-objective,
-.story-epilogue {
+.story-epilogue,
+.story-field-intel {
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   display: grid;
   gap: 6px;
@@ -1151,6 +1152,19 @@ button.equipment-trigger {
 
 .story-epilogue {
   border-color: rgba(255, 155, 213, 0.18);
+}
+
+.story-field-intel {
+  border-color: rgba(128, 214, 255, 0.2);
+}
+
+.story-field-intel span {
+  color: #80d6ff;
+  font-size: 0.8rem;
+}
+
+.story-field-intel b {
+  color: #dff6ff;
 }
 
 .story-timeline {
@@ -1197,6 +1211,54 @@ button.equipment-trigger {
 
 .exploration-log-entry b {
   color: #d7fff7;
+}
+
+.exploration-log-entry span {
+  color: #80d6ff;
+  font-size: 0.78rem;
+}
+
+.exploration-chain-list {
+  display: grid;
+  gap: 8px;
+}
+
+.exploration-chain-list article {
+  display: grid;
+  gap: 6px;
+  border: 1px solid rgba(128, 214, 255, 0.14);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.035);
+  padding: 10px;
+}
+
+.exploration-chain-list article.complete {
+  border-color: rgba(116, 224, 141, 0.36);
+}
+
+.exploration-chain-list header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.exploration-chain-list header div {
+  display: grid;
+  gap: 2px;
+}
+
+.exploration-chain-list b {
+  color: #e8f4ff;
+}
+
+.exploration-chain-list span,
+.exploration-chain-list p {
+  color: #9db7c9;
+  font-size: 0.78rem;
+}
+
+.exploration-chain-list strong {
+  color: #ffd69a;
 }
 
 .story-entry header {
@@ -1739,6 +1801,11 @@ button.equipment-trigger {
 
 .exploration-signal-list article.discovered {
   border-color: rgba(255, 214, 128, 0.42);
+}
+
+.exploration-signal-list article.locked {
+  opacity: 0.72;
+  border-color: rgba(157, 183, 201, 0.18);
 }
 
 .exploration-signal-list article.complete {

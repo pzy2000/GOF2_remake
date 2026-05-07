@@ -312,7 +312,12 @@ const explorationSceneCopy: Record<string, [string, string]> = {
 };
 
 const explorationScenes: DialogueSceneDefinition[] = explorationSignals.map((signal) => {
-  const [npcLine, captainLine] = explorationSceneCopy[signal.id];
+  const [npcLine, captainLine] = explorationSceneCopy[signal.id] ?? [
+    signal.storyInfluence
+      ? `${signal.title} resolved. ${signal.storyInfluence.headline}`
+      : `${signal.title} resolved. ${signal.log}`,
+    signal.storyInfluence?.note ?? "Archive it with the rest of the Quiet Signals evidence."
+  ];
   return {
     id: `dialogue-exploration-${signal.id}`,
     group: "exploration",
