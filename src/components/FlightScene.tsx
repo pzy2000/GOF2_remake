@@ -55,6 +55,7 @@ function FlightControls() {
     const onMouseMove = (event: MouseEvent) => {
       const state = useGameStore.getState();
       if (state.screen !== "flight") return;
+      if (state.autopilot) return;
       setInput({ mouseDX: state.input.mouseDX + event.movementX, mouseDY: state.input.mouseDY + event.movementY });
     };
     const onMouseDown = (event: MouseEvent) => {

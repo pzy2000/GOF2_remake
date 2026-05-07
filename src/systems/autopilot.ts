@@ -30,11 +30,8 @@ export function shouldCancelAutopilot(input: FlightInput): boolean {
     input.throttleDown ||
     input.rollLeft ||
     input.rollRight ||
-    input.afterburner ||
     input.firePrimary ||
-    input.fireSecondary ||
-    Math.abs(input.mouseDX) > 0.45 ||
-    Math.abs(input.mouseDY) > 0.45
+    input.fireSecondary
   );
 }
 

@@ -148,7 +148,7 @@ export function Hud() {
       <section className="hud-panel hud-bottom-right">
         <h3>Comms</h3>
         <p>{runtime.message}</p>
-        {autopilot?.cancelable ? <p>Manual flight input cancels autopilot.</p> : null}
+        {autopilot?.cancelable ? <p>W/S/A/D or weapons cancel autopilot. Shift boosts. Mouse is ignored.</p> : null}
         <div className="quick-actions">
           <button onClick={() => openGalaxyMap("browse")} disabled={!!autopilot}>Map</button>
           <button onClick={() => saveGame()}>Save</button>

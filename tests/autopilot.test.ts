@@ -64,8 +64,26 @@ describe("autopilot jump flow", () => {
   it("distinguishes manual cancel input from pause", () => {
     expect(shouldCancelAutopilot({ ...neutralInput, throttleUp: true })).toBe(true);
     expect(shouldCancelAutopilot({ ...neutralInput, fireSecondary: true })).toBe(true);
-    expect(shouldCancelAutopilot({ ...neutralInput, mouseDX: 1 })).toBe(true);
+    expect(shouldCancelAutopilot({ ...neutralInput, mouseDX: 1 })).toBe(false);
+    expect(shouldCancelAutopilot({ ...neutralInput, afterburner: true })).toBe(false);
     expect(shouldCancelAutopilot({ ...neutralInput, pause: true })).toBe(false);
+  });
+
+  it("uses afterburner as an autopilot boost without canceling", async () => {
+    const normal = await freshStore();
+    normal.getState().startJumpToSystem("kuro-belt");
+    normal.getState().tick(0.2);
+    const normalSpeed = Math.hypot(...normal.getState().player.velocity);
+
+    const boosted = await freshStore();
+    boosted.getState().startJumpToSystem("kuro-belt");
+    boosted.getState().setInput({ afterburner: true });
+    boosted.getState().tick(0.2);
+    const boostedState = boosted.getState();
+
+    expect(boostedState.autopilot).toBeDefined();
+    expect(Math.hypot(...boostedState.player.velocity)).toBeGreaterThan(normalSpeed);
+    expect(boostedState.player.energy).toBeLessThan(boostedState.player.stats.energy);
   });
 
   it("auto-saves to the auto slot when docking manually", async () => {
@@ -200,6 +218,11 @@ describe("autopilot jump flow", () => {
     store.getState().setInput({ throttleUp: true });
     store.getState().tick(0.1);
     expect(store.getState().autopilot).toBeUndefined();
+
+    store.getState().startJumpToSystem("kuro-belt");
+    store.getState().setInput({ afterburner: true, mouseDX: 8, mouseDY: 8 });
+    store.getState().tick(0.1);
+    expect(store.getState().autopilot).toBeDefined();
 
     store.getState().startJumpToSystem("kuro-belt");
     store.getState().setInput({ pause: true });

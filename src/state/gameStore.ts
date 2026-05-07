@@ -789,6 +789,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }
 
       let player = state.player;
+      const autopilotEquipmentEffects = getEquipmentEffects(player.equipment);
+      const autopilotAfterburning = input.afterburner && player.energy > 12;
+      const autopilotSpeedMultiplier = autopilotAfterburning ? autopilotEquipmentEffects.afterburnerMultiplier : 1;
+      const drainAutopilotAfterburner = (nextPlayer: PlayerState): PlayerState =>
+        autopilotAfterburning
+          ? {
+              ...nextPlayer,
+              energy: clamp(nextPlayer.energy - delta * autopilotEquipmentEffects.afterburnerEnergyDrain, 0, nextPlayer.stats.energy)
+            }
+          : nextPlayer;
       let autopilot: AutoPilotState | undefined = { ...state.autopilot, timer: state.autopilot.timer + delta };
       let currentSystemId = state.currentSystemId;
       let currentStationId = state.currentStationId;
@@ -816,10 +826,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
           player,
           targetPosition: gatePosition,
           delta,
-          maxSpeed: 680,
+          maxSpeed: 680 * autopilotSpeedMultiplier,
           arriveDistance: GATE_ARRIVAL_DISTANCE
         });
-        player = step.player;
+        player = drainAutopilotAfterburner(step.player);
         runtime.effects.push(navEffect(gatePosition, `Gate ${Math.round(step.distanceToTarget)}m`));
         runtime.message = `Autopilot: aligning to jump gate · ${Math.round(step.distanceToTarget)}m`;
         autopilot = { ...autopilot, targetPosition: gatePosition };
@@ -898,10 +908,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
           player,
           targetPosition: targetStation.position,
           delta,
-          maxSpeed: 620,
+          maxSpeed: 620 * autopilotSpeedMultiplier,
           arriveDistance: STATION_DOCK_DISTANCE
         });
-        player = step.player;
+        player = drainAutopilotAfterburner(step.player);
         runtime.effects.push(navEffect(targetStation.position, `Dock ${Math.round(step.distanceToTarget)}m`));
         runtime.message = `Autopilot: approaching ${targetStation.name} · ${Math.round(step.distanceToTarget)}m`;
         if (step.distanceToTarget <= STATION_DOCK_DISTANCE) {
