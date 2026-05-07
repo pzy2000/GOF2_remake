@@ -5,6 +5,7 @@ import {
   getPirateAiProfile,
   resolveCombatAiStep
 } from "../src/systems/combatAi";
+import { getCombatLoadout } from "../src/systems/combatDoctrine";
 import { normalize, sub } from "../src/systems/math";
 import type { FlightEntity, Vec3 } from "../src/types/game";
 
@@ -135,6 +136,38 @@ describe("combat AI", () => {
     expect(getPirateAiProfile("ashen-drift", 0, 0.68)).toMatchObject({ aiProfileId: "elite-ace", elite: true });
     expect(getPirateAiProfile("ashen-drift", 1, 0.68).elite).toBe(false);
     expect(getPirateAiProfile("helion-reach", 0, 0.18).elite).toBe(false);
+  });
+
+  it("selects faction-specific combat loadouts for patrols, smugglers, and bosses", () => {
+    const patrol = getCombatLoadout({
+      role: "patrol",
+      factionId: "solar-directorate",
+      aiProfileId: "law-patrol",
+      systemId: "vantara",
+      risk: 0.28
+    });
+    const smuggler = getCombatLoadout({
+      role: "smuggler",
+      factionId: "vossari-clans",
+      aiProfileId: "smuggler",
+      systemId: "ashen-drift",
+      risk: 0.68
+    });
+    const boss = getCombatLoadout({
+      role: "pirate",
+      factionId: "independent-pirates",
+      aiProfileId: "boss-warlord",
+      systemId: "ashen-drift",
+      risk: 0.68,
+      elite: true,
+      boss: true
+    });
+
+    expect(patrol.id).toBe("directorate-patrol");
+    expect(smuggler.id).toBe("vossari-smuggler");
+    expect(boss.id).toBe("pirate-boss-warlord");
+    expect(boss.damage).toBeGreaterThan(smuggler.damage);
+    expect(patrol.attackRange).toBeGreaterThan(620);
   });
 
   it("summarizes per-system contraband law", () => {

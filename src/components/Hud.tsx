@@ -6,6 +6,7 @@ import { getMissionDeadlineRemaining, getStoryEncounterRemainingTargets } from "
 import { distance } from "../systems/math";
 import { getNearestNavigationTarget } from "../systems/navigation";
 import { combatAiProfileLabels, getContrabandLawSummary } from "../systems/combatAi";
+import { combatLoadoutLabels } from "../systems/combatDoctrine";
 import { explorationSignalById, getEffectiveSignalScanBand } from "../systems/exploration";
 
 function Bar({ label, value, max, tone }: { label: string; value: number; max: number; tone: "cyan" | "green" | "orange" | "red" }) {
@@ -49,6 +50,8 @@ export function Hud() {
   const activeScanSignal = activeScan ? explorationSignalById[activeScan.signalId] : undefined;
   const activeScanBand = activeScanSignal ? getEffectiveSignalScanBand(activeScanSignal, player.equipment) : undefined;
   const pirateCount = runtime.enemies.filter((ship) => ship.role === "pirate" && ship.hull > 0 && ship.deathTimer === undefined).length;
+  const bossContact = runtime.enemies.find((ship) => ship.boss && ship.hull > 0 && ship.deathTimer === undefined);
+  const supportCount = runtime.enemies.filter((ship) => ship.supportWing && ship.hull > 0 && ship.deathTimer === undefined).length;
   const contrabandAmount = player.cargo["illegal-contraband"] ?? 0;
   const scanningPatrol = runtime.enemies.find((ship) => ship.role === "patrol" && ship.aiState === "scan" && (ship.scanProgress ?? 0) > 0);
   const activeStoryMission = activeMissions.find((mission) => mission.storyCritical);
@@ -87,6 +90,8 @@ export function Hud() {
         <p>Throttle {Math.round(player.throttle * 100)}% · Speed {Math.round(Math.hypot(...player.velocity))}</p>
         {autopilot ? <p>Autopilot: {navLabel} · {navDistance}m</p> : null}
         <p>{graceRemaining > 0 ? `Enemy weapons safe for ${graceRemaining}s` : pirateCount > 0 ? `${pirateCount} pirate contact(s)` : "Local space clear"}</p>
+        {bossContact ? <p>Boss contact: {bossContact.name}</p> : null}
+        {supportCount > 0 ? <p>Patrol support active: {supportCount}</p> : null}
         {contrabandAmount > 0 ? <p>Contraband law: {getContrabandLawSummary(currentSystem.id)}</p> : null}
         {scanningPatrol ? <p>Patrol scan {Math.round((scanningPatrol.scanProgress ?? 0) * 100)}%</p> : null}
         {activeStoryMission?.storyEncounter ? (
@@ -109,9 +114,10 @@ export function Hud() {
           <>
             <h3>{target.name}</h3>
             <p>
-              {target.elite ? "ELITE · " : ""}
+              {target.boss ? "BOSS · " : target.elite ? "ELITE · " : ""}
               {combatAiProfileLabels[target.aiProfileId]} · {target.aiState.toUpperCase()} · {factionNames[target.factionId]} · {targetDistance}m
             </p>
+            {target.loadoutId ? <p>{combatLoadoutLabels[target.loadoutId]}</p> : null}
             <Bar label="Target Hull" value={target.hull} max={target.maxHull} tone="red" />
             <Bar label="Target Shield" value={target.shield} max={target.maxShield} tone="cyan" />
           </>
@@ -140,7 +146,7 @@ export function Hud() {
                 {mission.title}
                 {remaining !== undefined ? ` · ${formatHudTime(remaining)}` : ""}
                 {missionDistance !== undefined ? ` · ${missionDistance}m` : ""}
-                {convoy ? ` · convoy ${Math.round(convoy.hull)}/${convoy.maxHull}` : ""}
+                {convoy ? ` · convoy ${(convoy.status ?? "en-route").toUpperCase()} ${Math.round(convoy.hull)}/${convoy.maxHull}` : ""}
               </p>
             );
           })

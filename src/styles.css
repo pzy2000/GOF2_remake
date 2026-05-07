@@ -291,6 +291,29 @@ h3 {
   color: #d7fff7;
 }
 
+.boss-label {
+  border-color: rgba(255, 78, 95, 0.72);
+  background: rgba(36, 4, 16, 0.8);
+  color: #ffe0a3;
+}
+
+.support-label {
+  border-color: rgba(100, 228, 255, 0.66);
+  background: rgba(3, 18, 32, 0.76);
+  color: #dff8ff;
+}
+
+.convoy-label {
+  border-color: rgba(255, 209, 102, 0.52);
+  color: #fff2c5;
+}
+
+.convoy-distress-label {
+  border-color: rgba(255, 78, 95, 0.7);
+  background: rgba(34, 6, 12, 0.78);
+  color: #ffe0a3;
+}
+
 .waypoint-label {
   min-width: 126px;
   padding: 6px 8px;

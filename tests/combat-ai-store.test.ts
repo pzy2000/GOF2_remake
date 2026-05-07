@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import type { FlightEntity } from "../src/types/game";
+import type { ConvoyEntity, FlightEntity } from "../src/types/game";
 
 class MemoryStorage implements Storage {
   private data = new Map<string, string>();
@@ -48,6 +48,52 @@ function patrol(position: [number, number, number] = [0, 0, 120]): FlightEntity 
     aiProfileId: "law-patrol",
     aiState: "patrol",
     aiTimer: 0
+  };
+}
+
+function pirate(position: [number, number, number] = [110, 0, 120], patch: Partial<FlightEntity> = {}): FlightEntity {
+  return {
+    id: "test-pirate",
+    name: "Knife Wing Pirate",
+    role: "pirate",
+    factionId: "independent-pirates",
+    position,
+    velocity: [0, 0, 0],
+    hull: 70,
+    shield: 42,
+    maxHull: 70,
+    maxShield: 42,
+    lastDamageAt: -999,
+    fireCooldown: -1,
+    aiProfileId: "raider",
+    loadoutId: "pirate-raider",
+    aiState: "attack",
+    aiTargetId: "player",
+    aiTimer: 0,
+    ...patch
+  };
+}
+
+function convoy(patch: Partial<ConvoyEntity> = {}): ConvoyEntity {
+  return {
+    id: "test-convoy",
+    missionId: "test-escort",
+    name: "Test Convoy",
+    factionId: "free-belt-union",
+    position: [0, 0, 140],
+    velocity: [0, 0, 0],
+    hull: 120,
+    maxHull: 120,
+    shield: 45,
+    maxShield: 45,
+    lastDamageAt: -999,
+    fireCooldown: -1,
+    convoyRole: "mission-tender",
+    status: "en-route",
+    destinationStationId: "helion-prime",
+    destinationPosition: [0, 0, -760],
+    arrived: false,
+    ...patch
   };
 }
 
@@ -138,6 +184,97 @@ describe("combat AI store wiring", () => {
     const state = store.getState();
     expect(state.runtime.destroyedPirates).toBe(1);
     expect(state.runtime.loot[0]).toMatchObject({ kind: "commodity", commodityId: "illegal-contraband", amount: 2, rarity: "epic" });
+  });
+
+  it("spawns a high-risk system boss with a guaranteed equipment drop", async () => {
+    const store = await freshStore();
+    store.getState().jumpToSystem("ashen-drift");
+    const boss = store.getState().runtime.enemies.find((ship) => ship.boss);
+    expect(boss).toMatchObject({
+      name: "Ashen Warlord Kass Vey",
+      aiProfileId: "boss-warlord",
+      loadoutId: "pirate-boss-warlord"
+    });
+
+    store.setState((state) => ({
+      targetId: boss!.id,
+      runtime: {
+        ...state.runtime,
+        enemies: state.runtime.enemies.map((ship) => (ship.id === boss!.id ? { ...ship, position: [0, 0, 0] } : { ...ship, position: [900, 0, 900] })),
+        projectiles: [
+          {
+            id: "test-boss-shot",
+            owner: "player",
+            kind: "laser",
+            position: [0, 0, 0],
+            direction: [0, 0, 0],
+            speed: 0,
+            damage: 999,
+            life: 1,
+            targetId: boss!.id
+          }
+        ],
+        loot: []
+      }
+    }));
+
+    store.getState().tick(0.05);
+
+    const state = store.getState();
+    expect(state.runtime.message).toContain("Boss cargo scattered");
+    expect(state.runtime.loot).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "commodity", commodityId: "illegal-contraband", amount: 4, rarity: "epic" }),
+      expect.objectContaining({ kind: "equipment", amount: 1 })
+    ]));
+  });
+
+  it("requests patrol support once per cooldown when patrols engage threats", async () => {
+    const store = await freshStore();
+    store.setState((state) => ({
+      currentSystemId: "ashen-drift",
+      player: { ...state.player, position: [600, 0, 600] },
+      runtime: {
+        ...state.runtime,
+        enemies: [patrol([0, 0, 120]), pirate([120, 0, 120])],
+        convoys: [],
+        projectiles: [],
+        effects: [],
+        message: "",
+        clock: 0
+      }
+    }));
+
+    store.getState().tick(0.2);
+
+    const afterSupport = store.getState();
+    expect(afterSupport.runtime.enemies.filter((ship) => ship.supportWing)).toHaveLength(2);
+    expect(afterSupport.runtime.enemies.find((ship) => ship.id === "test-patrol")?.supportCooldownUntil).toBeGreaterThan(afterSupport.runtime.clock);
+
+    store.getState().tick(0.2);
+    expect(store.getState().runtime.enemies.filter((ship) => ship.supportWing)).toHaveLength(2);
+  });
+
+  it("puts convoys into distress and lets them fire at nearby attackers", async () => {
+    const store = await freshStore();
+    store.setState((state) => ({
+      currentSystemId: "ashen-drift",
+      player: { ...state.player, position: [900, 0, 900] },
+      runtime: {
+        ...state.runtime,
+        enemies: [pirate([500, 0, 140], { aiTargetId: "test-convoy" })],
+        convoys: [convoy()],
+        projectiles: [],
+        effects: [],
+        message: "",
+        clock: 0
+      }
+    }));
+
+    store.getState().tick(0.01);
+
+    const state = store.getState();
+    expect(state.runtime.convoys[0]).toMatchObject({ status: "distress", threatId: "test-pirate" });
+    expect(state.runtime.projectiles.some((projectile) => projectile.owner === "npc" && projectile.targetId === "test-pirate")).toBe(true);
   });
 
   it("lets player attacks destroy civilian NPCs and drop cargo or equipment", async () => {

@@ -70,6 +70,7 @@ import {
 } from "../systems/missions";
 import { deleteSave as deleteSaveSlot, getLatestSaveSlotId, readSave, readSaveSlots, writeSave } from "../systems/save";
 import { audioSystem } from "../systems/audio";
+import { getCombatLoadout } from "../systems/combatDoctrine";
 import {
   CONTRABAND_FINE_PER_UNIT,
   getContrabandLaw,
@@ -215,6 +216,15 @@ function createShipEntity(id: string, role: FlightEntity["role"], position: Vec3
   const elite = !!pirateProfile?.elite;
   const hull = elite ? Math.round(roleStats.hull * 1.72) : roleStats.hull;
   const shield = elite ? Math.round(roleStats.shield * 1.88) : roleStats.shield;
+  const aiProfileId = pirateProfile?.aiProfileId ?? (role === "pirate" ? "raider" : profiles[role]);
+  const loadout = getCombatLoadout({
+    role,
+    factionId: roleStats.factionId,
+    aiProfileId,
+    systemId,
+    risk: systemById[systemId]?.risk ?? 0,
+    elite
+  });
   return {
     id,
     name: elite ? "Elite Knife Wing Ace" : names[role],
@@ -228,7 +238,8 @@ function createShipEntity(id: string, role: FlightEntity["role"], position: Vec3
     maxShield: shield,
     lastDamageAt: -999,
     fireCooldown: 0.6,
-    aiProfileId: pirateProfile?.aiProfileId ?? (role === "pirate" ? "raider" : profiles[role]),
+    aiProfileId,
+    loadoutId: loadout.id,
     aiState: "patrol",
     aiTimer: 0,
     elite
@@ -239,7 +250,7 @@ function isEconomyTrafficRole(role: FlightEntity["role"]): role is EconomyNpcEnt
   return role === "trader" || role === "freighter" || role === "courier" || role === "miner" || role === "smuggler";
 }
 
-function aiProfileForEconomyRole(role: EconomyNpcEntity["role"]): FlightEntity["aiProfileId"] {
+function aiProfileForEconomyNpc(npc: EconomyNpcEntity): FlightEntity["aiProfileId"] {
   const profiles = {
     trader: "hauler",
     freighter: "freighter",
@@ -247,10 +258,19 @@ function aiProfileForEconomyRole(role: EconomyNpcEntity["role"]): FlightEntity["
     miner: "miner",
     smuggler: "smuggler"
   } satisfies Record<EconomyNpcEntity["role"], FlightEntity["aiProfileId"]>;
-  return profiles[role];
+  if (npc.factionId === "solar-directorate" && npc.role !== "courier") return "law-patrol";
+  return profiles[npc.role];
 }
 
 function materializeEconomyNpc(npc: EconomyNpcEntity): FlightEntity {
+  const aiProfileId = aiProfileForEconomyNpc(npc);
+  const loadout = getCombatLoadout({
+    role: npc.role,
+    factionId: npc.factionId,
+    aiProfileId,
+    systemId: npc.systemId,
+    risk: systemById[npc.systemId]?.risk ?? 0
+  });
   return {
     id: npc.id,
     name: npc.name,
@@ -264,7 +284,8 @@ function materializeEconomyNpc(npc: EconomyNpcEntity): FlightEntity {
     maxShield: npc.maxShield,
     lastDamageAt: -999,
     fireCooldown: 0.6,
-    aiProfileId: aiProfileForEconomyRole(npc.role),
+    aiProfileId,
+    loadoutId: loadout.id,
     aiState: "patrol",
     aiTimer: 0,
     economyTaskKind: npc.task.kind,
@@ -297,6 +318,79 @@ function createTrafficForSystem(systemId: string): FlightEntity[] {
   return roles.map((role, index) => createShipEntity(`${systemId}-${role}-${index}`, role, trafficPosition(systemId, index), systemId, index));
 }
 
+function shouldSpawnSystemBoss(systemId: string): boolean {
+  return (systemById[systemId]?.risk ?? 0) >= 0.6;
+}
+
+function createBossEntity(systemId: string): FlightEntity | undefined {
+  if (!shouldSpawnSystemBoss(systemId)) return undefined;
+  const position = add(getPirateSpawnPosition(systemId, 4), [140, 70, -260]);
+  const aiProfileId: FlightEntity["aiProfileId"] = "boss-warlord";
+  const loadout = getCombatLoadout({
+    role: "pirate",
+    factionId: "independent-pirates",
+    aiProfileId,
+    systemId,
+    risk: systemById[systemId]?.risk ?? 0,
+    elite: true,
+    boss: true
+  });
+  return {
+    id: `${systemId}-boss-warlord`,
+    name: systemId === "ashen-drift" ? "Ashen Warlord Kass Vey" : "Corsair Warlord",
+    role: "pirate",
+    factionId: "independent-pirates",
+    position,
+    velocity: [0, 0, 0],
+    hull: 255,
+    shield: 190,
+    maxHull: 255,
+    maxShield: 190,
+    lastDamageAt: -999,
+    fireCooldown: 0.35,
+    aiProfileId,
+    loadoutId: loadout.id,
+    aiState: "patrol",
+    aiTimer: 0,
+    elite: true,
+    boss: true
+  };
+}
+
+function createPatrolSupportShip(systemId: string, index: number, targetId: string | undefined, anchor: Vec3, now: number): FlightEntity {
+  const gate = getJumpGatePosition(systemId);
+  const offset: Vec3 = [index === 0 ? -42 : 42, 20 + index * 14, 58 + index * 18];
+  const position = add(scale(add(anchor, gate), 0.5), offset);
+  const aiProfileId: FlightEntity["aiProfileId"] = "patrol-support";
+  const loadout = getCombatLoadout({
+    role: "patrol",
+    factionId: "solar-directorate",
+    aiProfileId,
+    systemId,
+    risk: systemById[systemId]?.risk ?? 0
+  });
+  return {
+    id: `${systemId}-patrol-support-${Math.round(now * 10)}-${index}`,
+    name: "Patrol Support Wing",
+    role: "patrol",
+    factionId: "solar-directorate",
+    position,
+    velocity: [0, 0, 0],
+    hull: 96,
+    shield: 72,
+    maxHull: 96,
+    maxShield: 72,
+    lastDamageAt: -999,
+    fireCooldown: 0.2 + index * 0.18,
+    aiProfileId,
+    loadoutId: loadout.id,
+    aiState: targetId === "player" ? "attack" : targetId ? "intercept" : "patrol",
+    aiTargetId: targetId,
+    aiTimer: 0,
+    supportWing: true
+  };
+}
+
 function createConvoyEntity(mission: MissionDefinition): ConvoyEntity | undefined {
   if (!mission.escort || mission.escort.arrived || mission.failed || mission.completed) return undefined;
   return {
@@ -311,6 +405,9 @@ function createConvoyEntity(mission: MissionDefinition): ConvoyEntity | undefine
     shield: 45,
     maxShield: 45,
     lastDamageAt: -999,
+    fireCooldown: 0.7,
+    convoyRole: "mission-tender",
+    status: "en-route",
     destinationStationId: mission.destinationStationId,
     destinationPosition: [...mission.escort.destinationPosition],
     arrived: false
@@ -333,6 +430,15 @@ function createSalvageEntity(mission: MissionDefinition): SalvageEntity | undefi
 function createStoryTargetEntity(mission: MissionDefinition, targetId: string): FlightEntity | undefined {
   const target = mission.storyEncounter?.targets.find((item) => item.id === targetId);
   if (!target || mission.failed || mission.completed || mission.storyTargetDestroyedIds?.includes(target.id)) return undefined;
+  const aiProfileId = target.aiProfileId ?? (target.role === "relay" ? "relay-core" : target.role === "drone" ? "drone-hunter" : target.role === "smuggler" ? "smuggler" : target.elite ? "elite-ace" : "raider");
+  const loadout = getCombatLoadout({
+    role: target.role,
+    factionId: target.factionId,
+    aiProfileId,
+    systemId: target.systemId,
+    risk: systemById[target.systemId]?.risk ?? 0,
+    elite: target.elite
+  });
   return {
     id: target.id,
     name: target.name,
@@ -346,7 +452,8 @@ function createStoryTargetEntity(mission: MissionDefinition, targetId: string): 
     maxShield: target.shield,
     lastDamageAt: -999,
     fireCooldown: target.role === "relay" ? 1.1 : 0.55,
-    aiProfileId: target.aiProfileId ?? (target.role === "relay" ? "relay-core" : target.role === "drone" ? "drone-hunter" : target.role === "smuggler" ? "smuggler" : target.elite ? "elite-ace" : "raider"),
+    aiProfileId,
+    loadoutId: loadout.id,
     aiState: "patrol",
     aiTimer: 0,
     elite: target.elite,
@@ -403,11 +510,13 @@ function createRuntimeForSystem(systemId: string, activeMissions: MissionDefinit
   const pirateCount = getPirateSpawnCount(systemId, system.risk);
   const asteroids: AsteroidEntity[] = createAsteroidsForSystem(systemId, system.risk);
   const missionEntities = missionRuntimeEntities(systemId, activeMissions);
+  const boss = createBossEntity(systemId);
   return {
     enemies: [
       ...Array.from({ length: pirateCount }, (_, index) =>
         createShipEntity(`${systemId}-pirate-${index}`, "pirate", getPirateSpawnPosition(systemId, index), systemId, index)
       ),
+      ...(boss ? [boss] : []),
       createShipEntity(`${systemId}-patrol-0`, "patrol", [-190, 55, -360], systemId),
       ...createTrafficForSystem(systemId),
       ...missionEntities.storyTargets
@@ -429,6 +538,99 @@ function createRuntimeForSystem(systemId: string, activeMissions: MissionDefinit
 
 function projectileId(prefix: string): string {
   return `${prefix}-${Math.round(performance.now() * 1000)}-${Math.random().toString(16).slice(2)}`;
+}
+
+const PATROL_SUPPORT_COOLDOWN_SECONDS = 42;
+const MAX_PATROL_SUPPORT_WINGS = 2;
+
+function isPatrolSupportThreat(ship: FlightEntity): boolean {
+  return !!ship.storyTarget || ship.role === "pirate" || ship.role === "drone" || ship.role === "relay" || ship.role === "smuggler";
+}
+
+function hasLocalCombatThreat(ship: FlightEntity, enemies: FlightEntity[]): boolean {
+  return enemies.some((candidate) => {
+    if (candidate.id === ship.id || candidate.hull <= 0 || candidate.deathTimer !== undefined) return false;
+    const close = distance(candidate.position, ship.position) < 780;
+    if (!close) return false;
+    if (ship.role === "smuggler" && candidate.role === "patrol") return true;
+    return candidate.role === "pirate" || candidate.role === "drone" || candidate.role === "relay" || !!candidate.storyTarget;
+  });
+}
+
+function nearestConvoyThreat(convoy: ConvoyEntity, enemies: FlightEntity[]): { ship: FlightEntity; dist: number } | undefined {
+  return enemies
+    .filter((ship) => ship.hull > 0 && ship.deathTimer === undefined && (isPatrolSupportThreat(ship) || ship.aiTargetId === convoy.id))
+    .map((ship) => ({ ship, dist: distance(ship.position, convoy.position) }))
+    .filter((candidate) => candidate.dist < 840 || candidate.ship.aiTargetId === convoy.id)
+    .sort((a, b) => a.dist - b.dist)[0];
+}
+
+function advanceConvoyEntity(
+  convoy: ConvoyEntity,
+  enemies: FlightEntity[],
+  delta: number,
+  now: number
+): { convoy: ConvoyEntity; fire?: { position: Vec3; targetPosition: Vec3; targetId: string; damage: number; projectileSpeed: number } } {
+  if (convoy.arrived || convoy.hull <= 0) return { convoy };
+  const toDestination = sub(convoy.destinationPosition, convoy.position);
+  const distToDestination = distance(convoy.position, convoy.destinationPosition);
+  if (distToDestination < 170) {
+    return { convoy: { ...convoy, arrived: true, status: "arrived", velocity: [0, 0, 0], threatId: undefined } };
+  }
+
+  const threat = nearestConvoyThreat(convoy, enemies);
+  const recentlyDamaged = now - convoy.lastDamageAt < 4.5;
+  const status: ConvoyEntity["status"] = threat || recentlyDamaged
+    ? (threat && threat.dist < 520) || recentlyDamaged
+      ? "distress"
+      : "under-attack"
+    : "en-route";
+  const routeDirection = normalize(toDestination);
+  const lateral = normalize([routeDirection[2], 0, -routeDirection[0]]);
+  const evasiveSign = threat && threat.ship.position[0] > convoy.position[0] ? -1 : 1;
+  const direction = status === "en-route" ? routeDirection : normalize(add(routeDirection, scale(lateral, 0.34 * evasiveSign)));
+  const speed = status === "distress" ? 92 : status === "under-attack" ? 110 : 128;
+  const velocity = scale(direction, speed);
+  const fireCooldown = (convoy.fireCooldown ?? 0) - delta;
+  const canFire = !!threat && threat.dist < 620 && fireCooldown <= 0;
+  const next = regenerateShield(
+    {
+      ...convoy,
+      velocity,
+      position: add(convoy.position, scale(velocity, delta)),
+      status,
+      threatId: threat?.ship.id,
+      distressCalledAt: status === "distress" ? convoy.distressCalledAt ?? now : convoy.distressCalledAt,
+      fireCooldown: canFire ? 0.9 + Math.random() * 0.45 : fireCooldown
+    },
+    convoy.maxShield,
+    now,
+    delta,
+    5
+  );
+  return {
+    convoy: next,
+    fire: canFire && threat
+      ? {
+          position: next.position,
+          targetPosition: threat.ship.position,
+          targetId: threat.ship.id,
+          damage: 8,
+          projectileSpeed: 430
+        }
+      : undefined
+  };
+}
+
+function shouldRequestPatrolSupport(ship: FlightEntity, enemies: FlightEntity[], convoys: ConvoyEntity[], now: number): boolean {
+  if (ship.role !== "patrol" || ship.supportWing || ship.hull <= 0 || ship.deathTimer !== undefined) return false;
+  if ((ship.supportCooldownUntil ?? -Infinity) > now) return false;
+  const hullRatio = ship.hull / ship.maxHull;
+  if (hullRatio < 0.45 && ship.aiState !== "patrol") return true;
+  if (ship.aiTargetId === "player" && ship.aiState === "attack") return true;
+  const target = enemies.find((enemy) => enemy.id === ship.aiTargetId);
+  if (target && isPatrolSupportThreat(target)) return true;
+  return convoys.some((convoy) => convoy.status === "distress" && distance(ship.position, convoy.position) < 900);
 }
 
 function addMissionRuntimeEntity(runtime: RuntimeState, mission: MissionDefinition, systemId: string): RuntimeState {
@@ -609,6 +811,7 @@ function systemTechCeiling(systemId: string): number {
 function commodityDropForShip(ship: FlightEntity): { commodityId: CommodityId; amount: number; rarity: LootEntity["rarity"] } {
   if (ship.role === "relay") return { commodityId: "data-cores", amount: ship.storyTarget ? 2 : 1, rarity: "epic" };
   if (ship.role === "drone") return { commodityId: "microchips", amount: 1, rarity: "rare" };
+  if (ship.boss) return { commodityId: "illegal-contraband", amount: 4, rarity: "epic" };
   if (ship.role === "pirate") return { commodityId: "illegal-contraband", amount: ship.elite ? 2 : 1, rarity: ship.elite ? "epic" : "rare" };
   if (ship.role === "smuggler") return { commodityId: Math.random() > 0.45 ? "illegal-contraband" : "data-cores", amount: 1, rarity: "rare" };
   if (ship.role === "freighter") return { commodityId: Math.random() > 0.5 ? "ship-components" : "mechanical-parts", amount: 2 + Math.floor(Math.random() * 2), rarity: "uncommon" };
@@ -619,6 +822,12 @@ function commodityDropForShip(ship: FlightEntity): { commodityId: CommodityId; a
 }
 
 function equipmentDropForShip(ship: FlightEntity, systemId: string): EquipmentId | undefined {
+  if (ship.boss) {
+    const ceiling = Math.min(5, systemTechCeiling(systemId) + 1);
+    return equipmentList
+      .filter((equipment) => (equipment.dropWeight ?? 0) > 0 && equipment.techLevel <= ceiling)
+      .sort((a, b) => b.techLevel - a.techLevel || (b.dropWeight ?? 0) - (a.dropWeight ?? 0))[0]?.id;
+  }
   const chanceByRole: Record<FlightEntity["role"], number> = {
     pirate: ship.elite ? 0.45 : 0.26,
     patrol: 0.18,
@@ -1399,6 +1608,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       player = { ...player, hull: clamp(player.hull + equipmentEffects.hullRegenPerSecond * delta, 0, player.stats.hull) };
     }
 
+    const convoyFires: Array<{ position: Vec3; targetPosition: Vec3; targetId: string; damage: number; projectileSpeed: number }> = [];
     let runtime: RuntimeState = {
       ...state.runtime,
       clock: now,
@@ -1408,15 +1618,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
         deathTimer: ship.deathTimer === undefined ? undefined : ship.deathTimer - delta
       })),
       convoys: state.runtime.convoys.map((convoy) => {
-        if (convoy.arrived || convoy.hull <= 0) return convoy;
-        const toDestination = sub(convoy.destinationPosition, convoy.position);
-        const distToDestination = distance(convoy.position, convoy.destinationPosition);
-        if (distToDestination < 170) {
-          return { ...convoy, arrived: true, velocity: [0, 0, 0] };
-        }
-        const direction = normalize(toDestination);
-        const velocity = scale(direction, 128);
-        return regenerateShield({ ...convoy, velocity, position: add(convoy.position, scale(velocity, delta)) }, convoy.maxShield, now, delta, 5);
+        const advanced = advanceConvoyEntity(convoy, state.runtime.enemies, delta, now);
+        if (advanced.fire) convoyFires.push(advanced.fire);
+        return advanced.convoy;
       }),
       salvage: state.runtime.salvage,
       loot: state.runtime.loot.map((loot) => ({
@@ -1435,6 +1639,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
         .filter((effect) => effect.life > 0),
       message: state.runtime.message
     };
+    for (const fire of convoyFires) {
+      runtime.projectiles.push({
+        id: projectileId("convoy-laser"),
+        owner: "npc",
+        kind: "laser",
+        position: fire.position,
+        direction: normalize(sub(fire.targetPosition, fire.position)),
+        speed: fire.projectileSpeed,
+        damage: fire.damage,
+        life: 1.8,
+        targetId: fire.targetId
+      });
+    }
     let explorationState = state.explorationState;
     let knownPlanetIds = state.knownPlanetIds;
     let primaryCooldown = Math.max(0, state.primaryCooldown - delta);
@@ -1555,9 +1772,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const graceActive = now < runtime.graceUntil;
     let reputation = state.reputation;
     let contrabandScanMessage: string | undefined;
+    const patrolSupportSpawns: FlightEntity[] = [];
+    let patrolSupportMessage: string | undefined;
     runtime.enemies = runtime.enemies.map((ship) => {
       if (ship.hull <= 0 || ship.deathTimer !== undefined) return ship;
-      if (ship.economyStatus && !isHostileToPlayer(ship)) {
+      if (ship.economyStatus && !isHostileToPlayer(ship) && !hasLocalCombatThreat(ship, runtime.enemies)) {
         return regenerateShield(
           {
             ...ship,
@@ -1607,6 +1826,38 @@ export const useGameStore = create<GameStore>((set, get) => ({
           contrabandScanMessage = `${law.label}: patrol has marked you hostile for Illegal Contraband.`;
         }
       }
+      if (shouldRequestPatrolSupport(moved, runtime.enemies, runtime.convoys, now)) {
+        const activeSupportCount = runtime.enemies.filter((enemy) => enemy.supportWing && enemy.hull > 0 && enemy.deathTimer === undefined).length + patrolSupportSpawns.length;
+        const desiredSupportCount = systemById[state.currentSystemId].risk >= 0.55 || runtime.convoys.some((convoy) => convoy.status === "distress") ? 2 : 1;
+        const spawnCount = Math.max(0, Math.min(desiredSupportCount, MAX_PATROL_SUPPORT_WINGS - activeSupportCount));
+        if (spawnCount > 0) {
+          const targetShip = runtime.enemies.find((enemy) => enemy.id === moved.aiTargetId);
+          const anchor = targetShip?.position ?? (moved.aiTargetId === "player" ? player.position : moved.position);
+          for (let index = 0; index < spawnCount; index += 1) {
+            const support = createPatrolSupportShip(state.currentSystemId, activeSupportCount + index, moved.aiTargetId, anchor, now);
+            patrolSupportSpawns.push(support);
+            runtime.effects.push({
+              id: projectileId("patrol-support"),
+              kind: "nav-ring",
+              position: support.position,
+              color: "#64e4ff",
+              secondaryColor: "#eaffff",
+              label: "SUPPORT",
+              particleCount: 0,
+              spread: 1,
+              size: 58,
+              life: 0.8,
+              maxLife: 0.8
+            });
+          }
+          moved = {
+            ...moved,
+            supportRequestedAt: now,
+            supportCooldownUntil: now + PATROL_SUPPORT_COOLDOWN_SECONDS
+          };
+          patrolSupportMessage = moved.aiTargetId === "player" ? "Patrol support wing has marked you hostile." : "Patrol support wing inbound.";
+        }
+      }
       if (ai.fire) {
         runtime.projectiles.push({
           id: projectileId(ai.fire.owner === "patrol" ? "patrol-laser" : "enemy-laser"),
@@ -1623,6 +1874,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }
       return regenerateShield(moved, moved.maxShield, now, delta, 5);
     });
+    if (patrolSupportSpawns.length > 0) {
+      runtime = {
+        ...runtime,
+        enemies: [...runtime.enemies, ...patrolSupportSpawns],
+        message: runtime.message === state.runtime.message ? patrolSupportMessage ?? runtime.message : runtime.message
+      };
+    }
 
     if (runtime.explorationScan) {
       const signal = explorationSignalById[runtime.explorationScan.signalId];
@@ -1696,6 +1954,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const lootDrops: LootEntity[] = [];
     let destroyedPirates = runtime.destroyedPirates;
     const destroyedStoryTargets: Array<{ missionId: string; targetId: string; name: string }> = [];
+    let destroyedBossName: string | undefined;
     let patrolsShouldAttackPlayer = false;
     let playerAggressionMessage: string | undefined;
     for (const projectile of runtime.projectiles) {
@@ -1753,6 +2012,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           });
           if (damaged.hull <= 0 && ship.hull > 0) {
             if (ship.role === "pirate") destroyedPirates += 1;
+            if (ship.boss) destroyedBossName = ship.name;
             if (ship.storyTarget && ship.missionId) destroyedStoryTargets.push({ missionId: ship.missionId, targetId: ship.id, name: ship.name });
             lootDrops.push(...lootDropsForDestroyedShip(ship, state.currentSystemId));
             runtime.effects.push({
@@ -1829,6 +2089,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           });
           if (damaged.hull <= 0 && ship.hull > 0) {
             if (ship.role === "pirate") destroyedPirates += 1;
+            if (ship.boss) destroyedBossName = ship.name;
             if (ship.storyTarget && ship.missionId) destroyedStoryTargets.push({ missionId: ship.missionId, targetId: ship.id, name: ship.name });
             lootDrops.push(...lootDropsForDestroyedShip(ship, state.currentSystemId));
             runtime.effects.push({
@@ -1867,7 +2128,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       enemies: runtime.enemies.filter((ship) => ship.hull > 0 || (ship.deathTimer ?? 0) > 0),
       loot: [...runtime.loot, ...lootDrops],
       destroyedPirates,
-      message: playerAggressionMessage ?? runtime.message
+      message: playerAggressionMessage ?? (destroyedBossName ? `${destroyedBossName} destroyed. Boss cargo scattered.` : runtime.message)
     };
 
     let activeMissions = destroyedStoryTargets.length > 0
@@ -1967,6 +2228,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
               ? contrabandScanMessage
             : storyTargetMessage
               ? storyTargetMessage
+            : destroyedBossName
+              ? `${destroyedBossName} destroyed. Boss cargo scattered.`
             : lootDrops.length
               ? "Target destroyed. Cargo canister released."
               : miningActive

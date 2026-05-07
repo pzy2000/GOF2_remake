@@ -1,6 +1,6 @@
 import { contrabandLawBySystem } from "../data/contraband";
 import type { ContrabandLaw, FlightEntity, ProjectileEntity, Vec3 } from "../types/game";
-import { getPirateLoadout } from "./difficulty";
+import { getCombatLoadout } from "./combatDoctrine";
 import { add, distance, normalize, rightFromRotation, scale, sub } from "./math";
 import { getIdlePatrolDirection } from "./patrol";
 
@@ -65,12 +65,14 @@ export const combatAiProfileLabels: Record<FlightEntity["aiProfileId"], string> 
   interceptor: "Interceptor",
   gunner: "Gunner",
   "law-patrol": "Law Patrol",
+  "patrol-support": "Patrol Support",
   hauler: "Hauler",
   freighter: "Freighter",
   courier: "Courier",
   miner: "Miner",
   smuggler: "Smuggler",
   "elite-ace": "Elite Ace",
+  "boss-warlord": "Pirate Warlord",
   "drone-hunter": "Unknown Drone",
   "relay-core": "Relay Core"
 };
@@ -80,12 +82,14 @@ const combatProfiles: Record<FlightEntity["aiProfileId"], CombatProfile> = {
   interceptor: { label: "Interceptor", speedMultiplier: 1.22, damageMultiplier: 0.82, rangeMultiplier: 0.9, strafe: 0.8, projectileSpeed: 500, cooldownMultiplier: 0.92 },
   gunner: { label: "Gunner", speedMultiplier: 0.86, damageMultiplier: 1.3, rangeMultiplier: 1.22, strafe: 0.42, projectileSpeed: 450, cooldownMultiplier: 1.12 },
   "law-patrol": { label: "Law Patrol", speedMultiplier: 1, damageMultiplier: 1, rangeMultiplier: 1, strafe: 0.12, projectileSpeed: 520, cooldownMultiplier: 1 },
+  "patrol-support": { label: "Patrol Support", speedMultiplier: 1.08, damageMultiplier: 0.95, rangeMultiplier: 1.02, strafe: 0.35, projectileSpeed: 540, cooldownMultiplier: 0.92 },
   hauler: { label: "Hauler", speedMultiplier: 0.9, damageMultiplier: 0.58, rangeMultiplier: 0.78, strafe: 0.12, projectileSpeed: 410, cooldownMultiplier: 1.25 },
   freighter: { label: "Freighter", speedMultiplier: 0.78, damageMultiplier: 0.72, rangeMultiplier: 0.82, strafe: 0.1, projectileSpeed: 420, cooldownMultiplier: 1.18 },
   courier: { label: "Courier", speedMultiplier: 1.2, damageMultiplier: 0.62, rangeMultiplier: 0.78, strafe: 0.52, projectileSpeed: 460, cooldownMultiplier: 0.96 },
   miner: { label: "Miner", speedMultiplier: 0.82, damageMultiplier: 0.68, rangeMultiplier: 0.72, strafe: 0.06, projectileSpeed: 390, cooldownMultiplier: 1.35 },
   smuggler: { label: "Smuggler", speedMultiplier: 1.14, damageMultiplier: 0.92, rangeMultiplier: 0.95, strafe: 0.66, projectileSpeed: 500, cooldownMultiplier: 0.9 },
   "elite-ace": { label: "Elite Ace", speedMultiplier: 1.28, damageMultiplier: 1.55, rangeMultiplier: 1.18, strafe: 0.95, projectileSpeed: 560, cooldownMultiplier: 0.74 },
+  "boss-warlord": { label: "Pirate Warlord", speedMultiplier: 0.98, damageMultiplier: 1.55, rangeMultiplier: 1.12, strafe: 0.62, projectileSpeed: 540, cooldownMultiplier: 0.78 },
   "drone-hunter": { label: "Unknown Drone", speedMultiplier: 1.34, damageMultiplier: 1.1, rangeMultiplier: 1.05, strafe: 0.9, projectileSpeed: 540, cooldownMultiplier: 0.82 },
   "relay-core": { label: "Relay Core", speedMultiplier: 0, damageMultiplier: 0.88, rangeMultiplier: 1.05, strafe: 0, projectileSpeed: 430, cooldownMultiplier: 1.35 }
 };
@@ -119,7 +123,7 @@ export function shouldSpawnElitePirate(systemId: string, risk: number): boolean 
 export function sortPirateTargets(enemies: FlightEntity[]): FlightEntity[] {
   return enemies
     .filter((ship) => ship.role === "pirate" && ship.hull > 0 && ship.deathTimer === undefined)
-    .sort((a, b) => Number(!!b.elite) - Number(!!a.elite) || a.id.localeCompare(b.id));
+    .sort((a, b) => Number(!!b.boss) - Number(!!a.boss) || Number(!!b.elite) - Number(!!a.elite) || a.id.localeCompare(b.id));
 }
 
 export function sortTargetableShips(enemies: FlightEntity[]): FlightEntity[] {
@@ -136,7 +140,7 @@ export function sortTargetableShips(enemies: FlightEntity[]): FlightEntity[] {
   };
   return enemies
     .filter((ship) => ship.hull > 0 && ship.deathTimer === undefined)
-    .sort((a, b) => Number(!!b.storyTarget) - Number(!!a.storyTarget) || priority[a.role] - priority[b.role] || Number(!!b.elite) - Number(!!a.elite) || a.id.localeCompare(b.id));
+    .sort((a, b) => Number(!!b.storyTarget) - Number(!!a.storyTarget) || Number(!!b.boss) - Number(!!a.boss) || priority[a.role] - priority[b.role] || Number(!!b.elite) - Number(!!a.elite) || a.id.localeCompare(b.id));
 }
 
 export function isHostileToPlayer(ship: FlightEntity): boolean {
@@ -154,7 +158,7 @@ export function resolveCombatAiStep(input: CombatAiStepInput): CombatAiStep {
 }
 
 function resolvePirateStep(input: CombatAiStepInput, profile: CombatProfile): CombatAiStep {
-  const loadout = getPirateLoadout(input.systemId, input.risk);
+  const loadout = getCombatLoadout({ ...input.ship, systemId: input.systemId, risk: input.risk });
   const civilianTarget = input.ships
     .filter((ship) => ["trader", "freighter", "courier", "miner"].includes(ship.role) && ship.hull > 0 && ship.deathTimer === undefined)
     .map((ship) => ({ ship, dist: distance(input.ship.position, ship.position) }))
@@ -173,7 +177,7 @@ function resolvePirateStep(input: CombatAiStepInput, profile: CombatProfile): Co
   let aiState: FlightEntity["aiState"] = "attack";
   let desiredDirection = normalize(add(toTarget, scale(sideVector(toTarget), profile.strafe)));
 
-  if (input.ship.hull / input.ship.maxHull < 0.28) {
+  if (input.ship.hull / input.ship.maxHull < loadout.retreatHullRatio) {
     aiState = "retreat";
     desiredDirection = scale(toTarget, -1);
   } else if (recentlyHit && distToTarget < 320) {
@@ -209,6 +213,7 @@ function resolvePirateStep(input: CombatAiStepInput, profile: CombatProfile): Co
 }
 
 function resolvePatrolStep(input: CombatAiStepInput, profile: CombatProfile): CombatAiStep {
+  const loadout = getCombatLoadout({ ...input.ship, systemId: input.systemId, risk: input.risk });
   const activePirates = sortPirateTargets(input.pirates);
   const outlawTarget = [
     ...activePirates,
@@ -221,13 +226,14 @@ function resolvePatrolStep(input: CombatAiStepInput, profile: CombatProfile): Co
 
   if (input.ship.aiState === "attack" && input.ship.aiTargetId === "player") {
     const toPlayer = normalize(sub(input.playerPosition, input.ship.position));
-    const canFire = input.ship.fireCooldown <= 0 && playerDistance < 620;
+    const attackRange = loadout.attackRange * profile.rangeMultiplier;
+    const canFire = input.ship.fireCooldown <= 0 && playerDistance < attackRange;
     return {
       ship: { ...input.ship, aiState: "attack", aiTargetId: "player", aiTimer: input.ship.aiTimer + input.delta, scanProgress: 1 },
       desiredDirection: normalize(add(toPlayer, scale(sideVector(toPlayer), 0.22))),
-      speed: 128,
+      speed: loadout.speed * profile.speedMultiplier,
       fire: canFire
-        ? { owner: "enemy", targetPosition: input.playerPosition, damage: 12, projectileSpeed: profile.projectileSpeed, cooldownMin: 0.72, cooldownMax: 1.05 }
+        ? { owner: "enemy", targetPosition: input.playerPosition, damage: Math.round(loadout.damage * profile.damageMultiplier), projectileSpeed: profile.projectileSpeed, cooldownMin: loadout.fireCooldownMin * profile.cooldownMultiplier, cooldownMax: loadout.fireCooldownMax * profile.cooldownMultiplier }
         : undefined
     };
   }
@@ -236,7 +242,7 @@ function resolvePatrolStep(input: CombatAiStepInput, profile: CombatProfile): Co
     const pirate = outlawTarget;
     const toPirate = normalize(sub(pirate.position, input.ship.position));
     const distToPirate = distance(input.ship.position, pirate.position);
-    const canFire = input.ship.fireCooldown <= 0 && distToPirate < 620;
+    const canFire = input.ship.fireCooldown <= 0 && distToPirate < loadout.attackRange * profile.rangeMultiplier;
     return {
       ship: {
         ...input.ship,
@@ -246,9 +252,9 @@ function resolvePatrolStep(input: CombatAiStepInput, profile: CombatProfile): Co
         scanProgress: undefined
       },
       desiredDirection: normalize(add(toPirate, scale(sideVector(toPirate), profile.strafe))),
-      speed: 118,
+      speed: loadout.speed * profile.speedMultiplier,
       fire: canFire
-        ? { owner: "patrol", targetPosition: pirate.position, targetId: pirate.id, damage: 14, projectileSpeed: profile.projectileSpeed, cooldownMin: 0.65, cooldownMax: 0.65 }
+        ? { owner: "patrol", targetPosition: pirate.position, targetId: pirate.id, damage: Math.round(loadout.damage * profile.damageMultiplier), projectileSpeed: profile.projectileSpeed, cooldownMin: loadout.fireCooldownMin * profile.cooldownMultiplier, cooldownMax: loadout.fireCooldownMax * profile.cooldownMultiplier }
         : undefined
     };
   }
@@ -279,11 +285,12 @@ function resolvePatrolStep(input: CombatAiStepInput, profile: CombatProfile): Co
       scanProgress: undefined
     },
     desiredDirection: getIdlePatrolDirection(input.systemId, input.ship.position),
-    speed: 118 * profile.speedMultiplier
+    speed: loadout.speed * profile.speedMultiplier
   };
 }
 
 function resolveDroneStep(input: CombatAiStepInput, profile: CombatProfile): CombatAiStep {
+  const loadout = getCombatLoadout({ ...input.ship, systemId: input.systemId, risk: input.risk });
   const convoyTarget = input.convoys
     .filter((convoy) => convoy.hull > 0 && !convoy.arrived)
     .map((convoy) => ({ convoy, dist: distance(input.ship.position, convoy.position) }))
@@ -294,11 +301,11 @@ function resolveDroneStep(input: CombatAiStepInput, profile: CombatProfile): Com
   const toTarget = normalize(sub(targetPosition, input.ship.position));
   const distToTarget = distance(input.ship.position, targetPosition);
   const recentlyHit = input.now - input.ship.lastDamageAt < 0.6;
-  const aiState: FlightEntity["aiState"] = distToTarget < 640 ? (recentlyHit ? "evade" : "attack") : "intercept";
+  const aiState: FlightEntity["aiState"] = distToTarget < loadout.attackRange ? (recentlyHit ? "evade" : "attack") : "intercept";
   const desiredDirection = aiState === "evade"
     ? normalize(add(scale(toTarget, -0.45), scale(sideVector(toTarget), profile.strafe)))
     : normalize(add(toTarget, scale(sideVector(toTarget), profile.strafe)));
-  const canFire = input.ship.fireCooldown <= 0 && distToTarget < 640 * profile.rangeMultiplier;
+  const canFire = input.ship.fireCooldown <= 0 && distToTarget < loadout.attackRange * profile.rangeMultiplier;
   return {
     ship: {
       ...input.ship,
@@ -308,22 +315,23 @@ function resolveDroneStep(input: CombatAiStepInput, profile: CombatProfile): Com
       scanProgress: undefined
     },
     desiredDirection,
-    speed: 118 * profile.speedMultiplier,
+    speed: loadout.speed * profile.speedMultiplier,
     fire: canFire
       ? {
           owner: "enemy",
           targetPosition,
           targetId: convoyTarget?.id,
-          damage: Math.round(11 * profile.damageMultiplier),
+          damage: Math.round(loadout.damage * profile.damageMultiplier),
           projectileSpeed: profile.projectileSpeed,
-          cooldownMin: 0.62 * profile.cooldownMultiplier,
-          cooldownMax: 1.02 * profile.cooldownMultiplier
+          cooldownMin: loadout.fireCooldownMin * profile.cooldownMultiplier,
+          cooldownMax: loadout.fireCooldownMax * profile.cooldownMultiplier
         }
       : undefined
   };
 }
 
 function resolveRelayStep(input: CombatAiStepInput, profile: CombatProfile): CombatAiStep {
+  const loadout = getCombatLoadout({ ...input.ship, systemId: input.systemId, risk: input.risk });
   const convoyTarget = input.convoys
     .filter((convoy) => convoy.hull > 0 && !convoy.arrived)
     .map((convoy) => ({ convoy, dist: distance(input.ship.position, convoy.position) }))
@@ -333,7 +341,7 @@ function resolveRelayStep(input: CombatAiStepInput, profile: CombatProfile): Com
   const targetPosition = convoyTarget?.position ?? input.playerPosition;
   const targetId = convoyTarget?.id ?? "player";
   const targetDistance = convoyTarget ? distance(input.ship.position, convoyTarget.position) : playerDistance;
-  const canFire = input.ship.fireCooldown <= 0 && targetDistance < 560 * profile.rangeMultiplier;
+  const canFire = input.ship.fireCooldown <= 0 && targetDistance < loadout.attackRange * profile.rangeMultiplier;
   return {
     ship: {
       ...input.ship,
@@ -349,32 +357,33 @@ function resolveRelayStep(input: CombatAiStepInput, profile: CombatProfile): Com
           owner: "enemy",
           targetPosition,
           targetId: convoyTarget?.id,
-          damage: Math.round(9 * profile.damageMultiplier),
+          damage: Math.round(loadout.damage * profile.damageMultiplier),
           projectileSpeed: profile.projectileSpeed,
-          cooldownMin: 0.95 * profile.cooldownMultiplier,
-          cooldownMax: 1.45 * profile.cooldownMultiplier
+          cooldownMin: loadout.fireCooldownMin * profile.cooldownMultiplier,
+          cooldownMax: loadout.fireCooldownMax * profile.cooldownMultiplier
         }
       : undefined
   };
 }
 
 function resolveCivilianStep(input: CombatAiStepInput, profile: CombatProfile): CombatAiStep {
+  const loadout = getCombatLoadout({ ...input.ship, systemId: input.systemId, risk: input.risk });
   if (input.ship.aiState === "attack" && input.ship.aiTargetId === "player") {
     const toPlayer = normalize(sub(input.playerPosition, input.ship.position));
     const playerDistance = distance(input.ship.position, input.playerPosition);
-    const canFire = input.ship.fireCooldown <= 0 && playerDistance < 620 * profile.rangeMultiplier;
+    const canFire = input.ship.fireCooldown <= 0 && playerDistance < loadout.attackRange * profile.rangeMultiplier;
     return {
       ship: { ...input.ship, aiState: "attack", aiTargetId: "player", aiTimer: nextAiTimer(input.ship, "attack", input.delta), scanProgress: undefined },
       desiredDirection: normalize(add(toPlayer, scale(sideVector(toPlayer), profile.strafe))),
-      speed: 105 * profile.speedMultiplier,
+      speed: loadout.speed * profile.speedMultiplier,
       fire: canFire
         ? {
             owner: "enemy",
             targetPosition: input.playerPosition,
-            damage: Math.round(10 * profile.damageMultiplier),
+            damage: Math.round(loadout.damage * profile.damageMultiplier),
             projectileSpeed: profile.projectileSpeed,
-            cooldownMin: 0.72 * profile.cooldownMultiplier,
-            cooldownMax: 1.2 * profile.cooldownMultiplier
+            cooldownMin: loadout.fireCooldownMin * profile.cooldownMultiplier,
+            cooldownMax: loadout.fireCooldownMax * profile.cooldownMultiplier
           }
         : undefined
     };
@@ -389,7 +398,7 @@ function resolveCivilianStep(input: CombatAiStepInput, profile: CombatProfile): 
   if (nearestThreat && distance(input.ship.position, nearestThreat.position) < 780) {
     const toThreat = normalize(sub(nearestThreat.position, input.ship.position));
     const threatDistance = distance(input.ship.position, nearestThreat.position);
-    const canFire = input.ship.fireCooldown <= 0 && threatDistance < 620 * profile.rangeMultiplier;
+    const canFire = input.ship.fireCooldown <= 0 && threatDistance < loadout.attackRange * profile.rangeMultiplier;
     return {
       ship: {
         ...input.ship,
@@ -399,16 +408,16 @@ function resolveCivilianStep(input: CombatAiStepInput, profile: CombatProfile): 
         scanProgress: undefined
       },
       desiredDirection: normalize(add(toThreat, scale(sideVector(toThreat), profile.strafe))),
-      speed: 108 * profile.speedMultiplier,
+      speed: loadout.speed * profile.speedMultiplier,
       fire: canFire
         ? {
             owner: "npc",
             targetPosition: nearestThreat.position,
             targetId: nearestThreat.id,
-            damage: Math.round(10 * profile.damageMultiplier),
+            damage: Math.round(loadout.damage * profile.damageMultiplier),
             projectileSpeed: profile.projectileSpeed,
-            cooldownMin: 0.78 * profile.cooldownMultiplier,
-            cooldownMax: 1.28 * profile.cooldownMultiplier
+            cooldownMin: loadout.fireCooldownMin * profile.cooldownMultiplier,
+            cooldownMax: loadout.fireCooldownMax * profile.cooldownMultiplier
           }
         : undefined
     };
@@ -422,7 +431,7 @@ function resolveCivilianStep(input: CombatAiStepInput, profile: CombatProfile): 
       scanProgress: undefined
     },
     desiredDirection: normalize(add(getIdlePatrolDirection(input.systemId, input.ship.position), [0.18, 0, -0.08])),
-    speed: 105 * profile.speedMultiplier
+    speed: loadout.speed * profile.speedMultiplier
   };
 }
 

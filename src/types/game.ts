@@ -362,14 +362,35 @@ export type FlightAiProfileId =
   | "interceptor"
   | "gunner"
   | "law-patrol"
+  | "patrol-support"
   | "hauler"
   | "freighter"
   | "courier"
   | "miner"
   | "smuggler"
   | "elite-ace"
+  | "boss-warlord"
   | "drone-hunter"
   | "relay-core";
+
+export type CombatLoadoutId =
+  | "pirate-raider"
+  | "pirate-interceptor"
+  | "pirate-gunner"
+  | "pirate-elite-ace"
+  | "pirate-boss-warlord"
+  | "directorate-patrol"
+  | "directorate-support"
+  | "directorate-courier"
+  | "union-hauler"
+  | "union-freighter"
+  | "union-miner"
+  | "vossari-smuggler"
+  | "mirr-defender"
+  | "unknown-drone"
+  | "unknown-relay";
+
+export type ConvoyStatus = "en-route" | "under-attack" | "distress" | "arrived";
 
 export type EconomyNpcTaskKind =
   | "idle"
@@ -514,10 +535,15 @@ export interface FlightEntity {
   lastDamageAt: number;
   fireCooldown: number;
   aiProfileId: FlightAiProfileId;
+  loadoutId?: CombatLoadoutId;
   aiState: "patrol" | "scan" | "intercept" | "attack" | "evade" | "retreat";
   aiTargetId?: string;
   aiTimer: number;
   elite?: boolean;
+  boss?: boolean;
+  supportWing?: boolean;
+  supportRequestedAt?: number;
+  supportCooldownUntil?: number;
   missionId?: string;
   storyTarget?: boolean;
   storyTargetKind?: StoryEncounterTargetKind;
@@ -572,6 +598,11 @@ export interface ConvoyEntity {
   shield: number;
   maxShield: number;
   lastDamageAt: number;
+  fireCooldown?: number;
+  convoyRole?: "mission-tender";
+  status?: ConvoyStatus;
+  threatId?: string;
+  distressCalledAt?: number;
   destinationStationId: string;
   destinationPosition: Vec3;
   arrived: boolean;

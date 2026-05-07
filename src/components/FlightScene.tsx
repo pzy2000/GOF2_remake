@@ -423,12 +423,13 @@ function NpcShip({ ship }: { ship: FlightEntity }) {
   if (ship.role === "freighter") return <FreighterNpcShip ship={ship} />;
   if (ship.role === "drone") return <DroneNpcShip ship={ship} />;
   if (ship.role === "relay") return <RelayNpcCore ship={ship} />;
-  const color = ship.role === "pirate" ? "#ff4e5f" : ship.role === "patrol" ? "#5dc8ff" : ship.role === "smuggler" ? "#ff9b52" : ship.role === "courier" ? "#9bffe8" : ship.role === "miner" ? "#ffd166" : "#f6c96d";
+  const color = ship.boss ? "#ff2f5f" : ship.role === "pirate" ? "#ff4e5f" : ship.role === "patrol" ? "#5dc8ff" : ship.role === "smuggler" ? "#ff9b52" : ship.role === "courier" ? "#9bffe8" : ship.role === "miner" ? "#ffd166" : "#f6c96d";
   const direction = normalize(ship.velocity);
   const yaw = Math.atan2(direction[0], -direction[2]);
   const flashing = clock - ship.lastDamageAt < 0.18 || ship.deathTimer !== undefined;
   const speed = Math.hypot(...ship.velocity);
   const flameScale = Math.max(0.45, Math.min(1.45, speed / 115));
+  const combatPulse = 0.5 + Math.sin(clock * 5.4 + ship.position[0] * 0.01) * 0.5;
   const body =
     ship.role === "pirate"
       ? { cone: [7, 25, 3] as [number, number, number], wing: [26, 1.8, 8] as [number, number, number], offset: 6, tail: "#3a111c" }
@@ -446,10 +447,10 @@ function NpcShip({ ship }: { ship: FlightEntity }) {
       {miningTarget ? (
         <Line points={[ship.position, miningTarget.position]} color={ship.economyCommodityId ? getOreColor(ship.economyCommodityId) : "#ffd166"} lineWidth={2.4} transparent opacity={0.72} />
       ) : null}
-      <group position={toThree(ship.position)} rotation={[0, yaw, 0]} scale={ship.deathTimer !== undefined ? 0.82 : 1}>
+      <group position={toThree(ship.position)} rotation={[0, yaw, 0]} scale={ship.deathTimer !== undefined ? 0.82 : ship.boss ? 1.28 : 1}>
         <mesh castShadow>
           <coneGeometry args={body.cone} />
-          <meshStandardMaterial color={flashing ? "#ffffff" : color} metalness={0.35} roughness={0.44} emissive={color} emissiveIntensity={flashing ? 0.85 : 0.16} transparent opacity={ship.deathTimer !== undefined ? 0.45 : 1} />
+          <meshStandardMaterial color={flashing ? "#ffffff" : color} metalness={0.35} roughness={0.44} emissive={color} emissiveIntensity={flashing ? 0.85 : ship.boss ? 0.32 : 0.16} transparent opacity={ship.deathTimer !== undefined ? 0.45 : 1} />
         </mesh>
         <mesh position={[0, 0, body.offset]} castShadow>
           <boxGeometry args={body.wing} />
@@ -473,6 +474,20 @@ function NpcShip({ ship }: { ship: FlightEntity }) {
             <meshStandardMaterial color="#84d8ff" metalness={0.4} roughness={0.35} emissive="#1b719d" emissiveIntensity={0.25} />
           </mesh>
         ) : null}
+        {ship.boss ? (
+          <>
+            <mesh rotation={[Math.PI / 2, 0, clock * 0.65]}>
+              <torusGeometry args={[30 + combatPulse * 6, 1.5, 8, 52]} />
+              <meshBasicMaterial color="#ffdf6e" transparent opacity={0.38 + combatPulse * 0.28} toneMapped={false} />
+            </mesh>
+            <pointLight color="#ff4e5f" intensity={1.1 + combatPulse * 0.9} distance={210} />
+          </>
+        ) : ship.supportWing ? (
+          <mesh rotation={[Math.PI / 2, 0, clock * 0.9]}>
+            <torusGeometry args={[24 + combatPulse * 3, 1.2, 8, 42]} />
+            <meshBasicMaterial color="#64e4ff" transparent opacity={0.3 + combatPulse * 0.22} toneMapped={false} />
+          </mesh>
+        ) : null}
         {ship.role === "trader" ? (
           <>
             <mesh position={[-12, -1, -1]}>
@@ -493,9 +508,17 @@ function NpcShip({ ship }: { ship: FlightEntity }) {
           <Html center distanceFactor={12} className="target-label npc-label">
             {ship.economyStatus}
           </Html>
+        ) : ship.boss ? (
+          <Html center distanceFactor={12} className="target-label boss-label">
+            BOSS · {ship.name.toUpperCase()}
+          </Html>
         ) : ship.storyTarget ? (
           <Html center distanceFactor={12} className="target-label story-target-label">
             {ship.elite ? "ELITE · " : ""}{ship.name.toUpperCase()}
+          </Html>
+        ) : ship.supportWing ? (
+          <Html center distanceFactor={12} className="target-label support-label">
+            SUPPORT WING
           </Html>
         ) : null}
       </group>
@@ -504,14 +527,17 @@ function NpcShip({ ship }: { ship: FlightEntity }) {
 }
 
 function ConvoyShip({ convoy }: { convoy: ConvoyEntity }) {
+  const clock = useGameStore((state) => state.runtime.clock);
   const direction = normalize(convoy.velocity);
   const yaw = Math.atan2(direction[0], -direction[2]);
   const healthRatio = convoy.hull / convoy.maxHull;
+  const status = convoy.status ?? "en-route";
+  const pulse = 0.5 + Math.sin(clock * 6.2 + convoy.position[2] * 0.01) * 0.5;
   return (
     <group position={toThree(convoy.position)} rotation={[0, yaw, 0]}>
       <mesh>
         <boxGeometry args={[34, 12, 42]} />
-        <meshStandardMaterial color="#c9a86a" metalness={0.35} roughness={0.48} emissive={healthRatio < 0.35 ? "#5f1d14" : "#1d342f"} emissiveIntensity={0.18} />
+        <meshStandardMaterial color={status === "distress" ? "#ffb657" : "#c9a86a"} metalness={0.35} roughness={0.48} emissive={status === "distress" || healthRatio < 0.35 ? "#5f1d14" : "#1d342f"} emissiveIntensity={status === "distress" ? 0.36 : 0.18} />
       </mesh>
       <mesh position={[-25, -2, 0]}>
         <boxGeometry args={[10, 9, 34]} />
@@ -525,8 +551,14 @@ function ConvoyShip({ convoy }: { convoy: ConvoyEntity }) {
         <coneGeometry args={[5, 18, 12]} />
         <meshBasicMaterial color="#6ee7ff" transparent opacity={0.32} toneMapped={false} />
       </mesh>
-      <Html center distanceFactor={12} className="target-label">
-        ESCORT · {Math.round(convoy.hull)}/{convoy.maxHull}
+      {status !== "en-route" ? (
+        <mesh rotation={[Math.PI / 2, 0, clock * 0.7]}>
+          <torusGeometry args={[46 + pulse * 6, 1.3, 8, 52]} />
+          <meshBasicMaterial color={status === "distress" ? "#ff4e5f" : "#ffd166"} transparent opacity={0.26 + pulse * 0.26} toneMapped={false} />
+        </mesh>
+      ) : null}
+      <Html center distanceFactor={12} className={`target-label ${status === "distress" ? "convoy-distress-label" : "convoy-label"}`}>
+        ESCORT · {status.toUpperCase()} · {Math.round(convoy.hull)}/{convoy.maxHull}
       </Html>
     </group>
   );

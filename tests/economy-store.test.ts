@@ -91,6 +91,7 @@ describe("economy store integration", () => {
     expect(state.economyService).toMatchObject({ status: "connected", snapshotId: 42 });
     expect(state.runtime.enemies.find((ship) => ship.id === "econ-helion-reach-miner-test")).toMatchObject({
       role: "miner",
+      loadoutId: "union-miner",
       economyStatus: "MINING · Iron",
       economyTaskKind: "mining",
       economyTargetId: asteroids[0].id
