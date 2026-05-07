@@ -1716,6 +1716,20 @@ button.equipment-trigger {
   background: rgba(255, 255, 255, 0.04);
 }
 
+.dialogue-badge-portrait {
+  overflow: hidden;
+  background: rgba(5, 16, 28, 0.82);
+  box-shadow: 0 0 18px rgba(126, 210, 255, 0.16);
+}
+
+.dialogue-badge-portrait img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 7px;
+}
+
 .dialogue-badge-text {
   color: #e8f4ff;
   font-weight: 900;

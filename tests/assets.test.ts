@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import manifest from "../public/assets/generated/manifest.json";
-import { ships, systems } from "../src/data/world";
+import { dialogueSpeakers, ships, systems } from "../src/data/world";
 import { fallbackAssetManifest, resolveAssetManifest, resolvePublicAssetPath } from "../src/systems/assets";
 import type { AssetManifest } from "../src/types/game";
 
@@ -22,6 +22,7 @@ describe("asset manifest", () => {
     expect(pagesManifest.keyArt).toBe("/GOF2_remake/assets/generated/key-art.webp");
     expect(pagesManifest.skyboxPanorama).toBe("/GOF2_remake/assets/generated/skybox-panorama.webp");
     expect(pagesManifest.shipModels["sparrow-mk1"]).toBe("/GOF2_remake/assets/generated/ships/sparrow-mk1.glb");
+    expect(pagesManifest.speakerPortraits["helion-handler"]).toBe("/GOF2_remake/assets/generated/portraits/helion-handler.webp");
     expect(pagesManifest.musicTracks.systems["helion-reach"]).toBe("/GOF2_remake/assets/music/magic-space.mp3");
     expect(pagesManifest.musicTracks.combat).toBe("/GOF2_remake/assets/music/infestation-control-room.mp3");
     expect(Object.values(pagesManifest.planetTextures).every((assetPath) => assetPath.startsWith("/GOF2_remake/assets/generated/"))).toBe(true);
@@ -48,6 +49,14 @@ describe("asset manifest", () => {
     for (const ship of ships) {
       expect(assetManifest.shipModels[ship.id]).toMatch(/^\/assets\/generated\/ships\/.+\.glb$/);
       expect(fallbackAssetManifest.shipModels[ship.id]).toBe(assetManifest.shipModels[ship.id]);
+    }
+  });
+
+  it("points every dialogue speaker to a generated WebP portrait", () => {
+    const assetManifest = manifest as AssetManifest;
+    for (const speaker of dialogueSpeakers) {
+      expect(assetManifest.speakerPortraits[speaker.id]).toMatch(/^\/assets\/generated\/portraits\/.+\.webp$/);
+      expect(fallbackAssetManifest.speakerPortraits[speaker.id]).toBe(assetManifest.speakerPortraits[speaker.id]);
     }
   });
 

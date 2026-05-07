@@ -8,6 +8,25 @@ import type { AssetManifest } from "../types/game";
 
 function SpeakerBadge({ manifest, speakerId }: { manifest: AssetManifest; speakerId: string }) {
   const badgeSpeaker = dialogueSpeakerById[speakerId];
+  const portrait = manifest.speakerPortraits[speakerId];
+  const [portraitFailed, setPortraitFailed] = useState(false);
+  useEffect(() => setPortraitFailed(false), [portrait, speakerId]);
+  if (portrait && !portraitFailed) {
+    const portraitStyle = {
+      borderColor: badgeSpeaker?.color,
+      boxShadow: badgeSpeaker?.color ? `0 0 18px ${badgeSpeaker.color}44` : undefined
+    };
+    return (
+      <div className="dialogue-badge dialogue-badge-portrait" style={portraitStyle}>
+        <img
+          src={portrait}
+          alt={`${badgeSpeaker?.name ?? speakerId} portrait`}
+          data-testid={`speaker-portrait-${speakerId}`}
+          onError={() => setPortraitFailed(true)}
+        />
+      </div>
+    );
+  }
   if (badgeSpeaker?.factionId) {
     return (
       <div className="dialogue-badge" style={{ borderColor: badgeSpeaker.color }}>

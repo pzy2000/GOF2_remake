@@ -146,6 +146,7 @@ export interface AssetManifest {
   systemSkyboxes: Record<string, string>;
   planetTextures: Record<string, string>;
   shipModels: Record<string, string>;
+  speakerPortraits: Record<string, string>;
   asteroidTextures: string;
   factionEmblems: string;
   hudOverlay: string;

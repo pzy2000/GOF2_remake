@@ -152,6 +152,9 @@ describe("content data", () => {
 
   it("defines voiced dialogue coverage for story chapters and exploration signals", () => {
     const speakerIds = new Set(dialogueSpeakers.map((speaker) => speaker.id));
+    for (const speaker of dialogueSpeakers) {
+      expect(fallbackAssetManifest.speakerPortraits[speaker.id]).toMatch(/^\/assets\/generated\/portraits\/.+\.webp$/);
+    }
     for (const scene of dialogueScenes) {
       expect(scene.lines.length).toBeGreaterThan(0);
       expect(scene.lines.every((line) => speakerIds.has(line.speakerId) && line.text.trim().length > 0)).toBe(true);

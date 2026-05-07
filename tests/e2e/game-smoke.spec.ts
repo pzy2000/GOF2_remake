@@ -118,6 +118,8 @@ test.describe("browser smoke", () => {
     await expect(storyMission).toContainText("Glass Wake 01: Clean Carrier");
     await storyMission.getByRole("button", { name: "Accept" }).click();
     await expect(page.getByTestId("dialogue-overlay")).toContainText("Clean Carrier Briefing");
+    await expect(page.getByTestId("speaker-portrait-helion-handler")).toBeVisible();
+    await expect(page.getByTestId("speaker-portrait-helion-handler")).toHaveAttribute("src", /\/assets\/generated\/portraits\/helion-handler\.webp$/);
     await expect(page.getByTestId("dialogue-overlay")).toContainText("Captain, Helion traffic is handing you a clean sync key.");
     await page.getByTestId("dialogue-overlay").getByRole("button", { name: "Skip" }).click();
     await expect(page.getByTestId("dialogue-overlay")).toHaveCount(0);

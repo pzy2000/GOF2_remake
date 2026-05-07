@@ -51,6 +51,17 @@ const rawFallbackAssetManifest: AssetManifest = {
     "bastion-7": "/assets/generated/ships/bastion-7.glb",
     "horizon-ark": "/assets/generated/ships/horizon-ark.glb"
   },
+  speakerPortraits: {
+    captain: "/assets/generated/portraits/captain.webp",
+    "ship-ai": "/assets/generated/portraits/ship-ai.webp",
+    "helion-handler": "/assets/generated/portraits/helion-handler.webp",
+    "mirr-analyst": "/assets/generated/portraits/mirr-analyst.webp",
+    "kuro-foreman": "/assets/generated/portraits/kuro-foreman.webp",
+    "vantara-officer": "/assets/generated/portraits/vantara-officer.webp",
+    "ashen-broker": "/assets/generated/portraits/ashen-broker.webp",
+    "celest-archivist": "/assets/generated/portraits/celest-archivist.webp",
+    "union-witness": "/assets/generated/portraits/union-witness.webp"
+  },
   asteroidTextures: "/assets/generated/asteroid-textures.webp",
   factionEmblems: "/assets/generated/faction-emblems.webp",
   hudOverlay: "/assets/generated/hud-overlay.webp",
@@ -111,6 +122,7 @@ export function resolveAssetManifest(manifest: AssetManifest, baseUrl?: string):
     systemSkyboxes: resolveAssetRecord(manifest.systemSkyboxes, baseUrl),
     planetTextures: resolveAssetRecord(manifest.planetTextures, baseUrl),
     shipModels: resolveAssetRecord(manifest.shipModels, baseUrl),
+    speakerPortraits: resolveAssetRecord(manifest.speakerPortraits, baseUrl),
     asteroidTextures: resolvePublicAssetPath(manifest.asteroidTextures, baseUrl),
     factionEmblems: resolvePublicAssetPath(manifest.factionEmblems, baseUrl),
     hudOverlay: resolvePublicAssetPath(manifest.hudOverlay, baseUrl),
@@ -130,6 +142,7 @@ export async function loadAssetManifest(): Promise<AssetManifest> {
     systemSkyboxes: { ...rawFallbackAssetManifest.systemSkyboxes, ...loaded.systemSkyboxes },
     planetTextures: { ...rawFallbackAssetManifest.planetTextures, ...loaded.planetTextures },
     shipModels: { ...rawFallbackAssetManifest.shipModels, ...loaded.shipModels },
+    speakerPortraits: { ...rawFallbackAssetManifest.speakerPortraits, ...loaded.speakerPortraits },
     musicTracks: {
       systems: { ...rawFallbackAssetManifest.musicTracks.systems, ...loaded.musicTracks?.systems },
       stationArchetypes: { ...rawFallbackAssetManifest.musicTracks.stationArchetypes, ...loaded.musicTracks?.stationArchetypes },
