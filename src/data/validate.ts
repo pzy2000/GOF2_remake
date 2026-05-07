@@ -197,6 +197,23 @@ export function validateContentData(): ContentValidationResult {
       }
       if (mission.storyArcId !== arc.id) errors.push(`Story chapter ${chapter.id} mission ${mission.id} is not tagged for arc ${arc.id}`);
       if (mission.storyChapterId !== chapter.id) errors.push(`Story chapter ${chapter.id} mission ${mission.id} has story chapter ${mission.storyChapterId}`);
+      if (mission.storyEncounter) {
+        if (!mission.storyEncounter.fieldObjective.trim()) errors.push(`Story mission ${mission.id} has empty field objective`);
+        const targetIds = mission.storyEncounter.targets.map((target) => target.id);
+        requireUnique(targetIds, `${mission.id} story target`, errors);
+        for (const requiredTargetId of mission.storyEncounter.requiredTargetIds) {
+          if (!targetIds.includes(requiredTargetId)) errors.push(`Story mission ${mission.id} requires unknown story target ${requiredTargetId}`);
+        }
+        if (mission.storyEncounter.visualCue && !systemById[mission.storyEncounter.visualCue.systemId]) {
+          errors.push(`Story mission ${mission.id} visual cue references unknown system ${mission.storyEncounter.visualCue.systemId}`);
+        }
+        for (const target of mission.storyEncounter.targets) {
+          if (!systemById[target.systemId]) errors.push(`Story mission ${mission.id} target ${target.id} references unknown system ${target.systemId}`);
+          if (!hasFaction(target.factionId)) errors.push(`Story mission ${mission.id} target ${target.id} references unknown faction ${target.factionId}`);
+          if (target.hull <= 0 || target.shield < 0) errors.push(`Story mission ${mission.id} target ${target.id} has invalid durability`);
+          if (!target.objective.trim()) errors.push(`Story mission ${mission.id} target ${target.id} has empty objective`);
+        }
+      }
     }
   }
 

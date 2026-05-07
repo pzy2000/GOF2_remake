@@ -346,6 +346,61 @@ export interface JumpGateDefinition {
   position: Vec3;
 }
 
+export type FlightEntityRole =
+  | "pirate"
+  | "patrol"
+  | "trader"
+  | "freighter"
+  | "courier"
+  | "miner"
+  | "smuggler"
+  | "drone"
+  | "relay";
+
+export type FlightAiProfileId =
+  | "raider"
+  | "interceptor"
+  | "gunner"
+  | "law-patrol"
+  | "hauler"
+  | "freighter"
+  | "courier"
+  | "miner"
+  | "smuggler"
+  | "elite-ace"
+  | "drone-hunter"
+  | "relay-core";
+
+export type StoryEncounterTargetKind = "drone" | "relay" | "pirate-relay" | "jammer" | "guard";
+
+export interface StoryEncounterTargetDefinition {
+  id: string;
+  name: string;
+  kind: StoryEncounterTargetKind;
+  role: Extract<FlightEntityRole, "pirate" | "smuggler" | "drone" | "relay">;
+  systemId: string;
+  position: Vec3;
+  hull: number;
+  shield: number;
+  factionId: FactionId;
+  aiProfileId?: FlightAiProfileId;
+  elite?: boolean;
+  objective: string;
+}
+
+export interface StoryEncounterDefinition {
+  fieldObjective: string;
+  twist: string;
+  completionText: string;
+  visualCue?: {
+    systemId: string;
+    position: Vec3;
+    label: string;
+  };
+  targets: StoryEncounterTargetDefinition[];
+  requiredTargetIds: string[];
+}
+
 export interface MissionDefinition {
   id: string;
   title: string;
@@ -371,6 +426,8 @@ export interface MissionDefinition {
   storyArcId?: string;
   storyChapterId?: string;
   storyCritical?: boolean;
+  storyEncounter?: StoryEncounterDefinition;
+  storyTargetDestroyedIds?: string[];
   prerequisiteMissionIds?: string[];
   retryOnFailure?: boolean;
   reputationRewards?: Partial<Record<FactionId, number>>;
@@ -437,7 +494,7 @@ export interface OwnedShipRecord {
 export interface FlightEntity {
   id: string;
   name: string;
-  role: "pirate" | "patrol" | "trader" | "freighter" | "courier" | "miner" | "smuggler";
+  role: FlightEntityRole;
   factionId: FactionId;
   position: Vec3;
   velocity: Vec3;
@@ -447,11 +504,14 @@ export interface FlightEntity {
   maxShield: number;
   lastDamageAt: number;
   fireCooldown: number;
-  aiProfileId: "raider" | "interceptor" | "gunner" | "law-patrol" | "hauler" | "freighter" | "courier" | "miner" | "smuggler" | "elite-ace";
+  aiProfileId: FlightAiProfileId;
   aiState: "patrol" | "scan" | "intercept" | "attack" | "evade" | "retreat";
   aiTargetId?: string;
   aiTimer: number;
   elite?: boolean;
+  missionId?: string;
+  storyTarget?: boolean;
+  storyTargetKind?: StoryEncounterTargetKind;
   provokedByPlayer?: boolean;
   scanProgress?: number;
   deathTimer?: number;

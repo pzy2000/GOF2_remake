@@ -82,4 +82,66 @@ describe("story mission store flow", () => {
     store.getState().acceptMission("story-clean-carrier");
     expect(store.getState().activeDialogue).toBeUndefined();
   });
+
+  it("spawns and records story encounter targets", async () => {
+    const store = await freshStore();
+    store.getState().jumpToSystem("mirr-vale");
+    store.setState({ completedMissionIds: ["story-clean-carrier"] });
+
+    store.getState().acceptMission("story-probe-in-glass");
+
+    const target = store.getState().runtime.enemies.find((ship) => ship.id === "glass-echo-drone");
+    expect(target).toMatchObject({ storyTarget: true, missionId: "story-probe-in-glass", role: "drone" });
+
+    store.setState((state) => ({
+      targetId: "glass-echo-drone",
+      player: { ...state.player, position: [0, 0, 0] },
+      runtime: {
+        ...state.runtime,
+        enemies: state.runtime.enemies.map((ship) => (ship.id === "glass-echo-drone" ? { ...ship, position: [0, 0, 0] } : { ...ship, position: [900, 0, 900] })),
+        projectiles: [
+          {
+            id: "story-target-shot",
+            owner: "player",
+            kind: "laser",
+            position: [0, 0, 0],
+            direction: [0, 0, 0],
+            speed: 0,
+            damage: 999,
+            life: 1,
+            targetId: "glass-echo-drone"
+          }
+        ]
+      }
+    }));
+    store.getState().tick(0.05);
+
+    expect(store.getState().activeMissions[0].storyTargetDestroyedIds).toContain("glass-echo-drone");
+    expect(store.getState().runtime.message).toContain("Story objective updated");
+  });
+
+  it("completes final story chapter after relay targets and salvage are done", async () => {
+    const store = await freshStore();
+    const { missionTemplates } = await import("../src/data/world");
+    const { cloneMission } = await import("../src/systems/missions");
+    const template = missionTemplates.find((mission) => mission.id === "story-quiet-crown-relay")!;
+    const activeMission = {
+      ...cloneMission(template),
+      accepted: true,
+      acceptedAt: 0,
+      storyTargetDestroyedIds: [...template.storyEncounter!.requiredTargetIds],
+      salvage: { ...template.salvage!, recovered: true }
+    };
+    store.setState({
+      currentSystemId: "celest-gate",
+      currentStationId: "celest-vault",
+      activeMissions: [activeMission],
+      completedMissionIds: ["story-clean-carrier", "story-probe-in-glass", "story-kuro-resonance", "story-bastion-calibration", "story-ashen-decoy-manifest", "story-knife-wing-relay", "story-witnesses-to-celest"]
+    });
+
+    store.getState().completeMission("story-quiet-crown-relay");
+
+    expect(store.getState().completedMissionIds).toContain("story-quiet-crown-relay");
+    expect(store.getState().activeDialogue?.sceneId).toBe("dialogue-story-quiet-crown-relay-complete");
+  });
 });

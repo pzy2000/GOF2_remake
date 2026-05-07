@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent, MouseEvent as ReactMouseEvent, MutableRefObject, ReactNode } from "react";
 import { commodities, shipById, ships, stationById, systemById, useGameStore } from "../state/gameStore";
 import { commodityById, equipmentById, equipmentList, equipmentName, explorationSignals, factionNames, glassWakeProtocol, missionTemplates } from "../data/world";
-import { canCompleteMission, getAvailableMissionsForSystem, getMissionDeadlineRemaining } from "../systems/missions";
+import { canCompleteMission, getAvailableMissionsForSystem, getMissionDeadlineRemaining, getStoryEncounterRemainingTargets } from "../systems/missions";
 import {
   canBuyCommodityAtStation,
   canBuyEquipmentAtStation,
@@ -622,6 +622,7 @@ function MissionBoardTab() {
             const storyChapter = mission.storyArcId === glassWakeProtocol.id
               ? glassWakeProtocol.chapters.find((chapter) => chapter.id === mission.storyChapterId)
               : undefined;
+            const remainingStoryTargets = getStoryEncounterRemainingTargets(mission);
             return (
               <article key={mission.id} className="mission-card" data-testid={`mission-card-${mission.id}`}>
                 <div className="mission-title">
@@ -640,6 +641,12 @@ function MissionBoardTab() {
                 {mission.passengerCount ? <p>Passengers occupy {mission.passengerCount} cargo space.</p> : null}
                 {mission.escort ? <p>Escort hull {mission.escort.hull}{mission.escort.arrived ? " · arrived" : ""}</p> : null}
                 {mission.salvage ? <p>Recovery target: {mission.salvage.name}{mission.salvage.recovered ? " · recovered" : ""}</p> : null}
+                {mission.storyEncounter ? (
+                  <p className="story-field-line">
+                    Field objective: {mission.storyEncounter.fieldObjective}
+                    {remainingStoryTargets.length > 0 ? ` · Story targets: ${remainingStoryTargets.map((target) => target.name).join(", ")}` : " · Story targets clear"}
+                  </p>
+                ) : null}
                 {mission.targetCommodityId ? <p>Requires {mission.targetAmount} {commodityById[mission.targetCommodityId].name}</p> : null}
                 {active ? (
                   <button onClick={() => completeMission(mission.id)} disabled={!complete}>Complete</button>
@@ -686,6 +693,12 @@ function CaptainLogTab() {
           <span>Current Objective</span>
           <p>{current ? currentObjectiveText(current.status, currentMission, currentOrigin?.name, currentDestination?.name) : "Protocol complete. Glass Wake is quiet for now."}</p>
         </div>
+        {progress.completedCount === progress.totalCount ? (
+          <div className="story-epilogue" data-testid="glass-wake-epilogue">
+            <span>Epilogue</span>
+            <p>{glassWakeProtocol.epilogue}</p>
+          </div>
+        ) : null}
       </aside>
       <section className="story-timeline" aria-label={`${glassWakeProtocol.title} chapters`}>
         {progress.chapters.map(({ chapter, mission, status }) => {
@@ -702,6 +715,8 @@ function CaptainLogTab() {
                 <b className="story-status">{storyStatusLabel(status)}</b>
               </header>
               <p>{status === "complete" ? chapter.log : locked ? "Signal masked. Complete prior protocol entries to resolve this trace." : chapter.briefing}</p>
+              {!locked ? <p className="story-field-line">Field objective: {chapter.fieldObjective}</p> : null}
+              {status === "complete" ? <p className="story-reveal-line">Reveal: {chapter.reveal}</p> : null}
               {mission && !locked ? (
                 <p className="story-route">
                   {`${origin?.name ?? mission.originSystemId} Mission Board -> ${destination?.name ?? mission.destinationStationId}`}
@@ -768,7 +783,11 @@ function DialogueReplayList({
 function currentObjectiveText(status: string, mission: typeof missionTemplates[number] | undefined, originName: string | undefined, destinationName: string | undefined): string {
   if (!mission) return "Signal source missing from mission registry.";
   if (status === "locked") return "Complete prior protocol entries to resolve the next trace.";
-  if (status === "active") return `Complete ${mission.title} and report to ${destinationName ?? mission.destinationStationId}.`;
+  if (status === "active") {
+    const remaining = getStoryEncounterRemainingTargets(mission);
+    if (remaining.length > 0) return `Clear ${remaining.map((target) => target.name).join(", ")}; then report to ${destinationName ?? mission.destinationStationId}.`;
+    return mission.storyEncounter?.completionText ?? `Complete ${mission.title} and report to ${destinationName ?? mission.destinationStationId}.`;
+  }
   if (status === "failed retry") return `Return to ${originName ?? mission.originSystemId} and retry ${mission.title}.`;
   return `Accept ${mission.title} from the ${originName ?? mission.originSystemId} Mission Board.`;
 }

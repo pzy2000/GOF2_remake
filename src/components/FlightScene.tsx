@@ -334,9 +334,74 @@ function FreighterNpcShip({ ship }: { ship: FlightEntity }) {
   );
 }
 
+function DroneNpcShip({ ship }: { ship: FlightEntity }) {
+  const clock = useGameStore((state) => state.runtime.clock);
+  const direction = normalize(ship.velocity);
+  const yaw = Math.atan2(direction[0], -direction[2]);
+  const pulse = 0.5 + Math.sin(clock * 7.2 + ship.position[0] * 0.02) * 0.5;
+  const flashing = clock - ship.lastDamageAt < 0.18 || ship.deathTimer !== undefined;
+  const opacity = ship.deathTimer !== undefined ? 0.42 : 1;
+  return (
+    <group position={toThree(ship.position)} rotation={[0, yaw, 0]} scale={ship.deathTimer !== undefined ? 0.78 : 1}>
+      <mesh castShadow rotation={[clock * 1.2, clock * 0.4, 0]}>
+        <octahedronGeometry args={[14 + pulse * 2.8, 1]} />
+        <meshStandardMaterial color={flashing ? "#ffffff" : "#8ff7ff"} metalness={0.48} roughness={0.24} emissive="#2de4ff" emissiveIntensity={flashing ? 1.2 : 0.45 + pulse * 0.3} transparent opacity={opacity} />
+      </mesh>
+      <mesh rotation={[Math.PI / 2, 0, clock * 1.6]}>
+        <torusGeometry args={[25 + pulse * 4, 1.6, 8, 42]} />
+        <meshBasicMaterial color="#ff9bd5" transparent opacity={(0.28 + pulse * 0.3) * opacity} toneMapped={false} />
+      </mesh>
+      {[0, 1, 2].map((index) => {
+        const angle = index * ((Math.PI * 2) / 3) + clock * 0.8;
+        return (
+          <mesh key={index} position={[Math.cos(angle) * 22, Math.sin(angle) * 8, Math.sin(angle) * 22]}>
+            <sphereGeometry args={[3.2 + pulse * 1.4, 10, 8]} />
+            <meshBasicMaterial color={index === 1 ? "#ff9bd5" : "#9bffe8"} transparent opacity={0.68 * opacity} toneMapped={false} />
+          </mesh>
+        );
+      })}
+      <pointLight color="#9bffe8" intensity={1.1 + pulse * 1.1} distance={180} />
+      {ship.storyTarget ? (
+        <Html center distanceFactor={12} className="target-label story-target-label">
+          {ship.name.toUpperCase()}
+        </Html>
+      ) : null}
+    </group>
+  );
+}
+
+function RelayNpcCore({ ship }: { ship: FlightEntity }) {
+  const clock = useGameStore((state) => state.runtime.clock);
+  const pulse = 0.5 + Math.sin(clock * 4.8 + ship.position[2] * 0.01) * 0.5;
+  const flashing = clock - ship.lastDamageAt < 0.18 || ship.deathTimer !== undefined;
+  const opacity = ship.deathTimer !== undefined ? 0.45 : 1;
+  return (
+    <group position={toThree(ship.position)} scale={ship.deathTimer !== undefined ? 0.86 : 1}>
+      <mesh castShadow rotation={[0.2, clock * 0.35, 0.4]}>
+        <icosahedronGeometry args={[22, 1]} />
+        <meshStandardMaterial color={flashing ? "#ffffff" : "#c7b8ff"} metalness={0.55} roughness={0.28} emissive="#5b39ff" emissiveIntensity={flashing ? 1.2 : 0.38 + pulse * 0.32} transparent opacity={opacity} />
+      </mesh>
+      {[0, 1, 2].map((index) => (
+        <mesh key={index} rotation={[index === 0 ? Math.PI / 2 : 0, index === 1 ? Math.PI / 2 : 0, clock * (0.35 + index * 0.12)]}>
+          <torusGeometry args={[42 + pulse * 6 + index * 10, 1.6, 8, 56]} />
+          <meshBasicMaterial color={index === 1 ? "#ff9bd5" : "#6ee7ff"} transparent opacity={(0.24 + pulse * 0.18) * opacity} toneMapped={false} />
+        </mesh>
+      ))}
+      <Line points={[[-62, 0, 0], [0, 0, 0], [62, 0, 0]]} color="#9bffe8" lineWidth={1.3} transparent opacity={0.34 + pulse * 0.32} />
+      <Line points={[[0, -48, 0], [0, 0, 0], [0, 48, 0]]} color="#ff9bd5" lineWidth={1.1} transparent opacity={0.26 + pulse * 0.26} />
+      <pointLight color="#9b7bff" intensity={1.3 + pulse * 1.4} distance={230} />
+      <Html center distanceFactor={13} className="target-label story-target-label story-relay-label">
+        {ship.storyTargetKind === "jammer" ? "JAMMER" : "RELAY"} · {Math.round(ship.hull)}/{ship.maxHull}
+      </Html>
+    </group>
+  );
+}
+
 function NpcShip({ ship }: { ship: FlightEntity }) {
   const clock = useGameStore((state) => state.runtime.clock);
   if (ship.role === "freighter") return <FreighterNpcShip ship={ship} />;
+  if (ship.role === "drone") return <DroneNpcShip ship={ship} />;
+  if (ship.role === "relay") return <RelayNpcCore ship={ship} />;
   const color = ship.role === "pirate" ? "#ff4e5f" : ship.role === "patrol" ? "#5dc8ff" : ship.role === "smuggler" ? "#ff9b52" : ship.role === "courier" ? "#9bffe8" : ship.role === "miner" ? "#ffd166" : "#f6c96d";
   const direction = normalize(ship.velocity);
   const yaw = Math.atan2(direction[0], -direction[2]);
@@ -399,6 +464,11 @@ function NpcShip({ ship }: { ship: FlightEntity }) {
         <coneGeometry args={[ship.role === "trader" ? 4.2 : 3, 13, 12]} />
         <meshBasicMaterial color={ship.role === "pirate" ? "#ff5f6d" : "#64e4ff"} transparent opacity={0.36} toneMapped={false} />
       </mesh>
+      {ship.storyTarget ? (
+        <Html center distanceFactor={12} className="target-label story-target-label">
+          {ship.elite ? "ELITE · " : ""}{ship.name.toUpperCase()}
+        </Html>
+      ) : null}
     </group>
   );
 }
@@ -980,7 +1050,7 @@ function TargetLock() {
         <meshBasicMaterial color="#ffdf6e" transparent opacity={0.78} toneMapped={false} />
       </mesh>
       <Html center distanceFactor={12} className="target-label">
-        LOCK · {dist}m
+        {target.storyTarget ? "STORY" : "LOCK"} · {dist}m
       </Html>
     </group>
   );

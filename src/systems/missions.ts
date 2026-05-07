@@ -1,5 +1,5 @@
 import { missionTemplates } from "../data/world";
-import type { CargoHold, FactionId, MissionDefinition, PlayerState, ReputationState } from "../types/game";
+import type { CargoHold, FactionId, MissionDefinition, PlayerState, ReputationState, StoryEncounterTargetDefinition } from "../types/game";
 import { getCargoUsed, getOccupiedCargo } from "./economy";
 import { updateReputation } from "./reputation";
 
@@ -13,7 +13,18 @@ export function cloneMission(mission: MissionDefinition): MissionDefinition {
     cargoProvided: cloneCargo(mission.cargoProvided),
     cargoRequired: cloneCargo(mission.cargoRequired),
     escort: mission.escort ? { ...mission.escort, originPosition: [...mission.escort.originPosition], destinationPosition: [...mission.escort.destinationPosition] } : undefined,
-    salvage: mission.salvage ? { ...mission.salvage, position: [...mission.salvage.position] } : undefined
+    salvage: mission.salvage ? { ...mission.salvage, position: [...mission.salvage.position] } : undefined,
+    storyEncounter: mission.storyEncounter
+      ? {
+          ...mission.storyEncounter,
+          visualCue: mission.storyEncounter.visualCue
+            ? { ...mission.storyEncounter.visualCue, position: [...mission.storyEncounter.visualCue.position] }
+            : undefined,
+          targets: mission.storyEncounter.targets.map((target) => ({ ...target, position: [...target.position] })),
+          requiredTargetIds: [...mission.storyEncounter.requiredTargetIds]
+        }
+      : undefined,
+    storyTargetDestroyedIds: mission.storyTargetDestroyedIds ? [...mission.storyTargetDestroyedIds] : undefined
   };
 }
 
@@ -121,7 +132,8 @@ export function acceptMission(
     accepted: true,
     completed: false,
     failed: false,
-    acceptedAt: gameClock
+    acceptedAt: gameClock,
+    storyTargetDestroyedIds: mission.storyEncounter ? [] : mission.storyTargetDestroyedIds
   };
   return {
     ok: true,
@@ -145,17 +157,19 @@ export function canCompleteMission(
 ): boolean {
   if (!mission.accepted || mission.completed || mission.failed || isMissionExpired(mission, gameClock)) return false;
   if (mission.destinationSystemId !== currentSystemId || mission.destinationStationId !== currentStationId) return false;
-  if (mission.type === "Courier delivery") return mission.cargoProvided ? hasCargo(player.cargo, mission.cargoProvided) : true;
-  if (mission.type === "Cargo transport" && mission.cargoRequired) return hasCargo(player.cargo, mission.cargoRequired);
-  if (mission.type === "Passenger transport") return true;
+  const storyTargetsComplete = areStoryEncounterTargetsComplete(mission);
+  if (mission.type === "Courier delivery") return (mission.cargoProvided ? hasCargo(player.cargo, mission.cargoProvided) : true) && storyTargetsComplete;
+  if (mission.type === "Cargo transport" && mission.cargoRequired) return hasCargo(player.cargo, mission.cargoRequired) && storyTargetsComplete;
+  if (mission.type === "Passenger transport") return storyTargetsComplete;
   if (mission.type === "Mining contract" && mission.targetCommodityId && mission.targetAmount) {
-    return (player.cargo[mission.targetCommodityId] ?? 0) >= mission.targetAmount;
+    return (player.cargo[mission.targetCommodityId] ?? 0) >= mission.targetAmount && storyTargetsComplete;
   }
   if (mission.type === "Pirate bounty" && mission.targetAmount) {
-    return destroyedPirates >= mission.targetAmount;
+    if ((mission.storyEncounter?.requiredTargetIds.length ?? 0) > 0) return storyTargetsComplete;
+    return destroyedPirates >= mission.targetAmount && storyTargetsComplete;
   }
-  if (mission.type === "Escort convoy") return mission.escort?.arrived === true;
-  if (mission.type === "Recovery/salvage") return mission.salvage?.recovered === true;
+  if (mission.type === "Escort convoy") return mission.escort?.arrived === true && storyTargetsComplete;
+  if (mission.type === "Recovery/salvage") return mission.salvage?.recovered === true && storyTargetsComplete;
   return false;
 }
 
@@ -211,4 +225,25 @@ export function markEscortArrived(mission: MissionDefinition): MissionDefinition
 
 export function markSalvageRecovered(mission: MissionDefinition): MissionDefinition {
   return mission.salvage ? { ...cloneMission(mission), salvage: { ...mission.salvage, recovered: true } } : mission;
+}
+
+export function areStoryEncounterTargetsComplete(mission: MissionDefinition): boolean {
+  const required = mission.storyEncounter?.requiredTargetIds ?? [];
+  if (required.length === 0) return true;
+  const destroyed = new Set(mission.storyTargetDestroyedIds ?? []);
+  return required.every((targetId) => destroyed.has(targetId));
+}
+
+export function getStoryEncounterRemainingTargets(mission: MissionDefinition | undefined): StoryEncounterTargetDefinition[] {
+  if (!mission?.storyEncounter) return [];
+  const destroyed = new Set(mission.storyTargetDestroyedIds ?? []);
+  return mission.storyEncounter.targets.filter((target) => mission.storyEncounter?.requiredTargetIds.includes(target.id) && !destroyed.has(target.id));
+}
+
+export function markStoryTargetDestroyed(mission: MissionDefinition, targetId: string): MissionDefinition {
+  if (!mission.storyEncounter?.targets.some((target) => target.id === targetId)) return mission;
+  return {
+    ...cloneMission(mission),
+    storyTargetDestroyedIds: Array.from(new Set([...(mission.storyTargetDestroyedIds ?? []), targetId]))
+  };
 }

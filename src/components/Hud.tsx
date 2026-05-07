@@ -2,7 +2,7 @@ import { commodities, stationById, systemById, useGameStore } from "../state/gam
 import { commodityById, factionNames } from "../data/world";
 import { getOccupiedCargo } from "../systems/economy";
 import { getEquipmentEffects, hasMiningBeam } from "../systems/equipment";
-import { getMissionDeadlineRemaining } from "../systems/missions";
+import { getMissionDeadlineRemaining, getStoryEncounterRemainingTargets } from "../systems/missions";
 import { distance } from "../systems/math";
 import { getNearestNavigationTarget } from "../systems/navigation";
 import { combatAiProfileLabels, getContrabandLawSummary } from "../systems/combatAi";
@@ -50,6 +50,8 @@ export function Hud() {
   const pirateCount = runtime.enemies.filter((ship) => ship.role === "pirate" && ship.hull > 0 && ship.deathTimer === undefined).length;
   const contrabandAmount = player.cargo["illegal-contraband"] ?? 0;
   const scanningPatrol = runtime.enemies.find((ship) => ship.role === "patrol" && ship.aiState === "scan" && (ship.scanProgress ?? 0) > 0);
+  const activeStoryMission = activeMissions.find((mission) => mission.storyCritical);
+  const activeStoryTargets = getStoryEncounterRemainingTargets(activeStoryMission);
   const graceRemaining = Math.max(0, Math.ceil(runtime.graceUntil - runtime.clock));
   const nearestMine = runtime.asteroids
     .filter((asteroid) => asteroid.amount > 0)
@@ -86,6 +88,9 @@ export function Hud() {
         <p>{graceRemaining > 0 ? `Enemy weapons safe for ${graceRemaining}s` : pirateCount > 0 ? `${pirateCount} pirate contact(s)` : "Local space clear"}</p>
         {contrabandAmount > 0 ? <p>Contraband law: {getContrabandLawSummary(currentSystem.id)}</p> : null}
         {scanningPatrol ? <p>Patrol scan {Math.round((scanningPatrol.scanProgress ?? 0) * 100)}%</p> : null}
+        {activeStoryMission?.storyEncounter ? (
+          <p>Main story: {activeStoryTargets.length > 0 ? `clear ${activeStoryTargets.map((target) => target.name).join(", ")}` : activeStoryMission.storyEncounter.completionText}</p>
+        ) : null}
         {nearestNavigation ? (
           <p>
             {nearestNavigation.kind === "station"

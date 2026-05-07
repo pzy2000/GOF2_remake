@@ -212,16 +212,22 @@ describe("content data", () => {
 
   it("connects every Glass Wake chapter to a valid story mission chain", () => {
     expect(glassWakeProtocol.chapters).toHaveLength(8);
+    expect(glassWakeProtocol.epilogue).toContain("Quiet Crown core");
     const missionById = new Map(missionTemplates.map((mission) => [mission.id, mission]));
     for (const [index, chapter] of glassWakeProtocol.chapters.entries()) {
       const mission = missionById.get(chapter.missionId);
       expect(mission).toBeDefined();
       expect(mission?.storyArcId).toBe(glassWakeProtocol.id);
       expect(mission?.storyChapterId).toBe(chapter.id);
+      expect(chapter.fieldObjective.length).toBeGreaterThan(20);
+      expect(chapter.reveal.length).toBeGreaterThan(20);
       if (index === 0) {
         expect(mission?.prerequisiteMissionIds ?? []).toEqual([]);
+        expect(mission?.storyEncounter?.visualCue?.label).toBe("GHOST PING");
       } else {
         expect(mission?.prerequisiteMissionIds).toContain(glassWakeProtocol.chapters[index - 1].missionId);
+        expect(mission?.storyEncounter?.targets.length).toBeGreaterThan(0);
+        expect(mission?.storyEncounter?.requiredTargetIds.length).toBeGreaterThan(0);
       }
     }
   });

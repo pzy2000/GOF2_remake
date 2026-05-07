@@ -66,7 +66,8 @@ import {
   areMissionPrerequisitesMet,
   isMissionExpired,
   markEscortArrived,
-  markSalvageRecovered
+  markSalvageRecovered,
+  markStoryTargetDestroyed
 } from "../systems/missions";
 import { deleteSave as deleteSaveSlot, getLatestSaveSlotId, readSave, readSaveSlots, writeSave } from "../systems/save";
 import { audioSystem } from "../systems/audio";
@@ -178,7 +179,9 @@ function createShipEntity(id: string, role: FlightEntity["role"], position: Vec3
     freighter: { hull: 170, shield: 70, factionId: "free-belt-union" as const },
     courier: { hull: 72, shield: 48, factionId: "solar-directorate" as const },
     miner: { hull: 125, shield: 58, factionId: "free-belt-union" as const },
-    smuggler: { hull: 96, shield: 68, factionId: "vossari-clans" as const }
+    smuggler: { hull: 96, shield: 68, factionId: "vossari-clans" as const },
+    drone: { hull: 92, shield: 86, factionId: "unknown-drones" as const },
+    relay: { hull: 160, shield: 120, factionId: "unknown-drones" as const }
   }[role];
   const names: Record<FlightEntity["role"], string> = {
     pirate: "Knife Wing Pirate",
@@ -187,7 +190,9 @@ function createShipEntity(id: string, role: FlightEntity["role"], position: Vec3
     freighter: "Union Bulk Freighter",
     courier: "Gate Courier",
     miner: "Ore Cutter",
-    smuggler: "Vossari Smuggler"
+    smuggler: "Vossari Smuggler",
+    drone: "Unknown Drone",
+    relay: "Signal Relay"
   };
   const profiles: Record<Exclude<FlightEntity["role"], "pirate">, FlightEntity["aiProfileId"]> = {
     patrol: "law-patrol",
@@ -195,7 +200,9 @@ function createShipEntity(id: string, role: FlightEntity["role"], position: Vec3
     freighter: "freighter",
     courier: "courier",
     miner: "miner",
-    smuggler: "smuggler"
+    smuggler: "smuggler",
+    drone: "drone-hunter",
+    relay: "relay-core"
   };
   const elite = !!pirateProfile?.elite;
   const hull = elite ? Math.round(roleStats.hull * 1.72) : roleStats.hull;
@@ -270,6 +277,59 @@ function createSalvageEntity(mission: MissionDefinition): SalvageEntity | undefi
   };
 }
 
+function createStoryTargetEntity(mission: MissionDefinition, targetId: string): FlightEntity | undefined {
+  const target = mission.storyEncounter?.targets.find((item) => item.id === targetId);
+  if (!target || mission.failed || mission.completed || mission.storyTargetDestroyedIds?.includes(target.id)) return undefined;
+  return {
+    id: target.id,
+    name: target.name,
+    role: target.role,
+    factionId: target.factionId,
+    position: [...target.position],
+    velocity: [0, 0, 0],
+    hull: target.hull,
+    shield: target.shield,
+    maxHull: target.hull,
+    maxShield: target.shield,
+    lastDamageAt: -999,
+    fireCooldown: target.role === "relay" ? 1.1 : 0.55,
+    aiProfileId: target.aiProfileId ?? (target.role === "relay" ? "relay-core" : target.role === "drone" ? "drone-hunter" : target.role === "smuggler" ? "smuggler" : target.elite ? "elite-ace" : "raider"),
+    aiState: "patrol",
+    aiTimer: 0,
+    elite: target.elite,
+    missionId: mission.id,
+    storyTarget: true,
+    storyTargetKind: target.kind
+  };
+}
+
+function createStoryTargetsForMission(systemId: string, mission: MissionDefinition): FlightEntity[] {
+  return (mission.storyEncounter?.targets ?? [])
+    .filter((target) => target.systemId === systemId)
+    .map((target) => createStoryTargetEntity(mission, target.id))
+    .filter(Boolean) as FlightEntity[];
+}
+
+function storyEncounterEffectsForMission(systemId: string, mission: MissionDefinition): RuntimeState["effects"] {
+  const cue = mission.storyEncounter?.visualCue;
+  if (!cue || cue.systemId !== systemId || mission.failed || mission.completed) return [];
+  return [
+    {
+      id: projectileId("glass-wake-ping"),
+      kind: "nav-ring",
+      position: [...cue.position],
+      color: "#ff9bd5",
+      secondaryColor: "#9bffe8",
+      label: cue.label,
+      particleCount: 0,
+      spread: 1,
+      size: 76,
+      life: 1.35,
+      maxLife: 1.35
+    }
+  ];
+}
+
 function missionRuntimeEntities(systemId: string, activeMissions: MissionDefinition[]) {
   return {
     convoys: activeMissions
@@ -279,7 +339,9 @@ function missionRuntimeEntities(systemId: string, activeMissions: MissionDefinit
     salvage: activeMissions
       .filter((mission) => mission.salvage?.systemId === systemId)
       .map(createSalvageEntity)
-      .filter(Boolean) as SalvageEntity[]
+      .filter(Boolean) as SalvageEntity[],
+    storyTargets: activeMissions.flatMap((mission) => createStoryTargetsForMission(systemId, mission)),
+    effects: activeMissions.flatMap((mission) => storyEncounterEffectsForMission(systemId, mission))
   };
 }
 
@@ -303,14 +365,15 @@ function createRuntimeForSystem(systemId: string, activeMissions: MissionDefinit
         createShipEntity(`${systemId}-pirate-${index}`, "pirate", getPirateSpawnPosition(systemId, index), systemId, index)
       ),
       createShipEntity(`${systemId}-patrol-0`, "patrol", [-190, 55, -360], systemId),
-      ...createTrafficForSystem(systemId)
+      ...createTrafficForSystem(systemId),
+      ...missionEntities.storyTargets
     ],
     convoys: missionEntities.convoys,
     salvage: missionEntities.salvage,
     asteroids,
     loot: [],
     projectiles: [],
-    effects: [],
+    effects: missionEntities.effects,
     destroyedPirates: 0,
     mined: {},
     clock: 0,
@@ -327,10 +390,14 @@ function projectileId(prefix: string): string {
 function addMissionRuntimeEntity(runtime: RuntimeState, mission: MissionDefinition, systemId: string): RuntimeState {
   const convoy = (mission.originSystemId === systemId || mission.destinationSystemId === systemId) ? createConvoyEntity(mission) : undefined;
   const salvage = mission.salvage?.systemId === systemId ? createSalvageEntity(mission) : undefined;
+  const storyTargets = createStoryTargetsForMission(systemId, mission).filter((target) => !runtime.enemies.some((enemy) => enemy.id === target.id));
+  const storyEffects = storyEncounterEffectsForMission(systemId, mission);
   return {
     ...runtime,
+    enemies: storyTargets.length > 0 ? [...runtime.enemies, ...storyTargets] : runtime.enemies,
     convoys: convoy && !runtime.convoys.some((item) => item.id === convoy.id) ? [...runtime.convoys, convoy] : runtime.convoys,
-    salvage: salvage && !runtime.salvage.some((item) => item.id === salvage.id) ? [...runtime.salvage, salvage] : runtime.salvage
+    salvage: salvage && !runtime.salvage.some((item) => item.id === salvage.id) ? [...runtime.salvage, salvage] : runtime.salvage,
+    effects: storyEffects.length > 0 ? [...runtime.effects, ...storyEffects] : runtime.effects
   };
 }
 
@@ -496,6 +563,8 @@ function systemTechCeiling(systemId: string): number {
 }
 
 function commodityDropForShip(ship: FlightEntity): { commodityId: CommodityId; amount: number; rarity: LootEntity["rarity"] } {
+  if (ship.role === "relay") return { commodityId: "data-cores", amount: ship.storyTarget ? 2 : 1, rarity: "epic" };
+  if (ship.role === "drone") return { commodityId: "microchips", amount: 1, rarity: "rare" };
   if (ship.role === "pirate") return { commodityId: "illegal-contraband", amount: ship.elite ? 2 : 1, rarity: ship.elite ? "epic" : "rare" };
   if (ship.role === "smuggler") return { commodityId: Math.random() > 0.45 ? "illegal-contraband" : "data-cores", amount: 1, rarity: "rare" };
   if (ship.role === "freighter") return { commodityId: Math.random() > 0.5 ? "ship-components" : "mechanical-parts", amount: 2 + Math.floor(Math.random() * 2), rarity: "uncommon" };
@@ -513,10 +582,12 @@ function equipmentDropForShip(ship: FlightEntity, systemId: string): EquipmentId
     freighter: 0.18,
     courier: 0.14,
     miner: 0.12,
-    smuggler: 0.32
+    smuggler: 0.32,
+    drone: 0.22,
+    relay: 0.34
   };
   if (Math.random() > chanceByRole[ship.role]) return undefined;
-  const ceiling = Math.min(5, systemTechCeiling(systemId) + (ship.role === "pirate" || ship.role === "smuggler" ? 1 : 0));
+  const ceiling = Math.min(5, systemTechCeiling(systemId) + (ship.role === "pirate" || ship.role === "smuggler" || ship.role === "drone" || ship.role === "relay" ? 1 : 0));
   const candidates = equipmentList.filter((equipment) => (equipment.dropWeight ?? 0) > 0 && equipment.techLevel <= ceiling);
   const totalWeight = candidates.reduce((total, equipment) => total + (equipment.dropWeight ?? 0), 0);
   if (totalWeight <= 0) return undefined;
@@ -598,6 +669,19 @@ function addOwnedShipId(player: PlayerState, shipId: string): string[] {
 
 function addUniqueIds(existing: string[], additions: string[]): string[] {
   return Array.from(new Set([...existing, ...additions]));
+}
+
+function hydrateActiveMission(mission: MissionDefinition): MissionDefinition {
+  const template = missionTemplates.find((candidate) => candidate.id === mission.id);
+  if (!template) return cloneMission(mission);
+  const templateClone = cloneMission(template);
+  const savedClone = cloneMission(mission);
+  return {
+    ...templateClone,
+    ...savedClone,
+    storyEncounter: templateClone.storyEncounter,
+    storyTargetDestroyedIds: savedClone.storyTargetDestroyedIds ?? []
+  };
 }
 
 function dialogueOpenPatch(
@@ -853,6 +937,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const resolvedSlotId = slotId ?? getLatestSaveSlotId();
     const save = readSave(undefined, resolvedSlotId);
     if (!save) return false;
+    const activeMissions = save.activeMissions.map(hydrateActiveMission);
     set({
       screen: "flight",
       previousScreen: "menu",
@@ -861,7 +946,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       currentStationId: save.currentStationId,
       gameClock: save.gameClock,
       player: normalizePlayerEquipmentStats(save.player),
-      activeMissions: save.activeMissions,
+      activeMissions,
       completedMissionIds: save.completedMissionIds,
       failedMissionIds: save.failedMissionIds,
       marketState: save.marketState,
@@ -871,7 +956,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       explorationState: normalizeExplorationState(save.explorationState),
       dialogueState: normalizeDialogueState(save.dialogueState),
       activeDialogue: undefined,
-      runtime: createRuntimeForSystem(save.currentSystemId, save.activeMissions),
+      runtime: createRuntimeForSystem(save.currentSystemId, activeMissions),
       autopilot: undefined,
       hasSave: true,
       saveSlots: readSaveSlots(),
@@ -1463,6 +1548,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const remainingProjectiles: ProjectileEntity[] = [];
     const lootDrops: LootEntity[] = [];
     let destroyedPirates = runtime.destroyedPirates;
+    const destroyedStoryTargets: Array<{ missionId: string; targetId: string; name: string }> = [];
     let patrolsShouldAttackPlayer = false;
     let playerAggressionMessage: string | undefined;
     for (const projectile of runtime.projectiles) {
@@ -1520,6 +1606,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           });
           if (damaged.hull <= 0 && ship.hull > 0) {
             if (ship.role === "pirate") destroyedPirates += 1;
+            if (ship.storyTarget && ship.missionId) destroyedStoryTargets.push({ missionId: ship.missionId, targetId: ship.id, name: ship.name });
             lootDrops.push(...lootDropsForDestroyedShip(ship, state.currentSystemId));
             runtime.effects.push({
               id: projectileId("explosion"),
@@ -1594,6 +1681,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           });
           if (damaged.hull <= 0 && ship.hull > 0) {
             if (ship.role === "pirate") destroyedPirates += 1;
+            if (ship.storyTarget && ship.missionId) destroyedStoryTargets.push({ missionId: ship.missionId, targetId: ship.id, name: ship.name });
             lootDrops.push(...lootDropsForDestroyedShip(ship, state.currentSystemId));
             runtime.effects.push({
               id: projectileId("explosion"),
@@ -1633,7 +1721,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
       message: playerAggressionMessage ?? runtime.message
     };
 
-    let activeMissions = state.activeMissions.map((mission) => {
+    let activeMissions = destroyedStoryTargets.length > 0
+      ? state.activeMissions.map((mission) => {
+          const targetKills = destroyedStoryTargets.filter((target) => target.missionId === mission.id);
+          return targetKills.reduce((nextMission, target) => markStoryTargetDestroyed(nextMission, target.targetId), mission);
+        })
+      : state.activeMissions;
+    const storyTargetMessage = destroyedStoryTargets.length > 0
+      ? `${destroyedStoryTargets[destroyedStoryTargets.length - 1].name} destroyed. Story objective updated.`
+      : undefined;
+    activeMissions = activeMissions.map((mission) => {
       const convoy = runtime.convoys.find((item) => item.missionId === mission.id);
       return convoy?.arrived && mission.escort && !mission.escort.arrived ? markEscortArrived(mission) : mission;
     });
@@ -1719,6 +1816,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
               ? expiration.runtime.message
             : contrabandScanMessage
               ? contrabandScanMessage
+            : storyTargetMessage
+              ? storyTargetMessage
             : lootDrops.length
               ? "Target destroyed. Cargo canister released."
               : miningActive

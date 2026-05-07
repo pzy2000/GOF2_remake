@@ -18,6 +18,18 @@ export const missionTemplates: MissionDefinition[] = [
     storyChapterId: "glass-wake-01",
     storyCritical: true,
     retryOnFailure: true,
+    storyEncounter: {
+      fieldObjective: "Deliver the clean sync key and watch for a one-time Glass Wake ghost ping after launch.",
+      twist: "A lawful-looking beacon answers from outside the public registry.",
+      completionText: "Clean sync key delivered; Mirr can now compare the false carrier against trusted Helion traffic.",
+      visualCue: {
+        systemId: "helion-reach",
+        position: [180, 28, -520],
+        label: "GHOST PING"
+      },
+      targets: [],
+      requiredTargetIds: []
+    },
     cargoProvided: { "data-cores": 1 }
   },
   {
@@ -37,6 +49,27 @@ export const missionTemplates: MissionDefinition[] = [
     storyCritical: true,
     prerequisiteMissionIds: ["story-clean-carrier"],
     retryOnFailure: true,
+    storyEncounter: {
+      fieldObjective: "Destroy the Glass Echo Drone guarding the wreck, then recover the probe core.",
+      twist: "The wreck repeats the captain's transponder before the probe core is touched.",
+      completionText: "Glass Echo destroyed and probe core recovered for Mirr analysis.",
+      targets: [
+        {
+          id: "glass-echo-drone",
+          name: "Glass Echo Drone",
+          kind: "drone",
+          role: "drone",
+          systemId: "mirr-vale",
+          position: [330, -20, -500],
+          hull: 78,
+          shield: 74,
+          factionId: "unknown-drones",
+          aiProfileId: "drone-hunter",
+          objective: "Destroy the drone echoing your ship name near the probe wreck."
+        }
+      ],
+      requiredTargetIds: ["glass-echo-drone"]
+    },
     salvage: {
       salvageId: "glass-wake-probe-core",
       name: "Glass Wake Probe Core",
@@ -63,6 +96,27 @@ export const missionTemplates: MissionDefinition[] = [
     storyCritical: true,
     prerequisiteMissionIds: ["story-probe-in-glass"],
     retryOnFailure: true,
+    storyEncounter: {
+      fieldObjective: "Mine three voidglass samples and destroy the Kuro Listener Drone.",
+      twist: "The Listener counts mining pulses and tries to erase the resonance sample before it is complete.",
+      completionText: "Voidglass resonance isolated; Listener Drone destroyed.",
+      targets: [
+        {
+          id: "kuro-listener-drone",
+          name: "Kuro Listener Drone",
+          kind: "drone",
+          role: "drone",
+          systemId: "kuro-belt",
+          position: [245, 28, -455],
+          hull: 86,
+          shield: 82,
+          factionId: "unknown-drones",
+          aiProfileId: "drone-hunter",
+          objective: "Silence the Listener Drone harassing Kuro miners."
+        }
+      ],
+      requiredTargetIds: ["kuro-listener-drone"]
+    },
     targetCommodityId: "voidglass",
     targetAmount: 3
   },
@@ -83,6 +137,40 @@ export const missionTemplates: MissionDefinition[] = [
     storyCritical: true,
     prerequisiteMissionIds: ["story-kuro-resonance"],
     retryOnFailure: true,
+    storyEncounter: {
+      fieldObjective: "Escort the tender while two Handshake Mimic drones try to copy its IFF.",
+      twist: "The mimics answer with Directorate authentication before they fire.",
+      completionText: "Calibration tender survived; the forged military handshake is now evidence.",
+      targets: [
+        {
+          id: "handshake-mimic-alpha",
+          name: "Handshake Mimic Alpha",
+          kind: "drone",
+          role: "drone",
+          systemId: "vantara",
+          position: [260, 60, -440],
+          hull: 92,
+          shield: 86,
+          factionId: "unknown-drones",
+          aiProfileId: "drone-hunter",
+          objective: "Destroy the first mimic harassing Calibration Tender C-9."
+        },
+        {
+          id: "handshake-mimic-beta",
+          name: "Handshake Mimic Beta",
+          kind: "drone",
+          role: "drone",
+          systemId: "vantara",
+          position: [80, 35, -650],
+          hull: 92,
+          shield: 86,
+          factionId: "unknown-drones",
+          aiProfileId: "drone-hunter",
+          objective: "Destroy the second mimic copying Directorate IFF."
+        }
+      ],
+      requiredTargetIds: ["handshake-mimic-alpha", "handshake-mimic-beta"]
+    },
     escort: {
       convoyId: "glass-wake-calibration-tender",
       convoyName: "Calibration Tender C-9",
@@ -108,6 +196,40 @@ export const missionTemplates: MissionDefinition[] = [
     storyCritical: true,
     prerequisiteMissionIds: ["story-bastion-calibration"],
     retryOnFailure: true,
+    storyEncounter: {
+      fieldObjective: "Draw out the False Mercy Relay, destroy it and its guard, then finish the decoy delivery.",
+      twist: "The relay answers the relief manifest before Ashen Freeport receives it.",
+      completionText: "False Mercy Relay destroyed; decoy manifest proved the pirates are rebroadcasting a deeper instruction.",
+      targets: [
+        {
+          id: "false-mercy-relay",
+          name: "False Mercy Relay",
+          kind: "relay",
+          role: "relay",
+          systemId: "ashen-drift",
+          position: [20, -20, -680],
+          hull: 150,
+          shield: 118,
+          factionId: "unknown-drones",
+          aiProfileId: "relay-core",
+          objective: "Break the relay answering the relief cargo manifest."
+        },
+        {
+          id: "false-mercy-guard",
+          name: "False Mercy Guard",
+          kind: "guard",
+          role: "smuggler",
+          systemId: "ashen-drift",
+          position: [-18, -26, -626],
+          hull: 104,
+          shield: 72,
+          factionId: "vossari-clans",
+          aiProfileId: "smuggler",
+          objective: "Defeat the smuggler guard protecting the false relay."
+        }
+      ],
+      requiredTargetIds: ["false-mercy-relay", "false-mercy-guard"]
+    },
     cargoRequired: { "basic-food": 2, "medical-supplies": 1 },
     consumeCargoOnComplete: true
   },
@@ -128,7 +250,55 @@ export const missionTemplates: MissionDefinition[] = [
     storyCritical: true,
     prerequisiteMissionIds: ["story-ashen-decoy-manifest"],
     retryOnFailure: true,
-    targetAmount: 2
+    storyEncounter: {
+      fieldObjective: "Destroy three named Knife Wing relay craft before the carrier is sold into black-market lanes.",
+      twist: "The relay craft carry fragments of an instruction none of their pilots understand.",
+      completionText: "Knife Wing relay wing destroyed; last packet points toward Celest Gate.",
+      targets: [
+        {
+          id: "knife-wing-relay-red",
+          name: "Knife Wing Red Relay",
+          kind: "pirate-relay",
+          role: "pirate",
+          systemId: "ashen-drift",
+          position: [260, 40, -820],
+          hull: 96,
+          shield: 58,
+          factionId: "independent-pirates",
+          aiProfileId: "interceptor",
+          objective: "Destroy the fast Knife Wing relay runner."
+        },
+        {
+          id: "knife-wing-relay-black",
+          name: "Knife Wing Black Relay",
+          kind: "pirate-relay",
+          role: "pirate",
+          systemId: "ashen-drift",
+          position: [-360, 20, -700],
+          hull: 112,
+          shield: 70,
+          factionId: "independent-pirates",
+          aiProfileId: "gunner",
+          objective: "Destroy the heavy Knife Wing broadcast craft."
+        },
+        {
+          id: "broken-choir-ace",
+          name: "Broken Choir Ace",
+          kind: "pirate-relay",
+          role: "pirate",
+          systemId: "ashen-drift",
+          position: [430, 80, -1040],
+          hull: 138,
+          shield: 110,
+          factionId: "independent-pirates",
+          aiProfileId: "elite-ace",
+          elite: true,
+          objective: "Defeat the elite ace auctioning the Glass Wake carrier."
+        }
+      ],
+      requiredTargetIds: ["knife-wing-relay-red", "knife-wing-relay-black", "broken-choir-ace"]
+    },
+    targetAmount: 3
   },
   {
     id: "story-witnesses-to-celest",
@@ -147,6 +317,53 @@ export const missionTemplates: MissionDefinition[] = [
     storyCritical: true,
     prerequisiteMissionIds: ["story-knife-wing-relay"],
     retryOnFailure: true,
+    storyEncounter: {
+      fieldObjective: "Destroy the Witness Jammer and silencer drones near Celest Gate before completing the passenger delivery.",
+      twist: "The jammer broadcasts legal arbitration silence while its drones target the delegation.",
+      completionText: "Witness Jammer destroyed; the delegation's testimony reached Celest Vault.",
+      targets: [
+        {
+          id: "witness-jammer",
+          name: "Witness Jammer",
+          kind: "jammer",
+          role: "relay",
+          systemId: "celest-gate",
+          position: [520, 80, -1030],
+          hull: 142,
+          shield: 126,
+          factionId: "unknown-drones",
+          aiProfileId: "relay-core",
+          objective: "Destroy the jammer suppressing the witness convoy channel."
+        },
+        {
+          id: "celest-silencer-one",
+          name: "Celest Silencer One",
+          kind: "drone",
+          role: "drone",
+          systemId: "celest-gate",
+          position: [600, 120, -980],
+          hull: 92,
+          shield: 92,
+          factionId: "unknown-drones",
+          aiProfileId: "drone-hunter",
+          objective: "Destroy the first silencer drone."
+        },
+        {
+          id: "celest-silencer-two",
+          name: "Celest Silencer Two",
+          kind: "drone",
+          role: "drone",
+          systemId: "celest-gate",
+          position: [460, 60, -1100],
+          hull: 92,
+          shield: 92,
+          factionId: "unknown-drones",
+          aiProfileId: "drone-hunter",
+          objective: "Destroy the second silencer drone."
+        }
+      ],
+      requiredTargetIds: ["witness-jammer", "celest-silencer-one", "celest-silencer-two"]
+    },
     passengerCount: 4
   },
   {
@@ -167,6 +384,53 @@ export const missionTemplates: MissionDefinition[] = [
     prerequisiteMissionIds: ["story-witnesses-to-celest"],
     retryOnFailure: true,
     reputationRewards: { "solar-directorate": 5, "mirr-collective": 7, "free-belt-union": 4 },
+    storyEncounter: {
+      fieldObjective: "Destroy the Crown Warden drones and Quiet Crown Relay Core, recover the core, then return to Celest Vault.",
+      twist: "The relay is not broadcasting orders; it is listening for the ship that closes the wake.",
+      completionText: "Quiet Crown relay destroyed and recovered; Glass Wake is cut out of public navigation.",
+      targets: [
+        {
+          id: "quiet-crown-relay-core",
+          name: "Quiet Crown Relay Core",
+          kind: "relay",
+          role: "relay",
+          systemId: "celest-gate",
+          position: [300, 40, -640],
+          hull: 190,
+          shield: 160,
+          factionId: "unknown-drones",
+          aiProfileId: "relay-core",
+          objective: "Shatter the relay core beneath Celest Crown."
+        },
+        {
+          id: "crown-warden-one",
+          name: "Crown Warden One",
+          kind: "drone",
+          role: "drone",
+          systemId: "celest-gate",
+          position: [230, 80, -590],
+          hull: 108,
+          shield: 104,
+          factionId: "unknown-drones",
+          aiProfileId: "drone-hunter",
+          objective: "Destroy the first Crown Warden drone."
+        },
+        {
+          id: "crown-warden-two",
+          name: "Crown Warden Two",
+          kind: "drone",
+          role: "drone",
+          systemId: "celest-gate",
+          position: [390, 10, -630],
+          hull: 108,
+          shield: 104,
+          factionId: "unknown-drones",
+          aiProfileId: "drone-hunter",
+          objective: "Destroy the second Crown Warden drone."
+        }
+      ],
+      requiredTargetIds: ["quiet-crown-relay-core", "crown-warden-one", "crown-warden-two"]
+    },
     salvage: {
       salvageId: "quiet-crown-relay-core",
       name: "Quiet Crown Relay Core",

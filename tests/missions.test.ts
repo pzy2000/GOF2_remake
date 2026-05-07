@@ -10,11 +10,12 @@ import {
   isMissionAvailable,
   isMissionExpired,
   markEscortArrived,
-  markSalvageRecovered
+  markSalvageRecovered,
+  markStoryTargetDestroyed
 } from "../src/systems/missions";
 import { getOccupiedCargo } from "../src/systems/economy";
 import { createInitialReputation } from "../src/systems/reputation";
-import type { PlayerState } from "../src/types/game";
+import type { MissionDefinition, PlayerState } from "../src/types/game";
 
 function player(): PlayerState {
   const ship = shipById["sparrow-mk1"];
@@ -125,5 +126,27 @@ describe("missions", () => {
     expect(second.retryOnFailure).toBe(true);
     expect(available.map((mission) => mission.id)).toContain(second.id);
     expect(isMissionAvailable(second, [], [first.id, second.id], [second.id])).toBe(false);
+  });
+
+  it("requires story encounter targets before story mission completion", () => {
+    const mission = { ...missionTemplates.find((item) => item.id === "story-probe-in-glass")!, accepted: true, acceptedAt: 0 };
+    const recovered = markSalvageRecovered(mission);
+
+    expect(canCompleteMission(recovered, player(), "mirr-vale", "mirr-lattice", 0, 10)).toBe(false);
+
+    const cleared = markStoryTargetDestroyed(recovered, "glass-echo-drone");
+    expect(canCompleteMission(cleared, player(), "mirr-vale", "mirr-lattice", 0, 10)).toBe(true);
+  });
+
+  it("does not let random pirate kills complete the Knife Wing story relay", () => {
+    const mission = { ...missionTemplates.find((item) => item.id === "story-knife-wing-relay")!, accepted: true, acceptedAt: 0 };
+
+    expect(canCompleteMission(mission, player(), "ashen-drift", "ashen-freeport", 99, 10)).toBe(false);
+
+    let cleared: MissionDefinition = mission;
+    for (const targetId of mission.storyEncounter!.requiredTargetIds) {
+      cleared = markStoryTargetDestroyed(cleared, targetId);
+    }
+    expect(canCompleteMission(cleared, player(), "ashen-drift", "ashen-freeport", 0, 10)).toBe(true);
   });
 });

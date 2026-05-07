@@ -179,7 +179,7 @@ test.describe("browser smoke", () => {
     await expect(page.getByTestId("dialogue-overlay")).toContainText("Clean Carrier Briefing");
     await expect(page.getByTestId("speaker-portrait-helion-handler")).toBeVisible();
     await expect(page.getByTestId("speaker-portrait-helion-handler")).toHaveAttribute("src", /\/assets\/generated\/portraits\/helion-handler\.webp$/);
-    await expect(page.getByTestId("dialogue-overlay")).toContainText("Captain, Helion traffic is handing you a clean sync key.");
+    await expect(page.getByTestId("dialogue-overlay")).toContainText("Captain, Helion traffic is handing you a clean sync key. It has never touched");
     await page.getByTestId("dialogue-overlay").getByRole("button", { name: "Skip" }).click();
     await expect(page.getByTestId("dialogue-overlay")).toHaveCount(0);
     expect((await getGameState(page)).activeMissions.map((mission) => mission.id)).toContain("story-clean-carrier");

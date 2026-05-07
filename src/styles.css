@@ -279,6 +279,18 @@ h3 {
   color: #fff2c5;
 }
 
+.story-target-label {
+  border-color: rgba(255, 155, 213, 0.62);
+  background: rgba(24, 6, 32, 0.78);
+  color: #ffd6ef;
+  letter-spacing: 0;
+}
+
+.story-relay-label {
+  border-color: rgba(155, 255, 232, 0.62);
+  color: #d7fff7;
+}
+
 .waypoint-label {
   min-width: 126px;
   padding: 6px 8px;
@@ -1097,17 +1109,25 @@ button.equipment-trigger {
 
 .story-progress-meter span,
 .story-current-objective span,
+.story-epilogue span,
 .story-entry header span,
-.story-route {
+.story-route,
+.story-field-line,
+.story-reveal-line {
   color: #9db7c9;
   font-size: 0.8rem;
 }
 
-.story-current-objective {
+.story-current-objective,
+.story-epilogue {
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   display: grid;
   gap: 6px;
   padding-top: 12px;
+}
+
+.story-epilogue {
+  border-color: rgba(255, 155, 213, 0.18);
 }
 
 .story-timeline {
@@ -1121,6 +1141,14 @@ button.equipment-trigger {
 .story-entry {
   display: grid;
   gap: 10px;
+}
+
+.story-field-line {
+  color: #dff6ff;
+}
+
+.story-reveal-line {
+  color: #ffd69a;
 }
 
 .exploration-log-section {

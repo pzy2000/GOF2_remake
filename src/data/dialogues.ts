@@ -52,9 +52,11 @@ const storyScenes: DialogueSceneDefinition[] = [
     maskedTitle: "Signal Masked",
     trigger: { kind: "story-accept", missionId: "story-clean-carrier", chapterId: "glass-wake-01" },
     lines: [
-      { speakerId: "helion-handler", text: "Captain, Helion traffic is handing you a clean sync key. Mirr needs something they can trust." },
-      { speakerId: "captain", text: "A clean key for a missing probe. That sounds like someone doubts the accident report." },
-      { speakerId: "helion-handler", text: "We doubt the silence after it. Deliver the key to Mirr Lattice and keep your receiver open." }
+      { speakerId: "helion-handler", text: "Captain, Helion traffic is handing you a clean sync key. It has never touched a pirate repeater, a private courier, or a Mirr filter." },
+      { speakerId: "captain", text: "That is a lot of purity for one missing probe." },
+      { speakerId: "helion-handler", text: "Purity is the point. Mirr needs an honest mirror before they accuse the lane itself of lying." },
+      { speakerId: "ship-ai", text: "Advisory: a weak ghost ping is nested in the launch queue. It is not attached to Helion tower." },
+      { speakerId: "helion-handler", text: "Then keep your receiver open and your mouth shut until Sera sees the key." }
     ]
   },
   {
@@ -64,9 +66,11 @@ const storyScenes: DialogueSceneDefinition[] = [
     maskedTitle: "Signal Masked",
     trigger: { kind: "story-complete", missionId: "story-clean-carrier", chapterId: "glass-wake-01" },
     lines: [
-      { speakerId: "mirr-analyst", text: "The Helion key is clean. The probe answered a beacon that only looked legal." },
-      { speakerId: "captain", text: "So the trap wore a trader's mask." },
-      { speakerId: "mirr-analyst", text: "Yes. We are naming the carrier Glass Wake until we know what woke it." }
+      { speakerId: "mirr-analyst", text: "The Helion key is clean. That is the uncomfortable part." },
+      { speakerId: "captain", text: "The probe did not chase a bad signal." },
+      { speakerId: "mirr-analyst", text: "No. It answered a beacon shaped exactly like lawful trade traffic, but the registry has no birth record for it." },
+      { speakerId: "ship-ai", text: "Ghost ping confirmed. Wake residue persists behind the legal interval." },
+      { speakerId: "mirr-analyst", text: "We are naming the carrier Glass Wake until we know what woke it." }
     ]
   },
   {
@@ -76,9 +80,10 @@ const storyScenes: DialogueSceneDefinition[] = [
     maskedTitle: "Signal Masked",
     trigger: { kind: "story-accept", missionId: "story-probe-in-glass", chapterId: "glass-wake-02" },
     lines: [
-      { speakerId: "mirr-analyst", text: "The probe core is still drifting in the Vale. Its carrier logs are decaying fast." },
-      { speakerId: "captain", text: "Send the recovery vector. I will bring back the heart of it." },
-      { speakerId: "mirr-analyst", text: "Do not trust nearby trade pings. The false beacon may call you by name." }
+      { speakerId: "mirr-analyst", text: "The probe core is still drifting in the Vale. Its carrier logs are decaying, and the debris field has started answering hails in your voiceprint." },
+      { speakerId: "captain", text: "That is new." },
+      { speakerId: "ship-ai", text: "Recovery vector includes an unregistered machine silhouette near the wreck." },
+      { speakerId: "mirr-analyst", text: "We call it Glass Echo. If it repeats your ship name, do not answer. Destroy it and bring back the core." }
     ]
   },
   {
@@ -88,7 +93,9 @@ const storyScenes: DialogueSceneDefinition[] = [
     maskedTitle: "Signal Masked",
     trigger: { kind: "story-complete", missionId: "story-probe-in-glass", chapterId: "glass-wake-02" },
     lines: [
-      { speakerId: "ship-ai", text: "Recovered core contains a wake pattern behind legal traffic intervals." },
+      { speakerId: "ship-ai", text: "Glass Echo destroyed. Recovered core contains a wake pattern behind legal traffic intervals." },
+      { speakerId: "captain", text: "It knew my ship before I touched the wreck." },
+      { speakerId: "mirr-analyst", text: "That means it is not a trap waiting for any ship. It is choosing who trusts the lane." },
       { speakerId: "captain", text: "Can we separate the carrier from the noise?" },
       { speakerId: "mirr-analyst", text: "Not with station filters. Kuro voidglass can split frequencies that software cannot." }
     ]
@@ -102,7 +109,9 @@ const storyScenes: DialogueSceneDefinition[] = [
     lines: [
       { speakerId: "kuro-foreman", text: "You want voidglass, you fly slow and mine clean. The belt hates rushed hands." },
       { speakerId: "captain", text: "This sample may tell us who is hiding inside the beacons." },
-      { speakerId: "kuro-foreman", text: "Then bring enough. One shard sings. Three shards testify." }
+      { speakerId: "kuro-foreman", text: "Then bring enough. One shard sings. Three shards testify." },
+      { speakerId: "ship-ai", text: "Warning: a Listener Drone is counting local drill pulses." },
+      { speakerId: "kuro-foreman", text: "I lost two cutters to that counting. If it blinks red, burn it before it teaches the rocks to lie." }
     ]
   },
   {
@@ -112,9 +121,10 @@ const storyScenes: DialogueSceneDefinition[] = [
     maskedTitle: "Signal Masked",
     trigger: { kind: "story-complete", missionId: "story-kuro-resonance", chapterId: "glass-wake-03" },
     lines: [
-      { speakerId: "kuro-foreman", text: "The voidglass split your ghost signal. It is not pirate work." },
-      { speakerId: "captain", text: "Not pirate, not Mirr, not Directorate. That leaves something worse." },
-      { speakerId: "ship-ai", text: "Pattern match suggests machine-origin timing. Confidence rising." }
+      { speakerId: "kuro-foreman", text: "The Listener is scrap, and the voidglass split your ghost signal like a vein under pressure." },
+      { speakerId: "captain", text: "Not pirate, not Mirr, not Directorate." },
+      { speakerId: "ship-ai", text: "Pattern match suggests machine-origin timing. Confidence rising." },
+      { speakerId: "kuro-foreman", text: "Then stop calling it a ghost. Ghosts haunt. Machines wait." }
     ]
   },
   {
@@ -124,9 +134,11 @@ const storyScenes: DialogueSceneDefinition[] = [
     maskedTitle: "Signal Masked",
     trigger: { kind: "story-accept", missionId: "story-bastion-calibration", chapterId: "glass-wake-04" },
     lines: [
-      { speakerId: "vantara-officer", text: "Directorate command will provide a calibration tender. Keep it intact through the burn." },
-      { speakerId: "captain", text: "If the wake can mimic military traffic, your tender becomes bait." },
-      { speakerId: "vantara-officer", text: "Correct. Make the bait survive long enough to prove the bite." }
+      { speakerId: "vantara-officer", text: "Directorate command will provide Calibration Tender C-9. It carries a handshake we do not share with civilians." },
+      { speakerId: "captain", text: "If the wake answers that, your secure lane is already compromised." },
+      { speakerId: "vantara-officer", text: "Correct. Command hates that sentence, so they require it in triplicate." },
+      { speakerId: "ship-ai", text: "Two Handshake Mimic drones are expected to shadow the burn." },
+      { speakerId: "vantara-officer", text: "Keep the tender alive long enough to record the forgery." }
     ]
   },
   {
@@ -136,9 +148,11 @@ const storyScenes: DialogueSceneDefinition[] = [
     maskedTitle: "Signal Masked",
     trigger: { kind: "story-complete", missionId: "story-bastion-calibration", chapterId: "glass-wake-04" },
     lines: [
-      { speakerId: "vantara-officer", text: "Calibration confirmed. The wake can wear Directorate handshakes." },
+      { speakerId: "vantara-officer", text: "Calibration confirmed. The mimics answered with Directorate authentication before they fired." },
       { speakerId: "captain", text: "Then every patrol lane is a possible lure." },
-      { speakerId: "vantara-officer", text: "And Ashen Freeport is already rebroadcasting something they should not possess." }
+      { speakerId: "vantara-officer", text: "And every officer who called this a research accident just lost the luxury." },
+      { speakerId: "ship-ai", text: "Forged handshake packets include a black-market rebroadcast trail toward Ashen Drift." },
+      { speakerId: "vantara-officer", text: "Ashen Freeport is selling something they should not possess." }
     ]
   },
   {
@@ -150,7 +164,9 @@ const storyScenes: DialogueSceneDefinition[] = [
     lines: [
       { speakerId: "ashen-broker", text: "Relief cargo makes a beautiful lie. Pirates open doors for pity and profit." },
       { speakerId: "captain", text: "You want me to deliver bait to Ashen Freeport." },
-      { speakerId: "ashen-broker", text: "I want you to watch which beacon answers first. That answer is the proof." }
+      { speakerId: "ashen-broker", text: "I want you to deliver hope with a forged shadow. The first beacon to answer is either hungry or guilty." },
+      { speakerId: "ship-ai", text: "Decoy manifest seeded. Expected false reply: Mercy-class relief priority." },
+      { speakerId: "ashen-broker", text: "If the False Mercy Relay wakes up, break it before it sells your kindness back to you." }
     ]
   },
   {
@@ -160,8 +176,10 @@ const storyScenes: DialogueSceneDefinition[] = [
     maskedTitle: "Signal Masked",
     trigger: { kind: "story-complete", missionId: "story-ashen-decoy-manifest", chapterId: "glass-wake-05" },
     lines: [
-      { speakerId: "ashen-broker", text: "The Knife Wing repeated the carrier, but they did not write it." },
+      { speakerId: "ashen-broker", text: "False Mercy is gone. The Knife Wing repeated the carrier, but they did not write it." },
       { speakerId: "captain", text: "They are a mirror, not the source." },
+      { speakerId: "ashen-broker", text: "A mirror with a price tag. Their relay pilots are auctioning fragments of a song they cannot hear." },
+      { speakerId: "ship-ai", text: "Three Knife Wing relay craft marked." },
       { speakerId: "ashen-broker", text: "Break the mirror before every black-market lane learns the tune." }
     ]
   },
@@ -172,9 +190,11 @@ const storyScenes: DialogueSceneDefinition[] = [
     maskedTitle: "Signal Masked",
     trigger: { kind: "story-accept", missionId: "story-knife-wing-relay", chapterId: "glass-wake-06" },
     lines: [
-      { speakerId: "ashen-broker", text: "Two Knife Wing contacts are carrying relay keys. They will run if they understand what you are." },
-      { speakerId: "captain", text: "Then I will introduce myself at weapons range." },
-      { speakerId: "ship-ai", text: "Combat routing marked. Priority targets will be sorted above common pirate traffic." }
+      { speakerId: "ashen-broker", text: "Three Knife Wing contacts are carrying relay keys: Red Relay, Black Relay, and the Broken Choir Ace." },
+      { speakerId: "captain", text: "The names sound theatrical." },
+      { speakerId: "ashen-broker", text: "That is how amateurs make themselves memorable before they die." },
+      { speakerId: "ship-ai", text: "Combat routing marked. Story relay targets will sort above common pirate traffic." },
+      { speakerId: "ashen-broker", text: "Kill the auction before the bidders learn what they are buying." }
     ]
   },
   {
@@ -184,9 +204,11 @@ const storyScenes: DialogueSceneDefinition[] = [
     maskedTitle: "Signal Masked",
     trigger: { kind: "story-complete", missionId: "story-knife-wing-relay", chapterId: "glass-wake-06" },
     lines: [
-      { speakerId: "ship-ai", text: "Knife Wing relay packets terminated. Last vector points toward Celest Gate." },
+      { speakerId: "ship-ai", text: "Knife Wing relay packets terminated. Broken Choir carried a final vector toward Celest Gate." },
       { speakerId: "captain", text: "Luxury traffic, clean arbitration, perfect cover." },
-      { speakerId: "ashen-broker", text: "Bring witnesses. Celest listens better when liability has names." }
+      { speakerId: "ashen-broker", text: "And perfect denial. Celest can call pirates a local problem unless witnesses force the word shared." },
+      { speakerId: "union-witness", text: "I can bring miners, analysts, and one Directorate seal. None of them like each other." },
+      { speakerId: "ashen-broker", text: "Good. Celest listens better when liability has names." }
     ]
   },
   {
@@ -198,7 +220,9 @@ const storyScenes: DialogueSceneDefinition[] = [
     lines: [
       { speakerId: "union-witness", text: "I have miners, analysts, and a Directorate seal packed into one nervous delegation." },
       { speakerId: "captain", text: "They ride quiet, or they do not ride." },
-      { speakerId: "union-witness", text: "They know. Get us to Celest Vault and the blockade vote becomes real." }
+      { speakerId: "union-witness", text: "They know. The Mirr analyst is scared, the officer is offended, and my miners want to punch both." },
+      { speakerId: "ship-ai", text: "Celest approach includes a Witness Jammer broadcasting arbitration silence." },
+      { speakerId: "union-witness", text: "Then make the silence loud. Get us to Celest Vault and the blockade vote becomes real." }
     ]
   },
   {
@@ -209,7 +233,9 @@ const storyScenes: DialogueSceneDefinition[] = [
     trigger: { kind: "story-complete", missionId: "story-witnesses-to-celest", chapterId: "glass-wake-07" },
     lines: [
       { speakerId: "celest-archivist", text: "The testimony is sealed. Celest Vault recognizes a shared emergency." },
-      { speakerId: "captain", text: "Then open the path to the relay core." },
+      { speakerId: "captain", text: "That sounded almost reluctant." },
+      { speakerId: "celest-archivist", text: "Archives prefer certainty. Today we have fear, signatures, and enough liability to move a gate." },
+      { speakerId: "mirr-analyst", text: "Open the path to the relay core." },
       { speakerId: "celest-archivist", text: "Path opened. If the crown goes quiet, the lanes may breathe again." }
     ]
   },
@@ -220,9 +246,11 @@ const storyScenes: DialogueSceneDefinition[] = [
     maskedTitle: "Signal Masked",
     trigger: { kind: "story-accept", missionId: "story-quiet-crown-relay", chapterId: "glass-wake-08" },
     lines: [
-      { speakerId: "celest-archivist", text: "The Quiet Crown relay sits below premium traffic. Touch it gently until you can cut it clean." },
+      { speakerId: "celest-archivist", text: "The Quiet Crown relay sits below premium traffic. It is quiet because it is listening." },
       { speakerId: "captain", text: "Recover the core, shut down the carrier, leave the gate standing." },
-      { speakerId: "ship-ai", text: "Recovery vector loaded. Unknown machine timing remains active inside the carrier." }
+      { speakerId: "ship-ai", text: "Two Crown Warden drones and one relay core marked. Unknown machine timing remains active inside the carrier." },
+      { speakerId: "mirr-analyst", text: "Do not just pull the core. Break the wardens first, or the relay may write your ship into its next lure." },
+      { speakerId: "celest-archivist", text: "When you cut it, every lane will hear the absence." }
     ]
   },
   {
@@ -234,7 +262,10 @@ const storyScenes: DialogueSceneDefinition[] = [
     lines: [
       { speakerId: "ship-ai", text: "Glass Wake carrier removed from public lanes. Relay core retains one final listener trace." },
       { speakerId: "captain", text: "Unknown Drones." },
-      { speakerId: "mirr-analyst", text: "They heard us close the door. Next time, they may knock." }
+      { speakerId: "mirr-analyst", text: "They were not shouting through the lanes. They were waiting to learn who would close them." },
+      { speakerId: "celest-archivist", text: "Celest traffic is clean again. The archive will call this an emergency resolved." },
+      { speakerId: "captain", text: "And you?" },
+      { speakerId: "mirr-analyst", text: "I will call it a door closing from the wrong side. Next time, they may knock." }
     ]
   }
 ];

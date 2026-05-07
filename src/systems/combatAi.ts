@@ -70,7 +70,9 @@ export const combatAiProfileLabels: Record<FlightEntity["aiProfileId"], string> 
   courier: "Courier",
   miner: "Miner",
   smuggler: "Smuggler",
-  "elite-ace": "Elite Ace"
+  "elite-ace": "Elite Ace",
+  "drone-hunter": "Unknown Drone",
+  "relay-core": "Relay Core"
 };
 
 const combatProfiles: Record<FlightEntity["aiProfileId"], CombatProfile> = {
@@ -83,7 +85,9 @@ const combatProfiles: Record<FlightEntity["aiProfileId"], CombatProfile> = {
   courier: { label: "Courier", speedMultiplier: 1.2, damageMultiplier: 0.62, rangeMultiplier: 0.78, strafe: 0.52, projectileSpeed: 460, cooldownMultiplier: 0.96 },
   miner: { label: "Miner", speedMultiplier: 0.82, damageMultiplier: 0.68, rangeMultiplier: 0.72, strafe: 0.06, projectileSpeed: 390, cooldownMultiplier: 1.35 },
   smuggler: { label: "Smuggler", speedMultiplier: 1.14, damageMultiplier: 0.92, rangeMultiplier: 0.95, strafe: 0.66, projectileSpeed: 500, cooldownMultiplier: 0.9 },
-  "elite-ace": { label: "Elite Ace", speedMultiplier: 1.28, damageMultiplier: 1.55, rangeMultiplier: 1.18, strafe: 0.95, projectileSpeed: 560, cooldownMultiplier: 0.74 }
+  "elite-ace": { label: "Elite Ace", speedMultiplier: 1.28, damageMultiplier: 1.55, rangeMultiplier: 1.18, strafe: 0.95, projectileSpeed: 560, cooldownMultiplier: 0.74 },
+  "drone-hunter": { label: "Unknown Drone", speedMultiplier: 1.34, damageMultiplier: 1.1, rangeMultiplier: 1.05, strafe: 0.9, projectileSpeed: 540, cooldownMultiplier: 0.82 },
+  "relay-core": { label: "Relay Core", speedMultiplier: 0, damageMultiplier: 0.88, rangeMultiplier: 1.05, strafe: 0, projectileSpeed: 430, cooldownMultiplier: 1.35 }
 };
 
 export function getContrabandLaw(systemId: string): ContrabandLaw {
@@ -120,26 +124,31 @@ export function sortPirateTargets(enemies: FlightEntity[]): FlightEntity[] {
 
 export function sortTargetableShips(enemies: FlightEntity[]): FlightEntity[] {
   const priority: Record<FlightEntity["role"], number> = {
-    pirate: 0,
-    smuggler: 1,
-    patrol: 2,
-    freighter: 3,
-    trader: 4,
-    courier: 5,
-    miner: 6
+    relay: 0,
+    drone: 1,
+    pirate: 2,
+    smuggler: 3,
+    patrol: 4,
+    freighter: 5,
+    trader: 6,
+    courier: 7,
+    miner: 8
   };
   return enemies
     .filter((ship) => ship.hull > 0 && ship.deathTimer === undefined)
-    .sort((a, b) => priority[a.role] - priority[b.role] || Number(!!b.elite) - Number(!!a.elite) || a.id.localeCompare(b.id));
+    .sort((a, b) => Number(!!b.storyTarget) - Number(!!a.storyTarget) || priority[a.role] - priority[b.role] || Number(!!b.elite) - Number(!!a.elite) || a.id.localeCompare(b.id));
 }
 
 export function isHostileToPlayer(ship: FlightEntity): boolean {
-  return ship.role === "pirate" || (ship.aiState === "attack" && ship.aiTargetId === "player");
+  return !!ship.storyTarget || ship.role === "pirate" || ship.role === "drone" || ship.role === "relay" || (ship.aiState === "attack" && ship.aiTargetId === "player");
 }
 
 export function resolveCombatAiStep(input: CombatAiStepInput): CombatAiStep {
   const profile = combatProfiles[input.ship.aiProfileId] ?? combatProfiles.raider;
   if (input.ship.role === "patrol") return resolvePatrolStep(input, profile);
+  if (input.ship.role === "drone") return resolveDroneStep(input, profile);
+  if (input.ship.role === "relay") return resolveRelayStep(input, profile);
+  if (input.ship.storyTarget && input.ship.role === "smuggler") return resolveDroneStep(input, profile);
   if (input.ship.role !== "pirate") return resolveCivilianStep(input, profile);
   return resolvePirateStep(input, profile);
 }
@@ -203,7 +212,7 @@ function resolvePatrolStep(input: CombatAiStepInput, profile: CombatProfile): Co
   const activePirates = sortPirateTargets(input.pirates);
   const outlawTarget = [
     ...activePirates,
-    ...input.ships.filter((ship) => ship.role === "smuggler" && ship.hull > 0 && ship.deathTimer === undefined)
+    ...input.ships.filter((ship) => ["smuggler", "drone", "relay"].includes(ship.role) && ship.hull > 0 && ship.deathTimer === undefined)
   ]
     .map((ship) => ({ ship, dist: distance(input.ship.position, ship.position) }))
     .sort((a, b) => a.dist - b.dist)[0]?.ship;
@@ -271,6 +280,81 @@ function resolvePatrolStep(input: CombatAiStepInput, profile: CombatProfile): Co
     },
     desiredDirection: getIdlePatrolDirection(input.systemId, input.ship.position),
     speed: 118 * profile.speedMultiplier
+  };
+}
+
+function resolveDroneStep(input: CombatAiStepInput, profile: CombatProfile): CombatAiStep {
+  const convoyTarget = input.convoys
+    .filter((convoy) => convoy.hull > 0 && !convoy.arrived)
+    .map((convoy) => ({ convoy, dist: distance(input.ship.position, convoy.position) }))
+    .filter((candidate) => candidate.dist < 980)
+    .sort((a, b) => a.dist - b.dist)[0]?.convoy;
+  const targetPosition = convoyTarget?.position ?? input.playerPosition;
+  const targetId = convoyTarget?.id ?? "player";
+  const toTarget = normalize(sub(targetPosition, input.ship.position));
+  const distToTarget = distance(input.ship.position, targetPosition);
+  const recentlyHit = input.now - input.ship.lastDamageAt < 0.6;
+  const aiState: FlightEntity["aiState"] = distToTarget < 640 ? (recentlyHit ? "evade" : "attack") : "intercept";
+  const desiredDirection = aiState === "evade"
+    ? normalize(add(scale(toTarget, -0.45), scale(sideVector(toTarget), profile.strafe)))
+    : normalize(add(toTarget, scale(sideVector(toTarget), profile.strafe)));
+  const canFire = input.ship.fireCooldown <= 0 && distToTarget < 640 * profile.rangeMultiplier;
+  return {
+    ship: {
+      ...input.ship,
+      aiState,
+      aiTargetId: targetId,
+      aiTimer: nextAiTimer(input.ship, aiState, input.delta),
+      scanProgress: undefined
+    },
+    desiredDirection,
+    speed: 118 * profile.speedMultiplier,
+    fire: canFire
+      ? {
+          owner: "enemy",
+          targetPosition,
+          targetId: convoyTarget?.id,
+          damage: Math.round(11 * profile.damageMultiplier),
+          projectileSpeed: profile.projectileSpeed,
+          cooldownMin: 0.62 * profile.cooldownMultiplier,
+          cooldownMax: 1.02 * profile.cooldownMultiplier
+        }
+      : undefined
+  };
+}
+
+function resolveRelayStep(input: CombatAiStepInput, profile: CombatProfile): CombatAiStep {
+  const convoyTarget = input.convoys
+    .filter((convoy) => convoy.hull > 0 && !convoy.arrived)
+    .map((convoy) => ({ convoy, dist: distance(input.ship.position, convoy.position) }))
+    .filter((candidate) => candidate.dist < 720)
+    .sort((a, b) => a.dist - b.dist)[0]?.convoy;
+  const playerDistance = distance(input.ship.position, input.playerPosition);
+  const targetPosition = convoyTarget?.position ?? input.playerPosition;
+  const targetId = convoyTarget?.id ?? "player";
+  const targetDistance = convoyTarget ? distance(input.ship.position, convoyTarget.position) : playerDistance;
+  const canFire = input.ship.fireCooldown <= 0 && targetDistance < 560 * profile.rangeMultiplier;
+  return {
+    ship: {
+      ...input.ship,
+      aiState: canFire ? "attack" : "patrol",
+      aiTargetId: targetId,
+      aiTimer: nextAiTimer(input.ship, canFire ? "attack" : "patrol", input.delta),
+      scanProgress: undefined
+    },
+    desiredDirection: [0, 0, 0],
+    speed: 0,
+    fire: canFire
+      ? {
+          owner: "enemy",
+          targetPosition,
+          targetId: convoyTarget?.id,
+          damage: Math.round(9 * profile.damageMultiplier),
+          projectileSpeed: profile.projectileSpeed,
+          cooldownMin: 0.95 * profile.cooldownMultiplier,
+          cooldownMax: 1.45 * profile.cooldownMultiplier
+        }
+      : undefined
   };
 }
 
