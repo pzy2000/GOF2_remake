@@ -19,7 +19,7 @@ import type {
   Screen,
   StationTab
 } from "../types/game";
-import type { EconomyServiceStatus } from "../types/economy";
+import type { EconomyEvent, EconomyServiceStatus } from "../types/economy";
 
 export interface GameStore {
   screen: Screen;
@@ -34,6 +34,7 @@ export interface GameStore {
   player: PlayerState;
   runtime: RuntimeState;
   economyService: EconomyServiceStatus;
+  economyEvents: EconomyEvent[];
   autopilot?: AutoPilotState;
   input: FlightInput;
   gameClock: number;

@@ -11,9 +11,13 @@ import {
   getMarketEntry,
   getMarketTag,
   getOccupiedCargo,
-  getTradeHints,
   isCommodityVisibleInMarket
 } from "../systems/economy";
+import {
+  getAvailableMarketGapMissions,
+  getMarketSupplyBrief,
+  isMarketGapMissionId
+} from "../systems/marketMissions";
 import { reputationLabel } from "../systems/reputation";
 import { GalaxyMap } from "./GalaxyMap";
 import { AtlasIcon } from "./AtlasIcon";
@@ -594,13 +598,16 @@ function MissionBoardTab() {
   const player = useGameStore((state) => state.player);
   const runtime = useGameStore((state) => state.runtime);
   const activeMissions = useGameStore((state) => state.activeMissions);
+  const marketState = useGameStore((state) => state.marketState);
   const completedMissionIds = useGameStore((state) => state.completedMissionIds);
   const failedMissionIds = useGameStore((state) => state.failedMissionIds);
   const gameClock = useGameStore((state) => state.gameClock);
   const acceptMission = useGameStore((state) => state.acceptMission);
   const completeMission = useGameStore((state) => state.completeMission);
   const reputation = useGameStore((state) => state.reputation);
-  const available = getAvailableMissionsForSystem(missionTemplates, currentSystemId, activeMissions, completedMissionIds, failedMissionIds);
+  const staticAvailable = getAvailableMissionsForSystem(missionTemplates, currentSystemId, activeMissions, completedMissionIds, failedMissionIds);
+  const marketGapAvailable = getAvailableMarketGapMissions({ marketState, systemId: currentSystemId, activeMissions });
+  const available = [...staticAvailable, ...marketGapAvailable];
   return (
     <div className="split-layout">
       <aside className="reputation-panel">
@@ -622,6 +629,7 @@ function MissionBoardTab() {
             const storyChapter = mission.storyArcId === glassWakeProtocol.id
               ? glassWakeProtocol.chapters.find((chapter) => chapter.id === mission.storyChapterId)
               : undefined;
+            const marketGap = isMarketGapMissionId(mission.id);
             const remainingStoryTargets = getStoryEncounterRemainingTargets(mission);
             return (
               <article key={mission.id} className="mission-card" data-testid={`mission-card-${mission.id}`}>
@@ -629,6 +637,7 @@ function MissionBoardTab() {
                   <AtlasIcon icon={getFactionIcon(mission.factionId)} manifest={manifest} size={40} />
                   <h3>{mission.title}</h3>
                   {storyChapter ? <span className="story-pill">Main Story {storyChapter.order.toString().padStart(2, "0")}</span> : null}
+                  {marketGap ? <span className="story-pill">Market Gap</span> : null}
                 </div>
                 <p>{mission.type} · {factionNames[mission.factionId]} · Reward {mission.reward} cr</p>
                 <p>{mission.description}</p>
@@ -864,12 +873,31 @@ function getCraftMissingText(player: ReturnType<typeof useGameStore.getState>["p
 function LoungeTab() {
   const currentSystem = useGameStore((state) => systemById[state.currentSystemId]);
   const marketState = useGameStore((state) => state.marketState);
-  const hints = getTradeHints(marketState, 3);
+  const economyEvents = useGameStore((state) => state.economyEvents);
+  const supplyBrief = getMarketSupplyBrief(marketState, currentSystem.id, economyEvents);
   return (
     <div className="lounge">
       <h2>Lounge</h2>
-      <p>Dockhands in {currentSystem.name} are comparing live stock sheets and favor these runs:</p>
-      {hints.map((hint) => (
+      <p>Dockhands in {currentSystem.name} are comparing live stock sheets and supply pressure:</p>
+      {supplyBrief.shortages.length > 0 ? (
+        supplyBrief.shortages.map((signal) => (
+          <p key={`short-${signal.stationId}-${signal.commodityId}`}>
+            Shortage: {stationById[signal.stationId].name} needs {commodityById[signal.commodityId].name} · {signal.severity.toUpperCase()}
+          </p>
+        ))
+      ) : (
+        <p>No critical station shortages on the public sheet.</p>
+      )}
+      {supplyBrief.surpluses.map((signal) => (
+        <p key={`surplus-${signal.stationId}-${signal.commodityId}`}>
+          Surplus: {stationById[signal.stationId].name} is heavy on {commodityById[signal.commodityId].name}.
+        </p>
+      ))}
+      {supplyBrief.recentEvents.map((event) => (
+        <p key={event.id}>Supply feed: {event.message}</p>
+      ))}
+      <p>Favored live routes:</p>
+      {supplyBrief.routes.map((hint) => (
         <p key={`${hint.commodityId}-${hint.fromStationId}-${hint.toStationId}`}>
           {hint.commodityName}: {hint.fromStationName} → {hint.toStationName} · +{hint.profit} cr/unit
         </p>

@@ -8,7 +8,7 @@ export function applyEconomySnapshotPatch(
   state: GameStore,
   snapshot: EconomySnapshot,
   lastEvent?: string
-): Pick<GameStore, "marketState" | "runtime" | "economyService"> {
+): Pick<GameStore, "marketState" | "runtime" | "economyService" | "economyEvents"> {
   const backendNpcIds = new Set(snapshot.visibleNpcs.map((npc) => npc.id));
   const preservedEnemies = state.runtime.enemies.filter((ship) => {
     if (ship.storyTarget) return true;
@@ -33,7 +33,8 @@ export function applyEconomySnapshotPatch(
       snapshotId: snapshot.snapshotId,
       lastEvent,
       lastError: undefined
-    }
+    },
+    economyEvents: snapshot.recentEvents
   };
 }
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { stationById } from "../src/data/world";
 import { getMarketEntry } from "../src/systems/economy";
+import { getAvailableMarketGapMissions } from "../src/systems/marketMissions";
 import { createInitialEconomyState, tickEconomyState } from "../src/systems/economySimulation";
 
 describe("NPC economy simulation", () => {
@@ -85,5 +86,39 @@ describe("NPC economy simulation", () => {
     expect(trader.cargo.iron).toBe(9);
     expect(destinationAfter.stock - destinationBefore.stock).toBeCloseTo(1, 1);
     expect(trader.task.kind).toBe("selling");
+  });
+
+  it("lets NPC deliveries ease shortages and remove generated market contracts", () => {
+    const state = createInitialEconomyState();
+    const freighter = state.npcs.find((npc) => npc.id === "econ-helion-reach-freighter-1")!;
+    const station = stationById["helion-prime"];
+    const entry = getMarketEntry(state.marketState, station.id, "basic-food");
+    state.marketState[station.id] = {
+      ...state.marketState[station.id],
+      "basic-food": {
+        ...entry,
+        stock: 3,
+        demand: entry.baselineDemand + 0.2
+      }
+    };
+    expect(getAvailableMarketGapMissions({ marketState: state.marketState, systemId: "helion-reach", activeMissions: [] })).toHaveLength(1);
+
+    freighter.systemId = station.systemId;
+    freighter.position = [...station.position];
+    freighter.cargo = { "basic-food": 20 };
+    freighter.task = {
+      kind: "selling",
+      commodityId: "basic-food",
+      destinationStationId: station.id,
+      originStationId: "helion-prime",
+      progress: 1,
+      startedAt: state.clock
+    };
+
+    tickEconomyState(state, 1);
+
+    expect(getMarketEntry(state.marketState, station.id, "basic-food").stock).toBeGreaterThan(3);
+    expect(getAvailableMarketGapMissions({ marketState: state.marketState, systemId: "helion-reach", activeMissions: [] })).toHaveLength(0);
+    expect(state.recentEvents.some((event) => event.type === "npc-trade" && event.commodityId === "basic-food")).toBe(true);
   });
 });

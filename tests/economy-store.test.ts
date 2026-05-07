@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createAsteroidsForSystem } from "../src/systems/asteroids";
-import { createInitialMarketState } from "../src/systems/economy";
+import { createInitialMarketState, getMarketEntry } from "../src/systems/economy";
+import { getAvailableMarketGapMissions } from "../src/systems/marketMissions";
 import type { EconomySnapshot } from "../src/types/economy";
+import type { CommodityId, MarketState } from "../src/types/game";
 
 class MemoryStorage implements Storage {
   private data = new Map<string, string>();
@@ -31,6 +33,17 @@ async function freshStore() {
   const module = await import("../src/state/gameStore");
   module.useGameStore.getState().newGame();
   return module.useGameStore;
+}
+
+function setMarketEntry(marketState: MarketState, stationId: string, commodityId: CommodityId, patch: { stock?: number; demand?: number }) {
+  const entry = getMarketEntry(marketState, stationId, commodityId);
+  marketState[stationId] = {
+    ...marketState[stationId],
+    [commodityId]: {
+      ...entry,
+      ...patch
+    }
+  };
 }
 
 beforeEach(() => {
@@ -114,5 +127,85 @@ describe("economy store integration", () => {
     expect(state.economyService.status).toBe("offline");
     expect(state.player.cargo["basic-food"]).toBe(4);
     expect(state.runtime.message).toContain("Bought 1 Basic Food");
+  });
+
+  it("accepts generated market gap contracts and applies delivery to local market pressure", async () => {
+    const store = await freshStore();
+    const marketState = createInitialMarketState();
+    const entry = getMarketEntry(marketState, "helion-prime", "basic-food");
+    setMarketEntry(marketState, "helion-prime", "basic-food", { stock: 1, demand: entry.baselineDemand + 0.45 });
+    store.setState({ marketState });
+    store.getState().dockAt("helion-prime");
+
+    const mission = getAvailableMarketGapMissions({
+      marketState: store.getState().marketState,
+      systemId: "helion-reach",
+      activeMissions: []
+    })[0];
+    expect(mission.id).toMatch(/^market-gap:/);
+
+    store.getState().acceptMission(mission.id);
+    expect(store.getState().activeMissions[0]).toMatchObject({ id: mission.id, accepted: true });
+
+    store.setState((state) => ({
+      player: {
+        ...state.player,
+        cargo: {
+          ...state.player.cargo,
+          "basic-food": mission.cargoRequired!["basic-food"]
+        }
+      }
+    }));
+    const before = getMarketEntry(store.getState().marketState, "helion-prime", "basic-food");
+    store.getState().completeMission(mission.id);
+    const after = getMarketEntry(store.getState().marketState, "helion-prime", "basic-food");
+
+    expect(store.getState().activeMissions.some((active) => active.id === mission.id)).toBe(false);
+    expect(store.getState().completedMissionIds).not.toContain(mission.id);
+    expect(after.stock).toBeGreaterThan(before.stock);
+    expect(after.demand).toBeLessThan(before.demand);
+    expect(store.getState().runtime.message).toContain("Market pressure eased");
+  });
+
+  it("keeps accepted market gap missions through economy snapshot refreshes", async () => {
+    const store = await freshStore();
+    const marketState = createInitialMarketState();
+    const entry = getMarketEntry(marketState, "helion-prime", "basic-food");
+    setMarketEntry(marketState, "helion-prime", "basic-food", { stock: 1, demand: entry.baselineDemand + 0.45 });
+    store.setState({ marketState });
+    const mission = getAvailableMarketGapMissions({ marketState, systemId: "helion-reach", activeMissions: [] })[0];
+    store.getState().acceptMission(mission.id);
+
+    const snapshot: EconomySnapshot = {
+      version: 1,
+      snapshotId: 77,
+      clock: 15,
+      marketState: createInitialMarketState(),
+      status: "connected",
+      recentEvents: [
+        {
+          id: "econ-event-test",
+          type: "npc-trade",
+          clock: 14,
+          message: "Union Bulk Freighter sold 4 Basic Food at Helion Prime.",
+          systemId: "helion-reach",
+          stationId: "helion-prime",
+          commodityId: "basic-food",
+          amount: 4,
+          snapshotId: 77
+        }
+      ],
+      resourceBelts: [],
+      visibleNpcs: []
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(JSON.stringify(snapshot), { status: 200, headers: { "Content-Type": "application/json" } }))
+    );
+
+    await store.getState().refreshEconomySnapshot();
+
+    expect(store.getState().activeMissions.some((active) => active.id === mission.id)).toBe(true);
+    expect(store.getState().economyEvents[0]?.message).toContain("Basic Food");
   });
 });
