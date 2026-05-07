@@ -1521,6 +1521,10 @@ button.equipment-trigger {
   text-align: left;
 }
 
+.planet-list button:not(:disabled) {
+  min-height: 74px;
+}
+
 .planet-list button:hover:not(:disabled),
 .planet-list button.selected {
   border-color: rgba(128, 214, 255, 0.55);

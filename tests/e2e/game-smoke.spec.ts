@@ -87,31 +87,42 @@ async function expectRouteActionInsideStationBody(page: Page) {
   expect(metrics!.actionsBottom).toBeLessThanOrEqual(metrics!.detailsBottom);
 }
 
-async function expectGalaxyPlanetListReadable(page: Page) {
+async function expectGalaxyPlanetListReadable(page: Page, selectedTitle?: string) {
   const metrics = await page.evaluate(() => {
     const details = document.querySelector(".galaxy-details");
     const list = document.querySelector(".planet-list");
     const selected = document.querySelector(".planet-list button.selected");
+    const selectedName = selected?.querySelector("span");
     const selectedMeta = selected?.querySelector("small");
-    if (!details || !list || !selected || !selectedMeta) return null;
+    if (!details || !list || !selected || !selectedName || !selectedMeta) return null;
     const detailsRect = details.getBoundingClientRect();
     const listRect = list.getBoundingClientRect();
     const selectedRect = selected.getBoundingClientRect();
+    const nameRect = selectedName.getBoundingClientRect();
     const metaRect = selectedMeta.getBoundingClientRect();
     const listStyle = getComputedStyle(list);
     return {
       detailsWidth: detailsRect.width,
       listRight: listRect.right,
+      nameBottom: nameRect.bottom,
+      nameHeight: nameRect.height,
+      nameText: selectedName.textContent,
+      nameTop: nameRect.top,
       metaBottom: metaRect.bottom,
       selectedRight: selectedRect.right,
       selectedBottom: selectedRect.bottom,
+      selectedTop: selectedRect.top,
       scrollbarGutter: listStyle.scrollbarGutter
     };
   });
 
   expect(metrics).not.toBeNull();
+  if (selectedTitle) expect(metrics!.nameText).toBe(selectedTitle);
   expect(metrics!.detailsWidth).toBeGreaterThanOrEqual(300);
   expect(metrics!.scrollbarGutter).toContain("stable");
+  expect(metrics!.nameHeight).toBeGreaterThan(12);
+  expect(metrics!.nameTop).toBeGreaterThanOrEqual(metrics!.selectedTop);
+  expect(metrics!.nameBottom).toBeLessThan(metrics!.metaBottom);
   expect(metrics!.selectedRight).toBeLessThanOrEqual(metrics!.listRight);
   expect(metrics!.metaBottom).toBeLessThanOrEqual(metrics!.selectedBottom + 1);
 }
@@ -185,9 +196,10 @@ test.describe("browser smoke", () => {
       await expect(page.getByRole("heading", { name: "Helion Prime Exchange" })).toBeVisible();
 
       await page.getByRole("button", { name: "Galaxy Map" }).click();
+      await expectGalaxyPlanetListReadable(page, "Helion Prime");
       await page.getByRole("button", { name: "Mirr Vale known" }).click();
       await expectRouteActionInsideStationBody(page);
-      await expectGalaxyPlanetListReadable(page);
+      await expectGalaxyPlanetListReadable(page, "Mirr Glass");
     }
   });
 
