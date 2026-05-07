@@ -1,6 +1,68 @@
-import type { PlanetDefinition, StarSystemDefinition, StationDefinition } from "../types/game";
+import type { PlanetDefinition, StarSystemDefinition, StationDefinition, Vec3 } from "../types/game";
 
-export const planets: PlanetDefinition[] = [
+const CELESTIAL_XY_SCALE = 3.4;
+const JUMP_GATE_XY_SCALE = 2;
+const ORBITAL_CLEARANCE = 300;
+const HIDDEN_STATION_EXTRA_CLEARANCE = 180;
+const HIDDEN_STATION_DIRECTION_BIAS: Vec3 = [0, 1, -0.5];
+
+function addVec3(a: Vec3, b: Vec3): Vec3 {
+  return [a[0] + b[0], a[1] + b[1], a[2] + b[2]];
+}
+
+function subVec3(a: Vec3, b: Vec3): Vec3 {
+  return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+}
+
+function scaleVec3(a: Vec3, value: number): Vec3 {
+  return [a[0] * value, a[1] * value, a[2] * value];
+}
+
+function normalizeVec3(a: Vec3, fallback: Vec3 = [0, 0, 1]): Vec3 {
+  const length = Math.hypot(a[0], a[1], a[2]);
+  return length <= 0.0001 ? fallback : [a[0] / length, a[1] / length, a[2] / length];
+}
+
+function scaleOrbitalPlane(position: Vec3, xyScale = CELESTIAL_XY_SCALE): Vec3 {
+  return [position[0] * xyScale, position[1] * xyScale, position[2]];
+}
+
+function createOrbitalPosition(planet: PlanetDefinition, rawTargetPosition: Vec3, clearance: number, directionBias?: Vec3): Vec3 {
+  const scaledTargetPosition = scaleOrbitalPlane(rawTargetPosition);
+  const biasedDirection = directionBias
+    ? addVec3(normalizeVec3(subVec3(scaledTargetPosition, planet.position)), directionBias)
+    : subVec3(scaledTargetPosition, planet.position);
+  return addVec3(planet.position, scaleVec3(normalizeVec3(biasedDirection), planet.radius + clearance));
+}
+
+function layoutPlanet(planet: PlanetDefinition): PlanetDefinition {
+  const positionedPlanet = { ...planet, position: scaleOrbitalPlane(planet.position) };
+  return {
+    ...positionedPlanet,
+    beaconPosition: createOrbitalPosition(positionedPlanet, planet.beaconPosition, ORBITAL_CLEARANCE)
+  };
+}
+
+function layoutStation(station: StationDefinition): StationDefinition {
+  const planet = planetById[station.planetId];
+  if (!planet) return { ...station, position: scaleOrbitalPlane(station.position) };
+  if (station.hidden) {
+    return {
+      ...station,
+      position: createOrbitalPosition(planet, station.position, ORBITAL_CLEARANCE + HIDDEN_STATION_EXTRA_CLEARANCE, HIDDEN_STATION_DIRECTION_BIAS)
+    };
+  }
+  return { ...station, position: planet.beaconPosition };
+}
+
+function layoutSystem(system: StarSystemDefinition): StarSystemDefinition {
+  return {
+    ...system,
+    jumpGatePosition: scaleOrbitalPlane(system.jumpGatePosition, JUMP_GATE_XY_SCALE)
+  };
+}
+
+const rawPlanets: PlanetDefinition[] = [
   {
     id: "helion-prime-world",
     name: "Helion Prime",
@@ -354,12 +416,14 @@ export const planets: PlanetDefinition[] = [
   }
 ];
 
+export const planets: PlanetDefinition[] = rawPlanets.map(layoutPlanet);
+
 export const planetById = Object.fromEntries(planets.map((planet) => [planet.id, planet])) as Record<
   string,
   PlanetDefinition
 >;
 
-export const stations: StationDefinition[] = [
+const rawStations: StationDefinition[] = [
   { id: "helion-prime", name: "Helion Prime Exchange", archetype: "Trade Hub", factionId: "solar-directorate", systemId: "helion-reach", planetId: "helion-prime-world", position: [0, 0, -760] },
   { id: "aurora-ring", name: "Aurora Ring", archetype: "Trade Hub", factionId: "solar-directorate", systemId: "helion-reach", planetId: "aurora-shepherd", position: [770, 20, -850] },
   { id: "cinder-yard", name: "Cinder Yard", archetype: "Mining Station", factionId: "free-belt-union", systemId: "helion-reach", planetId: "vale-cinder", position: [-680, -20, -820] },
@@ -390,12 +454,14 @@ export const stations: StationDefinition[] = [
   { id: "ptd-home", name: "PTD Home", archetype: "Trade Hub", factionId: "solar-directorate", systemId: "ptd-home", planetId: "ptd-home-world", position: [0, 0, -720] }
 ];
 
+export const stations: StationDefinition[] = rawStations.map(layoutStation);
+
 export const stationById = Object.fromEntries(stations.map((station) => [station.id, station])) as Record<
   string,
   StationDefinition
 >;
 
-export const systems: StarSystemDefinition[] = [
+const rawSystems: StarSystemDefinition[] = [
   {
     id: "helion-reach",
     name: "Helion Reach",
@@ -489,6 +555,8 @@ export const systems: StarSystemDefinition[] = [
     marketBias: { "ship-components": 0.94, electronics: 0.98, "energy-cells": 0.96 }
   }
 ];
+
+export const systems: StarSystemDefinition[] = rawSystems.map(layoutSystem);
 
 export const systemById = Object.fromEntries(systems.map((system) => [system.id, system])) as Record<
   string,

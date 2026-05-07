@@ -2,11 +2,23 @@ import { describe, expect, it } from "vitest";
 import { commodities, contrabandLawBySystem, dialogueScenes, dialogueSpeakers, equipmentById, explorationSignals, glassWakeProtocol, missionTemplates, planetById, planets, ships, stationById, stations, systems } from "../src/data/world";
 import { fallbackAssetManifest } from "../src/systems/assets";
 import { getEquipmentSlotUsage, getShipSlotCapacity } from "../src/systems/equipment";
+import { distance, orbitPoint } from "../src/systems/math";
 import { validateContentData } from "../src/data/validate";
 import { createInitialMarketState } from "../src/systems/economy";
+import type { PlanetDefinition, StationDefinition } from "../src/types/game";
 
 function idsAreUnique(ids: string[]): boolean {
   return new Set(ids).size === ids.length;
+}
+
+const STATION_VISUAL_RADIUS = 150;
+const PLANET_PAIR_CLEARANCE = 160;
+const JUMP_GATE_VISUAL_RADIUS = 140;
+const ASTEROID_PLANET_CLEARANCE = 100;
+const STATION_PAIR_DISTANCE = 300;
+
+function formatClearance(clearance: number): string {
+  return clearance.toFixed(1);
 }
 
 describe("content data", () => {
@@ -64,6 +76,58 @@ describe("content data", () => {
         expect(station.planetId).toBe(planet.id);
       }
     }
+  });
+
+  it("keeps flight-space celestial layouts free of visual overlaps", () => {
+    const violations: string[] = [];
+    for (const system of systems) {
+      const systemPlanets = system.planetIds.map((planetId) => planetById[planetId]).filter(Boolean) as PlanetDefinition[];
+      const systemStations = stations.filter((station) => station.systemId === system.id) as StationDefinition[];
+
+      for (const station of systemStations) {
+        for (const planet of systemPlanets) {
+          const clearance = distance(station.position, planet.position) - planet.radius - STATION_VISUAL_RADIUS;
+          if (clearance <= 0) violations.push(`${system.id}: station ${station.id} overlaps planet ${planet.id} by ${formatClearance(clearance)}`);
+        }
+      }
+
+      for (let left = 0; left < systemPlanets.length; left += 1) {
+        for (let right = left + 1; right < systemPlanets.length; right += 1) {
+          const first = systemPlanets[left];
+          const second = systemPlanets[right];
+          const clearance = distance(first.position, second.position) - first.radius - second.radius;
+          if (clearance <= PLANET_PAIR_CLEARANCE) violations.push(`${system.id}: planets ${first.id} and ${second.id} are too close by ${formatClearance(clearance)}`);
+        }
+      }
+
+      for (const planet of systemPlanets) {
+        const gateClearance = distance(system.jumpGatePosition, planet.position) - planet.radius - JUMP_GATE_VISUAL_RADIUS;
+        if (gateClearance <= 0) violations.push(`${system.id}: jump gate overlaps planet ${planet.id} by ${formatClearance(gateClearance)}`);
+      }
+
+      const asteroidCount = system.id === "kuro-belt" ? 16 : 10;
+      for (let index = 0; index < asteroidCount; index += 1) {
+        const asteroidPosition = orbitPoint(index + system.risk * 10, 240 + index * 22);
+        const asteroidRadius = 20 + (index % 4) * 7;
+        for (const planet of systemPlanets) {
+          const clearance = distance(asteroidPosition, planet.position) - planet.radius - asteroidRadius;
+          if (clearance <= ASTEROID_PLANET_CLEARANCE) {
+            violations.push(`${system.id}: asteroid ${index} is too close to planet ${planet.id} by ${formatClearance(clearance)}`);
+          }
+        }
+      }
+
+      for (let left = 0; left < systemStations.length; left += 1) {
+        for (let right = left + 1; right < systemStations.length; right += 1) {
+          const first = systemStations[left];
+          const second = systemStations[right];
+          const clearance = distance(first.position, second.position) - STATION_PAIR_DISTANCE;
+          if (clearance <= 0) violations.push(`${system.id}: stations ${first.id} and ${second.id} overlap by ${formatClearance(clearance)}`);
+        }
+      }
+    }
+
+    expect(violations).toEqual([]);
   });
 
   it("has generated skybox and planet texture manifest entries for the expanded catalog", () => {

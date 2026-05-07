@@ -1533,13 +1533,18 @@ button.equipment-trigger {
 }
 
 .planet-list span {
+  display: block;
+  min-width: 0;
   overflow: hidden;
   font-weight: 900;
+  line-height: 1.15;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .planet-list small {
+  display: block;
+  min-width: 0;
   color: #92a9bd;
   font-size: 0.74rem;
   line-height: 1.25;
