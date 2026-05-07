@@ -1,4 +1,5 @@
 import { stationById, systemById, useGameStore } from "../state/gameStore";
+import { formatDateTime, formatNumber } from "../i18n";
 import type { SaveSlotId, SaveSlotSummary } from "../types/game";
 
 interface SaveSlotsPanelProps {
@@ -11,6 +12,7 @@ export function SaveSlotsPanel({ mode }: SaveSlotsPanelProps) {
   const loadGame = useGameStore((state) => state.loadGame);
   const saveGame = useGameStore((state) => state.saveGame);
   const deleteSave = useGameStore((state) => state.deleteSave);
+  const locale = useGameStore((state) => state.locale);
   return (
     <section className="save-slots-panel">
       <h3>{mode === "load" ? "Load Game" : "Save Slots"}</h3>
@@ -19,8 +21,8 @@ export function SaveSlotsPanel({ mode }: SaveSlotsPanelProps) {
           <article className={slot.id === activeSaveSlotId ? "save-slot active" : "save-slot"} key={slot.id}>
             <div>
               <strong>{slot.label}</strong>
-              <span>{slot.exists ? slotSubtitle(slot) : "Empty slot"}</span>
-              {slot.exists ? <span>{slot.savedAt ? new Date(slot.savedAt).toLocaleString() : "Unknown time"} · v{slot.version ?? "?"}</span> : null}
+              <span>{slot.exists ? slotSubtitle(slot, locale) : "Empty slot"}</span>
+              {slot.exists ? <span>{slot.savedAt ? formatDateTime(locale, slot.savedAt) : "Unknown time"} · v{slot.version ?? "?"}</span> : null}
             </div>
             <div className="save-slot-actions">
               {mode === "manage" ? <button onClick={() => saveGame(slot.id)}>Save</button> : null}
@@ -34,10 +36,10 @@ export function SaveSlotsPanel({ mode }: SaveSlotsPanelProps) {
   );
 }
 
-function slotSubtitle(slot: SaveSlotSummary): string {
+function slotSubtitle(slot: SaveSlotSummary, locale = useGameStore.getState().locale): string {
   const system = slot.currentSystemId ? systemById[slot.currentSystemId]?.name ?? slot.currentSystemId : "Unknown system";
   const station = slot.currentStationId ? stationById[slot.currentStationId]?.name ?? slot.currentStationId : "In flight";
-  const credits = slot.credits?.toLocaleString() ?? "0";
+  const credits = slot.credits !== undefined ? formatNumber(locale, slot.credits) : "0";
   const time = formatGameTime(slot.gameClock ?? 0);
   return `${system} · ${station} · ${credits} cr · ${time}`;
 }

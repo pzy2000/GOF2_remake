@@ -1,13 +1,35 @@
 import { commodities, stationById, systemById, useGameStore } from "../state/gameStore";
-import { commodityById, factionNames } from "../data/world";
+import { commodityById } from "../data/world";
 import { getOccupiedCargo } from "../systems/economy";
 import { getEquipmentEffects, hasMiningBeam } from "../systems/equipment";
 import { getMissionDeadlineRemaining, getStoryEncounterRemainingTargets } from "../systems/missions";
 import { distance } from "../systems/math";
 import { getNearestNavigationTarget } from "../systems/navigation";
+import type { NavigationTarget } from "../systems/navigation";
 import { combatAiProfileLabels, getContrabandLawSummary } from "../systems/combatAi";
 import { combatLoadoutLabels } from "../systems/combatDoctrine";
 import { explorationSignalById, getEffectiveSignalScanBand } from "../systems/exploration";
+import {
+  formatCargoLabel,
+  formatCommodityAmount,
+  formatCredits,
+  formatDistance,
+  formatGameDuration,
+  formatNumber,
+  formatRuntimeText,
+  localizeCombatAiProfile,
+  localizeCombatLoadout,
+  localizeCommodityName,
+  localizeFactionName,
+  localizeFlightState,
+  localizeGenericName,
+  localizeShipName,
+  localizeStationName,
+  localizeSystemName,
+  translateDisplayName,
+  translateText,
+  type Locale
+} from "../i18n";
 
 function Bar({ label, value, max, tone }: { label: string; value: number; max: number; tone: "cyan" | "green" | "orange" | "red" }) {
   const percent = Math.max(0, Math.min(100, (value / max) * 100));
@@ -26,6 +48,7 @@ function Bar({ label, value, max, tone }: { label: string; value: number; max: n
 
 export function Hud() {
   const player = useGameStore((state) => state.player);
+  const locale = useGameStore((state) => state.locale);
   const runtime = useGameStore((state) => state.runtime);
   const economyService = useGameStore((state) => state.economyService);
   const autopilot = useGameStore((state) => state.autopilot);
@@ -63,75 +86,68 @@ export function Hud() {
     .sort((a, b) => a.dist - b.dist)[0];
   const targetDistance = target ? Math.round(distance(player.position, target.position)) : 0;
   const navDistance = autopilot ? Math.round(distance(player.position, autopilot.targetPosition)) : 0;
-  const navLabel = autopilot
-    ? {
-        "to-origin-gate": "Aligning to gate",
-        "gate-activation": "Gate spool-up",
-        wormhole: "Wormhole transit",
-        "to-destination-station": "Approaching station",
-        docking: "Docking"
-      }[autopilot.phase]
-    : "";
+  const navLabel = autopilot ? autopilotPhaseLabel(autopilot.phase, locale) : "";
+  const occupiedCargo = getOccupiedCargo(player.cargo, activeMissions);
   return (
     <div className="hud">
       <img className="hud-overlay-art" src={manifest.hudOverlay} alt="" />
       <section className="hud-panel hud-top-left">
         <h2>GOF2 by pzy</h2>
         <p>
-          {currentSystem.name} · {factionNames[currentSystem.factionId]} · Risk {Math.round(currentSystem.risk * 100)}%
+          {localizeSystemName(currentSystem.id, locale, currentSystem.name)} · {localizeFactionName(currentSystem.factionId, locale)} · {translateText("Risk", locale)} {formatNumber(locale, Math.round(currentSystem.risk * 100))}%
         </p>
-        <Bar label="Hull" value={player.hull} max={player.stats.hull} tone="green" />
-        <Bar label="Shield" value={player.shield} max={player.stats.shield} tone="cyan" />
-        <Bar label="Energy" value={player.energy} max={player.stats.energy} tone="orange" />
+        <Bar label={translateText("Hull", locale)} value={player.hull} max={player.stats.hull} tone="green" />
+        <Bar label={translateText("Shield", locale)} value={player.shield} max={player.stats.shield} tone="cyan" />
+        <Bar label={translateText("Energy", locale)} value={player.energy} max={player.stats.energy} tone="orange" />
       </section>
       <section className="hud-panel hud-top-right">
-        <h3>{shipLabel(player.shipId)}</h3>
-        <p>Credits {player.credits.toLocaleString()} · Cargo {getOccupiedCargo(player.cargo, activeMissions)}/{player.stats.cargoCapacity} · Missiles {player.missiles}</p>
-        <p>Throttle {Math.round(player.throttle * 100)}% · Speed {Math.round(Math.hypot(...player.velocity))}</p>
-        {autopilot ? <p>Autopilot: {navLabel} · {navDistance}m</p> : null}
-        <p>{graceRemaining > 0 ? `Enemy weapons safe for ${graceRemaining}s` : pirateCount > 0 ? `${pirateCount} pirate contact(s)` : "Local space clear"}</p>
-        {bossContact ? <p>Boss contact: {bossContact.name}</p> : null}
-        {supportCount > 0 ? <p>Patrol support active: {supportCount}</p> : null}
-        {contrabandAmount > 0 ? <p>Contraband law: {getContrabandLawSummary(currentSystem.id)}</p> : null}
-        {scanningPatrol ? <p>Patrol scan {Math.round((scanningPatrol.scanProgress ?? 0) * 100)}%</p> : null}
+        <h3>{localizeShipName(player.shipId, locale)}</h3>
+        <p>{formatCredits(locale, player.credits)} · {formatCargoLabel(locale, occupiedCargo, player.stats.cargoCapacity)} · {translateText("Missiles", locale)} {formatNumber(locale, player.missiles)}</p>
+        <p>{translateText("Throttle", locale)} {formatNumber(locale, Math.round(player.throttle * 100))}% · {translateText("Speed", locale)} {formatNumber(locale, Math.round(Math.hypot(...player.velocity)))}</p>
+        {autopilot ? <p>{translateText("Autopilot", locale)}: {navLabel} · {formatDistance(locale, navDistance)}</p> : null}
+        <p>{graceRemaining > 0 ? enemySafeLabel(graceRemaining, locale) : pirateCount > 0 ? pirateContactsLabel(pirateCount, locale) : translateText("Local space clear", locale)}</p>
+        {bossContact ? <p>{bossContactLabel(locale)}: {translateDisplayName(bossContact.name, locale)}</p> : null}
+        {supportCount > 0 ? <p>{patrolSupportLabel(locale)}: {formatNumber(locale, supportCount)}</p> : null}
+        {contrabandAmount > 0 ? <p>{contrabandLawLabel(locale)}: {translateText(getContrabandLawSummary(currentSystem.id), locale)}</p> : null}
+        {scanningPatrol ? <p>{patrolScanLabel(locale)} {formatNumber(locale, Math.round((scanningPatrol.scanProgress ?? 0) * 100))}%</p> : null}
         {activeStoryMission?.storyEncounter ? (
-          <p>Main story: {activeStoryTargets.length > 0 ? `clear ${activeStoryTargets.map((target) => target.name).join(", ")}` : activeStoryMission.storyEncounter.completionText}</p>
+          <p>{translateText("Main Story", locale)}: {activeStoryTargets.length > 0 ? clearTargetsLabel(activeStoryTargets.map((target) => translateDisplayName(target.name, locale)), locale) : translateText(activeStoryMission.storyEncounter.completionText, locale)}</p>
         ) : null}
         {nearestNavigation ? (
           <p>
             {nearestNavigation.kind === "station"
-              ? "Nearest station"
+              ? nearestStationLabel(locale)
               : nearestNavigation.kind === "planet-signal"
-                ? "Scan target"
+                ? scanTargetLabel(locale)
                 : nearestNavigation.kind === "exploration-signal"
-                  ? "Exploration signal"
-                  : "Nearest nav"}: {nearestNavigation.name} {Math.round(nearestNavigation.distance)}m
+                  ? explorationSignalLabel(locale)
+                  : nearestNavLabel(locale)}: {navigationTargetName(nearestNavigation, locale)} {formatDistance(locale, nearestNavigation.distance)}
           </p>
         ) : null}
       </section>
       <section className="hud-panel hud-target">
         {target ? (
           <>
-            <h3>{target.name}</h3>
+            <h3>{translateDisplayName(target.name, locale)}</h3>
             <p>
-              {target.boss ? "BOSS · " : target.elite ? "ELITE · " : ""}
-              {combatAiProfileLabels[target.aiProfileId]} · {target.aiState.toUpperCase()} · {factionNames[target.factionId]} · {targetDistance}m
+              {target.boss ? `${localizeGenericName("BOSS", locale)} · ` : target.elite ? `${localizeGenericName("ELITE", locale)} · ` : ""}
+              {localizeCombatAiProfile(target.aiProfileId, locale, combatAiProfileLabels[target.aiProfileId])} · {localizeFlightState(target.aiState, locale)} · {localizeFactionName(target.factionId, locale)} · {formatDistance(locale, targetDistance)}
             </p>
-            {target.loadoutId ? <p>{combatLoadoutLabels[target.loadoutId]}</p> : null}
-            <Bar label="Target Hull" value={target.hull} max={target.maxHull} tone="red" />
-            <Bar label="Target Shield" value={target.shield} max={target.maxShield} tone="cyan" />
+            {target.loadoutId ? <p>{localizeCombatLoadout(target.loadoutId, locale, combatLoadoutLabels[target.loadoutId])}</p> : null}
+            <Bar label={targetHullLabel(locale)} value={target.hull} max={target.maxHull} tone="red" />
+            <Bar label={targetShieldLabel(locale)} value={target.shield} max={target.maxShield} tone="cyan" />
           </>
         ) : (
           <>
-            <h3>No target</h3>
-            <p>Tab cycles pirates. Left mouse fires. Hold fire near asteroids to mine.</p>
+            <h3>{translateText("No target", locale)}</h3>
+            <p>{translateText("Tab cycles pirates. Left mouse fires. Hold fire near asteroids to mine.", locale)}</p>
           </>
         )}
       </section>
       <section className="hud-panel hud-bottom-left">
-        <h3>Active Missions</h3>
+        <h3>{translateText("Active Missions", locale)}</h3>
         {activeMissions.length === 0 ? (
-          <p>No active contracts.</p>
+          <p>{translateText("No active contracts.", locale)}</p>
         ) : (
           activeMissions.slice(0, 3).map((mission) => {
             const remaining = getMissionDeadlineRemaining(mission, gameClock);
@@ -143,41 +159,41 @@ export function Hud() {
             const convoy = runtime.convoys.find((item) => item.missionId === mission.id);
             return (
               <p key={mission.id}>
-                {mission.title}
-                {remaining !== undefined ? ` · ${formatHudTime(remaining)}` : ""}
-                {missionDistance !== undefined ? ` · ${missionDistance}m` : ""}
-                {convoy ? ` · convoy ${(convoy.status ?? "en-route").toUpperCase()} ${Math.round(convoy.hull)}/${convoy.maxHull}` : ""}
+                {translateText(mission.title, locale)}
+                {remaining !== undefined ? ` · ${formatHudTime(remaining, locale)}` : ""}
+                {missionDistance !== undefined ? ` · ${formatDistance(locale, missionDistance)}` : ""}
+                {convoy ? ` · ${convoyLabel(locale)} ${(convoy.status ?? "en-route").toUpperCase()} ${Math.round(convoy.hull)}/${convoy.maxHull}` : ""}
               </p>
             );
           })
         )}
         {nearestMine && nearestMine.dist < equipmentEffects.miningHudRange ? (
           <p>
-            {hasMiningBeam(player.equipment) ? "Mining vein" : "Detected vein"}: {commodityById[nearestMine.asteroid.resource].name} · {Math.round(nearestMine.asteroid.miningProgress * 100)}% · {Math.round(nearestMine.dist)}m
+            {hasMiningBeam(player.equipment) ? translateText("Mining vein", locale) : translateText("Detected vein", locale)}: {localizeCommodityName(nearestMine.asteroid.resource, locale, commodityById[nearestMine.asteroid.resource].name)} · {formatNumber(locale, Math.round(nearestMine.asteroid.miningProgress * 100))}% · {formatDistance(locale, nearestMine.dist)}
           </p>
         ) : null}
       </section>
       <section className="hud-panel hud-bottom-right">
-        <h3>Comms</h3>
-        <p>{runtime.message}</p>
+        <h3>{translateText("Comms", locale)}</h3>
+        <p>{formatRuntimeText(locale, runtime.message)}</p>
         <p>
-          Economy {economyService.status === "connected" ? `live #${economyService.snapshotId ?? 0}` : `${economyService.status} · local fallback`}
+          {economyLabel(locale)} {economyService.status === "connected" ? economyLiveLabel(economyService.snapshotId ?? 0, locale) : economyFallbackLabel(economyService.status, locale)}
         </p>
-        {autopilot?.cancelable ? <p>W/S/A/D or weapons cancel autopilot. Shift boosts. Mouse is ignored.</p> : null}
+        {autopilot?.cancelable ? <p>{autopilotCancelLabel(locale)}</p> : null}
         <div className="quick-actions">
-          <button onClick={() => openGalaxyMap("station-route")} disabled={!!autopilot}>Map</button>
-          <button onClick={() => saveGame()}>Save</button>
-          <button onClick={() => setScreen("pause")}>Pause</button>
+          <button onClick={() => openGalaxyMap("station-route")} disabled={!!autopilot}>{translateText("Map", locale)}</button>
+          <button onClick={() => saveGame()}>{translateText("Save", locale)}</button>
+          <button onClick={() => setScreen("pause")}>{translateText("Pause", locale)}</button>
         </div>
       </section>
       {activeScan && activeScanSignal && activeScanBand ? (
         <section className="hud-panel scan-panel">
           <div className="scan-panel-header">
-            <span>Frequency Scan</span>
-            <button onClick={cancelExplorationScan} aria-keyshortcuts="Escape" title="Cancel scan (Esc)">Cancel</button>
+            <span>{translateText("Frequency Scan", locale)}</span>
+            <button onClick={cancelExplorationScan} aria-keyshortcuts="Escape" title={translateText("Cancel scan (Esc)", locale)}>{translateText("Cancel", locale)}</button>
           </div>
-          <h3>{activeScanSignal.title}</h3>
-          <div className="frequency-track" aria-label="Signal frequency">
+          <h3>{translateText(activeScanSignal.title, locale)}</h3>
+          <div className="frequency-track" aria-label={translateText("Signal frequency", locale)}>
             <i className="frequency-band" style={{ left: `${activeScanBand[0]}%`, width: `${activeScanBand[1] - activeScanBand[0]}%` }} />
             <b style={{ left: `${activeScan.frequency}%` }} />
           </div>
@@ -189,7 +205,7 @@ export function Hud() {
             <button onClick={() => adjustExplorationScanFrequency(5)} aria-keyshortcuts="Shift+ArrowRight" title="Increase frequency by 5 (Shift+ArrowRight)">+5</button>
           </div>
           <div className="scan-progress">
-            <span>{activeScan.inBand ? "LOCKED" : "TUNING"}</span>
+            <span>{activeScan.inBand ? translateText("LOCKED", locale) : translateText("TUNING", locale)}</span>
             <i style={{ width: `${Math.round(activeScan.progress * 100)}%` }} />
             <b>{Math.round(activeScan.progress * 100)}%</b>
           </div>
@@ -201,7 +217,7 @@ export function Hud() {
           .slice(0, 7)
           .map(([id, amount]) => (
             <span key={id}>
-              {commodityById[id as keyof typeof commodityById]?.name ?? id}: {amount}
+              {formatCommodityAmount(locale, id, amount ?? 0, commodityById[id as keyof typeof commodityById]?.name)}
             </span>
           ))}
         {commodities.length ? null : null}
@@ -210,18 +226,168 @@ export function Hud() {
   );
 }
 
-function shipLabel(shipId: string): string {
-  return {
-    "sparrow-mk1": "Sparrow MK-I",
-    "mule-lx": "Mule LX",
-    "raptor-v": "Raptor V",
-    "bastion-7": "Bastion-7",
-    "horizon-ark": "Horizon Ark"
-  }[shipId] ?? shipId;
+function formatHudTime(seconds: number, locale: Locale): string {
+  return formatGameDuration(locale, seconds);
 }
 
-function formatHudTime(seconds: number): string {
-  const minutes = Math.floor(seconds / 60);
-  const remainder = Math.floor(seconds % 60).toString().padStart(2, "0");
-  return `${minutes}:${remainder}`;
+function autopilotPhaseLabel(phase: string, locale: Locale): string {
+  const labels: Record<string, Partial<Record<Locale, string>>> = {
+    "to-origin-gate": { en: "Aligning to gate", "zh-CN": "对准星门", "zh-TW": "對準星門", ja: "ゲートへ整列", fr: "Alignement portail" },
+    "gate-activation": { en: "Gate spool-up", "zh-CN": "星门预热", "zh-TW": "星門預熱", ja: "ゲート起動中", fr: "Charge du portail" },
+    wormhole: { en: "Wormhole transit", "zh-CN": "虫洞航行", "zh-TW": "蟲洞航行", ja: "ワームホール通過", fr: "Transit vortex" },
+    "to-destination-station": { en: "Approaching station", "zh-CN": "接近空间站", "zh-TW": "接近太空站", ja: "ステーション接近", fr: "Approche station" },
+    docking: { en: "Docking", "zh-CN": "停靠中", "zh-TW": "停靠中", ja: "ドッキング中", fr: "Amarrage" }
+  };
+  return labels[phase]?.[locale] ?? labels[phase]?.en ?? phase;
+}
+
+function enemySafeLabel(seconds: number, locale: Locale): string {
+  if (locale === "zh-CN") return `敌方武器保险剩余 ${seconds}秒`;
+  if (locale === "zh-TW") return `敵方武器保險剩餘 ${seconds}秒`;
+  if (locale === "ja") return `敵武器安全解除まで ${seconds}秒`;
+  if (locale === "fr") return `Armes ennemies verrouillées encore ${seconds} s`;
+  return `Enemy weapons safe for ${seconds}s`;
+}
+
+function pirateContactsLabel(count: number, locale: Locale): string {
+  if (locale === "zh-CN") return `${count} 个海盗接触`;
+  if (locale === "zh-TW") return `${count} 個海盜接觸`;
+  if (locale === "ja") return `海賊接触 ${count}`;
+  if (locale === "fr") return `${count} contact(s) pirate(s)`;
+  return `${count} pirate contact(s)`;
+}
+
+function bossContactLabel(locale: Locale): string {
+  if (locale === "zh-CN") return "首领接触";
+  if (locale === "zh-TW") return "首領接觸";
+  if (locale === "ja") return "ボス接触";
+  if (locale === "fr") return "Contact chef";
+  return "Boss contact";
+}
+
+function patrolSupportLabel(locale: Locale): string {
+  if (locale === "zh-CN") return "巡逻支援已启动";
+  if (locale === "zh-TW") return "巡邏支援已啟動";
+  if (locale === "ja") return "巡回支援稼働中";
+  if (locale === "fr") return "Soutien de patrouille actif";
+  return "Patrol support active";
+}
+
+function contrabandLawLabel(locale: Locale): string {
+  if (locale === "zh-CN") return "违禁品法律";
+  if (locale === "zh-TW") return "違禁品法律";
+  if (locale === "ja") return "禁制品法";
+  if (locale === "fr") return "Loi contrebande";
+  return "Contraband law";
+}
+
+function patrolScanLabel(locale: Locale): string {
+  if (locale === "zh-CN") return "巡逻扫描";
+  if (locale === "zh-TW") return "巡邏掃描";
+  if (locale === "ja") return "巡回スキャン";
+  if (locale === "fr") return "Scan patrouille";
+  return "Patrol scan";
+}
+
+function clearTargetsLabel(targets: string[], locale: Locale): string {
+  if (locale === "zh-CN") return `清除 ${targets.join("、")}`;
+  if (locale === "zh-TW") return `清除 ${targets.join("、")}`;
+  if (locale === "ja") return `${targets.join("、")} を排除`;
+  if (locale === "fr") return `neutraliser ${targets.join(", ")}`;
+  return `clear ${targets.join(", ")}`;
+}
+
+function nearestStationLabel(locale: Locale): string {
+  if (locale === "zh-CN") return "最近空间站";
+  if (locale === "zh-TW") return "最近太空站";
+  if (locale === "ja") return "最寄りステーション";
+  if (locale === "fr") return "Station la plus proche";
+  return "Nearest station";
+}
+
+function scanTargetLabel(locale: Locale): string {
+  if (locale === "zh-CN") return "扫描目标";
+  if (locale === "zh-TW") return "掃描目標";
+  if (locale === "ja") return "スキャン目標";
+  if (locale === "fr") return "Cible de scan";
+  return "Scan target";
+}
+
+function explorationSignalLabel(locale: Locale): string {
+  if (locale === "zh-CN") return "探索信号";
+  if (locale === "zh-TW") return "探索訊號";
+  if (locale === "ja") return "探索信号";
+  if (locale === "fr") return "Signal d'exploration";
+  return "Exploration signal";
+}
+
+function nearestNavLabel(locale: Locale): string {
+  if (locale === "zh-CN") return "最近导航点";
+  if (locale === "zh-TW") return "最近導航點";
+  if (locale === "ja") return "最寄りナビ";
+  if (locale === "fr") return "Navigation proche";
+  return "Nearest nav";
+}
+
+function navigationTargetName(target: NavigationTarget, locale: Locale): string {
+  if (target.kind === "station") return localizeStationName(target.station.id, locale, target.station.name);
+  if (target.kind === "planet-signal") return translateText("Unknown Beacon", locale);
+  if (target.kind === "exploration-signal") return translateText(target.name, locale);
+  return translateText(target.name, locale);
+}
+
+function targetHullLabel(locale: Locale): string {
+  if (locale === "zh-CN") return "目标船体";
+  if (locale === "zh-TW") return "目標船體";
+  if (locale === "ja") return "目標船体";
+  if (locale === "fr") return "Coque cible";
+  return "Target Hull";
+}
+
+function targetShieldLabel(locale: Locale): string {
+  if (locale === "zh-CN") return "目标护盾";
+  if (locale === "zh-TW") return "目標護盾";
+  if (locale === "ja") return "目標シールド";
+  if (locale === "fr") return "Bouclier cible";
+  return "Target Shield";
+}
+
+function convoyLabel(locale: Locale): string {
+  if (locale === "zh-CN") return "船队";
+  if (locale === "zh-TW") return "船隊";
+  if (locale === "ja") return "船団";
+  if (locale === "fr") return "convoi";
+  return "convoy";
+}
+
+function economyLabel(locale: Locale): string {
+  if (locale === "zh-CN") return "经济";
+  if (locale === "zh-TW") return "經濟";
+  if (locale === "ja") return "経済";
+  if (locale === "fr") return "Économie";
+  return "Economy";
+}
+
+function economyLiveLabel(snapshotId: number, locale: Locale): string {
+  if (locale === "zh-CN") return `实时 #${snapshotId}`;
+  if (locale === "zh-TW") return `即時 #${snapshotId}`;
+  if (locale === "ja") return `ライブ #${snapshotId}`;
+  if (locale === "fr") return `direct #${snapshotId}`;
+  return `live #${snapshotId}`;
+}
+
+function economyFallbackLabel(status: string, locale: Locale): string {
+  if (locale === "zh-CN") return `${translateText(status, locale)} · 使用本地模拟`;
+  if (locale === "zh-TW") return `${translateText(status, locale)} · 使用本地模擬`;
+  if (locale === "ja") return `${translateText(status, locale)} · ローカル代替`;
+  if (locale === "fr") return `${translateText(status, locale)} · simulation locale`;
+  return `${status} · local fallback`;
+}
+
+function autopilotCancelLabel(locale: Locale): string {
+  if (locale === "zh-CN") return "W/S/A/D 或武器会取消自动导航。Shift 加速。鼠标输入已忽略。";
+  if (locale === "zh-TW") return "W/S/A/D 或武器會取消自動導航。Shift 加速。滑鼠輸入已忽略。";
+  if (locale === "ja") return "W/S/A/D または武器でオートパイロット解除。Shift はブースト。マウス入力は無視されます。";
+  if (locale === "fr") return "W/S/A/D ou les armes annulent le pilote auto. Shift accélère. La souris est ignorée.";
+  return "W/S/A/D or weapons cancel autopilot. Shift boosts. Mouse is ignored.";
 }

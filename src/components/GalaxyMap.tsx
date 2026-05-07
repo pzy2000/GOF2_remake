@@ -5,6 +5,15 @@ import { planetById, stationById, systems, useGameStore } from "../state/gameSto
 import type { GalaxyMapMode } from "../types/game";
 import { GALAXY_DISCOVERY_DISTANCE, systemDistance } from "../systems/navigation";
 import { getExplorationSignalsForSystem, getVisibleStationsForSystem, isExplorationSignalDiscovered, isExplorationSignalUnlocked, isHiddenStationRevealed } from "../systems/exploration";
+import {
+  formatTechLevel,
+  localizeFactionName,
+  localizePlanetName,
+  localizeStationName,
+  localizeSystemName,
+  translateText,
+  type Locale
+} from "../i18n";
 
 const MAP_WIDTH = 840;
 const MAP_HEIGHT = 560;
@@ -21,6 +30,7 @@ interface DragState {
 export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
   const currentSystemId = useGameStore((state) => state.currentSystemId);
   const currentStationId = useGameStore((state) => state.currentStationId);
+  const locale = useGameStore((state) => state.locale);
   const knownSystems = useGameStore((state) => state.knownSystems);
   const knownPlanetIds = useGameStore((state) => state.knownPlanetIds);
   const explorationState = useGameStore((state) => state.explorationState);
@@ -126,13 +136,13 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
       <div className="modal-panel wide galaxy-panel">
         <header className="screen-header galaxy-header">
           <div>
-            <p className="eyebrow">{modeLabel(mode)}</p>
-            <h2>Galaxy Map</h2>
+            <p className="eyebrow">{modeLabel(mode, locale)}</p>
+            <h2>{translateText("Galaxy Map", locale)}</h2>
           </div>
           <div className="galaxy-controls">
             <span>{Math.round(zoom * 100)}%</span>
-            <button onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}>Reset View</button>
-            {!embedded ? <button onClick={() => setScreen("flight")}>Return</button> : null}
+            <button onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}>{translateText("Reset View", locale)}</button>
+            {!embedded ? <button onClick={() => setScreen("flight")}>{translateText("Return", locale)}</button> : null}
           </div>
         </header>
         <div className="galaxy-layout">
@@ -175,14 +185,14 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                       const firstKnown = system.planetIds.map((id) => planetById[id]).find((planet) => planet && knownPlanetIds.includes(planet.id));
                       if (firstKnown) executeTravel(firstKnown.stationId);
                     }}
-                    aria-label={`${system.name} ${known ? "known" : "locked"}`}
+                    aria-label={`${localizeSystemName(system.id, locale, system.name)} ${known ? translateText("known", locale) : translateText("locked", locale)}`}
                   >
                     <span className="orbit orbit-one" />
                     <span className="orbit orbit-two" />
                     <span className="star-core" />
                     <span className="moon moon-one" />
                     <span className="moon moon-two" />
-                    <span className="system-name">{known ? system.name : "Unknown Signal"}</span>
+                    <span className="system-name">{known ? localizeSystemName(system.id, locale, system.name) : translateText("Unknown Signal", locale)}</span>
                   </button>
                 );
               })}
@@ -190,15 +200,15 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
           </div>
           <aside className="galaxy-details">
             <div className="galaxy-details-content">
-              <p className="eyebrow">{selectedKnown ? factionNames[selectedSystem.factionId] : "Uncharted"}</p>
-              <h3>{selectedKnown ? selectedSystem.name : "Unknown Signal"}</h3>
-              <p>{selectedKnown ? selectedSystem.description : "A faint jump signature sits beyond current registry data."}</p>
+              <p className="eyebrow">{selectedKnown ? localizeFactionName(selectedSystem.factionId, locale, factionNames[selectedSystem.factionId]) : unchartedLabel(locale)}</p>
+              <h3>{selectedKnown ? localizeSystemName(selectedSystem.id, locale, selectedSystem.name) : translateText("Unknown Signal", locale)}</h3>
+              <p>{selectedKnown ? translateText(selectedSystem.description, locale) : translateText("A faint jump signature sits beyond current registry data.", locale)}</p>
               <div className="galaxy-stat-row">
-                <span>Risk {selectedKnown ? `${Math.round(selectedSystem.risk * 100)}%` : "--"}</span>
-                <span>{selectedCurrent ? "Current" : selectedKnown ? "Known" : "Locked"}</span>
+                <span>{translateText("Risk", locale)} {selectedKnown ? `${Math.round(selectedSystem.risk * 100)}%` : "--"}</span>
+                <span>{selectedCurrent ? translateText("Current", locale) : selectedKnown ? translateText("Known", locale) : translateText("Locked", locale)}</span>
               </div>
               {selectedKnown ? (
-                <div className="planet-list" role="list" aria-label={`${selectedSystem.name} planets`}>
+                <div className="planet-list" role="list" aria-label={`${localizeSystemName(selectedSystem.id, locale, selectedSystem.name)} ${translateText("planets", locale)}`}>
                   {selectedPlanets.map((planet) => {
                     const known = knownPlanetIds.includes(planet.id);
                     const station = stationById[planet.stationId];
@@ -212,8 +222,8 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                         onClick={() => setSelectedStationId(station.id)}
                         onDoubleClick={() => executeTravel(station.id)}
                       >
-                        <span>{known ? planet.name : "Unknown Beacon"}</span>
-                        <small>{known ? `${planet.type} · ${station.name} · Tech Level ${station.techLevel}` : "Local scan required"}</small>
+                        <span>{known ? localizePlanetName(planet.id, locale, planet.name) : translateText("Unknown Beacon", locale)}</span>
+                        <small>{known ? `${translateText(planet.type, locale)} · ${localizeStationName(station.id, locale, station.name)} · ${formatTechLevel(locale, station.techLevel)}` : translateText("Local scan required", locale)}</small>
                       </button>
                     );
                   })}
@@ -230,27 +240,27 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                         onClick={() => setSelectedStationId(station.id)}
                         onDoubleClick={() => executeTravel(station.id)}
                       >
-                        <span>{station.name}</span>
-                        <small>{known && planet ? `${planet.name} · Hidden Station Found · Tech Level ${station.techLevel}` : "Signal masked"}</small>
+                        <span>{localizeStationName(station.id, locale, station.name)}</span>
+                        <small>{known && planet ? `${localizePlanetName(planet.id, locale, planet.name)} · ${hiddenStationFoundLabel(locale)} · ${formatTechLevel(locale, station.techLevel)}` : translateText("Signal masked", locale)}</small>
                       </button>
                     );
                   })}
                 </div>
               ) : (
-                <p>Station: Signal masked</p>
+                <p>{translateText("Station", locale)}: {translateText("Signal masked", locale)}</p>
               )}
               {selectedKnown ? (
-                <div className="exploration-signal-list" aria-label={`${selectedSystem.name} exploration signals`}>
-                  <h4>Exploration Signals</h4>
+                <div className="exploration-signal-list" aria-label={`${localizeSystemName(selectedSystem.id, locale, selectedSystem.name)} ${translateText("exploration signals", locale)}`}>
+                  <h4>{translateText("Exploration Signals", locale)}</h4>
                   {selectedSignals.map((signal) => {
                     const complete = explorationState.completedSignalIds.includes(signal.id);
                     const unlocked = isExplorationSignalUnlocked(signal, explorationState);
                     const discovered = isExplorationSignalDiscovered(signal.id, explorationState);
                     return (
                       <article key={signal.id} className={complete ? "complete" : discovered ? "discovered" : unlocked ? "" : "locked"}>
-                        <strong>{unlocked ? (discovered ? signal.title : "Masked Signal") : "Locked Signal"}</strong>
-                        <span>{complete ? "Resolved" : unlocked ? (discovered ? "Discovered" : signal.maskedTitle) : "Follow the prior Quiet Signal stage"}</span>
-                        {complete ? <p>{signal.log}</p> : null}
+                        <strong>{unlocked ? (discovered ? translateText(signal.title, locale) : translateText("Masked Signal", locale)) : translateText("Locked Signal", locale)}</strong>
+                        <span>{complete ? translateText("Resolved", locale) : unlocked ? (discovered ? translateText("Discovered", locale) : translateText(signal.maskedTitle, locale)) : translateText("Follow the prior Quiet Signal stage", locale)}</span>
+                        {complete ? <p>{translateText(signal.log, locale)}</p> : null}
                       </article>
                     );
                   })}
@@ -259,17 +269,17 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
             </div>
             <div className="galaxy-actions">
               <p>
-                Destination:{" "}
+                {translateText("Destination", locale)}:{" "}
                 {selectedKnown && selectedStationKnown && selectedStation && selectedPlanet
-                  ? `${selectedPlanet.name} · ${selectedStation.name} · Tech Level ${selectedStation.techLevel}`
+                  ? `${localizePlanetName(selectedPlanet.id, locale, selectedPlanet.name)} · ${localizeStationName(selectedStation.id, locale, selectedStation.name)} · ${formatTechLevel(locale, selectedStation.techLevel)}`
                   : selectedKnown
-                    ? "Select a scanned planet beacon"
-                    : "Signal masked"}
+                    ? translateText("Select a scanned planet beacon", locale)
+                    : translateText("Signal masked", locale)}
               </p>
               <button className="primary" disabled={!canTravel} onClick={() => executeTravel()}>
-                {travelLabel(mode, selectedSameStation, selectedKnown && selectedStationKnown, !!autopilot)}
+                {travelLabel(mode, selectedSameStation, selectedKnown && selectedStationKnown, !!autopilot, locale)}
               </button>
-              <p className="galaxy-help">{helpText(mode)}</p>
+              <p className="galaxy-help">{helpText(mode, locale)}</p>
             </div>
           </aside>
         </div>
@@ -294,25 +304,41 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
 }
 
-function modeLabel(mode: GalaxyMapMode): string {
-  if (mode === "gate") return "Stargate Link";
-  if (mode === "station-route") return "Route Planning";
-  return "Navigation Browse";
+function modeLabel(mode: GalaxyMapMode, locale: Locale): string {
+  if (mode === "gate") return translateText("Stargate Link", locale);
+  if (mode === "station-route") return translateText("Route Planning", locale);
+  return translateText("Navigation Browse", locale);
 }
 
-function helpText(mode: GalaxyMapMode): string {
-  if (mode === "gate") return "Select a scanned planet station to jump from the active Stargate.";
-  if (mode === "station-route") return "Select a scanned planet station to launch a route through the jump engine.";
-  return "Mouse wheel zooms. Drag empty space to pan. Unknown beacons unlock through local flight scans.";
+function helpText(mode: GalaxyMapMode, locale: Locale): string {
+  if (mode === "gate") return translateText("Select a scanned planet station to jump from the active Stargate.", locale);
+  if (mode === "station-route") return translateText("Select a scanned planet station to launch a route through the jump engine.", locale);
+  return translateText("Mouse wheel zooms. Drag empty space to pan. Unknown beacons unlock through local flight scans.", locale);
 }
 
-function travelLabel(mode: GalaxyMapMode, currentStation: boolean, known: boolean, autopilot: boolean): string {
-  if (autopilot) return "Autopilot Active";
-  if (currentStation) return "Current Station";
-  if (!known) return "Locked";
-  if (mode === "gate") return "Activate Jump";
-  if (mode === "station-route") return "Set Route";
-  return "Browse Only";
+function travelLabel(mode: GalaxyMapMode, currentStation: boolean, known: boolean, autopilot: boolean, locale: Locale): string {
+  if (autopilot) return translateText("Autopilot Active", locale);
+  if (currentStation) return translateText("Current Station", locale);
+  if (!known) return translateText("Locked", locale);
+  if (mode === "gate") return translateText("Activate Jump", locale);
+  if (mode === "station-route") return translateText("Set Route", locale);
+  return translateText("Browse Only", locale);
+}
+
+function unchartedLabel(locale: Locale): string {
+  if (locale === "zh-CN") return "未测绘";
+  if (locale === "zh-TW") return "未測繪";
+  if (locale === "ja") return "未踏査";
+  if (locale === "fr") return "Non cartographié";
+  return "Uncharted";
+}
+
+function hiddenStationFoundLabel(locale: Locale): string {
+  if (locale === "zh-CN") return "已发现隐藏空间站";
+  if (locale === "zh-TW") return "已發現隱藏太空站";
+  if (locale === "ja") return "隠しステーション発見";
+  if (locale === "fr") return "Station cachée trouvée";
+  return "Hidden Station Found";
 }
 
 function systemTone(index: number, risk: number): string {

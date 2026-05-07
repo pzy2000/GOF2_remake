@@ -1,4 +1,5 @@
 import type { AudioSettings } from "../types/game";
+import { DEFAULT_LOCALE, speechLangForLocale, type Locale } from "../i18n";
 
 const defaultVoiceSettings: AudioSettings = {
   masterVolume: 0.8,
@@ -16,6 +17,7 @@ type VoiceProfileDefinition = {
   preferredVoiceKeywords?: readonly string[];
 };
 type VoiceOptions = {
+  locale?: Locale;
   onEnd?: () => void;
 };
 
@@ -93,8 +95,11 @@ function hasSpeechApi(): boolean {
   return typeof window !== "undefined" && "speechSynthesis" in window && typeof SpeechSynthesisUtterance !== "undefined";
 }
 
-function selectVoice(profile: VoiceProfileDefinition): SpeechSynthesisVoice | null {
-  const englishVoices = window.speechSynthesis.getVoices().filter((voice) => voice.lang.toLowerCase().startsWith("en"));
+function selectVoice(profile: VoiceProfileDefinition, locale: Locale): SpeechSynthesisVoice | null {
+  const langPrefix = speechLangForLocale(locale).split("-")[0].toLowerCase();
+  const voices = window.speechSynthesis.getVoices();
+  const localeVoices = voices.filter((voice) => voice.lang.toLowerCase().startsWith(langPrefix));
+  const englishVoices = voices.filter((voice) => voice.lang.toLowerCase().startsWith("en"));
   const matchesProfile = (voice: SpeechSynthesisVoice) => {
     const searchable = `${voice.name} ${voice.voiceURI}`.toLowerCase();
     return (
@@ -102,7 +107,7 @@ function selectVoice(profile: VoiceProfileDefinition): SpeechSynthesisVoice | nu
       profile.preferredVoiceKeywords?.some((keyword) => searchable.includes(keyword.toLowerCase()))
     );
   };
-  return englishVoices.find(matchesProfile) ?? englishVoices[0] ?? null;
+  return localeVoices.find(matchesProfile) ?? localeVoices[0] ?? englishVoices.find(matchesProfile) ?? englishVoices[0] ?? null;
 }
 
 class BrowserVoiceSystem {
@@ -136,11 +141,12 @@ class BrowserVoiceSystem {
     if (!hasSpeechApi() || !text.trim() || this.settings.muted || volume <= 0) return false;
     this.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = "en-US";
+    const locale = options.locale ?? DEFAULT_LOCALE;
+    utterance.lang = speechLangForLocale(locale);
     utterance.pitch = profile.pitch;
     utterance.rate = profile.rate;
     utterance.volume = volume;
-    utterance.voice = selectVoice(profile);
+    utterance.voice = selectVoice(profile, locale);
     utterance.onend = () => {
       if (this.current !== utterance) return;
       this.current = undefined;

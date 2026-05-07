@@ -626,6 +626,37 @@ h3 {
   color: #d8efff;
 }
 
+.language-select {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  color: #d8efff;
+}
+
+.language-select.compact {
+  width: min(360px, 100%);
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 10px 12px;
+  border: 1px solid rgba(128, 214, 255, 0.22);
+  border-radius: 8px;
+  background: rgba(3, 10, 22, 0.58);
+}
+
+.language-select span {
+  font-size: 0.82rem;
+  color: #a8cfe9;
+}
+
+.language-select select {
+  min-width: 140px;
+  border: 1px solid rgba(128, 214, 255, 0.28);
+  border-radius: 6px;
+  background: rgba(5, 13, 27, 0.95);
+  color: #f3f8ff;
+  padding: 8px 10px;
+}
+
 .settings-grid input[type="range"] {
   width: 100%;
 }

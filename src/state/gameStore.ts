@@ -128,6 +128,7 @@ import {
   startJumpToStationPatch,
   undockPatch
 } from "./domains/navigationRuntime";
+import { readLocalePreference, saveLocalePreference } from "../i18n";
 
 const emptyInput: FlightInput = emptyFlightInput();
 
@@ -193,7 +194,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
   hasSave: readSave() !== null,
   saveSlots: readSaveSlots(),
   activeSaveSlotId: undefined,
+  locale: readLocalePreference(),
   setAssetManifest: (assetManifest) => set({ assetManifest }),
+  setLocale: (locale) => set({ locale: saveLocalePreference(locale) }),
   newGame: () =>
     set({
       screen: "flight",

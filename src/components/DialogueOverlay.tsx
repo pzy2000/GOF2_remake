@@ -5,6 +5,7 @@ import { useGameStore } from "../state/gameStore";
 import { voiceSystem } from "../systems/voice";
 import { AtlasIcon } from "./AtlasIcon";
 import type { AssetManifest } from "../types/game";
+import { translateText } from "../i18n";
 
 function SpeakerBadge({ manifest, speakerId }: { manifest: AssetManifest; speakerId: string }) {
   const badgeSpeaker = dialogueSpeakerById[speakerId];
@@ -44,6 +45,7 @@ function SpeakerBadge({ manifest, speakerId }: { manifest: AssetManifest; speake
 export function DialogueOverlay() {
   const activeDialogue = useGameStore((state) => state.activeDialogue);
   const manifest = useGameStore((state) => state.assetManifest);
+  const locale = useGameStore((state) => state.locale);
   const advanceDialogue = useGameStore((state) => state.advanceDialogue);
   const closeDialogue = useGameStore((state) => state.closeDialogue);
   const [voiceStatus, setVoiceStatus] = useState(voiceSystem.debugState);
@@ -54,7 +56,8 @@ export function DialogueOverlay() {
 
   useEffect(() => {
     if (!line || !speaker) return undefined;
-    voiceSystem.speak(line.text, speaker.voiceProfile, {
+    voiceSystem.speak(translateText(line.text, locale), speaker.voiceProfile, {
+      locale,
       onEnd: () => {
         setVoiceStatus(voiceSystem.debugState);
         advanceDialogue();
@@ -65,7 +68,7 @@ export function DialogueOverlay() {
       voiceSystem.cancel();
       setVoiceStatus(voiceSystem.debugState);
     };
-  }, [advanceDialogue, line, speaker]);
+  }, [advanceDialogue, line, locale, speaker]);
 
   if (!activeDialogue || !scene || !line || !speaker) return null;
 
@@ -83,13 +86,13 @@ export function DialogueOverlay() {
 
   function playPause() {
     const state = voiceSystem.pauseOrResume();
-    if (state === "idle" && line && speaker) voiceSystem.speak(line.text, speaker.voiceProfile);
+    if (state === "idle" && line && speaker) voiceSystem.speak(translateText(line.text, locale), speaker.voiceProfile, { locale });
     setVoiceStatus(voiceSystem.debugState);
   }
 
   function replayVoice() {
     if (!line || !speaker) return;
-    voiceSystem.speak(line.text, speaker.voiceProfile);
+    voiceSystem.speak(translateText(line.text, locale), speaker.voiceProfile, { locale });
     setVoiceStatus(voiceSystem.debugState);
   }
 
@@ -97,20 +100,20 @@ export function DialogueOverlay() {
   const currentIndex = activeDialogue.lineIndex;
   const atEnd = currentIndex >= scene.lines.length - 1;
   return (
-    <section className="dialogue-backdrop" role="dialog" aria-modal="true" aria-label={`Comms dialogue: ${scene.title}`} data-testid="dialogue-overlay">
+    <section className="dialogue-backdrop" role="dialog" aria-modal="true" aria-label={`Comms dialogue: ${translateText(scene.title, locale)}`} data-testid="dialogue-overlay">
       <div className="dialogue-panel">
         <header className="dialogue-header">
           <div>
             <p className="eyebrow">{scene.group === "story" ? "Glass Wake Protocol" : "Quiet Signals"}</p>
-            <h2>{scene.title}</h2>
+            <h2>{translateText(scene.title, locale)}</h2>
           </div>
           <button className="dialogue-close" onClick={close} aria-label="Close dialogue">X</button>
         </header>
         <div className={`dialogue-current ${isPlayer ? "player-line" : ""}`}>
           <SpeakerBadge manifest={manifest} speakerId={speaker.id} />
           <div>
-            <span>{speaker.name} · {speaker.role}</span>
-            <p>{line.text}</p>
+            <span>{speaker.name} · {translateText(speaker.role, locale)}</span>
+            <p>{translateText(line.text, locale)}</p>
           </div>
         </div>
         <div className="dialogue-transcript" aria-label="Dialogue transcript">
@@ -119,7 +122,7 @@ export function DialogueOverlay() {
             return (
               <p key={`${scene.id}-${index}`} className={index === currentIndex ? "active" : ""}>
                 <b>{itemSpeaker?.name ?? item.speakerId}</b>
-                {item.text}
+                {translateText(item.text, locale)}
               </p>
             );
           })}

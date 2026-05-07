@@ -1,4 +1,5 @@
 import { useGameStore } from "../state/gameStore";
+import { LanguageSelect } from "./LanguageSelect";
 import { SaveSlotsPanel } from "./SaveSlotsPanel";
 
 export function MainMenu() {
@@ -13,6 +14,7 @@ export function MainMenu() {
         <p className="eyebrow">Browser WebGL vertical slice</p>
         <h1>GOF2 by pzy</h1>
         <p className="menu-summary">Trade, mine, fight pirates, dock at stations, and push across a six-system frontier.</p>
+        <LanguageSelect compact />
         <div className="menu-actions">
           <button className="primary" onClick={newGame}>New Game</button>
           <button onClick={() => loadGame()} disabled={!hasSave}>Continue</button>

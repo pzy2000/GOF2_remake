@@ -279,6 +279,39 @@ test.describe("browser smoke", () => {
     await expect(page.locator(".ship-model-status")).toHaveCount(0);
   });
 
+  test("persists Simplified Chinese language selection across menu, HUD, station, and settings", async ({ page }) => {
+    await resetApp(page);
+    await page.getByLabel("Select language").selectOption("zh-CN");
+    await expect(page.getByRole("button", { name: "新游戏" })).toBeVisible();
+
+    await page.reload();
+    await page.waitForFunction(() => !!window.__GOF2_E2E__);
+    await expect(page.getByRole("button", { name: "新游戏" })).toBeVisible();
+    await page.getByRole("button", { name: "新游戏" }).click();
+    await expect(page.locator(".hud-top-left")).toContainText("船体");
+    await expect(page.locator(".hud-bottom-right")).toContainText("通讯");
+    const englishResidue = /Credits|Cargo|Missiles|Throttle|Speed|Patrol support active|Nearest station|Target Hull|Target Shield|Law Patrol|Directorate precision kit|Economy offline|local fallback|Basic Food|TECH/;
+    await expect(page.locator(".hud")).not.toContainText(englishResidue);
+    await expect(page.locator(".dock-hint")).not.toContainText(/E Dock|Waypoint|TECH|Helion Prime Exchange/);
+    await expect(page.locator(".station-tech-label").first()).toContainText("科技");
+
+    await dockAtStation(page, "helion-prime");
+    await expect(page.getByRole("button", { name: "发射" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "赫利昂主星交易所" })).toBeVisible();
+    await expect(page.locator(".station-header")).toContainText("太阳理事会");
+    await expect(page.getByTestId("market-row-basic-food")).toContainText("基础食品");
+    await expect(page.getByTestId("market-row-basic-food")).toContainText("持有");
+    await expect(page.getByTestId("market-row-basic-food")).toContainText("出口");
+    await expect(page.getByTestId("market-row-drinking-water")).toContainText("饮用水");
+    await expect(page.locator(".station-screen")).not.toContainText(/Helion Prime Exchange|Solar Directorate|Trade Hub|Basic Food|Drinking Water|Electronics|Medical Supplies|Energy Cells|Hold|Export|Import|Balanced/);
+    await page.evaluate(() => {
+      window.__GOF2_E2E__!.setState({ screen: "settings" });
+    });
+    await expect(page.getByLabel("选择语言")).toHaveValue("zh-CN");
+    await page.getByLabel("选择语言").selectOption("en");
+    await expect(page.getByRole("button", { name: "Back" })).toBeVisible();
+  });
+
   test("tunes active frequency scans from the keyboard", async ({ page }) => {
     await resetApp(page);
     await startNewGame(page);

@@ -20,6 +20,7 @@ import type {
   StationTab
 } from "../types/game";
 import type { EconomyEvent, EconomyServiceStatus } from "../types/economy";
+import type { Locale } from "../i18n";
 
 export interface GameStore {
   screen: Screen;
@@ -53,7 +54,9 @@ export interface GameStore {
   hasSave: boolean;
   saveSlots: SaveSlotSummary[];
   activeSaveSlotId?: SaveSlotId;
+  locale: Locale;
   setAssetManifest: (manifest: AssetManifest) => void;
+  setLocale: (locale: Locale) => void;
   newGame: () => void;
   loadGame: (slotId?: SaveSlotId) => boolean;
   saveGame: (slotId?: SaveSlotId) => void;

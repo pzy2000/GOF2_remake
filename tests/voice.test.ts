@@ -145,6 +145,30 @@ describe("browser voice system", () => {
     expect(spoken[0].volume).toBe(1);
   });
 
+  it("uses the selected locale as the speech synthesis language", async () => {
+    const spoken: FakeUtterance[] = [];
+    const synthesis = {
+      speaking: false,
+      paused: false,
+      getVoices: vi.fn(() => [fakeVoice("Generic Chinese", "zh-CN"), fakeVoice("Generic Japanese", "ja-JP"), fakeVoice("Generic French", "fr-FR")]),
+      speak: vi.fn((utterance: FakeUtterance) => {
+        spoken.push(utterance);
+      }),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      cancel: vi.fn()
+    };
+    vi.stubGlobal("SpeechSynthesisUtterance", FakeUtterance);
+    vi.stubGlobal("window", { speechSynthesis: synthesis });
+
+    const { voiceSystem } = await freshVoice();
+
+    expect(voiceSystem.speak("你好。", "ship-ai", { locale: "zh-CN" })).toBe(true);
+    expect(voiceSystem.speak("通信確認。", "ship-ai", { locale: "ja" })).toBe(true);
+    expect(voiceSystem.speak("Canal prêt.", "ship-ai", { locale: "fr" })).toBe(true);
+    expect(spoken.map((utterance) => utterance.lang)).toEqual(["zh-CN", "ja-JP", "fr-FR"]);
+  });
+
   it("uses a young female voice profile for the captain when available", async () => {
     const spoken: FakeUtterance[] = [];
     const synthesis = {

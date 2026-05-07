@@ -6,6 +6,8 @@ import { MainMenu } from "./components/MainMenu";
 import { StationScreen } from "./components/StationScreen";
 import { SaveSlotsPanel } from "./components/SaveSlotsPanel";
 import { DialogueOverlay } from "./components/DialogueOverlay";
+import { I18nRuntime } from "./components/I18nRuntime";
+import { LanguageSelect } from "./components/LanguageSelect";
 import { audioSystem, getAudioSettings, saveAudioSettings } from "./systems/audio";
 import { loadAssetManifest } from "./systems/assets";
 import { resolveMusicCue } from "./systems/music";
@@ -69,6 +71,7 @@ function SimpleScreen({ type }: { type: "settings" | "credits" }) {
           <>
             <p>Keyboard and mouse controls are active in flight. Click the 3D view once to capture mouse movement.</p>
             <div className="settings-grid">
+              <LanguageSelect />
               <label>
                 <span>Master</span>
                 <input type="range" min="0" max="1" step="0.01" value={audioSettings.masterVolume} onChange={(event) => updateAudio({ masterVolume: Number(event.target.value) })} />
@@ -177,11 +180,12 @@ export default function App() {
     loadAssetManifest().then(setAssetManifest).catch(() => undefined);
   }, [setAssetManifest]);
 
-  if (screen === "menu") return <><AudioRuntime /><EconomyBackendRuntime /><MainMenu /><DialogueOverlay /></>;
-  if (screen === "settings" || screen === "credits") return <><AudioRuntime /><EconomyBackendRuntime /><SimpleScreen type={screen} /><DialogueOverlay /></>;
+  if (screen === "menu") return <><I18nRuntime /><AudioRuntime /><EconomyBackendRuntime /><MainMenu /><DialogueOverlay /></>;
+  if (screen === "settings" || screen === "credits") return <><I18nRuntime /><AudioRuntime /><EconomyBackendRuntime /><SimpleScreen type={screen} /><DialogueOverlay /></>;
   if (screen === "station") {
     return (
       <>
+        <I18nRuntime />
         <AudioRuntime />
         <EconomyBackendRuntime />
         <GameClockTicker />
@@ -193,6 +197,7 @@ export default function App() {
 
   return (
     <main className="game-shell">
+      <I18nRuntime />
       <AudioRuntime />
       <EconomyBackendRuntime />
       <GameClockTicker />

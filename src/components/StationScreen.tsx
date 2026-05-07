@@ -49,6 +49,26 @@ import {
 } from "../systems/equipment";
 import { getContrabandLawSummary } from "../systems/combatAi";
 import type { AssetManifest, BlueprintPath, CargoHold, CommodityId, EquipmentId, EquipmentSlotType, ExplorationSignalDefinition, ExplorationState, StationTab } from "../types/game";
+import {
+  formatCargoContents,
+  formatCargoLabel,
+  formatCredits,
+  formatDateTime,
+  formatNumber,
+  formatTechLevel,
+  localizeCommodityName,
+  localizeEquipmentName,
+  localizeFactionName,
+  localizeMarketTag,
+  localizeMissionType,
+  localizeShipName,
+  localizeStationArchetype,
+  localizeStationName,
+  localizeSystemName,
+  translateDisplayName,
+  translateText,
+  type Locale
+} from "../i18n";
 
 const tabs: StationTab[] = ["Market", "Hangar", "Shipyard", "Mission Board", "Captain's Log", "Blueprint Workshop", "Lounge", "Galaxy Map"];
 const craftable: EquipmentId[] = equipmentList.filter((item) => !!item.craftCost).map((item) => item.id);
@@ -217,6 +237,7 @@ function EquipmentPopover({
   onClose: () => void;
 }) {
   const player = useGameStore((state) => state.player);
+  const locale = useGameStore((state) => state.locale);
   if (!popover) return null;
   const equipment = equipmentById[popover.id];
   const slotUsage = getEquipmentSlotUsage(player.equipment);
@@ -232,47 +253,48 @@ function EquipmentPopover({
       style={getPopoverStyle(popover.rect)}
       ref={popoverRef}
       role="dialog"
-      aria-label={`${equipment.name} equipment details`}
+      aria-label={`${localizeEquipmentName(equipment.id, locale, equipment.name)} ${translateText("equipment details", locale)}`}
     >
       <div className="equipment-popover-header">
         <AtlasIcon icon={getEquipmentIcon(equipment.id)} manifest={manifest} size={58} showTitle={false} />
         <div>
-          <span>{popover.status}</span>
-          <h3>{equipment.name}</h3>
-          <p>Tech {equipment.techLevel} · {equipment.category} · {equipment.role}</p>
+          <span>{translateText(popover.status, locale)}</span>
+          <h3>{localizeEquipmentName(equipment.id, locale, equipment.name)}</h3>
+          <p>{formatTechLevel(locale, equipment.techLevel, true)} · {translateText(equipment.category, locale)} · {translateText(equipment.role, locale)}</p>
         </div>
         {popover.mode === "pinned" ? (
-          <button className="equipment-popover-close" onClick={onClose} aria-label="Close equipment details">
+          <button className="equipment-popover-close" onClick={onClose} aria-label={translateText("Close equipment details", locale)}>
             X
           </button>
         ) : null}
       </div>
-      <p>{equipment.description}</p>
-      <p className="equipment-effect">{equipment.effect}</p>
+      <p>{translateText(equipment.description, locale)}</p>
+      <p className="equipment-effect">{translateText(equipment.effect, locale)}</p>
       <p className={canFit ? "equipment-fit" : "equipment-fit warning-text"}>
-        Slot {equipmentSlotLabels[equipment.slotType]} · {slotUsage[equipment.slotType]}/{slotCapacity[equipment.slotType]} used{sameSlotInstalled.length ? ` · Compare ${sameSlotInstalled.map(equipmentName).join(", ")}` : ""}
+        {translateText("Slot", locale)} {translateText(equipmentSlotLabels[equipment.slotType], locale)} · {slotUsage[equipment.slotType]}/{slotCapacity[equipment.slotType]} {translateText("used", locale)}
+        {sameSlotInstalled.length ? ` · ${translateText("Compare", locale)} ${sameSlotInstalled.map((id) => localizeEquipmentName(id, locale, equipmentName(id))).join(", ")}` : ""}
       </p>
       <div className="equipment-comparison" data-testid="equipment-comparison">
         <header>
-          <span>{comparison.mode === "replace-preview" ? "Replace Preview" : comparison.mode === "installed" ? "Installed Baseline" : "Install Preview"}</span>
-          <b>{comparison.installMessage}</b>
+          <span>{translateText(comparison.mode === "replace-preview" ? "Replace Preview" : comparison.mode === "installed" ? "Installed Baseline" : "Install Preview", locale)}</span>
+          <b>{translateText(comparison.installMessage, locale)}</b>
         </header>
         {comparisonLines.length > 0 ? (
           comparisonLines.slice(0, 8).map((line) => (
             <div key={`${equipment.id}-${line.label}`} className={`equipment-comparison-line ${line.tone}`}>
-              <span>{line.label}</span>
+              <span>{translateText(line.label, locale)}</span>
               <b>{line.before} {"->"} {line.after}</b>
             </div>
           ))
         ) : (
-          <p>No projected stat change for the current hull.</p>
+          <p>{translateText("No projected stat change for the current hull.", locale)}</p>
         )}
       </div>
       <div className="equipment-stat-row">
         {equipment.displayStats.map((stat) => (
           <span key={`${equipment.id}-${stat.label}`}>
             <b>{stat.value}</b>
-            {stat.label}
+            {translateText(stat.label, locale)}
           </span>
         ))}
       </div>
@@ -303,13 +325,14 @@ function EquipmentTrigger({
 export function StationScreen() {
   const currentStationId = useGameStore((state) => state.currentStationId);
   const station = currentStationId ? stationById[currentStationId] : undefined;
+  const locale = useGameStore((state) => state.locale);
   const tab = useGameStore((state) => state.stationTab);
   const manifest = useGameStore((state) => state.assetManifest);
   const setStationTab = useGameStore((state) => state.setStationTab);
   const undock = useGameStore((state) => state.undock);
   const saveGame = useGameStore((state) => state.saveGame);
   const autoSaveSlot = useGameStore((state) => state.saveSlots.find((slot) => slot.id === "auto"));
-  const autoSaveTime = autoSaveSlot?.savedAt ? new Date(autoSaveSlot.savedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : undefined;
+  const autoSaveTime = autoSaveSlot?.savedAt ? formatDateTime(locale, autoSaveSlot.savedAt, { hour: "2-digit", minute: "2-digit" }) : undefined;
   const isHangarTab = tab === "Hangar";
   const isGalaxyMapTab = tab === "Galaxy Map";
   if (!station) return null;
@@ -321,21 +344,21 @@ export function StationScreen() {
       <header className="station-header">
         <div>
           <p className="station-autosave-note">
-            {autoSaveTime ? `Auto-saved to Auto / Quick Slot · ${autoSaveTime}` : "Auto-save writes to Auto / Quick Slot"}
+            {autoSaveTime ? translateText(`Auto-saved to Auto / Quick Slot · ${autoSaveTime}`, locale) : translateText("Auto-save writes to Auto / Quick Slot", locale)}
           </p>
-          <p className="eyebrow">{station.archetype}</p>
-          <h1>{station.name}</h1>
-          <p>Tech Level {station.techLevel} · {factionNames[station.factionId]}</p>
+          <p className="eyebrow">{localizeStationArchetype(station.archetype, locale)}</p>
+          <h1>{localizeStationName(station.id, locale, station.name)}</h1>
+          <p>{formatTechLevel(locale, station.techLevel)} · {localizeFactionName(station.factionId, locale, factionNames[station.factionId])}</p>
         </div>
         <div className="station-actions">
-          <button onClick={() => saveGame()}>Quick Save</button>
-          <button className="primary" onClick={undock}>Launch</button>
+          <button onClick={() => saveGame()}>{translateText("Quick Save", locale)}</button>
+          <button className="primary" onClick={undock}>{translateText("Launch", locale)}</button>
         </div>
       </header>
       <nav className="tab-row">
         {tabs.map((name) => (
           <button key={name} className={tab === name ? "active" : ""} onClick={() => setStationTab(name)}>
-            {name}
+            {translateText(name, locale)}
           </button>
         ))}
       </nav>
@@ -356,6 +379,7 @@ export function StationScreen() {
 
 function MarketTab() {
   const manifest = useGameStore((state) => state.assetManifest);
+  const locale = useGameStore((state) => state.locale);
   const player = useGameStore((state) => state.player);
   const station = useGameStore((state) => stationById[state.currentStationId ?? "helion-prime"]);
   const system = useGameStore((state) => systemById[state.currentSystemId]);
@@ -373,10 +397,10 @@ function MarketTab() {
   return (
     <>
       <div className="table-panel">
-        <h2>Market</h2>
-        <p>Tech Level {station.techLevel} · Credits {player.credits.toLocaleString()} · Cargo {occupiedCargo}/{player.stats.cargoCapacity}</p>
+        <h2>{translateText("Market", locale)}</h2>
+        <p>{formatTechLevel(locale, station.techLevel)} · {formatCredits(locale, player.credits)} · {formatCargoLabel(locale, occupiedCargo, player.stats.cargoCapacity)}</p>
         <div className="market-list">
-          <h3 className="market-section-title">Commodities</h3>
+          <h3 className="market-section-title">{translateText("Commodities", locale)}</h3>
           {listedCommodities.map((commodity) => {
             const canBuy = canBuyCommodityAtStation(commodity.id, station);
             const entry = getMarketEntry(marketState, station.id, commodity.id);
@@ -387,25 +411,25 @@ function MarketTab() {
               <div className="market-row" data-testid={`market-row-${commodity.id}`} key={commodity.id}>
                 <AtlasIcon icon={getCommodityIcon(commodity.id)} manifest={manifest} />
                 <div>
-                  <strong>{commodity.name}</strong>
-                  <span>Tech {commodity.techLevel} · {commodity.legal ? "Licensed" : "Restricted"} · Hold {player.cargo[commodity.id] ?? 0}</span>
-                  {commodity.description ? <span>{commodity.description}</span> : null}
-                  {commodity.id === "illegal-contraband" ? <span>Local law: {getContrabandLawSummary(system.id)}</span> : null}
-                  <span>Stock {Math.floor(entry.stock)}/{entry.maxStock} · Demand {entry.demand.toFixed(2)} · {tag}</span>
+                  <strong>{localizeCommodityName(commodity.id, locale, commodity.name)}</strong>
+                  <span>{formatTechLevel(locale, commodity.techLevel, true)} · {translateText(commodity.legal ? "Licensed" : "Restricted", locale)} · {holdLabel(locale)} {formatNumber(locale, player.cargo[commodity.id] ?? 0)}</span>
+                  {commodity.description ? <span>{translateText(commodity.description, locale)}</span> : null}
+                  {commodity.id === "illegal-contraband" ? <span>{translateText("Local law", locale)}: {translateText(getContrabandLawSummary(system.id), locale)}</span> : null}
+                  <span>{translateText("Stock", locale)} {formatNumber(locale, Math.floor(entry.stock))}/{formatNumber(locale, entry.maxStock)} · {translateText("Demand", locale)} {entry.demand.toFixed(2)} · {localizeMarketTag(tag, locale)}</span>
                 </div>
-                <b>{canBuy ? buyPrice : "—"}/{sellPrice} cr</b>
+                <b>{canBuy ? formatCredits(locale, buyPrice, true) : "—"}/{formatCredits(locale, sellPrice, true)}</b>
                 <button
                   onClick={() => buy(commodity.id, 1)}
                   disabled={!canBuy || entry.stock < 1 || occupiedCargo >= player.stats.cargoCapacity}
-                  title={!canBuy ? "Not stocked at this station" : entry.stock < 1 ? "Out of stock" : undefined}
+                  title={!canBuy ? translateText("Not stocked at this station", locale) : entry.stock < 1 ? translateText("Out of stock", locale) : undefined}
                 >
-                  Buy
+                  {translateText("Buy", locale)}
                 </button>
-                <button onClick={() => sell(commodity.id, 1)} disabled={(player.cargo[commodity.id] ?? 0) <= 0}>Sell</button>
+                <button onClick={() => sell(commodity.id, 1)} disabled={(player.cargo[commodity.id] ?? 0) <= 0}>{translateText("Sell", locale)}</button>
               </div>
             );
           })}
-          <h3 className="market-section-title">Equipment</h3>
+          <h3 className="market-section-title">{translateText("Equipment", locale)}</h3>
           {listedEquipment.map((equipment) => {
             const canBuy = canBuyEquipmentAtStation(equipment.id, station);
             const entry = getMarketEntry(marketState, station.id, equipment.id);
@@ -419,23 +443,23 @@ function MarketTab() {
                   className="equipment-row-trigger"
                   equipmentId={equipment.id}
                   getTriggerProps={equipmentPopover.getTriggerProps}
-                  status={`Market · Tech ${equipment.techLevel}`}
+                  status={`${translateText("Market", locale)} · ${formatTechLevel(locale, equipment.techLevel, true)}`}
                 >
                   <span>
-                    <strong>{equipment.name}</strong>
-                    <small>Tech {equipment.techLevel} · {equipment.category} · Inventory {inventoryCount}</small>
-                    <small>Stock {Math.floor(entry.stock)}/{entry.maxStock} · Demand {entry.demand.toFixed(2)}</small>
+                    <strong>{localizeEquipmentName(equipment.id, locale, equipment.name)}</strong>
+                    <small>{formatTechLevel(locale, equipment.techLevel, true)} · {translateText(equipment.category, locale)} · {translateText("Inventory", locale)} {formatNumber(locale, inventoryCount)}</small>
+                    <small>{translateText("Stock", locale)} {formatNumber(locale, Math.floor(entry.stock))}/{formatNumber(locale, entry.maxStock)} · {translateText("Demand", locale)} {entry.demand.toFixed(2)}</small>
                   </span>
                 </EquipmentTrigger>
-                <b>{canBuy ? buyPrice : "—"}/{sellPrice} cr</b>
+                <b>{canBuy ? formatCredits(locale, buyPrice, true) : "—"}/{formatCredits(locale, sellPrice, true)}</b>
                 <button
                   onClick={() => buyEquipmentAction(equipment.id, 1)}
                   disabled={!canBuy || entry.stock < 1 || player.credits < buyPrice}
-                  title={!canBuy ? `Requires Tech Level ${equipment.techLevel} station` : entry.stock < 1 ? "Out of stock" : undefined}
+                  title={!canBuy ? requiresTechStationLabel(equipment.techLevel, locale) : entry.stock < 1 ? translateText("Out of stock", locale) : undefined}
                 >
-                  Buy
+                  {translateText("Buy", locale)}
                 </button>
-                <button onClick={() => sellEquipmentAction(equipment.id, 1)} disabled={inventoryCount <= 0}>Sell</button>
+                <button onClick={() => sellEquipmentAction(equipment.id, 1)} disabled={inventoryCount <= 0}>{translateText("Sell", locale)}</button>
               </div>
             );
           })}
@@ -453,6 +477,7 @@ function MarketTab() {
 
 function HangarTab() {
   const manifest = useGameStore((state) => state.assetManifest);
+  const locale = useGameStore((state) => state.locale);
   const player = useGameStore((state) => state.player);
   const activeMissions = useGameStore((state) => state.activeMissions);
   const repairAndRefill = useGameStore((state) => state.repairAndRefill);
@@ -470,32 +495,32 @@ function HangarTab() {
     <>
       <div className="hangar-build-grid">
         <section className="hangar-panel">
-          <h2>Current Ship</h2>
-          <p>{ship.name} · {ship.role}</p>
+          <h2>{translateText("Current Ship", locale)}</h2>
+          <p>{localizeShipName(ship.id, locale, ship.name)} · {translateText(ship.role, locale)}</p>
           <div className="stat-grid">
-            <span>Hull {Math.round(player.hull)}/{player.stats.hull}</span>
-            <span>Shield {Math.round(player.shield)}/{player.stats.shield}</span>
-            <span>Energy {Math.round(player.energy)}/{player.stats.energy}</span>
-            <span>Cargo {getOccupiedCargo(player.cargo, activeMissions)}/{player.stats.cargoCapacity}</span>
+            <span>{translateText("Hull", locale)} {Math.round(player.hull)}/{player.stats.hull}</span>
+            <span>{translateText("Shield", locale)} {Math.round(player.shield)}/{player.stats.shield}</span>
+            <span>{translateText("Energy", locale)} {Math.round(player.energy)}/{player.stats.energy}</span>
+            <span>{formatCargoLabel(locale, getOccupiedCargo(player.cargo, activeMissions), player.stats.cargoCapacity)}</span>
           </div>
-          <div className="slot-grid" aria-label="Equipment slots">
+          <div className="slot-grid" aria-label={translateText("Equipment slots", locale)}>
             {equipmentSlotOrder.map((slotType) => {
               const used = slotUsage[slotType];
               const capacity = slotCapacity[slotType];
               const fill = capacity > 0 ? Math.min(100, (used / capacity) * 100) : 0;
               return (
                 <div className="slot-meter" key={slotType}>
-                  <span>{equipmentSlotLabels[slotType]}</span>
+                  <span>{translateText(equipmentSlotLabels[slotType], locale)}</span>
                   <b>{used}/{capacity}</b>
                   <i style={{ width: `${fill}%` }} />
                 </div>
               );
             })}
           </div>
-          <button className="primary" onClick={repairAndRefill}>Repair Hull and Refill Missiles</button>
+          <button className="primary" onClick={repairAndRefill}>{translateText("Repair Hull and Refill Missiles", locale)}</button>
         </section>
         <section className="hangar-panel hangar-scroll-panel">
-          <h2>Installed Equipment</h2>
+          <h2>{translateText("Installed Equipment", locale)}</h2>
           <div className="equipment-list">
             {player.equipment.map((item, index) => (
               <div className="equipment-list-row" key={`${item}-${index}`}>
@@ -503,26 +528,26 @@ function HangarTab() {
                   className="equipment-row-trigger"
                   equipmentId={item}
                   getTriggerProps={equipmentPopover.getTriggerProps}
-                  status={`Installed · ${equipmentSlotLabels[equipmentById[item].slotType]}`}
+                  status={`${translateText("Installed", locale)} · ${translateText(equipmentSlotLabels[equipmentById[item].slotType], locale)}`}
                 >
                   <AtlasIcon icon={getEquipmentIcon(item)} manifest={manifest} size={38} showTitle={false} />
                   <span>
-                    <strong>{equipmentName(item)}</strong>
-                    <small>{equipmentSlotLabels[equipmentById[item].slotType]} · {equipmentById[item].effect}</small>
+                    <strong>{localizeEquipmentName(item, locale, equipmentName(item))}</strong>
+                    <small>{translateText(equipmentSlotLabels[equipmentById[item].slotType], locale)} · {translateText(equipmentById[item].effect, locale)}</small>
                   </span>
                 </EquipmentTrigger>
-                <button onClick={() => uninstallToInventory(item)}>Unload</button>
+                <button onClick={() => uninstallToInventory(item)}>{translateText("Unload", locale)}</button>
               </div>
             ))}
           </div>
         </section>
         <section className="hangar-panel hangar-scroll-panel">
           <header className="inventory-header">
-            <h2>Inventory</h2>
-            <select value={inventoryFilter} onChange={(event) => setInventoryFilter(event.target.value as EquipmentSlotType | "all")} aria-label="Filter equipment inventory">
-              <option value="all">All</option>
+            <h2>{translateText("Inventory", locale)}</h2>
+            <select value={inventoryFilter} onChange={(event) => setInventoryFilter(event.target.value as EquipmentSlotType | "all")} aria-label={translateText("Filter equipment inventory", locale)}>
+              <option value="all">{translateText("All", locale)}</option>
               {equipmentSlotOrder.map((slotType) => (
-                <option key={slotType} value={slotType}>{equipmentSlotLabels[slotType]}</option>
+                <option key={slotType} value={slotType}>{translateText(equipmentSlotLabels[slotType], locale)}</option>
               ))}
             </select>
           </header>
@@ -536,22 +561,22 @@ function HangarTab() {
                       className="equipment-row-trigger"
                       equipmentId={item}
                       getTriggerProps={equipmentPopover.getTriggerProps}
-                      status={`Inventory x${amount ?? 0}`}
+                      status={`${translateText("Inventory", locale)} x${amount ?? 0}`}
                     >
                       <AtlasIcon icon={getEquipmentIcon(item)} manifest={manifest} size={38} showTitle={false} />
                       <span>
-                        <strong>{equipmentName(item)} x{amount}</strong>
-                        <small>{equipmentSlotLabels[equipmentById[item].slotType]} · {equipmentById[item].role}</small>
+                        <strong>{localizeEquipmentName(item, locale, equipmentName(item))} x{amount}</strong>
+                        <small>{translateText(equipmentSlotLabels[equipmentById[item].slotType], locale)} · {translateText(equipmentById[item].role, locale)}</small>
                       </span>
                     </EquipmentTrigger>
-                    <button disabled={!availability.ok} title={availability.ok ? undefined : availability.message} onClick={() => installFromInventory(item)}>
-                      Install
+                    <button disabled={!availability.ok} title={availability.ok ? undefined : translateText(availability.message, locale)} onClick={() => installFromInventory(item)}>
+                      {translateText("Install", locale)}
                     </button>
                   </div>
                 );
               })
             ) : (
-              <p className="muted">No spare equipment in inventory.</p>
+              <p className="muted">{translateText("No spare equipment in inventory.", locale)}</p>
             )}
           </div>
         </section>
@@ -589,6 +614,7 @@ function shipBlueprintPathText(shipId: string): string {
 }
 
 function ShipyardTab() {
+  const locale = useGameStore((state) => state.locale);
   const player = useGameStore((state) => state.player);
   const currentStationId = useGameStore((state) => state.currentStationId);
   const buyShip = useGameStore((state) => state.buyShip);
@@ -598,8 +624,8 @@ function ShipyardTab() {
   const currentShip = shipById[player.shipId];
   return (
     <div className="shipyard-panel">
-      <h2>Shipyard</h2>
-      <p className="muted">Purchased ships transfer your active hull into secure storage at PTD Home. Stored ships can be switched there for free.</p>
+      <h2>{translateText("Shipyard", locale)}</h2>
+      <p className="muted">{translateText("Purchased ships transfer your active hull into secure storage at PTD Home. Stored ships can be switched there for free.", locale)}</p>
       <div className="ship-grid">
         {ships.map((ship) => {
           const current = player.shipId === ship.id;
@@ -609,24 +635,24 @@ function ShipyardTab() {
           const canSwitch = !!storedRecord && currentStationId === storedRecord.stationId;
           return (
             <article key={ship.id} className={`ship-card ${current ? "current-ship-card" : ""}`}>
-              <h3>{ship.name}</h3>
-              <p>{ship.role}</p>
-              <p>{shipCareerText(ship.id)}</p>
-              <p>{shipBlueprintPathText(ship.id)}</p>
-              <p>Hull {ship.stats.hull} · Shield {ship.stats.shield} · Speed {ship.stats.speed} · Cargo {ship.stats.cargoCapacity}</p>
-              <p>Slots {ship.stats.primarySlots}P / {ship.stats.secondarySlots}S / {ship.stats.utilitySlots}U / {ship.stats.defenseSlots}D / {ship.stats.engineeringSlots}E</p>
-              <p>Stock loadout: {ship.equipment.map(equipmentName).join(", ")}</p>
+              <h3>{localizeShipName(ship.id, locale, ship.name)}</h3>
+              <p>{translateText(ship.role, locale)}</p>
+              <p>{translateText(shipCareerText(ship.id), locale)}</p>
+              <p>{translateText(shipBlueprintPathText(ship.id), locale)}</p>
+              <p>{translateText("Hull", locale)} {ship.stats.hull} · {translateText("Shield", locale)} {ship.stats.shield} · {translateText("Speed", locale)} {ship.stats.speed} · {translateText("Cargo", locale)} {ship.stats.cargoCapacity}</p>
+              <p>{translateText("Slots", locale)} {ship.stats.primarySlots}P / {ship.stats.secondarySlots}S / {ship.stats.utilitySlots}U / {ship.stats.defenseSlots}D / {ship.stats.engineeringSlots}E</p>
+              <p>{stockLoadoutLabel(locale)}: {ship.equipment.map((id) => localizeEquipmentName(id, locale, equipmentName(id))).join(", ")}</p>
               {current ? (
-                <button disabled>Current</button>
+                <button disabled>{translateText("Current", locale)}</button>
               ) : canSwitch ? (
-                <button onClick={() => switchShip(ship.id)}>Switch Free</button>
+                <button onClick={() => switchShip(ship.id)}>{translateText("Switch Free", locale)}</button>
               ) : storedRecord ? (
-                <button disabled>Stored at {storedStation?.name ?? storedRecord.stationId}</button>
+                <button disabled>{storedAtLabel(locale)} {storedStation ? localizeStationName(storedStation.id, locale, storedStation.name) : storedRecord.stationId}</button>
               ) : owned ? (
-                <button disabled>Owned</button>
+                <button disabled>{translateText("Owned", locale)}</button>
               ) : (
                 <button disabled={player.credits < ship.price} onClick={() => setPendingShipId(ship.id)}>
-                  Buy {ship.price.toLocaleString()} cr
+                  {translateText("Buy", locale)} {formatCredits(locale, ship.price, true)}
                 </button>
               )}
             </article>
@@ -634,22 +660,22 @@ function ShipyardTab() {
         })}
       </div>
       {pendingShip ? (
-        <div className="modal-screen static-screen" role="dialog" aria-modal="true" aria-label={`Confirm ${pendingShip.name} purchase`}>
+        <div className="modal-screen static-screen" role="dialog" aria-modal="true" aria-label={`${translateText("Confirm", locale)} ${localizeShipName(pendingShip.id, locale, pendingShip.name)} ${translateText("purchase", locale)}`}>
           <section className="modal-panel ship-purchase-modal">
-            <h2>Confirm Purchase</h2>
+            <h2>{translateText("Confirm Purchase", locale)}</h2>
             <p>
-              Buy {pendingShip.name} for {pendingShip.price.toLocaleString()} credits. Your {currentShip.name} and its installed equipment will be stored at PTD Home.
+              {confirmShipPurchaseText(pendingShip.id, currentShip.id, pendingShip.price, locale)}
             </p>
             <div className="ship-confirm-grid">
-              <span>Default loadout</span>
-              <b>{pendingShip.equipment.map(equipmentName).join(", ")}</b>
-              <span>Slot layout</span>
+              <span>{translateText("Default loadout", locale)}</span>
+              <b>{pendingShip.equipment.map((id) => localizeEquipmentName(id, locale, equipmentName(id))).join(", ")}</b>
+              <span>{translateText("Slot layout", locale)}</span>
               <b>{pendingShip.stats.primarySlots}P / {pendingShip.stats.secondarySlots}S / {pendingShip.stats.utilitySlots}U / {pendingShip.stats.defenseSlots}D / {pendingShip.stats.engineeringSlots}E</b>
-              <span>Storage station</span>
-              <b>PTD Home</b>
+              <span>{translateText("Storage station", locale)}</span>
+              <b>{localizeStationName("ptd-home", locale, "PTD Home")}</b>
             </div>
             <div className="modal-actions">
-              <button onClick={() => setPendingShipId(null)}>Cancel</button>
+              <button onClick={() => setPendingShipId(null)}>{translateText("Cancel", locale)}</button>
               <button
                 className="primary"
                 disabled={player.credits < pendingShip.price}
@@ -658,7 +684,7 @@ function ShipyardTab() {
                   setPendingShipId(null);
                 }}
               >
-                Confirm Buy
+                {translateText("Confirm Buy", locale)}
               </button>
             </div>
           </section>
@@ -670,6 +696,7 @@ function ShipyardTab() {
 
 function MissionBoardTab() {
   const manifest = useGameStore((state) => state.assetManifest);
+  const locale = useGameStore((state) => state.locale);
   const currentSystemId = useGameStore((state) => state.currentSystemId);
   const currentStationId = useGameStore((state) => state.currentStationId ?? "");
   const player = useGameStore((state) => state.player);
@@ -688,16 +715,16 @@ function MissionBoardTab() {
   return (
     <div className="split-layout">
       <aside className="reputation-panel">
-        <h3>Reputation</h3>
+        <h3>{translateText("Reputation", locale)}</h3>
         {Object.entries(reputation.factions).map(([id, value]) => (
           <div className="reputation-row" key={id}>
             <AtlasIcon icon={getFactionIcon(id)} manifest={manifest} size={38} />
-            <p>{id.replace(/-/g, " ")}: {value} · {reputationLabel(value)}</p>
+            <p>{localizeFactionName(id, locale, factionNames[id as keyof typeof factionNames])}: {value} · {translateText(reputationLabel(value), locale)}</p>
           </div>
         ))}
       </aside>
       <div className="mission-board-panel">
-        <h2>Mission Board</h2>
+        <h2>{translateText("Mission Board", locale)}</h2>
         <div className="mission-list">
           {[...activeMissions, ...available.filter((mission) => !activeMissions.some((active) => active.id === mission.id))].map((mission) => {
             const active = activeMissions.some((item) => item.id === mission.id);
@@ -712,32 +739,32 @@ function MissionBoardTab() {
               <article key={mission.id} className="mission-card" data-testid={`mission-card-${mission.id}`}>
                 <div className="mission-title">
                   <AtlasIcon icon={getFactionIcon(mission.factionId)} manifest={manifest} size={40} />
-                  <h3>{mission.title}</h3>
-                  {storyChapter ? <span className="story-pill">Main Story {storyChapter.order.toString().padStart(2, "0")}</span> : null}
-                  {marketGap ? <span className="story-pill">Market Gap</span> : null}
+                  <h3>{translateText(mission.title, locale)}</h3>
+                  {storyChapter ? <span className="story-pill">{translateText("Main Story", locale)} {storyChapter.order.toString().padStart(2, "0")}</span> : null}
+                  {marketGap ? <span className="story-pill">{translateText("Market Gap", locale)}</span> : null}
                 </div>
-                <p>{mission.type} · {factionNames[mission.factionId]} · Reward {mission.reward} cr</p>
-                <p>{mission.description}</p>
+                <p>{localizeMissionType(mission.type, locale)} · {localizeFactionName(mission.factionId, locale, factionNames[mission.factionId])} · {translateText("Reward", locale)} {formatCredits(locale, mission.reward, true)}</p>
+                <p>{translateText(mission.description, locale)}</p>
                 <p>
-                  {remaining !== undefined ? `Time ${formatTime(remaining)} · ` : ""}
-                  Failure {mission.failureReputationDelta ?? -4} rep
+                  {remaining !== undefined ? `${translateText("Time", locale)} ${formatTime(remaining, locale)} · ` : ""}
+                  {translateText("Failure", locale)} {mission.failureReputationDelta ?? -4} rep
                 </p>
-                {mission.cargoProvided ? <p>Provided cargo: {formatCargo(mission.cargoProvided)}</p> : null}
-                {mission.cargoRequired ? <p>Required cargo: {formatCargo(mission.cargoRequired)}{mission.consumeCargoOnComplete ? " · consumed" : ""}</p> : null}
-                {mission.passengerCount ? <p>Passengers occupy {mission.passengerCount} cargo space.</p> : null}
-                {mission.escort ? <p>Escort hull {mission.escort.hull}{mission.escort.arrived ? " · arrived" : ""}</p> : null}
-                {mission.salvage ? <p>Recovery target: {mission.salvage.name}{mission.salvage.recovered ? " · recovered" : ""}</p> : null}
+                {mission.cargoProvided ? <p>{translateText("Provided cargo", locale)}: {formatCargo(mission.cargoProvided, locale)}</p> : null}
+                {mission.cargoRequired ? <p>{translateText("Required cargo", locale)}: {formatCargo(mission.cargoRequired, locale)}{mission.consumeCargoOnComplete ? ` · ${translateText("consumed", locale)}` : ""}</p> : null}
+                {mission.passengerCount ? <p>{translateText("Passengers occupy", locale)} {mission.passengerCount} {translateText("cargo space.", locale)}</p> : null}
+                {mission.escort ? <p>{translateText("Escort hull", locale)} {mission.escort.hull}{mission.escort.arrived ? ` · ${translateText("arrived", locale)}` : ""}</p> : null}
+                {mission.salvage ? <p>{translateText("Recovery target", locale)}: {translateDisplayName(mission.salvage.name, locale)}{mission.salvage.recovered ? ` · ${translateText("recovered", locale)}` : ""}</p> : null}
                 {mission.storyEncounter ? (
                   <p className="story-field-line">
-                    Field objective: {mission.storyEncounter.fieldObjective}
-                    {remainingStoryTargets.length > 0 ? ` · Story targets: ${remainingStoryTargets.map((target) => target.name).join(", ")}` : " · Story targets clear"}
+                    {translateText("Field objective", locale)}: {translateText(mission.storyEncounter.fieldObjective, locale)}
+                    {remainingStoryTargets.length > 0 ? ` · ${translateText("Story targets", locale)}: ${remainingStoryTargets.map((target) => translateDisplayName(target.name, locale)).join(", ")}` : ` · ${translateText("Story targets clear", locale)}`}
                   </p>
                 ) : null}
-                {mission.targetCommodityId ? <p>Requires {mission.targetAmount} {commodityById[mission.targetCommodityId].name}</p> : null}
+                {mission.targetCommodityId ? <p>{translateText("Requires", locale)} {mission.targetAmount} {localizeCommodityName(mission.targetCommodityId, locale, commodityById[mission.targetCommodityId].name)}</p> : null}
                 {active ? (
-                  <button onClick={() => completeMission(mission.id)} disabled={!complete}>Complete</button>
+                  <button onClick={() => completeMission(mission.id)} disabled={!complete}>{translateText("Complete", locale)}</button>
                 ) : (
-                  <button onClick={() => acceptMission(mission.id)}>Accept</button>
+                  <button onClick={() => acceptMission(mission.id)}>{translateText("Accept", locale)}</button>
                 )}
               </article>
             );
@@ -916,6 +943,7 @@ function currentObjectiveText(status: string, mission: typeof missionTemplates[n
 
 function BlueprintTab() {
   const manifest = useGameStore((state) => state.assetManifest);
+  const locale = useGameStore((state) => state.locale);
   const player = useGameStore((state) => state.player);
   const station = useGameStore((state) => stationById[state.currentStationId ?? "helion-prime"]);
   const unlockBlueprint = useGameStore((state) => state.unlockBlueprint);
@@ -931,13 +959,13 @@ function BlueprintTab() {
       <div className="blueprint-panel">
         <header className="blueprint-toolbar">
           <div>
-            <h2>Blueprint Workshop</h2>
-            <p>Research unlocks fabrication rights. Markets and NPC drops still provide physical equipment without requiring blueprints.</p>
+            <h2>{translateText("Blueprint Workshop", locale)}</h2>
+            <p>{translateText("Research unlocks fabrication rights. Markets and NPC drops still provide physical equipment without requiring blueprints.", locale)}</p>
           </div>
-          <select value={pathFilter} onChange={(event) => setPathFilter(event.target.value as BlueprintPath | "all")} aria-label="Filter blueprint path">
-            <option value="all">All Paths</option>
+          <select value={pathFilter} onChange={(event) => setPathFilter(event.target.value as BlueprintPath | "all")} aria-label={translateText("Filter blueprint path", locale)}>
+            <option value="all">{translateText("All Paths", locale)}</option>
             {blueprintPathOrder.map((path) => (
-              <option key={path} value={path}>{blueprintPathLabels[path]}</option>
+              <option key={path} value={path}>{translateText(blueprintPathLabels[path], locale)}</option>
             ))}
           </select>
         </header>
@@ -955,12 +983,12 @@ function BlueprintTab() {
             const canCraft = blueprintUnlocked && techUnlocked && !!craftCost && player.credits >= craftCost.credits && hasCraftMaterials(player.cargo, craftCost.cargo);
             const blueprintStatus = canCraft ? "Craftable" : blueprintUnlocked ? "Unlocked" : researchable ? "Researchable" : "Locked";
             const missing = !blueprintUnlocked
-              ? unlockAvailability.message
+              ? translateText(unlockAvailability.message, locale)
               : !techUnlocked
-                ? `Requires Tech Level ${equipment.techLevel} station.`
+                ? requiresTechStationLabel(equipment.techLevel, locale)
                 : craftCost
-                  ? getCraftMissingText(player, craftCost.credits, craftCost.cargo)
-                  : "No blueprint data.";
+                  ? getCraftMissingText(player, craftCost.credits, craftCost.cargo, locale)
+                  : translateText("No blueprint data.", locale);
             return (
               <article
                 className={`ship-card equipment-card blueprint-card ${blueprintStatus.toLowerCase()} equipment-trigger`}
@@ -968,20 +996,20 @@ function BlueprintTab() {
                 role="button"
                 tabIndex={0}
                 data-testid={`blueprint-card-${id}`}
-                {...equipmentPopover.getTriggerProps(id, installed ? "Installed" : inventoryCount > 0 ? `Inventory x${inventoryCount}` : blueprintStatus)}
+                {...equipmentPopover.getTriggerProps(id, installed ? translateText("Installed", locale) : inventoryCount > 0 ? `${translateText("Inventory", locale)} x${inventoryCount}` : translateText(blueprintStatus, locale))}
               >
                 <AtlasIcon icon={getEquipmentIcon(id)} manifest={manifest} size={52} showTitle={false} />
-                <span className={`blueprint-status ${blueprintStatus.toLowerCase()}`}>{blueprintStatus}</span>
-                <h3>{equipmentName(id)}</h3>
-                <p>Tier {blueprint.tier} · {blueprintPathLabels[blueprint.path]} · Tech {equipment.techLevel}</p>
-                <p>{equipment.category} · {equipmentSlotLabels[equipment.slotType]} slot</p>
-                <p>Requires: {(blueprint.prerequisiteEquipmentIds ?? []).map(equipmentName).join(", ") || "Starter research"}</p>
-                <p>Unlock: {formatBlueprintUnlockCost(blueprint.unlockCost)}</p>
+                <span className={`blueprint-status ${blueprintStatus.toLowerCase()}`}>{translateText(blueprintStatus, locale)}</span>
+                <h3>{localizeEquipmentName(id, locale, equipmentName(id))}</h3>
+                <p>{translateText("Tier", locale)} {blueprint.tier} · {translateText(blueprintPathLabels[blueprint.path], locale)} · {formatTechLevel(locale, equipment.techLevel, true)}</p>
+                <p>{translateText(equipment.category, locale)} · {translateText(equipmentSlotLabels[equipment.slotType], locale)} {translateText("slot", locale)}</p>
+                <p>{translateText("Requires", locale)}: {(blueprint.prerequisiteEquipmentIds ?? []).map((equipmentId) => localizeEquipmentName(equipmentId, locale, equipmentName(equipmentId))).join(", ") || translateText("Starter research", locale)}</p>
+                <p>{translateText("Unlock", locale)}: {formatBlueprintUnlockCost(blueprint.unlockCost, locale)}</p>
                 {craftCost ? (
-                  <p>Craft: {craftCost.credits.toLocaleString()} cr · {formatCargo(craftCost.cargo)}</p>
+                  <p>{translateText("Craft", locale)}: {formatCredits(locale, craftCost.credits, true)} · {formatCargo(craftCost.cargo, locale)}</p>
                 ) : null}
-                <p>Installed {installed ? "yes" : "no"} · Inventory {inventoryCount}</p>
-                {missing ? <p className="warning-text">{missing}</p> : <p className="muted">Added to equipment inventory after fabrication.</p>}
+                <p>{translateText("Installed", locale)} {translateText(installed ? "yes" : "no", locale)} · {translateText("Inventory", locale)} {formatNumber(locale, inventoryCount)}</p>
+                {missing ? <p className="warning-text">{missing}</p> : <p className="muted">{translateText("Added to equipment inventory after fabrication.", locale)}</p>}
                 <button
                   disabled={!researchable}
                   onClick={(event) => {
@@ -989,7 +1017,7 @@ function BlueprintTab() {
                     unlockBlueprint(id);
                   }}
                 >
-                  {blueprintUnlocked ? "Unlocked" : "Research"}
+                  {blueprintUnlocked ? translateText("Unlocked", locale) : translateText("Research", locale)}
                 </button>
                 <button
                   disabled={!canCraft}
@@ -998,7 +1026,7 @@ function BlueprintTab() {
                     craftEquipment(id);
                   }}
                 >
-                  Craft
+                  {translateText("Craft", locale)}
                 </button>
               </article>
             );
@@ -1015,67 +1043,173 @@ function BlueprintTab() {
   );
 }
 
-function getCraftMissingText(player: ReturnType<typeof useGameStore.getState>["player"], credits: number, cargo: CargoHold): string {
+function getCraftMissingText(player: ReturnType<typeof useGameStore.getState>["player"], credits: number, cargo: CargoHold, locale: Locale): string {
   const missing: string[] = [];
-  if (player.credits < credits) missing.push(`${(credits - player.credits).toLocaleString()} credits`);
+  if (player.credits < credits) missing.push(formatCredits(locale, credits - player.credits));
   for (const [id, amount] of Object.entries(cargo) as [CommodityId, number][]) {
     const shortage = amount - (player.cargo[id] ?? 0);
-    if (shortage > 0) missing.push(`${shortage} ${commodityById[id].name}`);
+    if (shortage > 0) missing.push(`${formatNumber(locale, shortage)} ${localizeCommodityName(id, locale, commodityById[id].name)}`);
   }
-  return missing.length > 0 ? `Missing ${missing.join(", ")}.` : "";
+  if (missing.length === 0) return "";
+  if (locale === "zh-CN") return `缺少 ${missing.join(", ")}。`;
+  if (locale === "zh-TW") return `缺少 ${missing.join(", ")}。`;
+  if (locale === "ja") return `不足: ${missing.join(", ")}。`;
+  if (locale === "fr") return `Manque ${missing.join(", ")}.`;
+  return `Missing ${missing.join(", ")}.`;
 }
 
-function formatBlueprintUnlockCost(cost: { credits: number; cargo?: CargoHold }): string {
-  const parts = [`${cost.credits.toLocaleString()} cr`];
-  if (cost.cargo && Object.keys(cost.cargo).length > 0) parts.push(formatCargo(cost.cargo));
+function formatBlueprintUnlockCost(cost: { credits: number; cargo?: CargoHold }, locale: Locale): string {
+  const parts = [formatCredits(locale, cost.credits, true)];
+  if (cost.cargo && Object.keys(cost.cargo).length > 0) parts.push(formatCargo(cost.cargo, locale));
   return parts.join(" · ");
 }
 
+function holdLabel(locale: Locale): string {
+  if (locale === "zh-CN") return "持有";
+  if (locale === "zh-TW") return "持有";
+  if (locale === "ja") return "保有";
+  if (locale === "fr") return "Soute";
+  return "Hold";
+}
+
+function requiresTechStationLabel(level: number, locale: Locale): string {
+  if (locale === "zh-CN") return `需要 ${formatTechLevel(locale, level)} 空间站`;
+  if (locale === "zh-TW") return `需要 ${formatTechLevel(locale, level)} 太空站`;
+  if (locale === "ja") return `${formatTechLevel(locale, level)} のステーションが必要`;
+  if (locale === "fr") return `Station ${formatTechLevel(locale, level)} requise`;
+  return `Requires Tech Level ${level} station`;
+}
+
+function stockLoadoutLabel(locale: Locale): string {
+  if (locale === "zh-CN") return "标准配置";
+  if (locale === "zh-TW") return "標準配置";
+  if (locale === "ja") return "標準ロードアウト";
+  if (locale === "fr") return "Configuration stock";
+  return "Stock loadout";
+}
+
+function storedAtLabel(locale: Locale): string {
+  if (locale === "zh-CN") return "存放于";
+  if (locale === "zh-TW") return "存放於";
+  if (locale === "ja") return "保管先";
+  if (locale === "fr") return "Stocké à";
+  return "Stored at";
+}
+
+function confirmShipPurchaseText(pendingShipId: string, currentShipId: string, price: number, locale: Locale): string {
+  const pendingName = localizeShipName(pendingShipId, locale);
+  const currentName = localizeShipName(currentShipId, locale);
+  const priceText = formatCredits(locale, price);
+  const storageName = localizeStationName("ptd-home", locale, "PTD Home");
+  if (locale === "zh-CN") return `以 ${priceText} 购买 ${pendingName}。你的 ${currentName} 及其已安装装备将存放在 ${storageName}。`;
+  if (locale === "zh-TW") return `以 ${priceText} 購買 ${pendingName}。你的 ${currentName} 及其已安裝裝備將存放在 ${storageName}。`;
+  if (locale === "ja") return `${pendingName}を ${priceText} で購入します。現在の ${currentName} と装備は ${storageName} に保管されます。`;
+  if (locale === "fr") return `Acheter ${pendingName} pour ${priceText}. Votre ${currentName} et ses équipements installés seront stockés à ${storageName}.`;
+  return `Buy ${pendingName} for ${priceText}. Your ${currentName} and its installed equipment will be stored at ${storageName}.`;
+}
+
+function dockhandsBriefLabel(systemName: string, locale: Locale): string {
+  if (locale === "zh-CN") return `${systemName} 的码头工正在比对实时库存表和供需压力：`;
+  if (locale === "zh-TW") return `${systemName} 的碼頭工正在比對即時庫存表和供需壓力：`;
+  if (locale === "ja") return `${systemName} のドック作業員がライブ在庫表と供給圧を比較しています:`;
+  if (locale === "fr") return `Les dockers de ${systemName} comparent les stocks en direct et la pression d'approvisionnement :`;
+  return `Dockhands in ${systemName} are comparing live stock sheets and supply pressure:`;
+}
+
+function shortageLabel(locale: Locale): string {
+  if (locale === "zh-CN") return "短缺";
+  if (locale === "zh-TW") return "短缺";
+  if (locale === "ja") return "不足";
+  if (locale === "fr") return "Pénurie";
+  return "Shortage";
+}
+
+function surplusLabel(locale: Locale): string {
+  if (locale === "zh-CN") return "过剩";
+  if (locale === "zh-TW") return "過剩";
+  if (locale === "ja") return "余剰";
+  if (locale === "fr") return "Surplus";
+  return "Surplus";
+}
+
+function needsLabel(locale: Locale): string {
+  if (locale === "zh-CN") return "需要";
+  if (locale === "zh-TW") return "需要";
+  if (locale === "ja") return "需要";
+  if (locale === "fr") return "a besoin de";
+  return "needs";
+}
+
+function heavyOnLabel(locale: Locale): string {
+  if (locale === "zh-CN") return "库存偏重于";
+  if (locale === "zh-TW") return "庫存偏重於";
+  if (locale === "ja") return "を多く抱えています";
+  if (locale === "fr") return "est chargé en";
+  return "is heavy on";
+}
+
+function supplyFeedLabel(locale: Locale): string {
+  if (locale === "zh-CN") return "供应动态";
+  if (locale === "zh-TW") return "供應動態";
+  if (locale === "ja") return "供給フィード";
+  if (locale === "fr") return "Flux d'approvisionnement";
+  return "Supply feed";
+}
+
+function unitLabel(locale: Locale): string {
+  if (locale === "zh-CN") return "单位";
+  if (locale === "zh-TW") return "單位";
+  if (locale === "ja") return "単位";
+  if (locale === "fr") return "unité";
+  return "unit";
+}
+
 function LoungeTab() {
+  const locale = useGameStore((state) => state.locale);
   const currentSystem = useGameStore((state) => systemById[state.currentSystemId]);
   const marketState = useGameStore((state) => state.marketState);
   const economyEvents = useGameStore((state) => state.economyEvents);
   const supplyBrief = getMarketSupplyBrief(marketState, currentSystem.id, economyEvents);
   return (
     <div className="lounge">
-      <h2>Lounge</h2>
-      <p>Dockhands in {currentSystem.name} are comparing live stock sheets and supply pressure:</p>
+      <h2>{translateText("Lounge", locale)}</h2>
+      <p>{dockhandsBriefLabel(localizeSystemName(currentSystem.id, locale, currentSystem.name), locale)}</p>
       {supplyBrief.shortages.length > 0 ? (
         supplyBrief.shortages.map((signal) => (
           <p key={`short-${signal.stationId}-${signal.commodityId}`}>
-            Shortage: {stationById[signal.stationId].name} needs {commodityById[signal.commodityId].name} · {signal.severity.toUpperCase()}
+            {shortageLabel(locale)}: {localizeStationName(signal.stationId, locale, stationById[signal.stationId].name)} {needsLabel(locale)} {localizeCommodityName(signal.commodityId, locale, commodityById[signal.commodityId].name)} · {translateText(signal.severity.toUpperCase(), locale)}
           </p>
         ))
       ) : (
-        <p>No critical station shortages on the public sheet.</p>
+        <p>{translateText("No critical station shortages on the public sheet.", locale)}</p>
       )}
       {supplyBrief.surpluses.map((signal) => (
         <p key={`surplus-${signal.stationId}-${signal.commodityId}`}>
-          Surplus: {stationById[signal.stationId].name} is heavy on {commodityById[signal.commodityId].name}.
+          {surplusLabel(locale)}: {localizeStationName(signal.stationId, locale, stationById[signal.stationId].name)} {heavyOnLabel(locale)} {localizeCommodityName(signal.commodityId, locale, commodityById[signal.commodityId].name)}.
         </p>
       ))}
       {supplyBrief.recentEvents.map((event) => (
-        <p key={event.id}>Supply feed: {event.message}</p>
+        <p key={event.id}>{supplyFeedLabel(locale)}: {translateText(event.message, locale)}</p>
       ))}
-      <p>Favored live routes:</p>
+      <p>{translateText("Favored live routes", locale)}:</p>
       {supplyBrief.routes.map((hint) => (
         <p key={`${hint.commodityId}-${hint.fromStationId}-${hint.toStationId}`}>
-          {hint.commodityName}: {hint.fromStationName} → {hint.toStationName} · +{hint.profit} cr/unit
+          {localizeCommodityName(hint.commodityId, locale, hint.commodityName)}: {translateDisplayName(hint.fromStationName, locale)} → {translateDisplayName(hint.toStationName, locale)} · +{formatCredits(locale, hint.profit, true)}/{unitLabel(locale)}
         </p>
       ))}
-      <p>Contract timers use shipboard time, so they keep moving while docked or browsing the map.</p>
+      <p>{translateText("Contract timers use shipboard time, so they keep moving while docked or browsing the map.", locale)}</p>
     </div>
   );
 }
 
-function formatTime(seconds: number): string {
+function formatTime(seconds: number, locale: Locale): string {
   const minutes = Math.floor(seconds / 60);
   const remainder = Math.floor(seconds % 60).toString().padStart(2, "0");
+  if (locale === "zh-CN" || locale === "zh-TW" || locale === "ja") return `${minutes}分${remainder}秒`;
+  if (locale === "fr") return `${minutes} min ${remainder} s`;
   return `${minutes}:${remainder}`;
 }
 
-function formatCargo(cargo: CargoHold): string {
-  return Object.entries(cargo)
-    .map(([id, amount]) => `${amount} ${commodityById[id as CommodityId].name}`)
-    .join(", ");
+function formatCargo(cargo: CargoHold, locale: Locale): string {
+  return formatCargoContents(locale, cargo);
 }

@@ -8,9 +8,20 @@ import type { AsteroidEntity, ConvoyEntity, ExplorationSignalDefinition, FlightE
 import { add, forwardFromRotation, normalize, scale, sub } from "../systems/math";
 import { getOreColor } from "../systems/difficulty";
 import { getJumpGatePosition } from "../systems/autopilot";
-import { getNavigationHintText, getNavigationTargetCue, getNearestNavigationTarget } from "../systems/navigation";
-import type { NavigationCueTone } from "../systems/navigation";
+import { getNavigationTargetCue, getNearestNavigationTarget } from "../systems/navigation";
+import type { NavigationCueTone, NavigationTarget } from "../systems/navigation";
 import { getIncompleteExplorationSignals, getVisibleStationsForSystem, isExplorationSignalDiscovered } from "../systems/exploration";
+import {
+  formatDistance,
+  formatRuntimeText,
+  formatTechLevel,
+  localizeGenericName,
+  localizePlanetName,
+  localizeStationName,
+  translateDisplayName,
+  translateText,
+  type Locale
+} from "../i18n";
 
 function toThree(position: Vec3): [number, number, number] {
   return [position[0], position[1], position[2]];
@@ -260,27 +271,28 @@ function PlayerEngineFlames({ shipId, afterburning, speed }: { shipId: string; a
 
 function PlayerShip({ onModelStatus }: { onModelStatus: (status: ShipModelStatus | null) => void }) {
   const player = useGameStore((state) => state.player);
+  const locale = useGameStore((state) => state.locale);
   const modelUrl = useGameStore((state) => state.assetManifest.shipModels[state.player.shipId]);
   const afterburning = useGameStore((state) => state.input.afterburner && state.player.energy > 12);
   const speed = Math.hypot(...player.velocity);
   const fallback = <ProceduralPlayerShip shipId={player.shipId} />;
-  const shipName = shipById[player.shipId]?.name ?? player.shipId;
+  const shipName = translateDisplayName(shipById[player.shipId]?.name ?? player.shipId, locale);
 
   useEffect(() => {
     if (modelUrl) {
       onModelStatus(null);
     } else {
-      onModelStatus({ kind: "fallback", text: `Ship model: no GLB manifest entry for ${shipName}; using procedural fallback.` });
+      onModelStatus({ kind: "fallback", text: shipModelFallbackText(shipName, "missing", locale) });
     }
-  }, [modelUrl, onModelStatus, shipName]);
+  }, [locale, modelUrl, onModelStatus, shipName]);
 
   const markLoaded = useCallback(() => {
     onModelStatus(null);
   }, [onModelStatus]);
 
   const markFallback = useCallback(() => {
-    onModelStatus({ kind: "fallback", text: `Ship model: GLB failed for ${shipName}; using procedural fallback.` });
-  }, [onModelStatus, shipName]);
+    onModelStatus({ kind: "fallback", text: shipModelFallbackText(shipName, "failed", locale) });
+  }, [locale, onModelStatus, shipName]);
 
   return (
     <group position={toThree(player.position)} rotation={player.rotation}>
@@ -300,6 +312,7 @@ function PlayerShip({ onModelStatus }: { onModelStatus: (status: ShipModelStatus
 
 function FreighterNpcShip({ ship }: { ship: FlightEntity }) {
   const clock = useGameStore((state) => state.runtime.clock);
+  const locale = useGameStore((state) => state.locale);
   const textureUrl = useGameStore((state) => state.assetManifest.npcShipTextures.freighter);
   const texture = useLoader(THREE.TextureLoader, textureUrl);
   texture.wrapS = THREE.RepeatWrapping;
@@ -344,7 +357,7 @@ function FreighterNpcShip({ ship }: { ship: FlightEntity }) {
         <meshBasicMaterial color="#6ee7ff" transparent opacity={0.32} toneMapped={false} />
       </mesh>
       <Html center distanceFactor={13} className="target-label npc-label">
-        {ship.economyStatus ?? `FREIGHTER · ${Math.round(ship.hull)}/${ship.maxHull}`}
+        {ship.economyStatus ? formatRuntimeText(locale, ship.economyStatus) : `${localizeGenericName("FREIGHTER", locale)} · ${Math.round(ship.hull)}/${ship.maxHull}`}
       </Html>
     </group>
   );
@@ -352,6 +365,7 @@ function FreighterNpcShip({ ship }: { ship: FlightEntity }) {
 
 function DroneNpcShip({ ship }: { ship: FlightEntity }) {
   const clock = useGameStore((state) => state.runtime.clock);
+  const locale = useGameStore((state) => state.locale);
   const direction = normalize(ship.velocity);
   const yaw = Math.atan2(direction[0], -direction[2]);
   const pulse = 0.5 + Math.sin(clock * 7.2 + ship.position[0] * 0.02) * 0.5;
@@ -379,7 +393,7 @@ function DroneNpcShip({ ship }: { ship: FlightEntity }) {
       <pointLight color="#9bffe8" intensity={1.1 + pulse * 1.1} distance={180} />
       {ship.storyTarget ? (
         <Html center distanceFactor={12} className="target-label story-target-label">
-          {ship.name.toUpperCase()}
+          {translateDisplayName(ship.name, locale).toUpperCase()}
         </Html>
       ) : null}
     </group>
@@ -388,6 +402,7 @@ function DroneNpcShip({ ship }: { ship: FlightEntity }) {
 
 function RelayNpcCore({ ship }: { ship: FlightEntity }) {
   const clock = useGameStore((state) => state.runtime.clock);
+  const locale = useGameStore((state) => state.locale);
   const pulse = 0.5 + Math.sin(clock * 4.8 + ship.position[2] * 0.01) * 0.5;
   const flashing = clock - ship.lastDamageAt < 0.18 || ship.deathTimer !== undefined;
   const opacity = ship.deathTimer !== undefined ? 0.45 : 1;
@@ -407,7 +422,7 @@ function RelayNpcCore({ ship }: { ship: FlightEntity }) {
       <Line points={[[0, -48, 0], [0, 0, 0], [0, 48, 0]]} color="#ff9bd5" lineWidth={1.1} transparent opacity={0.26 + pulse * 0.26} />
       <pointLight color="#9b7bff" intensity={1.3 + pulse * 1.4} distance={230} />
       <Html center distanceFactor={13} className="target-label story-target-label story-relay-label">
-        {ship.storyTargetKind === "jammer" ? "JAMMER" : "RELAY"} · {Math.round(ship.hull)}/{ship.maxHull}
+        {localizeGenericName(ship.storyTargetKind === "jammer" ? "JAMMER" : "RELAY", locale)} · {Math.round(ship.hull)}/{ship.maxHull}
       </Html>
     </group>
   );
@@ -415,6 +430,7 @@ function RelayNpcCore({ ship }: { ship: FlightEntity }) {
 
 function NpcShip({ ship }: { ship: FlightEntity }) {
   const clock = useGameStore((state) => state.runtime.clock);
+  const locale = useGameStore((state) => state.locale);
   const miningTarget = useGameStore((state) =>
     ship.economyTaskKind === "mining" && ship.economyTargetId
       ? state.runtime.asteroids.find((asteroid) => asteroid.id === ship.economyTargetId)
@@ -506,19 +522,19 @@ function NpcShip({ ship }: { ship: FlightEntity }) {
         </mesh>
         {ship.economyStatus ? (
           <Html center distanceFactor={12} className="target-label npc-label">
-            {ship.economyStatus}
+            {formatRuntimeText(locale, ship.economyStatus)}
           </Html>
         ) : ship.boss ? (
           <Html center distanceFactor={12} className="target-label boss-label">
-            BOSS · {ship.name.toUpperCase()}
+            {localizeGenericName("BOSS", locale)} · {translateDisplayName(ship.name, locale).toUpperCase()}
           </Html>
         ) : ship.storyTarget ? (
           <Html center distanceFactor={12} className="target-label story-target-label">
-            {ship.elite ? "ELITE · " : ""}{ship.name.toUpperCase()}
+            {ship.elite ? `${localizeGenericName("ELITE", locale)} · ` : ""}{translateDisplayName(ship.name, locale).toUpperCase()}
           </Html>
         ) : ship.supportWing ? (
           <Html center distanceFactor={12} className="target-label support-label">
-            SUPPORT WING
+            {localizeGenericName("SUPPORT WING", locale)}
           </Html>
         ) : null}
       </group>
@@ -528,6 +544,7 @@ function NpcShip({ ship }: { ship: FlightEntity }) {
 
 function ConvoyShip({ convoy }: { convoy: ConvoyEntity }) {
   const clock = useGameStore((state) => state.runtime.clock);
+  const locale = useGameStore((state) => state.locale);
   const direction = normalize(convoy.velocity);
   const yaw = Math.atan2(direction[0], -direction[2]);
   const healthRatio = convoy.hull / convoy.maxHull;
@@ -558,13 +575,14 @@ function ConvoyShip({ convoy }: { convoy: ConvoyEntity }) {
         </mesh>
       ) : null}
       <Html center distanceFactor={12} className={`target-label ${status === "distress" ? "convoy-distress-label" : "convoy-label"}`}>
-        ESCORT · {status.toUpperCase()} · {Math.round(convoy.hull)}/{convoy.maxHull}
+        {localizeGenericName("ESCORT", locale)} · {convoyStatusLabel(status, locale)} · {Math.round(convoy.hull)}/{convoy.maxHull}
       </Html>
     </group>
   );
 }
 
 function SalvageCrate({ salvage }: { salvage: SalvageEntity }) {
+  const locale = useGameStore((state) => state.locale);
   return (
     <group position={toThree(salvage.position)}>
       <mesh rotation={[0.4, 0.2, 0.6]}>
@@ -577,7 +595,7 @@ function SalvageCrate({ salvage }: { salvage: SalvageEntity }) {
       </mesh>
       <pointLight color="#9b7bff" intensity={0.9} distance={150} />
       <Html center distanceFactor={10} className="target-label">
-        SALVAGE · E
+        {localizeGenericName("SALVAGE", locale)} · E
       </Html>
     </group>
   );
@@ -599,6 +617,7 @@ function StationModel() {
 
 function ExplorationSignalMarker({ signal }: { signal: ExplorationSignalDefinition }) {
   const clock = useGameStore((state) => state.runtime.clock);
+  const locale = useGameStore((state) => state.locale);
   const explorationState = useGameStore((state) => state.explorationState);
   const activeScan = useGameStore((state) => state.runtime.explorationScan);
   const discovered = isExplorationSignalDiscovered(signal.id, explorationState);
@@ -634,7 +653,7 @@ function ExplorationSignalMarker({ signal }: { signal: ExplorationSignalDefiniti
       <Line points={[[-48, 0, 0], [0, 0, 0], [48, 0, 0]]} color={color} lineWidth={1.2} transparent opacity={0.28 + pulse * 0.32} />
       <pointLight color={color} intensity={0.7 + pulse * 0.8} distance={220} />
       <Html center distanceFactor={11} className="target-label exploration-label">
-        {scanning ? "SCANNING" : discovered ? signal.title.toUpperCase() : signal.maskedTitle.toUpperCase()}
+        {scanning ? localizeGenericName("SCANNING", locale) : discovered ? translateText(signal.title, locale).toUpperCase() : translateText(signal.maskedTitle, locale).toUpperCase()}
       </Html>
     </group>
   );
@@ -656,6 +675,7 @@ function PlanetBackdrops() {
 function PlanetModel({ planet }: { planet: PlanetDefinition }) {
   const textureUrl = useGameStore((state) => state.assetManifest.planetTextures[planet.textureKey] || state.assetManifest.nebulaBg);
   const clock = useGameStore((state) => state.runtime.clock);
+  const locale = useGameStore((state) => state.locale);
   const texture = useLoader(THREE.TextureLoader, textureUrl);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.wrapS = THREE.RepeatWrapping;
@@ -677,7 +697,7 @@ function PlanetModel({ planet }: { planet: PlanetDefinition }) {
       </mesh>
       <pointLight color={planet.atmosphereColor} intensity={0.65} distance={planet.radius * 2.3} />
       <Html center distanceFactor={22} className="planet-label" position={[0, planet.radius * 0.72, 0]}>
-        {planet.name}
+        {localizePlanetName(planet.id, locale, planet.name)}
       </Html>
     </group>
   );
@@ -685,6 +705,7 @@ function PlanetModel({ planet }: { planet: PlanetDefinition }) {
 
 function UnknownPlanetBeacon({ planet }: { planet: PlanetDefinition }) {
   const clock = useGameStore((state) => state.runtime.clock);
+  const locale = useGameStore((state) => state.locale);
   const pulse = 0.5 + Math.sin(clock * 3.4 + planet.radius) * 0.5;
   return (
     <group position={toThree(planet.beaconPosition)}>
@@ -698,7 +719,7 @@ function UnknownPlanetBeacon({ planet }: { planet: PlanetDefinition }) {
       </mesh>
       <pointLight color="#ffd166" intensity={0.8 + pulse * 0.8} distance={220} />
       <Html center distanceFactor={11} className="target-label">
-        UNKNOWN BEACON
+        {localizeGenericName("UNKNOWN BEACON", locale)}
       </Html>
     </group>
   );
@@ -708,6 +729,7 @@ function JumpGateModel() {
   const currentSystemId = useGameStore((state) => state.currentSystemId);
   const autopilot = useGameStore((state) => state.autopilot);
   const clock = useGameStore((state) => state.runtime.clock);
+  const locale = useGameStore((state) => state.locale);
   const gatePosition = getJumpGatePosition(currentSystemId);
   const active =
     autopilot?.originSystemId === currentSystemId &&
@@ -742,13 +764,14 @@ function JumpGateModel() {
       <Line points={[[-170, 0, 160], [0, 0, 0], [170, 0, 160]]} color="#62d9ff" lineWidth={1.4 + spool * 2.2} transparent opacity={0.18 + spool * 0.42} />
       <pointLight color="#64e4ff" intensity={1 + spool * 4} distance={420} />
       <Html center distanceFactor={13} className="target-label">
-        JUMP GATE
+        {localizeGenericName("JUMP GATE", locale)}
       </Html>
     </group>
   );
 }
 
 function StationGeometry({ station }: { station: StationDefinition }) {
+  const locale = useGameStore((state) => state.locale);
   const accent =
     station.archetype === "Military Outpost"
       ? "#ff6b6b"
@@ -840,7 +863,7 @@ function StationGeometry({ station }: { station: StationDefinition }) {
       ) : null}
       <pointLight color={accent} intensity={0.75} distance={240} />
       <Html center distanceFactor={13} className="target-label station-tech-label" position={[0, 92, 0]}>
-        TECH {station.techLevel} · {station.name}
+        {stationTechLabel(station.techLevel, locale)} · {localizeStationName(station.id, locale, station.name)}
       </Html>
     </group>
   );
@@ -924,6 +947,7 @@ function WormholeTunnel() {
 }
 
 function VisualEffect({ effect }: { effect: VisualEffectEntity }) {
+  const locale = useGameStore((state) => state.locale);
   const alpha = Math.max(0, effect.life / effect.maxLife);
   const particles = useMemo(
     () =>
@@ -963,7 +987,7 @@ function VisualEffect({ effect }: { effect: VisualEffectEntity }) {
         </mesh>
         {effect.label ? (
           <Html center distanceFactor={10} className="effect-label" style={{ opacity: alpha }}>
-            {effect.label}
+            {formatRuntimeText(locale, effect.label)}
           </Html>
         ) : null}
       </group>
@@ -993,7 +1017,7 @@ function VisualEffect({ effect }: { effect: VisualEffectEntity }) {
         ))}
         {effect.label ? (
           <Html center distanceFactor={9} className="effect-label" style={{ opacity: alpha }}>
-            {effect.label}
+            {formatRuntimeText(locale, effect.label)}
           </Html>
         ) : null}
       </group>
@@ -1044,7 +1068,7 @@ function VisualEffect({ effect }: { effect: VisualEffectEntity }) {
         </mesh>
         {effect.label ? (
           <Html center distanceFactor={10} className="effect-label" position={toThree(effect.endPosition)} style={{ opacity: alpha }}>
-            {effect.label}
+            {formatRuntimeText(locale, effect.label)}
           </Html>
         ) : null}
       </group>
@@ -1093,7 +1117,7 @@ function VisualEffect({ effect }: { effect: VisualEffectEntity }) {
       ))}
       {effect.label ? (
         <Html center distanceFactor={9} className="effect-label" style={{ opacity: alpha }}>
-          {effect.label}
+          {formatRuntimeText(locale, effect.label)}
         </Html>
       ) : null}
     </group>
@@ -1102,6 +1126,7 @@ function VisualEffect({ effect }: { effect: VisualEffectEntity }) {
 
 function TargetLock() {
   const player = useGameStore((state) => state.player);
+  const locale = useGameStore((state) => state.locale);
   const target = useGameStore((state) => state.runtime.enemies.find((ship) => ship.id === state.targetId && ship.hull > 0 && ship.deathTimer === undefined));
   if (!target) return null;
   const dist = Math.round(Math.hypot(player.position[0] - target.position[0], player.position[1] - target.position[1], player.position[2] - target.position[2]));
@@ -1112,7 +1137,7 @@ function TargetLock() {
         <meshBasicMaterial color="#ffdf6e" transparent opacity={0.78} toneMapped={false} />
       </mesh>
       <Html center distanceFactor={12} className="target-label">
-        {target.storyTarget ? "STORY" : "LOCK"} · {dist}m
+        {localizeGenericName(target.storyTarget ? "STORY" : "LOCK", locale)} · {formatDistance(locale, dist)}
       </Html>
     </group>
   );
@@ -1127,6 +1152,7 @@ function waypointTone(tone: NavigationCueTone) {
 
 function WaypointMarker() {
   const currentSystemId = useGameStore((state) => state.currentSystemId);
+  const locale = useGameStore((state) => state.locale);
   const player = useGameStore((state) => state.player);
   const knownPlanetIds = useGameStore((state) => state.knownPlanetIds);
   const explorationState = useGameStore((state) => state.explorationState);
@@ -1163,9 +1189,9 @@ function WaypointMarker() {
         </mesh>
         <pointLight color={tone.color} intensity={cue.inRange ? 1.7 : 0.8} distance={cue.inRange ? 320 : 220} />
         <Html center distanceFactor={11} className={`waypoint-label waypoint-${cue.tone} ${cue.inRange ? "in-range" : ""}`}>
-          <b>{cue.label}</b>
-          {target.kind === "station" ? <span>Tech {target.station.techLevel}</span> : null}
-          <span>{cue.actionLabel} · {cue.distanceLabel}</span>
+          <b>{navigationTargetName(target, locale)}</b>
+          {target.kind === "station" ? <span>{formatTechLevel(locale, target.station.techLevel, true)}</span> : null}
+          <span>{navigationActionLabel(target, cue.inRange, locale)} · {formatDistance(locale, target.distance)}</span>
         </Html>
       </group>
     </group>
@@ -1220,6 +1246,72 @@ function SceneContent({ onShipModelStatus }: { onShipModelStatus: (status: ShipM
   );
 }
 
+function navigationTargetName(target: NavigationTarget, locale: Locale): string {
+  if (target.kind === "station") return localizeStationName(target.station.id, locale, target.station.name);
+  if (target.kind === "planet-signal") return translateText("Unknown Beacon", locale);
+  if (target.kind === "exploration-signal") return translateText(target.name, locale);
+  return translateText(target.name, locale);
+}
+
+function navigationActionLabel(target: NavigationTarget, inRange: boolean, locale: Locale): string {
+  if (target.kind === "station") {
+    if (locale === "zh-CN") return inRange ? "E 停靠" : "航点";
+    if (locale === "zh-TW") return inRange ? "E 停靠" : "航點";
+    if (locale === "ja") return inRange ? "E ドック" : "ウェイポイント";
+    if (locale === "fr") return inRange ? "E Amarrer" : "Point de route";
+    return inRange ? "E Dock" : "Waypoint";
+  }
+  if (target.kind === "planet-signal") {
+    if (locale === "zh-CN") return inRange ? "E 扫描" : "信标";
+    if (locale === "zh-TW") return inRange ? "E 掃描" : "信標";
+    if (locale === "ja") return inRange ? "E スキャン" : "ビーコン";
+    if (locale === "fr") return inRange ? "E Scanner" : "Balise";
+    return inRange ? "E Scan" : "Beacon";
+  }
+  if (target.kind === "exploration-signal") {
+    if (locale === "zh-CN") return inRange ? "E 扫描" : "信号";
+    if (locale === "zh-TW") return inRange ? "E 掃描" : "訊號";
+    if (locale === "ja") return inRange ? "E スキャン" : "信号";
+    if (locale === "fr") return inRange ? "E Scanner" : "Signal";
+    return inRange ? "E Scan" : "Signal";
+  }
+  if (locale === "zh-CN") return inRange ? "E 启动" : "星门";
+  if (locale === "zh-TW") return inRange ? "E 啟動" : "星門";
+  if (locale === "ja") return inRange ? "E 起動" : "スターゲート";
+  if (locale === "fr") return inRange ? "E Activer" : "Portail";
+  return inRange ? "E Activate" : "Stargate";
+}
+
+function getLocalizedNavigationHintText(target: NavigationTarget | undefined, locale: Locale): string | undefined {
+  if (!target) return undefined;
+  const action = navigationActionLabel(target, target.inRange, locale);
+  const label = navigationTargetName(target, locale);
+  return target.inRange ? `${action}: ${label}` : `${label} ${formatDistance(locale, target.distance)}`;
+}
+
+function convoyStatusLabel(status: ConvoyEntity["status"], locale: Locale): string {
+  const value = status ?? "en-route";
+  if (locale === "zh-CN") return { "en-route": "航行中", "under-attack": "遭受攻击", distress: "求救", arrived: "已抵达" }[value];
+  if (locale === "zh-TW") return { "en-route": "航行中", "under-attack": "遭受攻擊", distress: "求救", arrived: "已抵達" }[value];
+  if (locale === "ja") return { "en-route": "航行中", "under-attack": "攻撃中", distress: "救難", arrived: "到着" }[value];
+  if (locale === "fr") return { "en-route": "EN ROUTE", "under-attack": "ATTAQUÉ", distress: "DÉTRESSE", arrived: "ARRIVÉ" }[value];
+  return value.toUpperCase();
+}
+
+function shipModelFallbackText(shipName: string, reason: "missing" | "failed", locale: Locale): string {
+  if (locale === "zh-CN") return reason === "missing" ? `舰船模型：${shipName} 没有 GLB 清单项，使用程序生成模型。` : `舰船模型：${shipName} GLB 加载失败，使用程序生成模型。`;
+  if (locale === "zh-TW") return reason === "missing" ? `艦船模型：${shipName} 沒有 GLB 清單項，使用程序生成模型。` : `艦船模型：${shipName} GLB 載入失敗，使用程序生成模型。`;
+  if (locale === "ja") return reason === "missing" ? `船体モデル: ${shipName} のGLB項目がないため手続き型モデルを使用。` : `船体モデル: ${shipName} のGLB読み込みに失敗したため手続き型モデルを使用。`;
+  if (locale === "fr") return reason === "missing" ? `Modèle du vaisseau : aucune entrée GLB pour ${shipName}, modèle procédural utilisé.` : `Modèle du vaisseau : échec GLB pour ${shipName}, modèle procédural utilisé.`;
+  return reason === "missing"
+    ? `Ship model: no GLB manifest entry for ${shipName}; using procedural fallback.`
+    : `Ship model: GLB failed for ${shipName}; using procedural fallback.`;
+}
+
+function stationTechLabel(level: number, locale: Locale): string {
+  return locale === "en" ? `TECH ${level}` : formatTechLevel(locale, level, true);
+}
+
 export function FlightScene() {
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const currentSystemId = useGameStore((state) => state.currentSystemId);
@@ -1235,7 +1327,8 @@ export function FlightScene() {
     installedEquipment: player.equipment
   });
   const navigationCue = getNavigationTargetCue(navigationTarget);
-  const hint = getNavigationHintText(navigationTarget);
+  const locale = useGameStore((state) => state.locale);
+  const hint = getLocalizedNavigationHintText(navigationTarget, locale);
   return (
     <div
       ref={canvasRef}
