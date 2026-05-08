@@ -141,6 +141,24 @@ describe("exploration store flow", () => {
     expect(store.getState().autopilot?.targetStationId).toBe("parallax-hermitage");
   });
 
+  it("unlocks the chain blueprint reward when the final Quiet Signal stage resolves", async () => {
+    const store = await freshStore();
+
+    await completeSignal(store, "quiet-signal-sundog-lattice");
+    store.getState().closeDialogue();
+    expect(store.getState().player.unlockedBlueprintIds).not.toContain("survey-array");
+
+    await completeSignal(store, "quiet-signal-meridian-afterimage");
+
+    const state = store.getState();
+    expect(state.explorationState.completedSignalIds).toEqual(expect.arrayContaining([
+      "quiet-signal-sundog-lattice",
+      "quiet-signal-meridian-afterimage"
+    ]));
+    expect(state.player.unlockedBlueprintIds).toContain("survey-array");
+    expect(state.runtime.message).toContain("Survey Array blueprint unlocked");
+  });
+
   it("marks full-hold scans complete without overfilling cargo", async () => {
     const store = await freshStore();
     store.setState((state) => ({

@@ -3,6 +3,7 @@ import { commodities, commodityById, dialogueSceneById, equipmentById, equipment
 import type {
   CargoHold,
   EquipmentId,
+  FactionId,
   FlightEntity,
   FlightInput,
   LootEntity,
@@ -45,6 +46,18 @@ import {
   sortPirateTargets,
   sortTargetableShips
 } from "../systems/combatAi";
+import {
+  applyFactionHeatDecay,
+  applyFactionIncident,
+  applyFriendlyFireWarning,
+  bountyRewardForShip,
+  createBountyNotification,
+  createInitialFactionHeat,
+  hasActiveFriendlyFireWarning,
+  incidentKindForShip,
+  isFactionWanted,
+  payFactionFine as payFactionFinePure
+} from "../systems/factionConsequences";
 import {
   getActivePrimaryWeapon,
   getActiveSecondaryWeapon,
@@ -149,6 +162,7 @@ function savePayload(state: GameStore, overrides: SavePayloadOverrides = {}): Sa
     marketState: overrides.marketState ?? state.marketState,
     economySnapshotId: state.economyService.snapshotId,
     reputation: overrides.reputation ?? state.reputation,
+    factionHeat: overrides.factionHeat ?? state.factionHeat,
     knownSystems: overrides.knownSystems ?? state.knownSystems,
     knownPlanetIds: overrides.knownPlanetIds ?? state.knownPlanetIds,
     explorationState: overrides.explorationState ?? state.explorationState,
@@ -201,6 +215,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   completedMissionIds: [],
   failedMissionIds: [],
   reputation: createInitialReputation(),
+  factionHeat: createInitialFactionHeat(),
   knownSystems: getInitialKnownSystems("helion-reach"),
   knownPlanetIds: getInitialKnownPlanetIds(getInitialKnownSystems("helion-reach")),
   explorationState: createInitialExplorationState(),
@@ -236,6 +251,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       completedMissionIds: [],
       failedMissionIds: [],
       reputation: createInitialReputation(),
+      factionHeat: createInitialFactionHeat(),
       knownSystems: getInitialKnownSystems("helion-reach"),
       knownPlanetIds: getInitialKnownPlanetIds(getInitialKnownSystems("helion-reach")),
       explorationState: createInitialExplorationState(),
@@ -263,6 +279,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       failedMissionIds: save.failedMissionIds,
       marketState: save.marketState,
       reputation: save.reputation,
+      factionHeat: save.factionHeat,
       knownSystems: save.knownSystems,
       knownPlanetIds: save.knownPlanetIds,
       explorationState: normalizeExplorationState(save.explorationState),
@@ -298,6 +315,32 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }));
   },
   refreshSaveSlots: () => set({ saveSlots: readSaveSlots(), hasSave: readSave() !== null }),
+  payFactionFine: (factionId: FactionId) => {
+    const state = get();
+    const result = payFactionFinePure(state.factionHeat, factionId, state.player.credits, state.gameClock);
+    if (!result.paid) {
+      set({
+        runtime: {
+          ...state.runtime,
+          message: result.record.fineCredits > state.player.credits
+            ? `Insufficient credits for ${result.record.fineCredits.toLocaleString()} cr fine.`
+            : "No outstanding fine."
+        }
+      });
+      audioSystem.play("ui-click");
+      return;
+    }
+    set({
+      player: { ...state.player, credits: result.credits },
+      factionHeat: result.factionHeat,
+      runtime: {
+        ...state.runtime,
+        message: result.notification?.body ?? "Fine paid.",
+        lawNotification: result.notification
+      }
+    });
+    audioSystem.play("ui-click");
+  },
   refreshEconomySnapshot: async () => {
     if (economyRefreshInFlight) return;
     economyRefreshInFlight = true;
@@ -439,6 +482,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const now = state.runtime.clock + delta;
     const gameClock = state.gameClock + delta;
     const marketState = state.economyService.status === "connected" ? state.marketState : advanceMarketState(state.marketState, delta);
+    let factionHeat = applyFactionHeatDecay(state.factionHeat, delta, gameClock);
     const input = state.input;
     const { dx, dy } = state.consumeMouse();
 
@@ -458,6 +502,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
         clock: now,
         storyNotification: state.runtime.storyNotification && state.runtime.storyNotification.expiresAt > gameClock
           ? state.runtime.storyNotification
+          : undefined,
+        lawNotification: state.runtime.lawNotification && state.runtime.lawNotification.expiresAt > gameClock
+          ? state.runtime.lawNotification
           : undefined
       };
       const expiration = applyExpiredMissions({
@@ -487,11 +534,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
         marketState,
         player: expiration.player,
         reputation: expiration.reputation,
+        factionHeat,
         activeMissions: expiration.activeMissions,
         failedMissionIds: expiration.failedMissionIds,
         runtime: {
           ...expiration.runtime,
-          storyNotification
+          storyNotification,
+          lawNotification: runtime.lawNotification
         },
         economyNpcWatch: nextWatch,
         input: emptyFlightInput()
@@ -712,24 +761,30 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const graceActive = now < runtime.graceUntil;
     let reputation = state.reputation;
     let contrabandScanMessage: string | undefined;
+    let lawNotification = state.runtime.lawNotification && state.runtime.lawNotification.expiresAt > gameClock
+      ? state.runtime.lawNotification
+      : undefined;
     const patrolSupportSpawns: FlightEntity[] = [];
     let patrolSupportMessage: string | undefined;
+    const localLawFactionId = systemById[state.currentSystemId].factionId;
     runtime.enemies = runtime.enemies.map((ship) => {
       if (ship.hull <= 0 || ship.deathTimer !== undefined) return ship;
-      if (ship.economyStatus && !isHostileToPlayer(ship) && !hasLocalCombatThreat(ship, runtime.enemies)) {
+      const wantedByPatrol = ship.role === "patrol" && (isFactionWanted(factionHeat, ship.factionId, gameClock) || isFactionWanted(factionHeat, localLawFactionId, gameClock));
+      const aiShip = wantedByPatrol ? { ...ship, aiState: "attack" as const, aiTargetId: "player", scanProgress: 1 } : ship;
+      if (aiShip.economyStatus && !isHostileToPlayer(aiShip) && !hasLocalCombatThreat(aiShip, runtime.enemies)) {
         return regenerateShield(
           {
-            ...ship,
-            position: add(ship.position, scale(ship.velocity, delta))
+            ...aiShip,
+            position: add(aiShip.position, scale(aiShip.velocity, delta))
           },
-          ship.maxShield,
+          aiShip.maxShield,
           now,
           delta,
           5
         );
       }
       const ai = resolveCombatAiStep({
-        ship,
+        ship: aiShip,
         systemId: state.currentSystemId,
         risk: systemById[state.currentSystemId].risk,
         playerPosition: player.position,
@@ -751,17 +806,36 @@ export const useGameStore = create<GameStore>((set, get) => ({
         const contrabandAmount = player.cargo["illegal-contraband"] ?? 0;
         if (contrabandAmount > 0 && law.disposition === "fine-confiscate") {
           const fine = contrabandAmount * CONTRABAND_FINE_PER_UNIT;
+          const paid = Math.min(player.credits, fine);
           const cargo = { ...player.cargo };
           delete cargo["illegal-contraband"];
           player = {
             ...player,
             cargo,
-            credits: Math.max(0, player.credits - fine)
+            credits: player.credits - paid
           };
-          reputation = updateReputation(reputation, systemById[state.currentSystemId].factionId, -2);
+          const incident = applyFactionIncident({
+            factionHeat,
+            factionId: localLawFactionId,
+            kind: "contraband-fine",
+            now: gameClock,
+            fineCredits: fine - paid
+          });
+          factionHeat = incident.factionHeat;
+          reputation = updateReputation(reputation, localLawFactionId, incident.reputationDelta);
+          lawNotification = incident.notification;
           moved = { ...moved, scanProgress: undefined, aiState: "patrol", aiTargetId: undefined };
           contrabandScanMessage = `${law.label}: ${contrabandAmount} Illegal Contraband confiscated. Fine ${fine.toLocaleString()} cr.`;
         } else if (contrabandAmount > 0 && law.disposition === "hostile-pursuit") {
+          const incident = applyFactionIncident({
+            factionHeat,
+            factionId: localLawFactionId,
+            kind: "contraband-hostile",
+            now: gameClock
+          });
+          factionHeat = incident.factionHeat;
+          reputation = updateReputation(reputation, localLawFactionId, incident.reputationDelta);
+          lawNotification = incident.notification;
           moved = { ...moved, aiState: "attack", aiTargetId: "player", scanProgress: 1 };
           contrabandScanMessage = `${law.label}: patrol has marked you hostile for Illegal Contraband.`;
         }
@@ -932,7 +1006,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
         runtime.enemies = runtime.enemies.map((ship) => {
           if (ship.id !== projectile.targetId || ship.hull <= 0 || ship.deathTimer !== undefined || consumed || distance(movedProjectile.position, ship.position) > 25) return ship;
           const shielded = ship.shield > 0;
-          const damaged = applyDamage(ship, projectile.damage, now);
+          let damaged = applyDamage(ship, projectile.damage, now);
+          if (projectile.owner === "enemy" && ["trader", "freighter", "courier", "miner"].includes(ship.role)) {
+            damaged = { ...damaged, distressThreatId: "hostile-contact", distressCalledAt: gameClock };
+          }
           consumed = true;
           runtime.effects.push({
             id: projectileId(shielded ? "shield-hit" : "hit"),
@@ -1004,13 +1081,41 @@ export const useGameStore = create<GameStore>((set, get) => ({
           const validTarget = ship.hull > 0 && ship.deathTimer === undefined;
           if (!validTarget || ship.hull <= 0 || ship.deathTimer !== undefined || consumed || distance(movedProjectile.position, ship.position) > 25) return ship;
           const shielded = ship.shield > 0;
+          const wasHostile = isHostileToPlayer(ship);
           let damaged = applyDamage(ship, projectile.damage, now);
-          if (ship.role !== "pirate" && !ship.provokedByPlayer && !isHostileToPlayer(ship)) {
-            const penalty = ship.role === "patrol" ? -8 : ship.role === "smuggler" ? -2 : -4;
-            reputation = updateReputation(reputation, ship.factionId, penalty);
-            patrolsShouldAttackPlayer = ship.role !== "smuggler";
-            playerAggressionMessage = `${ship.name} returns fire. ${ship.role === "patrol" ? "Security response active." : "Local reputation damaged."}`;
-            damaged = { ...damaged, aiState: "attack", aiTargetId: "player", provokedByPlayer: true };
+          const destroyedByHit = damaged.hull <= 0 && ship.hull > 0;
+          const consequenceKind = !ship.storyTarget ? incidentKindForShip(ship.role, destroyedByHit) : undefined;
+          if (consequenceKind && (!wasHostile || ship.provokedByPlayer || destroyedByHit)) {
+            const warningActive = hasActiveFriendlyFireWarning(factionHeat, ship.factionId, gameClock);
+            if (!destroyedByHit && !ship.provokedByPlayer && !warningActive) {
+              const warning = applyFriendlyFireWarning(factionHeat, ship.factionId, ship.name, gameClock);
+              factionHeat = warning.factionHeat;
+              lawNotification = warning.notification;
+              playerAggressionMessage = warning.notification.body;
+              audioSystem.play("ui-click");
+            } else {
+              const incident = applyFactionIncident({
+                factionHeat,
+                factionId: ship.factionId,
+                kind: consequenceKind,
+                subjectName: ship.name,
+                now: gameClock
+              });
+              factionHeat = incident.factionHeat;
+              reputation = updateReputation(reputation, ship.factionId, incident.reputationDelta);
+              lawNotification = incident.notification;
+              patrolsShouldAttackPlayer = ship.role !== "smuggler";
+              playerAggressionMessage = incident.notification.body;
+              damaged = {
+                ...damaged,
+                aiState: "attack",
+                aiTargetId: "player",
+                provokedByPlayer: true,
+                distressThreatId: "player",
+                distressCalledAt: gameClock
+              };
+              audioSystem.play(incident.wanted ? "mission-fail" : "ui-click");
+            }
           }
           consumed = true;
           runtime.effects.push({
@@ -1028,7 +1133,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
             velocity: [0, 10, 0]
           });
           if (damaged.hull <= 0 && ship.hull > 0) {
-            if (ship.role === "pirate") destroyedPirates += 1;
+            if (ship.role === "pirate") {
+              destroyedPirates += 1;
+              const bounty = bountyRewardForShip(ship);
+              player = { ...player, credits: player.credits + bounty };
+              reputation = updateReputation(reputation, localLawFactionId, ship.boss ? 3 : ship.elite ? 2 : 1);
+              lawNotification = createBountyNotification(ship.name, bounty, gameClock);
+              playerAggressionMessage = lawNotification.body;
+              audioSystem.play("mission-complete");
+            }
             if (ship.boss) destroyedBossName = ship.name;
             if (ship.storyTarget && ship.missionId) destroyedStoryTargets.push({ missionId: ship.missionId, targetId: ship.id, name: ship.name });
             lootDrops.push(...lootDropsForDestroyedShip(ship, state.currentSystemId));
@@ -1192,6 +1305,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
               ? storyTargetMessage
             : destroyedBossName
               ? `${destroyedBossName} destroyed. Boss cargo scattered.`
+            : lawNotification
+              ? lawNotification.body
             : lootDrops.length
               ? "Target destroyed. Cargo canister released."
               : miningActive
@@ -1201,7 +1316,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
               : graceActive
                 ? `Pirates are sizing you up · weapons free in ${Math.ceil(runtime.graceUntil - now)}s`
               : expiration.runtime.message,
-        storyNotification
+        storyNotification,
+        lawNotification
       },
       gameClock,
       marketState,
@@ -1209,6 +1325,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       activeMissions: expiration.activeMissions,
       failedMissionIds: expiration.failedMissionIds,
       reputation: expiration.reputation,
+      factionHeat,
       explorationState,
       ...dialoguePatch,
       primaryCooldown,
@@ -1223,6 +1340,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const state = get();
     if (delta <= 0) return;
     const gameClock = state.gameClock + delta;
+    const factionHeat = applyFactionHeatDecay(state.factionHeat, delta, gameClock);
     const expiration = applyExpiredMissions({
       player: state.player,
       reputation: state.reputation,
@@ -1240,14 +1358,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
       : state.runtime.storyNotification && state.runtime.storyNotification.expiresAt > gameClock
         ? state.runtime.storyNotification
         : undefined;
+    const lawNotification = state.runtime.lawNotification && state.runtime.lawNotification.expiresAt > gameClock
+      ? state.runtime.lawNotification
+      : undefined;
     set({
       gameClock,
       marketState: state.economyService.status === "connected" ? state.marketState : advanceMarketState(state.marketState, delta),
       player: expiration.player,
       reputation: expiration.reputation,
+      factionHeat,
       activeMissions: expiration.activeMissions,
       failedMissionIds: expiration.failedMissionIds,
-      runtime: { ...expiration.runtime, storyNotification }
+      runtime: { ...expiration.runtime, storyNotification, lawNotification }
     });
   },
   cycleTarget: () => {

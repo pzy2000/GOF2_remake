@@ -9,6 +9,8 @@ import type { NavigationTarget } from "../systems/navigation";
 import { combatAiProfileLabels, getContrabandLawSummary } from "../systems/combatAi";
 import { combatLoadoutLabels } from "../systems/combatDoctrine";
 import { explorationSignalById, getEffectiveSignalScanBand } from "../systems/exploration";
+import { getExplorationObjectiveSummaryForSystem } from "../systems/explorationObjectives";
+import { getFactionHeatLevelLabel, getFactionHeatRecord } from "../systems/factionConsequences";
 import { getStoryObjectiveSummary } from "../systems/story";
 import {
   formatCargoLabel,
@@ -66,6 +68,7 @@ export function Hud() {
   const openGalaxyMap = useGameStore((state) => state.openGalaxyMap);
   const knownPlanetIds = useGameStore((state) => state.knownPlanetIds);
   const explorationState = useGameStore((state) => state.explorationState);
+  const factionHeat = useGameStore((state) => state.factionHeat);
   const adjustExplorationScanFrequency = useGameStore((state) => state.adjustExplorationScanFrequency);
   const cancelExplorationScan = useGameStore((state) => state.cancelExplorationScan);
   const equipmentEffects = getEquipmentEffects(player.equipment);
@@ -81,6 +84,9 @@ export function Hud() {
   const supportCount = runtime.enemies.filter((ship) => ship.supportWing && ship.hull > 0 && ship.deathTimer === undefined).length;
   const contrabandAmount = player.cargo["illegal-contraband"] ?? 0;
   const scanningPatrol = runtime.enemies.find((ship) => ship.role === "patrol" && ship.aiState === "scan" && (ship.scanProgress ?? 0) > 0);
+  const localHeatRecord = getFactionHeatRecord(factionHeat, currentSystem.factionId);
+  const localHeatLabel = getFactionHeatLevelLabel(localHeatRecord);
+  const wantedRemaining = Math.max(0, (localHeatRecord.wantedUntil ?? 0) - gameClock);
   const storyObjective = getStoryObjectiveSummary({
     arc: glassWakeProtocol,
     missions: missionTemplates,
@@ -94,6 +100,12 @@ export function Hud() {
     getStationName: (stationId) => localizeStationName(stationId, locale, stationById[stationId]?.name),
     getSystemName: (systemId) => localizeSystemName(systemId, locale, systemById[systemId]?.name),
     getCommodityName: (commodityId) => localizeCommodityName(commodityId, locale, commodityById[commodityId]?.name)
+  });
+  const explorationObjective = getExplorationObjectiveSummaryForSystem(currentSystem.id, explorationState, {
+    playerPosition: player.position,
+    playerEquipment: player.equipment,
+    activeScanSignalId: activeScan?.signalId,
+    playerUnlockedBlueprintIds: player.unlockedBlueprintIds
   });
   const graceRemaining = Math.max(0, Math.ceil(runtime.graceUntil - runtime.clock));
   const nearestMine = runtime.asteroids
@@ -124,6 +136,15 @@ export function Hud() {
         <p>{graceRemaining > 0 ? enemySafeLabel(graceRemaining, locale) : pirateCount > 0 ? pirateContactsLabel(pirateCount, locale) : translateText("Local space clear", locale)}</p>
         {bossContact ? <p>{bossContactLabel(locale)}: {translateDisplayName(bossContact.name, locale)}</p> : null}
         {supportCount > 0 ? <p>{patrolSupportLabel(locale)}: {formatNumber(locale, supportCount)}</p> : null}
+        <div className={`legal-status heat-${localHeatLabel.toLowerCase().replace(/[^a-z]+/g, "-")}`} data-testid="legal-status">
+          <span>{translateText("Legal Status", locale)}</span>
+          <b>{translateText(localHeatLabel, locale)} · {localizeFactionName(currentSystem.factionId, locale)}</b>
+          <p>
+            {translateText("Wanted Heat", locale)} {formatNumber(locale, Math.round(localHeatRecord.heat))}
+            {wantedRemaining > 0 ? ` · ${translateText("Wanted", locale)} ${formatHudTime(wantedRemaining, locale)}` : ""}
+            {localHeatRecord.fineCredits > 0 ? ` · ${translateText("Fine", locale)} ${formatCredits(locale, localHeatRecord.fineCredits)}` : ""}
+          </p>
+        </div>
         {contrabandAmount > 0 ? <p>{contrabandLawLabel(locale)}: {translateText(getContrabandLawSummary(currentSystem.id), locale)}</p> : null}
         {scanningPatrol ? <p>{patrolScanLabel(locale)} {formatNumber(locale, Math.round((scanningPatrol.scanProgress ?? 0) * 100))}%</p> : null}
         {storyObjective.status !== "complete" ? (
@@ -133,6 +154,16 @@ export function Hud() {
             <p>
               {translateText(storyObjective.objectiveText, locale)}
               {storyObjective.distanceMeters !== undefined ? ` · ${formatDistance(locale, storyObjective.distanceMeters)}` : ""}
+            </p>
+          </div>
+        ) : null}
+        {explorationObjective && explorationObjective.status !== "complete" ? (
+          <div className={`exploration-tracker status-${explorationObjective.status}`} data-testid="exploration-tracker">
+            <span>{translateText("Quiet Signals", locale)}</span>
+            <b>{translateText(explorationObjective.chainTitle, locale)} · {explorationObjective.completedCount}/{explorationObjective.totalCount}</b>
+            <p>
+              {formatRuntimeText(locale, explorationObjective.objectiveText)}
+              {explorationObjective.distanceMeters !== undefined ? ` · ${formatDistance(locale, explorationObjective.distanceMeters)}` : ""}
             </p>
           </div>
         ) : null}

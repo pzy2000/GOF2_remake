@@ -521,6 +521,21 @@ export interface ReputationState {
   factions: Record<FactionId, number>;
 }
 
+export type FactionHeatLevel = "clear" | "watched" | "wanted" | "kill-on-sight";
+
+export interface FactionHeatRecord {
+  heat: number;
+  fineCredits: number;
+  offenseCount: number;
+  lastIncidentAt?: number;
+  warningUntil?: number;
+  wantedUntil?: number;
+}
+
+export interface FactionHeatState {
+  factions: Partial<Record<FactionId, FactionHeatRecord>>;
+}
+
 export interface PlayerState {
   shipId: string;
   stats: ShipStats;
@@ -584,6 +599,8 @@ export interface FlightEntity {
   economyCommodityId?: CommodityId;
   economyTargetId?: string;
   scanProgress?: number;
+  distressThreatId?: string;
+  distressCalledAt?: number;
   deathTimer?: number;
 }
 
@@ -657,10 +674,19 @@ export interface ExplorationScanRuntime {
 }
 
 export type StoryNotificationTone = "start" | "updated" | "complete" | "failed";
+export type LawNotificationTone = "warning" | "fine" | "wanted" | "bounty" | "cleared";
 
 export interface StoryNotification {
   id: string;
   tone: StoryNotificationTone;
+  title: string;
+  body: string;
+  expiresAt: number;
+}
+
+export interface LawNotification {
+  id: string;
+  tone: LawNotificationTone;
   title: string;
   body: string;
   expiresAt: number;
@@ -745,6 +771,7 @@ export interface RuntimeState {
   message: string;
   explorationScan?: ExplorationScanRuntime;
   storyNotification?: StoryNotification;
+  lawNotification?: LawNotification;
 }
 
 export interface MarketEntry {
@@ -788,6 +815,7 @@ export interface SaveGameData {
   marketState: MarketState;
   economySnapshotId?: number;
   reputation: ReputationState;
+  factionHeat: FactionHeatState;
   knownSystems: string[];
   knownPlanetIds: string[];
   explorationState: ExplorationState;

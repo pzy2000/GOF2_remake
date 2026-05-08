@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import type { CSSProperties, PointerEvent, WheelEvent } from "react";
-import { commodityById, factionNames, glassWakeProtocol, missionTemplates } from "../data/world";
+import { commodityById, equipmentName, factionNames, glassWakeProtocol, missionTemplates } from "../data/world";
 import { planetById, stationById, systems, useGameStore } from "../state/gameStore";
 import type { GalaxyMapMode } from "../types/game";
 import { GALAXY_DISCOVERY_DISTANCE, systemDistance } from "../systems/navigation";
 import { getExplorationSignalsForSystem, getVisibleStationsForSystem, isExplorationSignalDiscovered, isExplorationSignalUnlocked, isHiddenStationRevealed } from "../systems/exploration";
+import { getExplorationObjectiveSummaryForSystem } from "../systems/explorationObjectives";
+import { getFactionHeatLevelLabel, getFactionHeatRecord, isFactionWanted } from "../systems/factionConsequences";
 import { getStoryObjectiveSummary } from "../systems/story";
 import {
   formatTechLevel,
@@ -13,6 +15,7 @@ import {
   localizePlanetName,
   localizeStationName,
   localizeSystemName,
+  formatRuntimeText,
   translateText,
   type Locale
 } from "../i18n";
@@ -40,6 +43,8 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
   const failedMissionIds = useGameStore((state) => state.failedMissionIds);
   const player = useGameStore((state) => state.player);
   const explorationState = useGameStore((state) => state.explorationState);
+  const factionHeat = useGameStore((state) => state.factionHeat);
+  const gameClock = useGameStore((state) => state.gameClock);
   const galaxyMapMode = useGameStore((state) => state.galaxyMapMode);
   const startJumpToStation = useGameStore((state) => state.startJumpToStation);
   const activateStargateJumpToStation = useGameStore((state) => state.activateStargateJumpToStation);
@@ -82,6 +87,9 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
   const storyTargetSystemId = storyObjective.status !== "complete" ? storyObjective.targetSystemId : undefined;
   const storyTargetStationId = storyObjective.status !== "complete" ? storyObjective.targetStationId : undefined;
   const storyTargetSystemVisible = storyTargetSystemId && knownSystems.includes(storyTargetSystemId) ? storyTargetSystemId : undefined;
+  const selectedExplorationSummary = selectedKnown
+    ? getExplorationObjectiveSummaryForSystem(selectedSystem.id, explorationState, { playerUnlockedBlueprintIds: player.unlockedBlueprintIds })
+    : undefined;
   const stars = useMemo(
     () =>
       Array.from({ length: 120 }, (_, index) => ({
@@ -197,10 +205,16 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                 const known = knownSystems.includes(system.id);
                 const current = system.id === currentSystemId;
                 const selected = system.id === selectedSystem.id;
+                const explorationSummary = known
+                  ? getExplorationObjectiveSummaryForSystem(system.id, explorationState, { playerUnlockedBlueprintIds: player.unlockedBlueprintIds })
+                  : undefined;
+                const heatRecord = getFactionHeatRecord(factionHeat, system.factionId);
+                const heatLabel = getFactionHeatLevelLabel(heatRecord);
+                const showHeatPin = known && (heatRecord.heat >= 20 || isFactionWanted(factionHeat, system.factionId, gameClock));
                 return (
                   <button
                     key={system.id}
-                    className={`galaxy-system ${known ? "known" : "locked"} ${current ? "current" : ""} ${selected ? "selected" : ""} ${storyTargetSystemVisible === system.id ? "story-pin" : ""}`}
+                    className={`galaxy-system ${known ? "known" : "locked"} ${current ? "current" : ""} ${selected ? "selected" : ""} ${storyTargetSystemVisible === system.id ? "story-pin" : ""} ${explorationSummary ? "exploration-pin" : ""}`}
                     style={{ left: point.x, top: point.y, "--system-tone": systemTone(index, system.risk) } as CSSProperties}
                     onClick={() => selectSystem(system.id)}
                     onDoubleClick={() => {
@@ -216,6 +230,12 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                     <span className="moon moon-two" />
                     <span className="system-name">{known ? localizeSystemName(system.id, locale, system.name) : translateText("Unknown Signal", locale)}</span>
                     {storyTargetSystemVisible === system.id ? <span className="story-map-pin">{translateText("Main Story", locale)}</span> : null}
+                    {explorationSummary ? (
+                      <span className="exploration-map-pin">
+                        {translateText("Quiet Signals", locale)} {explorationSummary.completedCount}/{explorationSummary.totalCount}
+                      </span>
+                    ) : null}
+                    {showHeatPin ? <span className={`law-map-pin heat-${heatLabel.toLowerCase().replace(/[^a-z]+/g, "-")}`}>{translateText(heatLabel, locale)}</span> : null}
                   </button>
                 );
               })}
@@ -235,6 +255,30 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                   <span>{translateText("Main Story", locale)}</span>
                   <b>{translateText(storyObjective.chapterLabel, locale)} · {translateText(storyObjective.title, locale)}</b>
                   <p>{translateText(storyObjective.objectiveText, locale)}</p>
+                </div>
+              ) : null}
+              {selectedKnown ? (
+                <div className={`law-map-brief heat-${getFactionHeatLevelLabel(getFactionHeatRecord(factionHeat, selectedSystem.factionId)).toLowerCase().replace(/[^a-z]+/g, "-")}`} data-testid="law-map-brief">
+                  <span>{translateText("Legal Status", locale)}</span>
+                  <b>{translateText(getFactionHeatLevelLabel(getFactionHeatRecord(factionHeat, selectedSystem.factionId)), locale)}</b>
+                  <p>
+                    {translateText("Wanted Heat", locale)} {Math.round(getFactionHeatRecord(factionHeat, selectedSystem.factionId).heat)}
+                    {getFactionHeatRecord(factionHeat, selectedSystem.factionId).fineCredits > 0
+                      ? ` · ${translateText("Fine", locale)} ${getFactionHeatRecord(factionHeat, selectedSystem.factionId).fineCredits.toLocaleString()} cr`
+                      : ""}
+                  </p>
+                </div>
+              ) : null}
+              {selectedExplorationSummary ? (
+                <div className={`exploration-map-brief status-${selectedExplorationSummary.status}`} data-testid="exploration-map-brief">
+                  <span>{translateText("Quiet Signals", locale)}</span>
+                  <b>{translateText(selectedExplorationSummary.chainTitle, locale)} · {selectedExplorationSummary.completedCount}/{selectedExplorationSummary.totalCount}</b>
+                  <p>{formatRuntimeText(locale, selectedExplorationSummary.objectiveText)}</p>
+                  {selectedExplorationSummary.unlockedBlueprintIds.length > 0 ? (
+                    <p>
+                      {translateText("Chain reward", locale)}: {selectedExplorationSummary.unlockedBlueprintIds.map((id) => translateText(equipmentName(id), locale)).join(", ")}
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
               {selectedKnown ? (

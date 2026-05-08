@@ -3,12 +3,15 @@ import { normalizeDialogueState } from "./dialogue";
 import { createInitialMarketState } from "./economy";
 import { normalizePlayerEquipmentStats } from "./equipment";
 import { normalizeExplorationState } from "./exploration";
+import { applyExplorationChainBlueprintRewards } from "./explorationObjectives";
+import { normalizeFactionHeat } from "./factionConsequences";
 import { getInitialKnownPlanetIds } from "./navigation";
 
 export const SAVE_KEY = "gof2-by-pzy-save";
 export const SAVE_INDEX_KEY = "gof2-by-pzy-save-index";
 export const SAVE_SLOT_PREFIX = "gof2-by-pzy-save-slot:";
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
+export const PREVIOUS_SAVE_VERSION = 2;
 export const LEGACY_SAVE_VERSION = 1;
 
 export const saveSlotLabels: Record<SaveSlotId, string> = {
@@ -40,10 +43,16 @@ function completeIndex(index?: Partial<SaveIndex>): SaveIndex {
   };
 }
 
+function isSupportedSaveVersion(version: unknown): boolean {
+  return version === SAVE_VERSION || version === PREVIOUS_SAVE_VERSION || version === LEGACY_SAVE_VERSION;
+}
+
 function normalizeSave(parsed: Partial<SaveGameData> | null): SaveGameData | null {
   if (!parsed || !parsed.player || !parsed.currentSystemId) return null;
-  if (parsed.version !== SAVE_VERSION && parsed.version !== LEGACY_SAVE_VERSION) return null;
+  if (!isSupportedSaveVersion(parsed.version)) return null;
   const knownSystems = parsed.knownSystems ?? [parsed.currentSystemId];
+  const explorationState = normalizeExplorationState(parsed.explorationState);
+  const player = applyExplorationChainBlueprintRewards(normalizePlayerEquipmentStats(parsed.player), explorationState).player;
   return {
     ...parsed,
     version: SAVE_VERSION,
@@ -51,15 +60,16 @@ function normalizeSave(parsed: Partial<SaveGameData> | null): SaveGameData | nul
     currentSystemId: parsed.currentSystemId,
     currentStationId: parsed.currentStationId,
     gameClock: parsed.gameClock ?? 0,
-    player: normalizePlayerEquipmentStats(parsed.player),
+    player,
     activeMissions: parsed.activeMissions ?? [],
     completedMissionIds: parsed.completedMissionIds ?? [],
     failedMissionIds: parsed.failedMissionIds ?? [],
     marketState: parsed.marketState ?? createInitialMarketState(),
     reputation: parsed.reputation,
+    factionHeat: normalizeFactionHeat(parsed.factionHeat),
     knownSystems,
     knownPlanetIds: parsed.knownPlanetIds ?? getInitialKnownPlanetIds(knownSystems, parsed.currentStationId),
-    explorationState: normalizeExplorationState(parsed.explorationState),
+    explorationState,
     dialogueState: normalizeDialogueState(parsed.dialogueState)
   } as SaveGameData;
 }
@@ -103,7 +113,7 @@ function writeIndex(index: SaveIndex, storage: Storage): SaveIndex {
 
 export function migrateLegacySave(storage: Storage = localStorage): SaveIndex {
   const existing = parseJson<SaveIndex>(storage.getItem(SAVE_INDEX_KEY));
-  if (existing?.version === SAVE_VERSION) return completeIndex(existing);
+  if (existing && isSupportedSaveVersion(existing.version)) return existing.version === SAVE_VERSION ? completeIndex(existing) : writeIndex(completeIndex(existing), storage);
 
   const legacy = parseSave(storage.getItem(SAVE_KEY));
   if (!legacy) return writeIndex(completeIndex(), storage);

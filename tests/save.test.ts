@@ -3,6 +3,7 @@ import { glassWakeProtocol, missionTemplates, shipById } from "../src/data/world
 import { createInitialDialogueState } from "../src/systems/dialogue";
 import { createInitialMarketState } from "../src/systems/economy";
 import { createInitialExplorationState } from "../src/systems/exploration";
+import { createInitialFactionHeat } from "../src/systems/factionConsequences";
 import { createInitialReputation } from "../src/systems/reputation";
 import {
   deleteSave,
@@ -74,6 +75,7 @@ describe("save system", () => {
       failedMissionIds: ["bounty-ashen"],
       marketState: createInitialMarketState(),
       reputation: createInitialReputation(),
+      factionHeat: createInitialFactionHeat(),
       knownSystems: ["helion-reach", "kuro-belt"],
       knownPlanetIds: ["helion-prime-world", "kuro-anvil"],
       ...overrides,
@@ -127,6 +129,7 @@ describe("save system", () => {
     expect(loaded?.explorationState.completedSignalIds).toEqual(["quiet-signal-sundog-lattice"]);
     expect(loaded?.explorationState.revealedStationIds).toEqual(["parallax-hermitage"]);
     expect(loaded?.dialogueState.seenSceneIds).toEqual(["dialogue-story-clean-carrier-accept"]);
+    expect(loaded?.factionHeat).toEqual(createInitialFactionHeat());
     expect(loaded?.version).toBe(SAVE_VERSION);
   });
 
@@ -140,6 +143,40 @@ describe("save system", () => {
     deleteSave("manual-2", storage);
     expect(readSaveSlots(storage).find((slot) => slot.id === "manual-2")?.exists).toBe(false);
     expect(readSave(storage)?.currentSystemId).toBe("kuro-belt");
+  });
+
+  it("backfills completed exploration chain blueprint rewards without changing save version", () => {
+    const storage = new MemoryStorage();
+    storage.setItem(`${SAVE_SLOT_PREFIX}manual-1`, JSON.stringify({
+      ...payload({
+        player: {
+          ...player(),
+          unlockedBlueprintIds: ["scanner"]
+        },
+        explorationState: {
+          discoveredSignalIds: ["quiet-signal-sundog-lattice", "quiet-signal-meridian-afterimage"],
+          completedSignalIds: ["quiet-signal-sundog-lattice", "quiet-signal-meridian-afterimage"],
+          revealedStationIds: [],
+          eventLogIds: ["quiet-signal-sundog-lattice", "quiet-signal-meridian-afterimage"]
+        }
+      }),
+      version: SAVE_VERSION,
+      savedAt: "2026-05-08T00:00:00.000Z"
+    } satisfies SaveGameData));
+    storage.setItem(SAVE_INDEX_KEY, JSON.stringify({
+      version: SAVE_VERSION,
+      lastPlayedSlotId: "manual-1",
+      slots: {
+        "manual-1": { id: "manual-1", label: "Manual Slot 1", exists: true, savedAt: "2026-05-08T00:00:00.000Z" },
+        "manual-2": { id: "manual-2", label: "Manual Slot 2", exists: false },
+        "manual-3": { id: "manual-3", label: "Manual Slot 3", exists: false },
+        auto: { id: "auto", label: "Auto / Quick Slot", exists: false }
+      }
+    }));
+
+    const loaded = readSave(storage, "manual-1");
+    expect(loaded?.version).toBe(SAVE_VERSION);
+    expect(loaded?.player.unlockedBlueprintIds).toContain("survey-array");
   });
 
   it("migrates a v1 single save into the auto slot", () => {
@@ -156,6 +193,33 @@ describe("save system", () => {
     expect(index.slots.auto?.exists).toBe(true);
     expect(index.lastPlayedSlotId).toBe("auto");
     expect(readSave(storage, "auto")?.version).toBe(SAVE_VERSION);
+    expect(readSave(storage, "auto")?.factionHeat).toEqual(createInitialFactionHeat());
+  });
+
+  it("backfills faction heat when reading v2 saves", () => {
+    const storage = new MemoryStorage();
+    const v2Payload = {
+      ...payload(),
+      factionHeat: undefined,
+      version: 2,
+      savedAt: "2026-05-08T00:00:00.000Z"
+    };
+    storage.setItem(`${SAVE_SLOT_PREFIX}manual-1`, JSON.stringify(v2Payload));
+    storage.setItem(SAVE_INDEX_KEY, JSON.stringify({
+      version: 2,
+      lastPlayedSlotId: "manual-1",
+      slots: {
+        "manual-1": { id: "manual-1", label: "Manual Slot 1", exists: true, savedAt: v2Payload.savedAt },
+        "manual-2": { id: "manual-2", label: "Manual Slot 2", exists: false },
+        "manual-3": { id: "manual-3", label: "Manual Slot 3", exists: false },
+        auto: { id: "auto", label: "Auto / Quick Slot", exists: false }
+      }
+    }));
+
+    const loaded = readSave(storage, "manual-1");
+    expect(loaded?.version).toBe(SAVE_VERSION);
+    expect(loaded?.factionHeat).toEqual(createInitialFactionHeat());
+    expect(readSaveIndex(storage).version).toBe(SAVE_VERSION);
   });
 
   it("migrates saves without planet discovery to primary planets and the current station planet", () => {

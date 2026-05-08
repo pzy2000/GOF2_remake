@@ -7,6 +7,8 @@ import type {
   EquipmentId,
   EconomyNpcWatchState,
   ExplorationState,
+  FactionHeatState,
+  FactionId,
   FlightInput,
   GalaxyMapMode,
   MarketState,
@@ -46,6 +48,7 @@ export interface GameStore {
   completedMissionIds: string[];
   failedMissionIds: string[];
   reputation: ReputationState;
+  factionHeat: FactionHeatState;
   knownSystems: string[];
   knownPlanetIds: string[];
   explorationState: ExplorationState;
@@ -100,6 +103,7 @@ export interface GameStore {
   acceptMission: (missionId: string) => void;
   completeMission: (missionId: string) => void;
   repairAndRefill: () => void;
+  payFactionFine: (factionId: FactionId) => void;
   buyShip: (shipId: string) => void;
   switchShip: (shipId: string) => void;
   unlockBlueprint: (equipmentId: EquipmentId) => void;
@@ -121,6 +125,7 @@ export type SavePayloadOverrides = Partial<
     | "failedMissionIds"
     | "marketState"
     | "reputation"
+    | "factionHeat"
     | "knownSystems"
     | "knownPlanetIds"
     | "explorationState"

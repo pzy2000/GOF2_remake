@@ -311,7 +311,138 @@ describe("combat AI store wiring", () => {
     expect(state.runtime.loot.some((loot) => loot.kind === "commodity")).toBe(true);
     expect(state.runtime.loot.some((loot) => loot.kind === "equipment")).toBe(true);
     expect(state.reputation.factions["free-belt-union"]).toBeLessThan(4);
+    expect(state.factionHeat.factions["free-belt-union"]?.heat).toBeGreaterThanOrEqual(35);
     expect(state.runtime.enemies.find((ship) => ship.role === "patrol")?.aiTargetId).toBe("player");
     randomSpy.mockRestore();
+  });
+
+  it("warns on first friendly-fire hit before escalating enforcement", async () => {
+    const store = await freshStore();
+    const freighter = store.getState().runtime.enemies.find((ship) => ship.role === "freighter");
+    expect(freighter).toBeDefined();
+
+    store.setState((state) => ({
+      targetId: freighter!.id,
+      runtime: {
+        ...state.runtime,
+        enemies: state.runtime.enemies.map((ship) => (ship.id === freighter!.id ? { ...ship, position: [0, 0, 0], velocity: [0, 0, 0] } : { ...ship, position: [900, 0, 900] })),
+        projectiles: [
+          {
+            id: "test-warning-shot",
+            owner: "player",
+            kind: "laser",
+            position: [0, 0, 0],
+            direction: [0, 0, 0],
+            speed: 0,
+            damage: 1,
+            life: 1,
+            targetId: freighter!.id
+          }
+        ],
+        message: ""
+      }
+    }));
+
+    store.getState().tick(0.05);
+
+    const warned = store.getState();
+    expect(warned.factionHeat.factions["free-belt-union"]?.heat).toBe(0);
+    expect(warned.factionHeat.factions["free-belt-union"]?.warningUntil).toBeGreaterThan(warned.gameClock);
+    expect(warned.reputation.factions["free-belt-union"]).toBe(4);
+    expect(warned.runtime.enemies.find((ship) => ship.role === "patrol")?.aiTargetId).not.toBe("player");
+
+    store.setState((state) => ({
+      runtime: {
+        ...state.runtime,
+        enemies: state.runtime.enemies.map((ship) => (ship.id === freighter!.id ? { ...ship, position: [0, 0, 0], velocity: [0, 0, 0] } : ship)),
+        projectiles: [
+          {
+            id: "test-escalation-shot",
+            owner: "player",
+            kind: "laser",
+            position: [0, 0, 0],
+            direction: [0, 0, 0],
+            speed: 0,
+            damage: 1,
+            life: 1,
+            targetId: freighter!.id
+          }
+        ]
+      }
+    }));
+
+    store.getState().tick(0.05);
+
+    const escalated = store.getState();
+    expect(escalated.factionHeat.factions["free-belt-union"]?.heat).toBeGreaterThanOrEqual(12);
+    expect(escalated.factionHeat.factions["free-belt-union"]?.fineCredits).toBe(750);
+    expect(escalated.reputation.factions["free-belt-union"]).toBe(0);
+    expect(escalated.runtime.enemies.find((ship) => ship.role === "patrol")?.aiTargetId).toBe("player");
+  });
+
+  it("lets station actions pay faction fines without touching cargo", async () => {
+    const store = await freshStore();
+    const freighter = store.getState().runtime.enemies.find((ship) => ship.role === "freighter");
+    expect(freighter).toBeDefined();
+    store.setState((state) => ({
+      player: { ...state.player, credits: 5000, cargo: { "basic-food": 2 } },
+      targetId: freighter!.id,
+      runtime: {
+        ...state.runtime,
+        enemies: state.runtime.enemies.map((ship) => (ship.id === freighter!.id ? { ...ship, position: [0, 0, 0] } : { ...ship, position: [900, 0, 900] })),
+        projectiles: [
+          {
+            id: "test-fine-shot",
+            owner: "player",
+            kind: "laser",
+            position: [0, 0, 0],
+            direction: [0, 0, 0],
+            speed: 0,
+            damage: 999,
+            life: 1,
+            targetId: freighter!.id
+          }
+        ]
+      }
+    }));
+
+    store.getState().tick(0.05);
+    expect(store.getState().factionHeat.factions["free-belt-union"]?.fineCredits).toBe(3000);
+
+    store.getState().payFactionFine("free-belt-union");
+
+    const state = store.getState();
+    expect(state.player.credits).toBe(2000);
+    expect(state.player.cargo).toEqual({ "basic-food": 2 });
+    expect(state.factionHeat.factions["free-belt-union"]?.fineCredits).toBe(0);
+    expect(state.factionHeat.factions["free-belt-union"]?.heat).toBe(19);
+  });
+
+  it("makes wanted local patrols attack and request support", async () => {
+    const store = await freshStore();
+    store.setState((state) => ({
+      currentSystemId: "helion-reach",
+      player: { ...state.player, position: [0, 0, 0] },
+      factionHeat: {
+        factions: {
+          "solar-directorate": { heat: 45, fineCredits: 0, offenseCount: 1 }
+        }
+      },
+      runtime: {
+        ...state.runtime,
+        enemies: [patrol([0, 0, 120])],
+        convoys: [],
+        projectiles: [],
+        effects: [],
+        message: "",
+        clock: 0
+      }
+    }));
+
+    store.getState().tick(0.2);
+
+    const state = store.getState();
+    expect(state.runtime.enemies.find((ship) => ship.id === "test-patrol")?.aiTargetId).toBe("player");
+    expect(state.runtime.enemies.filter((ship) => ship.supportWing)).toHaveLength(1);
   });
 });

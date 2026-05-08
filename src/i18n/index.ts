@@ -145,6 +145,8 @@ const exactText = {
     "Reveal": "揭示",
     "Exploration Archive": "探索档案",
     "Quiet Signals": "静默信号",
+    "Chain reward": "链路奖励",
+    "Hidden content unlocked": "隐藏内容已解锁",
     "signals resolved.": "个信号已解析。",
     "Chain resolved.": "链路已解析。",
     "Next trace locked behind a prior signal.": "下一条痕迹被前序信号锁定。",
@@ -167,6 +169,26 @@ const exactText = {
     "Added to equipment inventory after fabrication.": "制造完成后加入装备库存。",
     "No critical station shortages on the public sheet.": "公共清单上没有关键空间站短缺。",
     "Favored live routes": "热门实时航线",
+    "Legal Status": "执法状态",
+    "Wanted Heat": "悬赏热度",
+    "Heat": "热度",
+    "Clear": "清白",
+    "Watched": "观察名单",
+    "Wanted": "通缉",
+    "Kill-on-sight": "见即击毁",
+    "Fine": "罚款",
+    "Outstanding fine": "未缴罚款",
+    "Pay Fine": "缴纳罚款",
+    "Faction Consequences": "Faction 后果",
+    "Friendly fire warning": "误伤警告",
+    "Civilian fire violation": "平民火力违规",
+    "Security assault": "袭击安保",
+    "Civilian vessel destroyed": "平民船只被击毁",
+    "Patrol vessel destroyed": "巡逻船被击毁",
+    "Contraband citation": "违禁品处罚",
+    "Contraband pursuit": "违禁品追捕",
+    "Bounty paid": "赏金到账",
+    "Fine paid": "罚款已缴",
     "Watch": "观看",
     "Watching": "正在观看",
     "Cockpit": "驾驶舱",
@@ -353,6 +375,10 @@ const exactText = {
     "Not stocked at this station": "このステーションでは未入荷",
     "Local scan required": "ローカルスキャンが必要",
     "Exploration Signals": "探索信号",
+    "Quiet Signals": "静かな信号",
+    "Chain reward": "チェーン報酬",
+    "Hidden content unlocked": "隠しコンテンツ解除",
+    "signals resolved.": "信号解決済み。",
     "planets": "惑星",
     "purchase": "購入",
     "Tier": "ティア",
@@ -431,6 +457,10 @@ const exactText = {
     "Not stocked at this station": "Non stocké dans cette station",
     "Local scan required": "Scan local requis",
     "Exploration Signals": "Signaux d'exploration",
+    "Quiet Signals": "Signaux discrets",
+    "Chain reward": "Récompense de chaîne",
+    "Hidden content unlocked": "Contenu caché déverrouillé",
+    "signals resolved.": "signaux résolus.",
     "planets": "planètes",
     "purchase": "achat",
     "Tier": "Rang",
@@ -1281,6 +1311,48 @@ export function formatRuntimeText(locale: Locale, source: string | undefined | n
     const status = localizeGenericName(economyStatusMatch[1], locale);
     const detail = economyStatusMatch[2] ? translateDisplayName(economyStatusMatch[2], locale) : "";
     return detail ? `${status} · ${detail}` : status;
+  }
+  const locateSignalMatch = source.match(/^Locate (.+) in (.+)\.$/);
+  if (locateSignalMatch) {
+    const signal = translateDisplayName(locateSignalMatch[1], locale);
+    const system = translateDisplayName(locateSignalMatch[2], locale);
+    if (locale === "zh-CN") return `在 ${system} 定位 ${signal}。`;
+    if (locale === "zh-TW") return `在 ${system} 定位 ${signal}。`;
+    if (locale === "ja") return `${system} で ${signal} を特定。`;
+    return `Localiser ${signal} dans ${system}.`;
+  }
+  const returnSignalMatch = source.match(/^Return to (.+) and complete the scan\.$/);
+  if (returnSignalMatch) {
+    const signal = translateDisplayName(returnSignalMatch[1], locale);
+    if (locale === "zh-CN") return `返回 ${signal} 并完成扫描。`;
+    if (locale === "zh-TW") return `返回 ${signal} 並完成掃描。`;
+    if (locale === "ja") return `${signal} に戻ってスキャン完了。`;
+    return `Retourner vers ${signal} et terminer le scan.`;
+  }
+  const scanningSignalMatch = source.match(/^Scanning (.+): tune frequency to finish the trace\.$/);
+  if (scanningSignalMatch) {
+    const signal = translateDisplayName(scanningSignalMatch[1], locale);
+    if (locale === "zh-CN") return `正在扫描 ${signal}：调谐频率以完成痕迹解析。`;
+    if (locale === "zh-TW") return `正在掃描 ${signal}：調諧頻率以完成痕跡解析。`;
+    if (locale === "ja") return `${signal} をスキャン中: 周波数を合わせて痕跡を完了。`;
+    return `Scan de ${signal} : réglez la fréquence pour finaliser la trace.`;
+  }
+  const lockedSignalMatch = source.match(/^Complete the prior Quiet Signal stage to resolve (.+)\.$/);
+  if (lockedSignalMatch) {
+    const signal = translateDisplayName(lockedSignalMatch[1], locale);
+    if (locale === "zh-CN") return `完成前序静默信号阶段以解析 ${signal}。`;
+    if (locale === "zh-TW") return `完成前序靜默訊號階段以解析 ${signal}。`;
+    if (locale === "ja") return `前段階の Quiet Signal を完了して ${signal} を解決。`;
+    return `Terminez l'étape Quiet Signal précédente pour résoudre ${signal}.`;
+  }
+  const chainCompleteMatch = source.match(/^Chain complete: (.+)\. (.+) blueprint unlocked\.$/);
+  if (chainCompleteMatch) {
+    const chain = translateDisplayName(chainCompleteMatch[1], locale);
+    const blueprint = translateDisplayName(chainCompleteMatch[2], locale);
+    if (locale === "zh-CN") return `链路完成：${chain}。${blueprint} 蓝图已解锁。`;
+    if (locale === "zh-TW") return `鏈路完成：${chain}。${blueprint} 藍圖已解鎖。`;
+    if (locale === "ja") return `チェーン完了: ${chain}。${blueprint} の設計図を解除。`;
+    return `Chaîne terminée : ${chain}. Plan ${blueprint} déverrouillé.`;
   }
   const holdingNearMatch = source.match(/^Holding near (.+)$/);
   if (holdingNearMatch) {

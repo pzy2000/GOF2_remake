@@ -31,6 +31,7 @@ import {
   isMarketGapMissionId
 } from "../systems/marketMissions";
 import { getEconomyEventSystemName, getEconomyFlightRouteSummary } from "../systems/economyRoutes";
+import { getFactionHeatLevelLabel, getFactionHeatRecord } from "../systems/factionConsequences";
 import { reputationLabel } from "../systems/reputation";
 import { GalaxyMap } from "./GalaxyMap";
 import { AtlasIcon } from "./AtlasIcon";
@@ -38,7 +39,7 @@ import { SaveSlotsPanel } from "./SaveSlotsPanel";
 import { getCommodityIcon, getEquipmentIcon, getFactionIcon } from "../data/iconAtlas";
 import { getStoryObjectiveSummary, getStoryProgress, storyStatusLabel } from "../systems/story";
 import { getDialogueLogEntries } from "../systems/dialogue";
-import { isExplorationSignalUnlocked } from "../systems/exploration";
+import { getExplorationChainSummaries, getExplorationObjectiveSummaryForSystem, explorationRewardStationNames } from "../systems/explorationObjectives";
 import {
   canInstallEquipment,
   canUnlockBlueprint,
@@ -49,12 +50,13 @@ import {
   isBlueprintUnlocked
 } from "../systems/equipment";
 import { getContrabandLawSummary } from "../systems/combatAi";
-import type { AssetManifest, BlueprintPath, CargoHold, CommodityId, EquipmentId, EquipmentSlotType, ExplorationSignalDefinition, ExplorationState, StationTab } from "../types/game";
+import type { AssetManifest, BlueprintPath, CargoHold, CommodityId, EquipmentId, EquipmentSlotType, FactionId, StationTab } from "../types/game";
 import {
   formatCargoContents,
   formatCargoLabel,
   formatCredits,
   formatDateTime,
+  formatDistance,
   formatNumber,
   formatRuntimeText,
   formatTechLevel,
@@ -86,36 +88,6 @@ const blueprintPathOrder: BlueprintPath[] = ["combat", "defense", "exploration",
 const EQUIPMENT_POPOVER_HOVER_DELAY_MS = 2000;
 
 type EquipmentPopoverMode = "preview" | "pinned";
-
-interface ExplorationChainSummary {
-  id: string;
-  title: string;
-  systemName: string;
-  signals: ExplorationSignalDefinition[];
-  completed: ExplorationSignalDefinition[];
-  next?: ExplorationSignalDefinition;
-}
-
-function getExplorationChainSummaries(explorationState: ExplorationState): ExplorationChainSummary[] {
-  const chains = new Map<string, ExplorationSignalDefinition[]>();
-  for (const signal of explorationSignals) {
-    const chainId = signal.chainId ?? signal.id;
-    chains.set(chainId, [...(chains.get(chainId) ?? []), signal]);
-  }
-  return Array.from(chains.entries())
-    .map(([id, signals]) => {
-      const ordered = [...signals].sort((a, b) => (a.stage ?? 1) - (b.stage ?? 1) || a.title.localeCompare(b.title));
-      return {
-        id,
-        title: ordered[0]?.chainTitle ?? ordered[0]?.title ?? id,
-        systemName: systemById[ordered[0]?.systemId ?? ""]?.name ?? ordered[0]?.systemId ?? "Unknown System",
-        signals: ordered,
-        completed: ordered.filter((signal) => explorationState.completedSignalIds.includes(signal.id)),
-        next: ordered.find((signal) => !explorationState.completedSignalIds.includes(signal.id) && isExplorationSignalUnlocked(signal, explorationState))
-      };
-    })
-    .sort((a, b) => a.systemName.localeCompare(b.systemName) || a.title.localeCompare(b.title));
-}
 
 interface EquipmentPopoverState {
   id: EquipmentId;
@@ -921,7 +893,7 @@ function CaptainLogTab() {
     getCommodityName: (commodityId) => localizeCommodityName(commodityId, locale, commodityById[commodityId]?.name)
   });
   const completedExplorationLogs = explorationSignals.filter((signal) => explorationState.eventLogIds.includes(signal.id));
-  const chainSummaries = getExplorationChainSummaries(explorationState);
+  const chainSummaries = getExplorationChainSummaries(explorationState, { playerUnlockedBlueprintIds: player.unlockedBlueprintIds });
   const currentFieldIntel = currentMission
     ? completedExplorationLogs.filter((signal) => signal.storyInfluence?.missionId === currentMission.id)
     : [];
@@ -943,6 +915,7 @@ function CaptainLogTab() {
           <span>Current Objective</span>
           <p>{translateText(storyObjective.objectiveText, locale)}</p>
         </div>
+        <FactionConsequencesPanel />
         {currentFieldIntel.length > 0 ? (
           <div className="story-field-intel">
             <span>Field Intelligence</span>
@@ -993,24 +966,28 @@ function CaptainLogTab() {
           </header>
           <p>{explorationState.completedSignalIds.length}/{explorationSignals.length} signals resolved.</p>
           <div className="exploration-chain-list">
-            {chainSummaries.map((chain) => (
-              <article key={chain.id} className={chain.completed.length === chain.signals.length ? "complete" : ""}>
-                <header>
-                  <div>
-                    <b>{chain.title}</b>
-                    <span>{chain.systemName}</span>
-                  </div>
-                  <strong>{chain.completed.length}/{chain.signals.length}</strong>
-                </header>
-                <p>
-                  {chain.next
-                    ? `Next trace: ${chain.next.maskedTitle}`
-                    : chain.completed.length === chain.signals.length
-                      ? "Chain resolved."
-                      : "Next trace locked behind a prior signal."}
-                </p>
-              </article>
-            ))}
+            {chainSummaries.map((chain) => {
+              const hiddenStations = explorationRewardStationNames(chain).map((name) => translateDisplayName(name, locale));
+              return (
+                <article key={chain.id} data-testid={`exploration-chain-${chain.id}`} className={chain.status === "complete" ? "complete" : ""}>
+                  <header>
+                    <div>
+                      <b>{translateText(chain.title, locale)}</b>
+                      <span>{localizeSystemName(chain.systemId, locale, chain.systemName)}</span>
+                    </div>
+                    <strong>{chain.completedCount}/{chain.totalCount}</strong>
+                  </header>
+                  <p>{formatRuntimeText(locale, chain.objectiveText)}</p>
+                  {chain.rewardBlueprintId ? (
+                    <p>
+                      {translateText("Chain reward", locale)}: {translateText(equipmentName(chain.rewardBlueprintId), locale)}
+                      {chain.rewardUnlocked ? ` · ${translateText("Unlocked", locale)}` : ""}
+                    </p>
+                  ) : null}
+                  {hiddenStations.length > 0 ? <p>{translateText("Hidden content unlocked", locale)}: {hiddenStations.join(", ")}</p> : null}
+                </article>
+              );
+            })}
           </div>
           {completedExplorationLogs.length === 0 ? (
             <p className="muted">No exploration logs recovered.</p>
@@ -1285,16 +1262,83 @@ function unitLabel(locale: Locale): string {
   return "unit";
 }
 
+function FactionConsequencesPanel() {
+  const locale = useGameStore((state) => state.locale);
+  const player = useGameStore((state) => state.player);
+  const reputation = useGameStore((state) => state.reputation);
+  const factionHeat = useGameStore((state) => state.factionHeat);
+  const payFactionFine = useGameStore((state) => state.payFactionFine);
+  const factionIds = Object.keys(factionNames) as FactionId[];
+  return (
+    <section className="lounge-card faction-consequences" data-testid="faction-consequences">
+      <h3>{translateText("Faction Consequences", locale)}</h3>
+      <div className="faction-consequence-list">
+        {factionIds.map((factionId) => {
+          const record = getFactionHeatRecord(factionHeat, factionId);
+          const heatLabel = getFactionHeatLevelLabel(record);
+          return (
+            <article key={factionId} className={`faction-consequence heat-${heatLabel.toLowerCase().replace(/[^a-z]+/g, "-")}`}>
+              <div>
+                <b>{localizeFactionName(factionId, locale, factionNames[factionId])}</b>
+                <span>
+                  {translateText(heatLabel, locale)} · {translateText("Heat", locale)} {formatNumber(locale, Math.round(record.heat))} · {translateText(reputationLabel(reputation.factions[factionId]), locale)}
+                </span>
+                {record.fineCredits > 0 ? <small>{translateText("Outstanding fine", locale)}: {formatCredits(locale, record.fineCredits)}</small> : null}
+              </div>
+              <button
+                disabled={record.fineCredits <= 0 || player.credits < record.fineCredits}
+                onClick={() => payFactionFine(factionId)}
+              >
+                {translateText("Pay Fine", locale)}
+              </button>
+            </article>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function LoungeTab() {
   const locale = useGameStore((state) => state.locale);
   const currentSystem = useGameStore((state) => systemById[state.currentSystemId]);
+  const player = useGameStore((state) => state.player);
+  const runtime = useGameStore((state) => state.runtime);
+  const explorationState = useGameStore((state) => state.explorationState);
   const marketState = useGameStore((state) => state.marketState);
   const economyEvents = useGameStore((state) => state.economyEvents);
   const supplyBrief = getMarketSupplyBrief(marketState, currentSystem.id, economyEvents);
+  const explorationSummary = getExplorationObjectiveSummaryForSystem(currentSystem.id, explorationState, {
+    playerPosition: player.position,
+    playerEquipment: player.equipment,
+    activeScanSignalId: runtime.explorationScan?.signalId,
+    playerUnlockedBlueprintIds: player.unlockedBlueprintIds
+  });
   return (
     <div className="lounge">
       <h2>{translateText("Lounge", locale)}</h2>
       <p>{dockhandsBriefLabel(localizeSystemName(currentSystem.id, locale, currentSystem.name), locale)}</p>
+      {explorationSummary ? (
+        <section className={`lounge-card station-exploration-brief status-${explorationSummary.status}`} data-testid="station-exploration-brief">
+          <h3>{translateText("Quiet Signals", locale)}</h3>
+          <p>
+            {formatRuntimeText(locale, explorationSummary.objectiveText)}
+            {explorationSummary.distanceMeters !== undefined ? ` · ${formatDistance(locale, explorationSummary.distanceMeters)}` : ""}
+          </p>
+          <p>
+            {explorationSummary.completedCount}/{explorationSummary.totalCount} {translateText("signals resolved.", locale)}
+            {explorationSummary.unlockedBlueprintIds.length > 0
+              ? ` · ${translateText("Chain reward", locale)}: ${explorationSummary.unlockedBlueprintIds.map((id) => translateText(equipmentName(id), locale)).join(", ")}`
+              : ""}
+          </p>
+          {explorationSummary.revealedStationIds.length > 0 ? (
+            <p>
+              {translateText("Hidden content unlocked", locale)}: {explorationSummary.revealedStationIds.map((stationId) => localizeStationName(stationId, locale, stationById[stationId]?.name)).join(", ")}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+      <FactionConsequencesPanel />
       {supplyBrief.shortages.length > 0 ? (
         supplyBrief.shortages.map((signal) => (
           <p key={`short-${signal.stationId}-${signal.commodityId}`}>

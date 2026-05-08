@@ -12,6 +12,7 @@ import { getJumpGatePosition } from "../systems/autopilot";
 import { getNavigationTargetCue, getNearestNavigationTarget } from "../systems/navigation";
 import type { NavigationCueTone, NavigationTarget } from "../systems/navigation";
 import { getIncompleteExplorationSignals, getVisibleStationsForSystem, isExplorationSignalDiscovered } from "../systems/exploration";
+import { getExplorationObjectiveSummaryForSignal } from "../systems/explorationObjectives";
 import { getStoryObjectiveSummary } from "../systems/story";
 import { getEconomyFlightRouteCue } from "../systems/economyRoutes";
 import {
@@ -674,6 +675,7 @@ function ExplorationSignalMarker({ signal }: { signal: ExplorationSignalDefiniti
   const activeScan = useGameStore((state) => state.runtime.explorationScan);
   const discovered = isExplorationSignalDiscovered(signal.id, explorationState);
   const scanning = activeScan?.signalId === signal.id;
+  const summary = getExplorationObjectiveSummaryForSignal(signal.id, explorationState, { activeScanSignalId: activeScan?.signalId });
   const pulse = 0.5 + Math.sin(clock * (scanning ? 5.2 : 2.6) + signal.position[0] * 0.01) * 0.5;
   const color = signal.kind === "wreck" ? "#ffd166" : signal.kind === "cache" ? "#74e08d" : signal.kind === "event" ? "#ff9bd5" : "#8fe9ff";
   return (
@@ -705,7 +707,8 @@ function ExplorationSignalMarker({ signal }: { signal: ExplorationSignalDefiniti
       <Line points={[[-48, 0, 0], [0, 0, 0], [48, 0, 0]]} color={color} lineWidth={1.2} transparent opacity={0.28 + pulse * 0.32} />
       <pointLight color={color} intensity={0.7 + pulse * 0.8} distance={220} />
       <Html center distanceFactor={11} className="target-label exploration-label">
-        {scanning ? localizeGenericName("SCANNING", locale) : discovered ? translateText(signal.title, locale).toUpperCase() : translateText(signal.maskedTitle, locale).toUpperCase()}
+        <b>{scanning ? localizeGenericName("SCANNING", locale) : discovered ? translateText(signal.title, locale).toUpperCase() : translateText(signal.maskedTitle, locale).toUpperCase()}</b>
+        {summary ? <small>{translateText("Quiet Signals", locale)} {summary.completedCount}/{summary.totalCount}</small> : null}
       </Html>
     </group>
   );

@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { explorationSignalById } from "../../src/data/world";
 
 type Gof2E2EState = {
   screen: string;
@@ -109,6 +110,55 @@ async function getScanKeyboardState(page: Page): Promise<ScanKeyboardState> {
       afterburner: state.input.afterburner,
       scan: state.runtime.explorationScan ? { ...state.runtime.explorationScan } : undefined
     };
+  });
+}
+
+async function completeExplorationSignal(page: Page, signalId: string) {
+  const signal = explorationSignalById[signalId];
+  const frequency = Math.round((signal.scanBand[0] + signal.scanBand[1]) / 2);
+  await page.evaluate(({ systemId, position, frequency, scanTime }) => {
+    const e2e = window.__GOF2_E2E__!;
+    const state = e2e.getState() as {
+      player: Record<string, unknown>;
+      runtime: Record<string, unknown>;
+    };
+    e2e.setState({
+      screen: "flight",
+      currentSystemId: systemId,
+      currentStationId: undefined,
+      player: {
+        ...state.player,
+        position,
+        velocity: [0, 0, 0],
+        throttle: 0
+      },
+      runtime: {
+        ...state.runtime,
+        enemies: [],
+        projectiles: [],
+        effects: [],
+        explorationScan: undefined,
+        message: ""
+      }
+    });
+    const active = e2e.getState() as {
+      interact: () => void;
+      adjustExplorationScanFrequency: (delta: number) => void;
+      tick: (delta: number) => void;
+      closeDialogue: () => void;
+      runtime: { explorationScan?: { frequency: number } };
+    };
+    active.interact();
+    const scan = (e2e.getState() as typeof active).runtime.explorationScan;
+    if (!scan) throw new Error("Exploration scan did not start.");
+    (e2e.getState() as typeof active).adjustExplorationScanFrequency(frequency - scan.frequency);
+    (e2e.getState() as typeof active).tick(scanTime + 0.2);
+    (e2e.getState() as typeof active).closeDialogue();
+  }, {
+    systemId: signal.systemId,
+    position: signal.position,
+    frequency,
+    scanTime: signal.scanTime
   });
 }
 
@@ -663,6 +713,81 @@ test.describe("browser smoke", () => {
     await page.getByRole("button", { name: "Mirr Vale known" }).click();
     await expect(page.getByTestId("story-map-brief")).toContainText("Glass Wake 01");
     await expect(page.locator(".planet-list button.story-destination")).toContainText("Main Story");
+  });
+
+  test("surfaces wanted heat in HUD, galaxy map, and station fine payment", async ({ page }) => {
+    await resetApp(page);
+    await startNewGame(page);
+
+    await page.evaluate(() => {
+      const state = window.__GOF2_E2E__!.getState() as {
+        player: Record<string, unknown>;
+        runtime: Record<string, unknown>;
+      };
+      window.__GOF2_E2E__!.setState({
+        currentSystemId: "helion-reach",
+        currentStationId: undefined,
+        screen: "flight",
+        player: { ...state.player, credits: 5000 },
+        factionHeat: {
+          factions: {
+            "solar-directorate": { heat: 45, fineCredits: 3000, offenseCount: 1, wantedUntil: 120 }
+          }
+        },
+        runtime: { ...state.runtime, message: "" }
+      });
+    });
+
+    await expect(page.getByTestId("legal-status")).toContainText("Wanted");
+    await expect(page.getByTestId("legal-status")).toContainText("Fine");
+
+    await page.evaluate(() => {
+      window.__GOF2_E2E__!.setState({ screen: "galaxyMap", previousScreen: "flight", galaxyMapMode: "station-route" });
+    });
+    await expect(page.getByTestId("law-map-brief")).toContainText("Wanted");
+    await expect(page.getByRole("button", { name: "Helion Reach known" }).locator(".law-map-pin")).toContainText("Wanted");
+
+    await page.evaluate(() => {
+      window.__GOF2_E2E__!.setState({
+        screen: "station",
+        currentStationId: "helion-prime",
+        stationTab: "Lounge"
+      });
+    });
+    const solarRow = page.locator(".faction-consequence").filter({ hasText: "Solar Directorate" });
+    await expect(solarRow).toContainText("Wanted");
+    await expect(solarRow).toContainText("3,000");
+    await solarRow.getByRole("button", { name: "Pay Fine" }).click();
+    await expect(solarRow).toContainText("Clear");
+    await expect(solarRow).not.toContainText("3,000");
+  });
+
+  test("surfaces and completes the Quiet Signals exploration loop", async ({ page }) => {
+    await resetApp(page);
+    await startNewGame(page);
+    await dockAtStation(page, "helion-prime");
+
+    await page.getByRole("button", { name: "Lounge" }).click();
+    const stationBrief = page.getByTestId("station-exploration-brief");
+    await expect(stationBrief).toContainText("Quiet Signals");
+    await expect(stationBrief).toContainText("Prismatic Trade Echo");
+
+    await page.getByRole("button", { name: "Galaxy Map" }).click();
+    await expect(page.getByRole("button", { name: "Helion Reach known" }).locator(".exploration-map-pin")).toContainText("Quiet Signals");
+    await expect(page.getByTestId("exploration-map-brief")).toContainText("Sundog Lattice Chain");
+
+    await completeExplorationSignal(page, "quiet-signal-sundog-lattice");
+    expect((await getGameState(page)).player.unlockedBlueprintIds).not.toContain("survey-array");
+    await completeExplorationSignal(page, "quiet-signal-meridian-afterimage");
+
+    const state = await getGameState(page);
+    expect(state.player.unlockedBlueprintIds).toContain("survey-array");
+    await expect(page.locator(".hud-bottom-right")).toContainText("Survey Array blueprint unlocked");
+
+    await dockAtStation(page, "helion-prime");
+    await page.getByRole("button", { name: "Captain's Log" }).click();
+    await expect(page.getByTestId("exploration-chain-helion-sundog-chain")).toContainText("Chain complete");
+    await expect(page.getByTestId("exploration-chain-helion-sundog-chain")).toContainText("Survey Array");
   });
 
   test("covers station trade, mission accept, jump, save, and reload", async ({ page }) => {

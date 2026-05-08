@@ -21,6 +21,7 @@ import {
 import { createInitialMarketState } from "../src/systems/economy";
 import { createInitialDialogueState } from "../src/systems/dialogue";
 import { createInitialExplorationState } from "../src/systems/exploration";
+import { createInitialFactionHeat } from "../src/systems/factionConsequences";
 import { createInitialReputation } from "../src/systems/reputation";
 import { writeSave } from "../src/systems/save";
 import type { CargoHold, EquipmentId, PlayerState } from "../src/types/game";
@@ -306,6 +307,7 @@ describe("equipment gameplay wiring", () => {
         failedMissionIds: [],
         marketState: createInitialMarketState(),
         reputation: createInitialReputation(),
+        factionHeat: createInitialFactionHeat(),
         knownSystems: ["helion-reach"],
         knownPlanetIds: ["helion-prime-world"],
         explorationState: createInitialExplorationState(),

@@ -1,6 +1,7 @@
-import { stationById, planets } from "../../data/world";
+import { equipmentById, stationById, planets } from "../../data/world";
 import type { CommodityId, ExplorationState, FactionId, MissionDefinition, PlayerState, ReputationState } from "../../types/game";
 import { explorationSignalById } from "../../systems/exploration";
+import { applyExplorationChainBlueprintRewards } from "../../systems/explorationObjectives";
 import { updateReputation } from "../../systems/reputation";
 import { addCargoWithinCapacity, addUniqueIds } from "./runtimeFactory";
 
@@ -45,12 +46,15 @@ export function applyExplorationReward(snapshot: {
       : snapshot.explorationState.revealedStationIds,
     eventLogIds: addUniqueIds(snapshot.explorationState.eventLogIds, [signal.id])
   };
+  const blueprintRewards = applyExplorationChainBlueprintRewards(player, explorationState);
+  player = blueprintRewards.player;
   const knownPlanetIds = signal.revealPlanetIds?.length
     ? planets.filter((planet) => new Set([...snapshot.knownPlanetIds, ...(signal.revealPlanetIds ?? [])]).has(planet.id)).map((planet) => planet.id)
     : snapshot.knownPlanetIds;
   const rewardParts = [
     signal.rewards.credits ? `+${signal.rewards.credits} credits` : "",
     collectedCargo > 0 ? `+${collectedCargo} cargo` : "",
+    ...blueprintRewards.unlockedBlueprintIds.map((equipmentId) => `${equipmentById[equipmentId]?.name ?? equipmentId} blueprint unlocked`),
     signal.revealStationId ? `${stationById[signal.revealStationId]?.name ?? signal.revealStationId} revealed` : ""
   ].filter(Boolean);
   return {

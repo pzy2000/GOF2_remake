@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { blueprintDefinitions, commodities, contrabandLawBySystem, dialogueSceneById, dialogueScenes, dialogueSpeakerById, dialogueSpeakers, equipmentById, equipmentList, explorationSignals, glassWakeProtocol, missionTemplates, planetById, planets, ships, stationById, stations, systems } from "../src/data/world";
+import { EXPLORATION_CHAIN_BLUEPRINT_REWARDS } from "../src/systems/explorationObjectives";
 import { fallbackAssetManifest } from "../src/systems/assets";
 import { createAsteroidsForSystem } from "../src/systems/asteroids";
 import { getEquipmentSlotUsage, getShipSlotCapacity } from "../src/systems/equipment";
@@ -174,6 +175,8 @@ describe("content data", () => {
   it("defines multi-stage Quiet Signals exploration chains for every system", () => {
     const signalIds = new Set(explorationSignals.map((signal) => signal.id));
     const missionIds = new Set(missionTemplates.map((mission) => mission.id));
+    const chainIds = new Set(explorationSignals.map((signal) => signal.chainId ?? signal.id));
+    const blueprintIds = new Set(blueprintDefinitions.map((blueprint) => blueprint.equipmentId));
     for (const system of systems) {
       const systemSignals = explorationSignals.filter((signal) => signal.systemId === system.id);
       expect(systemSignals.length).toBeGreaterThanOrEqual(2);
@@ -196,6 +199,11 @@ describe("content data", () => {
         expect(system?.stationIds).not.toContain(station.id);
         expect(system?.hiddenStationIds).toContain(station.id);
       }
+    }
+    for (const [chainId, equipmentId] of Object.entries(EXPLORATION_CHAIN_BLUEPRINT_REWARDS)) {
+      expect(chainIds.has(chainId)).toBe(true);
+      expect(blueprintIds.has(equipmentId)).toBe(true);
+      expect(equipmentById[equipmentId]).toBeDefined();
     }
   });
 
