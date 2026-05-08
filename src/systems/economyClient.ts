@@ -54,7 +54,7 @@ export function fetchEconomyNpc(npcId: string): Promise<EconomyNpcResponse> {
 }
 
 export function isEconomyNotFoundError(error: unknown): boolean {
-  return error instanceof EconomyRequestError && error.status === 404;
+  return error instanceof EconomyRequestError && error.status === 404 && error.message === "Economy NPC not found.";
 }
 
 export function postEconomyReset(systemId: string): Promise<EconomySnapshot> {

@@ -320,6 +320,39 @@ describe("economy store integration", () => {
     expect(store.getState().runtime.message).toBe("NPC signal lost.");
   });
 
+  it("keeps a watched NPC when watch starts during an in-flight snapshot refresh", async () => {
+    const store = await freshStore();
+    store.getState().dockAt("helion-prime");
+    const asteroid = store.getState().runtime.asteroids[0];
+    store.setState((state) => ({
+      runtime: {
+        ...state.runtime,
+        enemies: [...state.runtime.enemies, watchableEconomyMiner(asteroid.id)]
+      }
+    }));
+    let resolveSnapshot: (response: Response) => void = () => undefined;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Promise<Response>((resolve) => {
+        resolveSnapshot = resolve;
+      }))
+    );
+
+    const refresh = store.getState().refreshEconomySnapshot();
+    store.getState().startEconomyNpcWatch("econ-watch-miner");
+    resolveSnapshot(new Response(JSON.stringify(snapshotWithoutVisibleNpcs(52)), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    }));
+    await refresh;
+    store.getState().tick(1 / 60);
+
+    const state = store.getState();
+    expect(state.screen).toBe("economyWatch");
+    expect(state.economyNpcWatch?.npcId).toBe("econ-watch-miner");
+    expect(state.runtime.enemies.find((ship) => ship.id === "econ-watch-miner")).toBeDefined();
+  });
+
   it("keeps economy watch active when the watched NPC is only returned by the remote lookup", async () => {
     const store = await freshStore();
     store.getState().dockAt("helion-prime");
@@ -417,6 +450,49 @@ describe("economy store integration", () => {
     expect(state.screen).toBe("economyWatch");
     expect(state.runtime.enemies.find((ship) => ship.id === "econ-watch-miner")).toBeDefined();
     expect(state.economyService).toMatchObject({ status: "offline", lastError: "watch offline" });
+  });
+
+  it("preserves the cached watched NPC when an old backend returns route-not-found for the watch endpoint", async () => {
+    const store = await freshStore();
+    store.getState().dockAt("helion-prime");
+    const asteroid = store.getState().runtime.asteroids[0];
+    store.setState((state) => ({
+      runtime: {
+        ...state.runtime,
+        enemies: [...state.runtime.enemies, watchableEconomyMiner(asteroid.id)]
+      }
+    }));
+    store.getState().startEconomyNpcWatch("econ-watch-miner");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/api/economy/snapshot")) {
+          return new Response(JSON.stringify(snapshotWithoutVisibleNpcs(56)), {
+            status: 200,
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+        if (url.includes("/api/economy/npc/econ-watch-miner")) {
+          return new Response(JSON.stringify({ message: "Route not found." }), {
+            status: 404,
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+        return new Response(JSON.stringify({ message: "Unexpected economy request." }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" }
+        });
+      })
+    );
+
+    await store.getState().refreshEconomySnapshot();
+    store.getState().tick(1 / 60);
+
+    const state = store.getState();
+    expect(state.screen).toBe("economyWatch");
+    expect(state.runtime.enemies.find((ship) => ship.id === "econ-watch-miner")).toBeDefined();
+    expect(state.economyService).toMatchObject({ status: "offline", lastError: "Route not found." });
   });
 
   it("returns from economy watch when the remote watched NPC lookup returns 404", async () => {

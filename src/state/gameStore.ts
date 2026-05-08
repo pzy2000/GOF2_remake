@@ -379,17 +379,23 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
       set((state) => {
         if (state.currentSystemId !== requestedSystemId) return {};
+        const activeWatchedNpcId = state.screen === "economyWatch" ? state.economyNpcWatch?.npcId : undefined;
+        const effectiveWatchedNpc = watchedNpc?.id === activeWatchedNpcId ? watchedNpc : undefined;
+        const preserveWatchedNpcId =
+          watchedNpcLost && watchedNpcId === activeWatchedNpcId ? undefined : activeWatchedNpcId;
+        const activeWatchOfflineMessage =
+          watchedNpcOfflineMessage && watchedNpcId === activeWatchedNpcId ? watchedNpcOfflineMessage : undefined;
         const patch = applyEconomySnapshotPatch(state, snapshotResult.value, "snapshot", {
-          watchedNpc,
-          watchedNpcId: watchedNpcLost ? undefined : watchedNpcId
+          watchedNpc: effectiveWatchedNpc,
+          watchedNpcId: preserveWatchedNpcId
         });
-        if (!watchedNpcOfflineMessage) return patch;
+        if (!activeWatchOfflineMessage) return patch;
         return {
           ...patch,
           economyService: {
             ...patch.economyService,
             status: "offline",
-            lastError: watchedNpcOfflineMessage
+            lastError: activeWatchOfflineMessage
           }
         };
       });
