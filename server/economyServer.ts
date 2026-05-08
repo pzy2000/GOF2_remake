@@ -4,6 +4,7 @@ import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { EconomyEvent, NpcDestroyedRequest, PlayerTradeRequest } from "../src/types/economy";
 import {
+  createEconomyNpcResponse,
   createEconomySnapshot,
   handlePlayerTrade,
   markEconomyNpcDestroyed,
@@ -144,6 +145,17 @@ export function createEconomyHttpServer(options: EconomyHttpServerOptions = {}):
 
       if (request.method === "GET" && url.pathname === "/api/economy/snapshot") {
         writeJson(response, 200, createEconomySnapshot(state, url.searchParams.get("systemId") ?? undefined));
+        return;
+      }
+
+      if (request.method === "GET" && url.pathname.startsWith("/api/economy/npc/")) {
+        const npcId = decodeURIComponent(url.pathname.slice("/api/economy/npc/".length));
+        const npcResponse = createEconomyNpcResponse(state, npcId);
+        if (!npcId || !npcResponse) {
+          writeJson(response, 404, { ok: false, message: "Economy NPC not found." });
+          return;
+        }
+        writeJson(response, 200, npcResponse);
         return;
       }
 

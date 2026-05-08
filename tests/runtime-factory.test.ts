@@ -57,6 +57,7 @@ describe("runtime factory domain helpers", () => {
       factionId: "free-belt-union",
       aiProfileId: "freighter",
       loadoutId: "union-freighter",
+      economySystemId: "helion-reach",
       economyTaskKind: "hauling",
       economyTaskProgress: 0.5,
       economyStatus: "HAULING",

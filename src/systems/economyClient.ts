@@ -1,5 +1,6 @@
 import type {
   EconomyEvent,
+  EconomyNpcResponse,
   EconomySnapshot,
   NpcDestroyedRequest,
   PlayerTradeRequest,
@@ -10,6 +11,16 @@ export const ECONOMY_SERVICE_URL =
   (import.meta.env.VITE_ECONOMY_API_URL as string | undefined)?.replace(/\/$/, "") ?? "http://127.0.0.1:19777";
 
 const REQUEST_TIMEOUT_MS = 1_400;
+
+export class EconomyRequestError extends Error {
+  status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "EconomyRequestError";
+    this.status = status;
+  }
+}
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   const controller = new AbortController();
@@ -26,7 +37,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
     const data = await response.json() as T;
     if (!response.ok) {
       const message = typeof data === "object" && data && "message" in data ? String(data.message) : "Economy service request failed.";
-      throw new Error(message);
+      throw new EconomyRequestError(message, response.status);
     }
     return data;
   } finally {
@@ -36,6 +47,14 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function fetchEconomySnapshot(systemId: string): Promise<EconomySnapshot> {
   return requestJson<EconomySnapshot>(`/api/economy/snapshot?systemId=${encodeURIComponent(systemId)}`);
+}
+
+export function fetchEconomyNpc(npcId: string): Promise<EconomyNpcResponse> {
+  return requestJson<EconomyNpcResponse>(`/api/economy/npc/${encodeURIComponent(npcId)}`);
+}
+
+export function isEconomyNotFoundError(error: unknown): boolean {
+  return error instanceof EconomyRequestError && error.status === 404;
 }
 
 export function postEconomyReset(systemId: string): Promise<EconomySnapshot> {

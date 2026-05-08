@@ -1352,7 +1352,12 @@ function EconomyRouteMarkers() {
   const locale = useGameStore((state) => state.locale);
   const pulse = 0.5 + Math.sin(runtime.clock * 3.8) * 0.5;
   const ships = runtime.enemies
-    .filter((ship) => !!ship.economyStatus && ship.hull > 0 && ship.deathTimer === undefined)
+    .filter((ship) =>
+      !!ship.economyStatus &&
+      ship.hull > 0 &&
+      ship.deathTimer === undefined &&
+      (!ship.economySystemId || ship.economySystemId === currentSystemId)
+    )
     .slice(0, 10);
   return (
     <>
@@ -1518,7 +1523,8 @@ function getEconomyWatchTarget(
   asteroids: AsteroidEntity[],
   currentSystemId: string
 ): EconomyWatchTarget | undefined {
-  const route = getEconomyFlightRouteCue(ship, asteroids, currentSystemId);
+  const watchSystemId = ship.economySystemId ?? currentSystemId;
+  const route = watchSystemId === currentSystemId ? getEconomyFlightRouteCue(ship, asteroids, currentSystemId) : undefined;
   const targetStation = ship.economyTargetId ? stationById[ship.economyTargetId] : undefined;
   if (route) {
     return {
@@ -1530,7 +1536,7 @@ function getEconomyWatchTarget(
   if (targetStation) {
     return {
       name: targetStation.name,
-      position: targetStation.systemId === currentSystemId ? targetStation.position : undefined,
+      position: watchSystemId !== "__transit__" && targetStation.systemId === watchSystemId ? targetStation.position : undefined,
       stationId: targetStation.id
     };
   }

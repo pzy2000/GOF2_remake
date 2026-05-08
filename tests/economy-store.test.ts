@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createAsteroidsForSystem } from "../src/systems/asteroids";
 import { createInitialMarketState, getMarketEntry } from "../src/systems/economy";
 import { getAvailableMarketGapMissions } from "../src/systems/marketMissions";
-import type { EconomySnapshot } from "../src/types/economy";
+import type { EconomyNpcResponse, EconomySnapshot } from "../src/types/economy";
 import type { CommodityId, FlightEntity, MarketState } from "../src/types/game";
 
 class MemoryStorage implements Storage {
@@ -68,6 +68,54 @@ function watchableEconomyMiner(targetId: string): FlightEntity {
     economyCargo: {},
     economyCommodityId: "iron",
     economyTargetId: targetId
+  };
+}
+
+function snapshotWithoutVisibleNpcs(snapshotId = 52, recentEvents: EconomySnapshot["recentEvents"] = []): EconomySnapshot {
+  return {
+    version: 1,
+    snapshotId,
+    clock: 20,
+    marketState: createInitialMarketState(),
+    status: "connected",
+    recentEvents,
+    resourceBelts: [],
+    visibleNpcs: []
+  };
+}
+
+function watchedTransitNpcResponse(snapshotId = 52): EconomyNpcResponse {
+  return {
+    version: 1,
+    snapshotId,
+    clock: 20,
+    status: "connected",
+    npc: {
+      id: "econ-watch-miner",
+      name: "Ore Cutter",
+      role: "miner",
+      factionId: "free-belt-union",
+      systemId: "__transit__",
+      position: [0, 0, 0],
+      velocity: [0, 0, 0],
+      hull: 125,
+      shield: 58,
+      maxHull: 125,
+      maxShield: 58,
+      cargoCapacity: 20,
+      cargo: { iron: 4 },
+      credits: 5000,
+      lastTradeAt: 0,
+      statusLabel: "HAULING · Iron",
+      task: {
+        kind: "hauling",
+        commodityId: "iron",
+        originStationId: "cinder-yard",
+        destinationStationId: "helion-prime",
+        progress: 0.45,
+        startedAt: 12
+      }
+    }
   };
 }
 
@@ -270,6 +318,148 @@ describe("economy store integration", () => {
     expect(store.getState().screen).toBe("station");
     expect(store.getState().stationTab).toBe("Economy");
     expect(store.getState().runtime.message).toBe("NPC signal lost.");
+  });
+
+  it("keeps economy watch active when the watched NPC is only returned by the remote lookup", async () => {
+    const store = await freshStore();
+    store.getState().dockAt("helion-prime");
+    const asteroid = store.getState().runtime.asteroids[0];
+    store.setState((state) => ({
+      runtime: {
+        ...state.runtime,
+        enemies: [...state.runtime.enemies, watchableEconomyMiner(asteroid.id)]
+      }
+    }));
+    store.getState().startEconomyNpcWatch("econ-watch-miner");
+    const snapshot = snapshotWithoutVisibleNpcs(53, [
+      {
+        id: "econ-watch-event",
+        type: "npc-task",
+        clock: 19,
+        message: "Ore Cutter entered transit to Helion Prime.",
+        systemId: "__transit__",
+        npcId: "econ-watch-miner",
+        commodityId: "iron",
+        snapshotId: 53
+      }
+    ]);
+    const npcResponse = watchedTransitNpcResponse(53);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/api/economy/snapshot")) {
+          return new Response(JSON.stringify(snapshot), { status: 200, headers: { "Content-Type": "application/json" } });
+        }
+        if (url.includes("/api/economy/npc/econ-watch-miner")) {
+          return new Response(JSON.stringify(npcResponse), { status: 200, headers: { "Content-Type": "application/json" } });
+        }
+        return new Response(JSON.stringify({ message: "Unexpected economy request." }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" }
+        });
+      })
+    );
+
+    await store.getState().refreshEconomySnapshot();
+    store.getState().tick(1 / 60);
+
+    const state = store.getState();
+    expect(state.screen).toBe("economyWatch");
+    expect(state.economyNpcWatch?.npcId).toBe("econ-watch-miner");
+    expect(state.runtime.enemies.find((ship) => ship.id === "econ-watch-miner")).toMatchObject({
+      economySystemId: "__transit__",
+      economyTaskKind: "hauling",
+      economyTaskProgress: 0.45,
+      economyCargo: { iron: 4 }
+    });
+    expect(state.economyEvents[0]?.message).toContain("entered transit");
+  });
+
+  it("preserves the cached watched NPC on temporary remote lookup failure", async () => {
+    const store = await freshStore();
+    store.getState().dockAt("helion-prime");
+    const asteroid = store.getState().runtime.asteroids[0];
+    store.setState((state) => ({
+      runtime: {
+        ...state.runtime,
+        enemies: [...state.runtime.enemies, watchableEconomyMiner(asteroid.id)]
+      }
+    }));
+    store.getState().startEconomyNpcWatch("econ-watch-miner");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/api/economy/snapshot")) {
+          return new Response(JSON.stringify(snapshotWithoutVisibleNpcs(54)), {
+            status: 200,
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+        if (url.includes("/api/economy/npc/econ-watch-miner")) {
+          return new Response(JSON.stringify({ message: "watch offline" }), {
+            status: 503,
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+        return new Response(JSON.stringify({ message: "Unexpected economy request." }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" }
+        });
+      })
+    );
+
+    await store.getState().refreshEconomySnapshot();
+    store.getState().tick(1 / 60);
+
+    const state = store.getState();
+    expect(state.screen).toBe("economyWatch");
+    expect(state.runtime.enemies.find((ship) => ship.id === "econ-watch-miner")).toBeDefined();
+    expect(state.economyService).toMatchObject({ status: "offline", lastError: "watch offline" });
+  });
+
+  it("returns from economy watch when the remote watched NPC lookup returns 404", async () => {
+    const store = await freshStore();
+    store.getState().dockAt("helion-prime");
+    const asteroid = store.getState().runtime.asteroids[0];
+    store.setState((state) => ({
+      runtime: {
+        ...state.runtime,
+        enemies: [...state.runtime.enemies, watchableEconomyMiner(asteroid.id)]
+      }
+    }));
+    store.getState().startEconomyNpcWatch("econ-watch-miner");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/api/economy/snapshot")) {
+          return new Response(JSON.stringify(snapshotWithoutVisibleNpcs(55)), {
+            status: 200,
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+        if (url.includes("/api/economy/npc/econ-watch-miner")) {
+          return new Response(JSON.stringify({ message: "Economy NPC not found." }), {
+            status: 404,
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+        return new Response(JSON.stringify({ message: "Unexpected economy request." }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" }
+        });
+      })
+    );
+
+    await store.getState().refreshEconomySnapshot();
+
+    const state = store.getState();
+    expect(state.screen).toBe("station");
+    expect(state.stationTab).toBe("Economy");
+    expect(state.economyNpcWatch).toBeUndefined();
+    expect(state.runtime.message).toBe("NPC signal lost.");
   });
 
   it("accepts generated market gap contracts and applies delivery to local market pressure", async () => {

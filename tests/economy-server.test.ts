@@ -5,7 +5,7 @@ import { get } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { createEconomyHttpServer, type EconomyHttpServer } from "../server/economyServer";
 import { shipById } from "../src/data/world";
-import type { EconomySnapshot, PlayerTradeResponse } from "../src/types/economy";
+import type { EconomyNpcResponse, EconomySnapshot, PlayerTradeResponse } from "../src/types/economy";
 import type { PlayerState } from "../src/types/game";
 
 let activeServer: EconomyHttpServer | undefined;
@@ -65,6 +65,54 @@ describe("economy HTTP server", () => {
     expect(snapshot.visibleNpcs.some((npc) => npc.role === "miner")).toBe(true);
     expect(snapshot.resourceBelts[0].asteroids.length).toBeGreaterThan(0);
     expect(snapshot.marketState["kuro-deep"]?.iron).toBeDefined();
+  });
+
+  it("serves watched NPC state outside the current-system snapshot", async () => {
+    const { app, baseUrl } = await startServer();
+    const npc = app.getState().npcs.find((candidate) => candidate.id === "econ-helion-reach-freighter-1");
+    expect(npc).toBeDefined();
+    npc!.systemId = "__transit__";
+    npc!.cargo = { "basic-food": 4 };
+    npc!.task = {
+      kind: "hauling",
+      commodityId: "basic-food",
+      originStationId: "cinder-yard",
+      destinationStationId: "mirr-lattice",
+      progress: 0.45,
+      startedAt: app.getState().clock
+    };
+    npc!.statusLabel = "HAULING · Basic Food";
+
+    const response = await fetch(`${baseUrl}/api/economy/npc/econ-helion-reach-freighter-1`);
+    const result = await response.json() as EconomyNpcResponse;
+
+    expect(response.ok).toBe(true);
+    expect(result.status).toBe("connected");
+    expect(result.npc).toMatchObject({
+      id: "econ-helion-reach-freighter-1",
+      systemId: "__transit__",
+      cargo: { "basic-food": 4 },
+      task: {
+        kind: "hauling",
+        destinationStationId: "mirr-lattice",
+        progress: 0.45
+      }
+    });
+  });
+
+  it("returns 404 for missing or destroyed watched NPCs", async () => {
+    const { app, baseUrl } = await startServer();
+
+    const missing = await fetch(`${baseUrl}/api/economy/npc/not-a-real-npc`);
+    expect(missing.status).toBe(404);
+
+    const npc = app.getState().npcs.find((candidate) => candidate.id === "econ-helion-reach-freighter-1");
+    expect(npc).toBeDefined();
+    npc!.hull = 0;
+    npc!.task = { kind: "destroyed", startedAt: app.getState().clock };
+
+    const destroyed = await fetch(`${baseUrl}/api/economy/npc/econ-helion-reach-freighter-1`);
+    expect(destroyed.status).toBe(404);
   });
 
   it("emits an initial SSE connected event", async () => {

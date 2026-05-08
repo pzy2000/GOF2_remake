@@ -593,6 +593,7 @@ export interface FlightEntity {
   storyTarget?: boolean;
   storyTargetKind?: StoryEncounterTargetKind;
   provokedByPlayer?: boolean;
+  economySystemId?: string;
   economyTaskKind?: EconomyNpcTaskKind;
   economyTaskProgress?: number;
   economyStatus?: string;

@@ -81,6 +81,14 @@ export interface EconomySnapshot {
   status: Extract<EconomyConnectionStatus, "connected">;
 }
 
+export interface EconomyNpcResponse {
+  version: number;
+  snapshotId: number;
+  clock: number;
+  npc: EconomyNpcEntity;
+  status: Extract<EconomyConnectionStatus, "connected">;
+}
+
 export interface PlayerTradeRequest {
   action: "buy" | "sell";
   stationId: string;

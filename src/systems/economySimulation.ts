@@ -3,6 +3,7 @@ import type { CargoHold, CommodityId, FactionId, MarketState, PlayerState, Vec3 
 import type {
   EconomyEvent,
   EconomyNpcEntity,
+  EconomyNpcResponse,
   EconomyResourceBelt,
   EconomySnapshot,
   NpcDestroyedRequest,
@@ -580,6 +581,10 @@ function updateNpcStatus(state: EconomyServiceState, npc: EconomyNpcEntity): voi
   else npc.statusLabel = "IDLE";
 }
 
+function cloneEconomyNpc(npc: EconomyNpcEntity): EconomyNpcEntity {
+  return { ...npc, cargo: cloneCargo(npc.cargo), task: { ...npc.task } };
+}
+
 export function tickEconomyState(state: EconomyServiceState, delta: number): EconomyServiceState {
   if (delta <= 0) return state;
   state.clock = Number((state.clock + delta).toFixed(3));
@@ -610,9 +615,21 @@ export function createEconomySnapshot(state: EconomyServiceState, systemId?: str
     visibleNpcs: state.npcs
       .filter((npc) => !systemId || npc.systemId === systemId)
       .filter((npc) => npc.task.kind !== "destroyed" && npc.hull > 0)
-      .map((npc) => ({ ...npc, cargo: cloneCargo(npc.cargo), task: { ...npc.task } })),
+      .map(cloneEconomyNpc),
     resourceBelts,
     recentEvents: state.recentEvents.slice(-12),
+    status: "connected"
+  };
+}
+
+export function createEconomyNpcResponse(state: EconomyServiceState, npcId: string): EconomyNpcResponse | undefined {
+  const npc = state.npcs.find((candidate) => candidate.id === npcId);
+  if (!npc || npc.task.kind === "destroyed" || npc.hull <= 0) return undefined;
+  return {
+    version: state.version,
+    snapshotId: state.snapshotId,
+    clock: state.clock,
+    npc: cloneEconomyNpc(npc),
     status: "connected"
   };
 }

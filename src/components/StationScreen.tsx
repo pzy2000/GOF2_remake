@@ -463,7 +463,12 @@ function EconomyTab() {
   const startEconomyNpcWatch = useGameStore((state) => state.startEconomyNpcWatch);
   const supplyBrief = getMarketSupplyBrief(marketState, currentSystem.id, economyEvents);
   const economyShips = runtime.enemies
-    .filter((ship) => !!ship.economyStatus && ship.hull > 0 && ship.deathTimer === undefined)
+    .filter((ship) =>
+      !!ship.economyStatus &&
+      ship.hull > 0 &&
+      ship.deathTimer === undefined &&
+      (!ship.economySystemId || ship.economySystemId === currentSystem.id)
+    )
     .sort((a, b) => (a.economyTaskKind ?? "").localeCompare(b.economyTaskKind ?? "") || a.name.localeCompare(b.name));
   const events = [...economyEvents].reverse().slice(0, 8);
   const resetLabel = translateText("Reset Economy", locale);

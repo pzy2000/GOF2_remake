@@ -102,7 +102,9 @@ import {
 import {
   connectEconomyEvents,
   ECONOMY_SERVICE_URL,
+  fetchEconomyNpc,
   fetchEconomySnapshot,
+  isEconomyNotFoundError,
   postEconomyReset,
   postNpcDestroyed,
   postPlayerTrade
@@ -151,6 +153,10 @@ const emptyInput: FlightInput = emptyFlightInput();
 
 let closeEconomyStream: (() => void) | undefined;
 let economyRefreshInFlight = false;
+
+function economyErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Economy service offline.";
+}
 
 function savePayload(state: GameStore, overrides: SavePayloadOverrides = {}): SavePayload {
   return {
@@ -346,12 +352,51 @@ export const useGameStore = create<GameStore>((set, get) => ({
   refreshEconomySnapshot: async () => {
     if (economyRefreshInFlight) return;
     economyRefreshInFlight = true;
-    const requestedSystemId = get().currentSystemId;
+    const requestedState = get();
+    const requestedSystemId = requestedState.currentSystemId;
+    const watchedNpcId = requestedState.screen === "economyWatch" ? requestedState.economyNpcWatch?.npcId : undefined;
     try {
-      const snapshot = await fetchEconomySnapshot(requestedSystemId);
-      set((state) => (state.currentSystemId === requestedSystemId ? applyEconomySnapshotPatch(state, snapshot, "snapshot") : {}));
-    } catch (error) {
-      set((state) => offlineEconomyPatch(state, error instanceof Error ? error.message : "Economy service offline."));
+      const [snapshotResult, watchedNpcResult] = await Promise.allSettled([
+        fetchEconomySnapshot(requestedSystemId),
+        watchedNpcId ? fetchEconomyNpc(watchedNpcId) : Promise.resolve(undefined)
+      ] as const);
+      const watchedNpcLost =
+        watchedNpcId !== undefined && watchedNpcResult.status === "rejected" && isEconomyNotFoundError(watchedNpcResult.reason);
+
+      if (snapshotResult.status === "rejected") {
+        set((state) => offlineEconomyPatch(state, economyErrorMessage(snapshotResult.reason)));
+        if (watchedNpcLost && get().economyNpcWatch?.npcId === watchedNpcId) {
+          get().stopEconomyNpcWatch("NPC signal lost.");
+        }
+        return;
+      }
+
+      const watchedNpc = watchedNpcResult.status === "fulfilled" ? watchedNpcResult.value?.npc : undefined;
+      const watchedNpcOfflineMessage =
+        watchedNpcId !== undefined && watchedNpcResult.status === "rejected" && !watchedNpcLost
+          ? economyErrorMessage(watchedNpcResult.reason)
+          : undefined;
+
+      set((state) => {
+        if (state.currentSystemId !== requestedSystemId) return {};
+        const patch = applyEconomySnapshotPatch(state, snapshotResult.value, "snapshot", {
+          watchedNpc,
+          watchedNpcId: watchedNpcLost ? undefined : watchedNpcId
+        });
+        if (!watchedNpcOfflineMessage) return patch;
+        return {
+          ...patch,
+          economyService: {
+            ...patch.economyService,
+            status: "offline",
+            lastError: watchedNpcOfflineMessage
+          }
+        };
+      });
+
+      if (watchedNpcLost && get().economyNpcWatch?.npcId === watchedNpcId) {
+        get().stopEconomyNpcWatch("NPC signal lost.");
+      }
     } finally {
       economyRefreshInFlight = false;
     }

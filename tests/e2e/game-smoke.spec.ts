@@ -811,8 +811,118 @@ test.describe("browser smoke", () => {
     await expect(watchOverlay).toContainText("Stock");
     await expect(watchOverlay).toContainText("Demand");
     await expect(watchOverlay).toContainText("Union Bulk Freighter bought 4 Basic Food.");
+    await page.evaluate(async () => {
+      const state = window.__GOF2_E2E__!.getState() as {
+        refreshEconomySnapshot: () => Promise<void>;
+        marketState: Record<string, Record<string, { stock: number; demand: number; baselineDemand: number; maxStock?: number }>>;
+        runtime: {
+          asteroids: Array<{ id: string; resource: string; position: [number, number, number] }>;
+        };
+      };
+      const asteroid = state.runtime.asteroids[0];
+      const snapshot = {
+        version: 1,
+        snapshotId: 202,
+        clock: 40,
+        marketState: state.marketState,
+        status: "connected",
+        recentEvents: [
+          {
+            id: "econ-e2e-hauler-transit",
+            type: "npc-task",
+            clock: 40,
+            message: "Union Bulk Freighter entered transit to Helion Prime.",
+            systemId: "__transit__",
+            stationId: "helion-prime",
+            npcId: "econ-e2e-hauler",
+            commodityId: "basic-food",
+            snapshotId: 202
+          }
+        ],
+        resourceBelts: [],
+        visibleNpcs: [
+          {
+            id: "econ-e2e-miner",
+            name: "Ore Cutter",
+            role: "miner",
+            factionId: "free-belt-union",
+            systemId: "helion-reach",
+            position: [0, 12, 20],
+            velocity: [0, 0, 0],
+            hull: 125,
+            shield: 58,
+            maxHull: 125,
+            maxShield: 58,
+            cargoCapacity: 20,
+            cargo: {},
+            credits: 5000,
+            task: {
+              kind: "mining",
+              asteroidId: asteroid.id,
+              commodityId: asteroid.resource,
+              originStationId: "cinder-yard",
+              progress: 0.42,
+              startedAt: 10
+            },
+            statusLabel: "MINING · Iron",
+            lastTradeAt: -999
+          }
+        ]
+      };
+      const npcResponse = {
+        version: 1,
+        snapshotId: 202,
+        clock: 40,
+        status: "connected",
+        npc: {
+          id: "econ-e2e-hauler",
+          name: "Union Bulk Freighter",
+          role: "freighter",
+          factionId: "free-belt-union",
+          systemId: "__transit__",
+          position: [0, 0, 0],
+          velocity: [0, 0, 0],
+          hull: 132,
+          shield: 21,
+          maxHull: 170,
+          maxShield: 70,
+          cargoCapacity: 42,
+          cargo: { "basic-food": 4 },
+          credits: 16000,
+          task: {
+            kind: "hauling",
+            commodityId: "basic-food",
+            originStationId: "cinder-yard",
+            destinationStationId: "helion-prime",
+            progress: 0.61,
+            startedAt: 35
+          },
+          statusLabel: "HAULING · Basic Food",
+          lastTradeAt: 12.5
+        }
+      };
+      window.fetch = async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/api/economy/snapshot")) {
+          return new Response(JSON.stringify(snapshot), { status: 200, headers: { "Content-Type": "application/json" } });
+        }
+        if (url.includes("/api/economy/npc/econ-e2e-hauler")) {
+          return new Response(JSON.stringify(npcResponse), { status: 200, headers: { "Content-Type": "application/json" } });
+        }
+        return new Response(JSON.stringify({ message: "Unexpected economy request." }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" }
+        });
+      };
+      await state.refreshEconomySnapshot();
+    });
+    await expect(watchOverlay).toContainText("Union Bulk Freighter");
+    await expect(watchOverlay).toContainText("61%");
+    await expect(watchOverlay).toContainText("Helion Prime");
+    await expect(watchOverlay.getByRole("button", { name: "Return" })).toBeVisible();
     await watchOverlay.getByRole("button", { name: "Return" }).click();
-    await expect(page.getByTestId("economy-tab")).toContainText("Union Bulk Freighter");
+    await expect(page.getByTestId("economy-tab")).toBeVisible();
+    await expect(page.locator(".economy-npc-row", { hasText: "Union Bulk Freighter" })).toHaveCount(0);
 
     await page.getByRole("button", { name: "Launch" }).click();
     await expect(page.locator(".economy-route-label", { hasText: "MINING · Iron" })).toBeVisible();
