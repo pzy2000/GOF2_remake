@@ -110,7 +110,17 @@ export function connectEconomyEvents(
       onError("Economy stream emitted invalid data.");
     }
   };
-  for (const eventName of ["connected", "snapshot", "market", "npc-task", "npc-mined", "npc-trade", "npc-destroyed", "reset"]) {
+  for (const eventName of [
+    "connected",
+    "snapshot",
+    "market",
+    "npc-task",
+    "npc-mined",
+    "npc-trade",
+    "npc-destroyed",
+    "npc-replacement",
+    "reset"
+  ]) {
     source.addEventListener(eventName, handleEvent);
   }
   source.onerror = () => onError("Economy service stream disconnected.");

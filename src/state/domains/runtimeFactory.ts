@@ -141,6 +141,7 @@ function aiProfileForEconomyNpc(npc: EconomyNpcEntity): FlightEntity["aiProfileI
 
 export function materializeEconomyNpc(npc: EconomyNpcEntity): FlightEntity {
   const aiProfileId = aiProfileForEconomyNpc(npc);
+  const ledger = npc.ledger ?? { revenue: 0, expenses: 0, losses: 0, completedContracts: 0, failedContracts: 0, minedUnits: 0 };
   const loadout = getCombatLoadout({
     role: npc.role,
     factionId: npc.factionId,
@@ -166,11 +167,11 @@ export function materializeEconomyNpc(npc: EconomyNpcEntity): FlightEntity {
     aiState: "patrol",
     aiTimer: 0,
     economySystemId: npc.systemId,
-    economySerial: npc.serial,
-    economyHomeStationId: npc.homeStationId,
-    economyRiskPreference: npc.riskPreference,
+    economySerial: npc.serial ?? npc.id,
+    economyHomeStationId: npc.homeStationId ?? npc.task.originStationId,
+    economyRiskPreference: npc.riskPreference ?? "balanced",
     economyContractId: npc.task.contractId,
-    economyLedger: { ...npc.ledger },
+    economyLedger: { ...ledger },
     economyTaskKind: npc.task.kind,
     economyTaskProgress: npc.task.progress,
     economyStatus: npc.statusLabel,

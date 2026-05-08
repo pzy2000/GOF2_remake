@@ -488,6 +488,11 @@ test.describe("browser smoke", () => {
               aiProfileId: "miner",
               aiState: "patrol",
               aiTimer: 0,
+              economySerial: "HR-MN-04",
+              economyHomeStationId: "cinder-yard",
+              economyRiskPreference: "balanced",
+              economyContractId: "HR-MN-04-MINING",
+              economyLedger: { revenue: 0, expenses: 0, losses: 0, completedContracts: 0, failedContracts: 0, minedUnits: 1 },
               economyTaskKind: "mining",
               economyStatus: "MINING · Iron",
               economyCargo: {},
@@ -690,6 +695,11 @@ test.describe("browser smoke", () => {
               aiProfileId: "miner",
               aiState: "patrol",
               aiTimer: 0,
+              economySerial: "HR-MN-04",
+              economyHomeStationId: "cinder-yard",
+              economyRiskPreference: "balanced",
+              economyContractId: "HR-MN-04-MINING",
+              economyLedger: { revenue: 0, expenses: 0, losses: 0, completedContracts: 0, failedContracts: 0, minedUnits: 1 },
               economyTaskKind: "mining",
               economyTaskProgress: 0.42,
               economyStatus: "MINING · Iron",
@@ -713,6 +723,11 @@ test.describe("browser smoke", () => {
               aiProfileId: "freighter",
               aiState: "patrol",
               aiTimer: 0,
+              economySerial: "HR-FR-02",
+              economyHomeStationId: "helion-prime",
+              economyRiskPreference: "bold",
+              economyContractId: "HR-FR-02-FREIGHT",
+              economyLedger: { revenue: 1800, expenses: 900, losses: 0, completedContracts: 2, failedContracts: 0, minedUnits: 0 },
               economyTaskKind: "hauling",
               economyTaskProgress: 0.35,
               economyStatus: "HAULING · Basic Food",
@@ -756,6 +771,10 @@ test.describe("browser smoke", () => {
               aiProfileId: "miner",
               aiState: "patrol",
               aiTimer: 0,
+              economySerial: "HR-MN-09",
+              economyHomeStationId: "cinder-yard",
+              economyRiskPreference: "cautious",
+              economyLedger: { revenue: 0, expenses: 0, losses: 0, completedContracts: 0, failedContracts: 0, minedUnits: 0 },
               economyTaskKind: "idle",
               economyTaskProgress: 0,
               economyStatus: "IDLE · Belt depleted",
@@ -775,6 +794,10 @@ test.describe("browser smoke", () => {
     await expect(economy).toContainText("MINING · Iron");
     await expect(economy).toContainText("Holding near Cinder Yard");
     await expect(economy).toContainText("Belt depleted");
+    await expect(economy).toContainText("HR-MN-04");
+    await expect(economy).toContainText("Home");
+    await expect(economy).toContainText("Contract");
+    await expect(economy).toContainText("P/L");
     await expect(economy).toContainText("Shortage");
     const eventsList = economy.locator(".economy-events-list");
     await expect(eventsList).toContainText("Ore Cutter mined 1 Iron.");
@@ -805,6 +828,13 @@ test.describe("browser smoke", () => {
     await expect(watchOverlay).toContainText("Watch Pirate");
     await expect(watchOverlay).toContainText("Hull");
     await expect(watchOverlay).toContainText("Shield");
+    await expect(watchOverlay).toContainText("Identity");
+    await expect(watchOverlay).toContainText("HR-FR-02");
+    await expect(watchOverlay).toContainText("Home");
+    await expect(watchOverlay).toContainText("Risk");
+    await expect(watchOverlay).toContainText("Contract");
+    await expect(watchOverlay).toContainText("P/L");
+    await expect(watchOverlay).toContainText("Ledger");
     await expect(watchOverlay).toContainText("Cargo");
     await expect(watchOverlay).toContainText("ETA");
     await expect(watchOverlay).toContainText("Target Market");
@@ -844,9 +874,14 @@ test.describe("browser smoke", () => {
           {
             id: "econ-e2e-miner",
             name: "Ore Cutter",
+            serial: "HR-MN-04",
             role: "miner",
             factionId: "free-belt-union",
             systemId: "helion-reach",
+            homeStationId: "cinder-yard",
+            riskPreference: "balanced",
+            lineageId: "econ-e2e-miner",
+            generation: 0,
             position: [0, 12, 20],
             velocity: [0, 0, 0],
             hull: 125,
@@ -856,8 +891,10 @@ test.describe("browser smoke", () => {
             cargoCapacity: 20,
             cargo: {},
             credits: 5000,
+            ledger: { revenue: 0, expenses: 0, losses: 0, completedContracts: 0, failedContracts: 0, minedUnits: 1 },
             task: {
               kind: "mining",
+              contractId: "HR-MN-04-MINING",
               asteroidId: asteroid.id,
               commodityId: asteroid.resource,
               originStationId: "cinder-yard",
@@ -877,9 +914,14 @@ test.describe("browser smoke", () => {
         npc: {
           id: "econ-e2e-hauler",
           name: "Union Bulk Freighter",
+          serial: "HR-FR-02",
           role: "freighter",
           factionId: "free-belt-union",
           systemId: "__transit__",
+          homeStationId: "helion-prime",
+          riskPreference: "bold",
+          lineageId: "econ-e2e-hauler",
+          generation: 0,
           position: [0, 0, 0],
           velocity: [0, 0, 0],
           hull: 132,
@@ -889,8 +931,10 @@ test.describe("browser smoke", () => {
           cargoCapacity: 42,
           cargo: { "basic-food": 4 },
           credits: 16000,
+          ledger: { revenue: 1800, expenses: 900, losses: 0, completedContracts: 2, failedContracts: 0, minedUnits: 0 },
           task: {
             kind: "hauling",
+            contractId: "HR-FR-02-FREIGHT",
             commodityId: "basic-food",
             originStationId: "cinder-yard",
             destinationStationId: "helion-prime",

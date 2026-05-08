@@ -2,9 +2,38 @@ import { describe, expect, it } from "vitest";
 import { stationById } from "../src/data/world";
 import { getMarketEntry } from "../src/systems/economy";
 import { getAvailableMarketGapMissions } from "../src/systems/marketMissions";
-import { createInitialEconomyState, tickEconomyState } from "../src/systems/economySimulation";
+import {
+  createEconomySnapshot,
+  createInitialEconomyState,
+  markEconomyNpcDestroyed,
+  normalizeEconomyState,
+  tickEconomyState
+} from "../src/systems/economySimulation";
 
 describe("NPC economy simulation", () => {
+  it("creates stable individual NPC metadata with unique serials and ledgers", () => {
+    const state = createInitialEconomyState();
+    const serials = new Set(state.npcs.map((npc) => npc.serial));
+    const miner = state.npcs.find((npc) => npc.id === "econ-helion-reach-miner-3")!;
+
+    expect(serials.size).toBe(state.npcs.length);
+    expect(miner).toMatchObject({
+      serial: "HR-MN-04",
+      homeStationId: "cinder-yard",
+      lineageId: "econ-helion-reach-miner-3",
+      generation: 0,
+      ledger: {
+        revenue: 0,
+        expenses: 0,
+        losses: 0,
+        completedContracts: 0,
+        failedContracts: 0,
+        minedUnits: 0
+      }
+    });
+    expect(["cautious", "balanced", "bold"]).toContain(miner.riskPreference);
+  });
+
   it("keeps miners idle with a depleted status when their local belt is empty", () => {
     const state = createInitialEconomyState();
     const miner = state.npcs.find((npc) => npc.id === "econ-helion-reach-miner-3")!;
@@ -95,6 +124,7 @@ describe("NPC economy simulation", () => {
     trader.cargo = {};
     trader.task = {
       kind: "buying",
+      contractId: "KB-TR-01-FREIGHT",
       commodityId: "iron",
       originStationId: origin.id,
       destinationStationId: destination.id,
@@ -108,6 +138,8 @@ describe("NPC economy simulation", () => {
     expect(trader.cargo.iron).toBeGreaterThan(0);
     expect(originAfter.stock).toBeLessThan(originBefore.stock);
     expect(trader.task.kind).toBe("hauling");
+    expect(trader.task.contractId).toBe("KB-TR-01-FREIGHT");
+    expect(trader.ledger.expenses).toBeGreaterThan(0);
 
     state.stationThroughput[destination.id] = { windowStart: state.clock, boughtByNpcs: 0, soldByNpcs: 13 };
     trader.systemId = destination.systemId;
@@ -115,6 +147,7 @@ describe("NPC economy simulation", () => {
     trader.cargo = { iron: 10 };
     trader.task = {
       kind: "selling",
+      contractId: "KB-TR-01-FREIGHT",
       commodityId: "iron",
       originStationId: origin.id,
       destinationStationId: destination.id,
@@ -129,6 +162,95 @@ describe("NPC economy simulation", () => {
     expect(trader.cargo.iron).toBe(9);
     expect(destinationAfter.stock - destinationBefore.stock).toBeCloseTo(1, 1);
     expect(trader.task.kind).toBe("selling");
+    expect(trader.task.contractId).toBe("KB-TR-01-FREIGHT");
+    expect(trader.ledger.revenue).toBeGreaterThan(0);
+  });
+
+  it("queues delayed replacement instead of reviving destroyed NPCs", () => {
+    const state = createInitialEconomyState();
+    const npc = state.npcs.find((candidate) => candidate.id === "econ-helion-reach-freighter-1")!;
+    npc.cargo = { "basic-food": 3 };
+    npc.task = {
+      kind: "hauling",
+      contractId: "HR-FR-02-FREIGHT",
+      commodityId: "basic-food",
+      originStationId: "helion-prime",
+      destinationStationId: "mirr-lattice",
+      startedAt: state.clock
+    };
+
+    markEconomyNpcDestroyed(state, { npcId: npc.id, systemId: "helion-reach" });
+
+    expect(createEconomySnapshot(state, "helion-reach").visibleNpcs.some((candidate) => candidate.id === npc.id)).toBe(false);
+    expect(state.replacementQueue).toHaveLength(1);
+    expect(npc.ledger.failedContracts).toBe(1);
+    expect(npc.ledger.losses).toBeGreaterThan(0);
+
+    const replacementDueAt = state.replacementQueue[0].dueAt;
+    tickEconomyState(state, replacementDueAt - state.clock - 0.1);
+    expect(state.npcs.some((candidate) => candidate.id === "econ-helion-reach-freighter-1-g1")).toBe(false);
+
+    tickEconomyState(state, 0.2);
+
+    const replacement = state.npcs.find((candidate) => candidate.id === "econ-helion-reach-freighter-1-g1");
+    expect(replacement).toMatchObject({
+      role: "freighter",
+      homeStationId: "helion-prime",
+      lineageId: "econ-helion-reach-freighter-1",
+      generation: 1
+    });
+    expect(replacement?.serial).not.toBe(npc.serial);
+    expect(state.recentEvents.some((event) => event.type === "npc-replacement" && event.npcId === replacement?.id)).toBe(true);
+  });
+
+  it("normalizes old economy snapshots with individual NPC defaults", () => {
+    const fresh = createInitialEconomyState();
+    const oldNpc = {
+      id: "econ-helion-reach-miner-3",
+      name: "Ore Cutter",
+      role: "miner" as const,
+      factionId: "free-belt-union" as const,
+      systemId: "helion-reach",
+      position: [0, 0, 0] as [number, number, number],
+      velocity: [0, 0, 0] as [number, number, number],
+      hull: 125,
+      shield: 58,
+      maxHull: 125,
+      maxShield: 58,
+      cargoCapacity: 20,
+      cargo: {},
+      credits: 5000,
+      task: { kind: "idle" as const, originStationId: "cinder-yard", startedAt: 0 },
+      statusLabel: "IDLE",
+      lastTradeAt: -999
+    };
+
+    const normalized = normalizeEconomyState({
+      version: fresh.version,
+      snapshotId: 8,
+      eventSeq: 0,
+      clock: 0,
+      marketState: fresh.marketState,
+      npcs: [oldNpc as never],
+      resourceBelts: fresh.resourceBelts,
+      recentEvents: [],
+      stationThroughput: {}
+    });
+
+    expect(normalized.replacementQueue).toEqual([]);
+    expect(normalized.npcs[0]).toMatchObject({
+      serial: "HR-MN-04",
+      homeStationId: "cinder-yard",
+      riskPreference: expect.any(String),
+      ledger: {
+        revenue: 0,
+        expenses: 0,
+        losses: 0,
+        completedContracts: 0,
+        failedContracts: 0,
+        minedUnits: 0
+      }
+    });
   });
 
   it("lets NPC deliveries ease shortages and remove generated market contracts", () => {
