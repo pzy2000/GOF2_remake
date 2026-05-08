@@ -6,7 +6,7 @@ import * as THREE from "three";
 import { planetById, planets, shipById, stationById, systemById, useGameStore } from "../state/gameStore";
 import { commodityById, glassWakeProtocol, missionTemplates } from "../data/world";
 import type { AsteroidEntity, ConvoyEntity, ExplorationSignalDefinition, FlightEntity, LootEntity, PlanetDefinition, ProjectileEntity, SalvageEntity, StationDefinition, Vec3, VisualEffectEntity } from "../types/game";
-import { add, forwardFromRotation, normalize, scale, sub } from "../systems/math";
+import { add, clamp, forwardFromRotation, normalize, scale, sub } from "../systems/math";
 import { getOreColor } from "../systems/difficulty";
 import { getJumpGatePosition } from "../systems/autopilot";
 import { getNavigationTargetCue, getNearestNavigationTarget } from "../systems/navigation";
@@ -15,6 +15,7 @@ import { getIncompleteExplorationSignals, getVisibleStationsForSystem, isExplora
 import { getStoryObjectiveSummary } from "../systems/story";
 import { getEconomyFlightRouteCue } from "../systems/economyRoutes";
 import {
+  formatCargoContents,
   formatDistance,
   formatRuntimeText,
   formatTechLevel,
@@ -51,6 +52,18 @@ function FlightControls() {
     };
     const onKeyDown = (event: KeyboardEvent) => {
       const state = useGameStore.getState();
+      if (state.screen === "economyWatch") {
+        if (event.code === "KeyC") {
+          event.preventDefault();
+          setInput({ toggleCamera: true });
+        } else if (event.code === "Escape") {
+          event.preventDefault();
+          setInput({ pause: true });
+        } else if (event.code in keyMap || event.code === "Space" || event.code === "KeyE" || event.code === "KeyM" || event.code === "Tab") {
+          event.preventDefault();
+        }
+        return;
+      }
       const scanActive = state.screen === "flight" && !!state.runtime.explorationScan;
       if (scanActive && (event.code === "ArrowLeft" || event.code === "ArrowRight")) {
         event.preventDefault();
@@ -87,15 +100,17 @@ function FlightControls() {
     };
     const onMouseMove = (event: MouseEvent) => {
       const state = useGameStore.getState();
-      if (state.screen !== "flight") return;
+      if (state.screen !== "flight" && state.screen !== "economyWatch") return;
       if (state.autopilot) return;
       setInput({ mouseDX: state.input.mouseDX + event.movementX, mouseDY: state.input.mouseDY + event.movementY });
     };
     const onMouseDown = (event: MouseEvent) => {
+      if (useGameStore.getState().screen !== "flight") return;
       if (event.button === 0) setInput({ firePrimary: true });
       if (event.button === 2) setInput({ fireSecondary: true });
     };
     const onMouseUp = (event: MouseEvent) => {
+      if (useGameStore.getState().screen !== "flight") return;
       if (event.button === 0) setInput({ firePrimary: false });
       if (event.button === 2) setInput({ fireSecondary: false });
     };
@@ -124,12 +139,44 @@ function SimulationTicker() {
   return null;
 }
 
+function npcForward(ship: FlightEntity): Vec3 {
+  const speed = Math.hypot(...ship.velocity);
+  return speed > 0.001 ? normalize(ship.velocity) : [0, 0, -1];
+}
+
+function directionFromAngles(yaw: number, pitch: number): Vec3 {
+  const cosPitch = Math.cos(pitch);
+  return [Math.sin(yaw) * cosPitch, Math.sin(pitch), -Math.cos(yaw) * cosPitch];
+}
+
 function CameraRig() {
   const { camera } = useThree();
+  const screen = useGameStore((state) => state.screen);
   const player = useGameStore((state) => state.player);
+  const runtime = useGameStore((state) => state.runtime);
+  const economyNpcWatch = useGameStore((state) => state.economyNpcWatch);
   const cameraMode = useGameStore((state) => state.cameraMode);
   const afterburnerHeld = useGameStore((state) => state.input.afterburner);
   useFrame(() => {
+    const watchedNpc = economyNpcWatch ? runtime.enemies.find((ship) => ship.id === economyNpcWatch.npcId) : undefined;
+    if (screen === "economyWatch" && economyNpcWatch && watchedNpc) {
+      const forward = npcForward(watchedNpc);
+      const baseYaw = Math.atan2(forward[0], -forward[2]);
+      const basePitch = Math.asin(clamp(forward[1], -0.85, 0.85));
+      const lookYaw = baseYaw + economyNpcWatch.lookYaw;
+      const lookPitch = clamp(basePitch + economyNpcWatch.lookPitch, -0.92, 0.92);
+      const lookDirection = directionFromAngles(lookYaw, lookPitch);
+      if (economyNpcWatch.cameraMode === "cockpit") {
+        const targetPosition = add(add(watchedNpc.position, scale(forward, 20)), [0, 8, 0]);
+        camera.position.lerp(new THREE.Vector3(...targetPosition), 0.18);
+        camera.lookAt(new THREE.Vector3(...add(targetPosition, scale(lookDirection, 160))));
+      } else {
+        const targetPosition = add(add(watchedNpc.position, scale(lookDirection, -118)), [0, 42, 0]);
+        camera.position.lerp(new THREE.Vector3(...targetPosition), 0.1);
+        camera.lookAt(new THREE.Vector3(...add(watchedNpc.position, scale(forward, 90))));
+      }
+      return;
+    }
     const forward = forwardFromRotation(player.rotation);
     const speed = Math.hypot(...player.velocity);
     const speedPullback = Math.min(56, speed * 0.22 + (afterburnerHeld ? 18 : 0));
@@ -1304,6 +1351,8 @@ function EconomyRouteMarkers() {
 
 function SceneContent({ onShipModelStatus }: { onShipModelStatus: (status: ShipModelStatus | null) => void }) {
   const runtime = useGameStore((state) => state.runtime);
+  const screen = useGameStore((state) => state.screen);
+  const economyNpcWatch = useGameStore((state) => state.economyNpcWatch);
   const currentSystemId = useGameStore((state) => state.currentSystemId);
   const explorationState = useGameStore((state) => state.explorationState);
   const ambient = 0.55 + systemById[currentSystemId].risk * 0.2;
@@ -1318,14 +1367,14 @@ function SceneContent({ onShipModelStatus }: { onShipModelStatus: (status: ShipM
       <PlanetBackdrops />
       <JumpGateModel />
       <StationModel />
-      <PlayerShip onModelStatus={onShipModelStatus} />
+      {screen === "economyWatch" ? null : <PlayerShip onModelStatus={onShipModelStatus} />}
       <WormholeTunnel />
-      <TargetLock />
-      <WaypointMarker />
-      <StoryObjectiveMarker />
+      {screen === "economyWatch" ? null : <TargetLock />}
+      {screen === "economyWatch" ? null : <WaypointMarker />}
+      {screen === "economyWatch" ? null : <StoryObjectiveMarker />}
       <EconomyRouteMarkers />
       {runtime.enemies.map((ship) => (
-        <NpcShip key={ship.id} ship={ship} />
+        economyNpcWatch?.cameraMode === "cockpit" && economyNpcWatch.npcId === ship.id ? null : <NpcShip key={ship.id} ship={ship} />
       ))}
       {runtime.convoys.map((convoy) => (
         <ConvoyShip key={convoy.id} convoy={convoy} />
@@ -1418,8 +1467,38 @@ function stationTechLabel(level: number, locale: Locale): string {
   return locale === "en" ? `TECH ${level}` : formatTechLevel(locale, level, true);
 }
 
+function EconomyWatchOverlay() {
+  const locale = useGameStore((state) => state.locale);
+  const currentSystemId = useGameStore((state) => state.currentSystemId);
+  const runtime = useGameStore((state) => state.runtime);
+  const watch = useGameStore((state) => state.economyNpcWatch);
+  const ship = watch ? runtime.enemies.find((item) => item.id === watch.npcId) : undefined;
+  if (!watch || !ship) return null;
+  const route = getEconomyFlightRouteCue(ship, runtime.asteroids, currentSystemId);
+  const cargo = ship.economyCargo && Object.keys(ship.economyCargo).length > 0
+    ? formatCargoContents(locale, ship.economyCargo)
+    : translateText("Empty hold", locale);
+  return (
+    <div className="economy-watch-overlay" data-testid="economy-watch-overlay">
+      <p className="eyebrow">{translateText("Watching", locale)}</p>
+      <h2>{translateDisplayName(ship.name, locale)}</h2>
+      <p>{formatRuntimeText(locale, ship.economyStatus)} · {cargo}</p>
+      <p>
+        {translateText(watch.cameraMode === "cockpit" ? "Cockpit" : "Chase", locale)}
+        {route ? ` · ${translateDisplayName(route.targetName, locale)}` : ""}
+      </p>
+      <div>
+        <span>{translateText("Mouse look", locale)}</span>
+        <span>C {translateText(watch.cameraMode === "cockpit" ? "Chase" : "Cockpit", locale)}</span>
+        <span>{translateText("Esc Return", locale)}</span>
+      </div>
+    </div>
+  );
+}
+
 export function FlightScene() {
   const canvasRef = useRef<HTMLDivElement | null>(null);
+  const screen = useGameStore((state) => state.screen);
   const currentSystemId = useGameStore((state) => state.currentSystemId);
   const player = useGameStore((state) => state.player);
   const knownPlanetIds = useGameStore((state) => state.knownPlanetIds);
@@ -1428,7 +1507,7 @@ export function FlightScene() {
   const updateShipModelStatus = useCallback((status: ShipModelStatus | null) => {
     setShipModelStatus((current) => (current?.kind === status?.kind && current?.text === status?.text ? current : status));
   }, []);
-  const navigationTarget = getNearestNavigationTarget(currentSystemId, player.position, knownPlanetIds, {
+  const navigationTarget = screen === "economyWatch" ? undefined : getNearestNavigationTarget(currentSystemId, player.position, knownPlanetIds, {
     explorationState,
     installedEquipment: player.equipment
   });
@@ -1452,6 +1531,7 @@ export function FlightScene() {
         </Suspense>
       </Canvas>
       {shipModelStatus ? <div className={`ship-model-status ${shipModelStatus.kind}`}>{shipModelStatus.text}</div> : null}
+      {screen === "economyWatch" ? <EconomyWatchOverlay /> : null}
       {hint ? <div className={`dock-hint ${navigationCue ? `dock-hint-${navigationCue.tone}` : ""} ${navigationCue?.inRange ? "in-range" : ""}`}>{hint}</div> : null}
     </div>
   );

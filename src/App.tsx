@@ -130,13 +130,19 @@ function EconomyBackendRuntime() {
   const refreshEconomySnapshot = useGameStore((state) => state.refreshEconomySnapshot);
   const startEconomyStream = useGameStore((state) => state.startEconomyStream);
   const stopEconomyStream = useGameStore((state) => state.stopEconomyStream);
+  const economyDisabledForE2E = import.meta.env.DEV && typeof localStorage !== "undefined" && localStorage.getItem("gof2-e2e-disable-economy-backend") === "true";
   useEffect(() => {
+    if (economyDisabledForE2E) {
+      stopEconomyStream();
+      return undefined;
+    }
     startEconomyStream();
     return stopEconomyStream;
-  }, [startEconomyStream, stopEconomyStream]);
+  }, [economyDisabledForE2E, startEconomyStream, stopEconomyStream]);
   useEffect(() => {
+    if (economyDisabledForE2E) return;
     void refreshEconomySnapshot();
-  }, [currentSystemId, refreshEconomySnapshot]);
+  }, [currentSystemId, economyDisabledForE2E, refreshEconomySnapshot]);
   return null;
 }
 
@@ -204,7 +210,7 @@ export default function App() {
       <EconomyBackendRuntime />
       <GameClockTicker />
       <FlightScene />
-      <Hud />
+      {screen === "economyWatch" ? null : <Hud />}
       {screen === "pause" ? <PauseMenu /> : null}
       {screen === "galaxyMap" ? <GalaxyMap /> : null}
       {screen === "gameOver" ? <GameOver /> : null}

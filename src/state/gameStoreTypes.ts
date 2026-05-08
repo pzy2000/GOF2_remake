@@ -5,6 +5,7 @@ import type {
   CommodityId,
   DialogueState,
   EquipmentId,
+  EconomyNpcWatchState,
   ExplorationState,
   FlightInput,
   GalaxyMapMode,
@@ -36,6 +37,7 @@ export interface GameStore {
   runtime: RuntimeState;
   economyService: EconomyServiceStatus;
   economyEvents: EconomyEvent[];
+  economyNpcWatch?: EconomyNpcWatchState;
   autopilot?: AutoPilotState;
   input: FlightInput;
   gameClock: number;
@@ -66,6 +68,9 @@ export interface GameStore {
   startEconomyStream: () => void;
   stopEconomyStream: () => void;
   resetEconomyBackend: () => Promise<void>;
+  startEconomyNpcWatch: (npcId: string) => void;
+  stopEconomyNpcWatch: (reason?: string) => void;
+  toggleEconomyNpcWatchCamera: () => void;
   setScreen: (screen: Screen) => void;
   setStationTab: (tab: StationTab) => void;
   openGalaxyMap: (mode: GalaxyMapMode) => void;

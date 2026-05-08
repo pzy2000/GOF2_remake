@@ -487,6 +487,7 @@ function EconomyTab() {
   const economyEvents = useGameStore((state) => state.economyEvents);
   const refreshEconomySnapshot = useGameStore((state) => state.refreshEconomySnapshot);
   const resetEconomyBackend = useGameStore((state) => state.resetEconomyBackend);
+  const startEconomyNpcWatch = useGameStore((state) => state.startEconomyNpcWatch);
   const supplyBrief = getMarketSupplyBrief(marketState, currentSystem.id, economyEvents);
   const economyShips = runtime.enemies
     .filter((ship) => !!ship.economyStatus && ship.hull > 0 && ship.deathTimer === undefined)
@@ -531,6 +532,9 @@ function EconomyTab() {
                     <div>
                       <b>{translateDisplayName(ship.name, locale)}</b>
                       <span>{formatRuntimeText(locale, ship.economyStatus)}</span>
+                      <button className="economy-watch-button" onClick={() => startEconomyNpcWatch(ship.id)}>
+                        {translateText("Watch", locale)}
+                      </button>
                     </div>
                     <p>
                       {translateText("Target", locale)}: {route ? translateDisplayName(route.targetName, locale) : translateText("In transit or awaiting signal", locale)}

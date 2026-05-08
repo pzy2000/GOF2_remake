@@ -52,6 +52,7 @@ export interface AudioSettings {
 export type Screen =
   | "menu"
   | "flight"
+  | "economyWatch"
   | "station"
   | "pause"
   | "galaxyMap"
@@ -718,6 +719,15 @@ export interface AutoPilotState {
   targetPosition: Vec3;
   timer: number;
   cancelable: boolean;
+}
+
+export interface EconomyNpcWatchState {
+  npcId: string;
+  returnStationId?: string;
+  cameraMode: "cockpit" | "chase";
+  lookYaw: number;
+  lookPitch: number;
+  enteredAt: number;
 }
 
 export interface RuntimeState {

@@ -41,8 +41,14 @@ type TestSpeechHarness = {
 };
 
 async function resetApp(page: Page) {
+  await page.addInitScript(() => {
+    localStorage.setItem("gof2-e2e-disable-economy-backend", "true");
+  });
   await page.goto("/");
-  await page.evaluate(() => localStorage.clear());
+  await page.evaluate(() => {
+    localStorage.clear();
+    localStorage.setItem("gof2-e2e-disable-economy-backend", "true");
+  });
   await page.reload();
   await page.waitForFunction(() => !!window.__GOF2_E2E__);
 }
@@ -54,6 +60,17 @@ async function startNewGame(page: Page) {
   await expect(page.locator(".hud-top-left")).toContainText("Helion Reach");
   await expect(page.locator(".dock-hint")).toBeVisible();
   await expect(page.locator(".station-tech-label").first()).toContainText("TECH");
+  await page.evaluate(() => {
+    const state = window.__GOF2_E2E__!.getState() as { stopEconomyStream: () => void };
+    state.stopEconomyStream();
+    window.__GOF2_E2E__!.setState({
+      economyService: {
+        status: "offline",
+        url: "http://127.0.0.1:19777",
+        lastError: "E2E economy backend disabled."
+      }
+    });
+  });
 }
 
 async function getGameState(page: Page): Promise<Gof2E2EState> {
@@ -530,6 +547,16 @@ test.describe("browser smoke", () => {
       await dialog.dismiss();
     });
     await resetButton.click();
+    await economy.locator(".economy-npc-row", { hasText: "MINING · Iron" }).getByRole("button", { name: "Watch" }).click();
+    const watchOverlay = page.getByTestId("economy-watch-overlay");
+    await expect(page.locator(".flight-canvas canvas")).toBeVisible();
+    await expect(watchOverlay).toContainText("Watching");
+    await expect(watchOverlay).toContainText("Ore Cutter");
+    await expect(watchOverlay).toContainText("Cockpit");
+    await page.keyboard.press("KeyC");
+    await expect(watchOverlay).toContainText("Chase");
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("economy-tab")).toContainText("Ore Cutter");
 
     await page.getByRole("button", { name: "Launch" }).click();
     await expect(page.locator(".economy-route-label")).toContainText("MINING · Iron");

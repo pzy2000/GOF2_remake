@@ -175,6 +175,10 @@ function createStoryNotification(tone: StoryNotificationTone, title: string, bod
   };
 }
 
+function isWatchableEconomyNpc(ship: FlightEntity | undefined): ship is FlightEntity {
+  return !!ship?.economyStatus && ship.hull > 0 && ship.deathTimer === undefined;
+}
+
 export const useGameStore = create<GameStore>((set, get) => ({
   screen: "menu",
   previousScreen: "menu",
@@ -188,6 +192,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   runtime: createRuntimeForSystem("helion-reach"),
   economyService: { status: "offline", url: ECONOMY_SERVICE_URL },
   economyEvents: [],
+  economyNpcWatch: undefined,
   autopilot: undefined,
   input: emptyInput,
   gameClock: 0,
@@ -223,6 +228,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       runtime: createRuntimeForSystem("helion-reach"),
       economyService: { status: "offline", url: ECONOMY_SERVICE_URL },
       economyEvents: [],
+      economyNpcWatch: undefined,
       autopilot: undefined,
       gameClock: 0,
       marketState: createInitialMarketState(),
@@ -265,6 +271,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       runtime: createRuntimeForSystem(save.currentSystemId, activeMissions),
       economyService: { status: "offline", url: ECONOMY_SERVICE_URL, snapshotId: save.economySnapshotId },
       economyEvents: [],
+      economyNpcWatch: undefined,
       autopilot: undefined,
       hasSave: true,
       saveSlots: readSaveSlots(),
@@ -357,7 +364,67 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }));
     }
   },
-  setScreen: (screen) => set((state) => ({ previousScreen: state.screen, screen })),
+  startEconomyNpcWatch: (npcId) => {
+    const state = get();
+    const npc = state.runtime.enemies.find((ship) => ship.id === npcId);
+    if (!isWatchableEconomyNpc(npc)) {
+      set({ runtime: { ...state.runtime, message: "NPC signal lost." } });
+      return;
+    }
+    audioSystem.play("ui-click");
+    set({
+      screen: "economyWatch",
+      previousScreen: state.screen,
+      stationTab: "Economy",
+      targetId: undefined,
+      autopilot: undefined,
+      input: emptyFlightInput(),
+      economyNpcWatch: {
+        npcId: npc.id,
+        returnStationId: state.currentStationId,
+        cameraMode: "cockpit",
+        lookYaw: 0,
+        lookPitch: 0,
+        enteredAt: state.runtime.clock
+      },
+      runtime: {
+        ...state.runtime,
+        message: `Watching ${npc.name}.`
+      }
+    });
+  },
+  stopEconomyNpcWatch: (reason) => {
+    const state = get();
+    const returnStationId = state.economyNpcWatch?.returnStationId ?? state.currentStationId;
+    const returnStation = returnStationId ? stationById[returnStationId] : undefined;
+    audioSystem.play("ui-click");
+    set({
+      screen: returnStation ? "station" : "flight",
+      previousScreen: state.screen,
+      currentSystemId: returnStation?.systemId ?? state.currentSystemId,
+      currentStationId: returnStation?.id ?? state.currentStationId,
+      stationTab: returnStation ? "Economy" : state.stationTab,
+      targetId: undefined,
+      economyNpcWatch: undefined,
+      input: emptyFlightInput(),
+      runtime: {
+        ...state.runtime,
+        message: reason ?? (returnStation ? `Returned to ${returnStation.name}.` : "Returned from NPC watch.")
+      }
+    });
+  },
+  toggleEconomyNpcWatchCamera: () => {
+    const state = get();
+    if (!state.economyNpcWatch) return;
+    audioSystem.play("ui-click");
+    set({
+      economyNpcWatch: {
+        ...state.economyNpcWatch,
+        cameraMode: state.economyNpcWatch.cameraMode === "cockpit" ? "chase" : "cockpit"
+      }
+    });
+  },
+  setScreen: (screen) => set((state) => ({ previousScreen: state.screen, screen, economyNpcWatch: screen === "economyWatch" ? state.economyNpcWatch : undefined })),
   setStationTab: (stationTab) => set({ stationTab, galaxyMapMode: stationTab === "Galaxy Map" ? "station-route" : get().galaxyMapMode }),
   openGalaxyMap: (galaxyMapMode) => set((state) => ({ previousScreen: state.screen, screen: "galaxyMap", galaxyMapMode })),
   setInput: (patch) => set((state) => ({ input: { ...state.input, ...patch } })),
@@ -368,12 +435,69 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
   tick: (delta) => {
     const state = get();
-    if (state.screen !== "flight") return;
+    if (state.screen !== "flight" && state.screen !== "economyWatch") return;
     const now = state.runtime.clock + delta;
     const gameClock = state.gameClock + delta;
     const marketState = state.economyService.status === "connected" ? state.marketState : advanceMarketState(state.marketState, delta);
     const input = state.input;
     const { dx, dy } = state.consumeMouse();
+
+    if (state.screen === "economyWatch") {
+      const watch = state.economyNpcWatch;
+      const watchedNpc = watch ? state.runtime.enemies.find((ship) => ship.id === watch.npcId) : undefined;
+      if (!watch || !isWatchableEconomyNpc(watchedNpc)) {
+        get().stopEconomyNpcWatch("NPC signal lost.");
+        return;
+      }
+      if (input.pause) {
+        get().stopEconomyNpcWatch();
+        return;
+      }
+      const runtime = {
+        ...state.runtime,
+        clock: now,
+        storyNotification: state.runtime.storyNotification && state.runtime.storyNotification.expiresAt > gameClock
+          ? state.runtime.storyNotification
+          : undefined
+      };
+      const expiration = applyExpiredMissions({
+        player: state.player,
+        reputation: state.reputation,
+        activeMissions: state.activeMissions,
+        failedMissionIds: state.failedMissionIds,
+        runtime,
+        gameClock
+      });
+      if (expiration.expiredMissionIds.length > 0) audioSystem.play("mission-fail");
+      const expiredStoryMission = expiration.expiredMissionIds
+        .map((missionId) => state.activeMissions.find((mission) => mission.id === missionId))
+        .find((mission) => mission?.storyCritical);
+      const storyNotification = expiredStoryMission
+        ? createStoryNotification("failed", expiredStoryMission.title, expiration.runtime.message, gameClock)
+        : expiration.runtime.storyNotification;
+      const nextWatch = {
+        ...watch,
+        cameraMode: input.toggleCamera ? (watch.cameraMode === "cockpit" ? "chase" as const : "cockpit" as const) : watch.cameraMode,
+        lookYaw: clamp(watch.lookYaw - dx * 0.0024, -1.35, 1.35),
+        lookPitch: clamp(watch.lookPitch - dy * 0.0024, -0.82, 0.82)
+      };
+      if (input.toggleCamera) audioSystem.play("ui-click");
+      set({
+        gameClock,
+        marketState,
+        player: expiration.player,
+        reputation: expiration.reputation,
+        activeMissions: expiration.activeMissions,
+        failedMissionIds: expiration.failedMissionIds,
+        runtime: {
+          ...expiration.runtime,
+          storyNotification
+        },
+        economyNpcWatch: nextWatch,
+        input: emptyFlightInput()
+      });
+      return;
+    }
 
     if (state.autopilot) {
       const controlInput: FlightInput = { ...input, mouseDX: dx, mouseDY: dy };

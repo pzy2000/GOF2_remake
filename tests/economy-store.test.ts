@@ -3,7 +3,7 @@ import { createAsteroidsForSystem } from "../src/systems/asteroids";
 import { createInitialMarketState, getMarketEntry } from "../src/systems/economy";
 import { getAvailableMarketGapMissions } from "../src/systems/marketMissions";
 import type { EconomySnapshot } from "../src/types/economy";
-import type { CommodityId, MarketState } from "../src/types/game";
+import type { CommodityId, FlightEntity, MarketState } from "../src/types/game";
 
 class MemoryStorage implements Storage {
   private data = new Map<string, string>();
@@ -43,6 +43,31 @@ function setMarketEntry(marketState: MarketState, stationId: string, commodityId
       ...entry,
       ...patch
     }
+  };
+}
+
+function watchableEconomyMiner(targetId: string): FlightEntity {
+  return {
+    id: "econ-watch-miner",
+    name: "Ore Cutter",
+    role: "miner",
+    factionId: "free-belt-union",
+    position: [20, 8, -40],
+    velocity: [0, 0, -28],
+    hull: 125,
+    shield: 58,
+    maxHull: 125,
+    maxShield: 58,
+    lastDamageAt: -999,
+    fireCooldown: 0.6,
+    aiProfileId: "miner",
+    aiState: "patrol",
+    aiTimer: 0,
+    economyTaskKind: "mining",
+    economyStatus: "MINING · Iron",
+    economyCargo: {},
+    economyCommodityId: "iron",
+    economyTargetId: targetId
   };
 }
 
@@ -172,6 +197,79 @@ describe("economy store integration", () => {
     expect(store.getState().economyService).toMatchObject({ status: "offline", lastError: "reset offline" });
     expect(store.getState().runtime.message).toContain("Economy reset failed");
     expect(getMarketEntry(store.getState().marketState, "helion-prime", "basic-food").stock).toBe(3);
+  });
+
+  it("watches a station economy NPC and returns to the economy tab without undocking", async () => {
+    const store = await freshStore();
+    store.getState().dockAt("helion-prime");
+    const playerBefore = store.getState().player;
+    const asteroid = store.getState().runtime.asteroids[0];
+    store.setState((state) => ({
+      stationTab: "Economy",
+      runtime: {
+        ...state.runtime,
+        enemies: [...state.runtime.enemies, watchableEconomyMiner(asteroid.id)]
+      }
+    }));
+
+    store.getState().startEconomyNpcWatch("econ-watch-miner");
+
+    expect(store.getState()).toMatchObject({
+      screen: "economyWatch",
+      currentStationId: "helion-prime",
+      stationTab: "Economy",
+      economyNpcWatch: {
+        npcId: "econ-watch-miner",
+        returnStationId: "helion-prime",
+        cameraMode: "cockpit"
+      }
+    });
+    expect(store.getState().player.position).toEqual(playerBefore.position);
+    expect(store.getState().player.cargo).toEqual(playerBefore.cargo);
+
+    store.getState().setInput({ pause: true });
+    store.getState().tick(1 / 60);
+
+    expect(store.getState().screen).toBe("station");
+    expect(store.getState().stationTab).toBe("Economy");
+    expect(store.getState().currentStationId).toBe("helion-prime");
+    expect(store.getState().economyNpcWatch).toBeUndefined();
+  });
+
+  it("uses mouse input for watch camera look and auto-returns when the NPC signal disappears", async () => {
+    const store = await freshStore();
+    store.getState().dockAt("helion-prime");
+    const rotationBefore = store.getState().player.rotation;
+    const asteroid = store.getState().runtime.asteroids[0];
+    store.setState((state) => ({
+      runtime: {
+        ...state.runtime,
+        enemies: [...state.runtime.enemies, watchableEconomyMiner(asteroid.id)]
+      }
+    }));
+
+    store.getState().startEconomyNpcWatch("econ-watch-miner");
+    store.getState().setInput({ mouseDX: 80, mouseDY: -40, toggleCamera: true });
+    store.getState().tick(1 / 60);
+
+    expect(store.getState().player.rotation).toEqual(rotationBefore);
+    expect(store.getState().economyNpcWatch).toMatchObject({
+      cameraMode: "chase"
+    });
+    expect(store.getState().economyNpcWatch?.lookYaw).not.toBe(0);
+    expect(store.getState().economyNpcWatch?.lookPitch).not.toBe(0);
+
+    store.setState((state) => ({
+      runtime: {
+        ...state.runtime,
+        enemies: state.runtime.enemies.filter((ship) => ship.id !== "econ-watch-miner")
+      }
+    }));
+    store.getState().tick(1 / 60);
+
+    expect(store.getState().screen).toBe("station");
+    expect(store.getState().stationTab).toBe("Economy");
+    expect(store.getState().runtime.message).toBe("NPC signal lost.");
   });
 
   it("accepts generated market gap contracts and applies delivery to local market pressure", async () => {
