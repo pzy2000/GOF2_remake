@@ -30,7 +30,7 @@ import {
   getMarketSupplyBrief,
   isMarketGapMissionId
 } from "../systems/marketMissions";
-import { getEconomyFlightRouteCue } from "../systems/economyRoutes";
+import { getEconomyEventSystemName, getEconomyFlightRouteSummary } from "../systems/economyRoutes";
 import { reputationLabel } from "../systems/reputation";
 import { GalaxyMap } from "./GalaxyMap";
 import { AtlasIcon } from "./AtlasIcon";
@@ -526,7 +526,7 @@ function EconomyTab() {
           {economyShips.length > 0 ? (
             <div className="economy-npc-list">
               {economyShips.map((ship) => {
-                const route = getEconomyFlightRouteCue(ship, runtime.asteroids, currentSystem.id);
+                const route = getEconomyFlightRouteSummary(ship, runtime.asteroids, currentSystem.id);
                 return (
                   <article key={ship.id} className={`economy-npc-row task-${ship.economyTaskKind ?? "idle"}`}>
                     <div>
@@ -537,7 +537,8 @@ function EconomyTab() {
                       </button>
                     </div>
                     <p>
-                      {translateText("Target", locale)}: {route ? translateDisplayName(route.targetName, locale) : translateText("In transit or awaiting signal", locale)}
+                      {translateText("Target", locale)}: {formatRuntimeText(locale, route.targetLabel)}
+                      {route.detailLabels.length > 0 ? route.detailLabels.map((detail) => ` · ${formatRuntimeText(locale, detail)}`).join("") : ""}
                       {ship.economyCargo && Object.keys(ship.economyCargo).length > 0 ? ` · ${formatCargoContents(locale, ship.economyCargo)}` : ` · ${translateText("Empty hold", locale)}`}
                     </p>
                   </article>
@@ -574,11 +575,14 @@ function EconomyTab() {
           <h3>{translateText("Recent Economy Events", locale)}</h3>
           <div className="economy-events-list">
             {events.length > 0 ? (
-              events.map((event) => (
-                <p key={event.id}>
-                  <span>{event.type.toUpperCase()}</span> {formatRuntimeText(locale, event.message)}
-                </p>
-              ))
+              events.map((event) => {
+                const systemName = getEconomyEventSystemName(event);
+                return (
+                  <p key={event.id}>
+                    <span>[{translateDisplayName(systemName, locale)}]</span> <span>{event.type.toUpperCase()}</span> {formatRuntimeText(locale, event.message)}
+                  </p>
+                );
+              })
             ) : (
               <p>{translateText("No backend events received yet.", locale)}</p>
             )}

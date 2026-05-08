@@ -5,6 +5,49 @@ import { getAvailableMarketGapMissions } from "../src/systems/marketMissions";
 import { createInitialEconomyState, tickEconomyState } from "../src/systems/economySimulation";
 
 describe("NPC economy simulation", () => {
+  it("keeps miners idle with a depleted status when their local belt is empty", () => {
+    const state = createInitialEconomyState();
+    const miner = state.npcs.find((npc) => npc.id === "econ-helion-reach-miner-3")!;
+    state.resourceBelts["helion-reach"].asteroids = state.resourceBelts["helion-reach"].asteroids.map((asteroid) => ({
+      ...asteroid,
+      amount: 0,
+      miningProgress: 0
+    }));
+    miner.systemId = "helion-reach";
+    miner.cargo = {};
+    miner.task = { kind: "idle", originStationId: "cinder-yard", startedAt: state.clock };
+
+    tickEconomyState(state, 1);
+
+    expect(miner.task).toMatchObject({ kind: "idle", originStationId: "cinder-yard" });
+    expect(miner.statusLabel).toBe("IDLE · Belt depleted");
+    expect(state.resourceBelts["helion-reach"].asteroids.every((asteroid) => asteroid.amount === 0)).toBe(true);
+  });
+
+  it("slowly regenerates depleted belts and sends idle miners back to work", () => {
+    const state = createInitialEconomyState();
+    const miner = state.npcs.find((npc) => npc.id === "econ-helion-reach-miner-3")!;
+    state.resourceBelts["helion-reach"].asteroids = state.resourceBelts["helion-reach"].asteroids.map((asteroid) => ({
+      ...asteroid,
+      amount: 0,
+      miningProgress: 0
+    }));
+    miner.systemId = "helion-reach";
+    miner.cargo = {};
+    miner.position = [...stationById["cinder-yard"].position];
+    miner.task = { kind: "idle", originStationId: "cinder-yard", startedAt: 0 };
+
+    tickEconomyState(state, 179);
+    expect(state.resourceBelts["helion-reach"].asteroids.every((asteroid) => asteroid.amount === 0)).toBe(true);
+    expect(miner.statusLabel).toBe("IDLE · Belt depleted");
+
+    tickEconomyState(state, 1);
+
+    expect(state.resourceBelts["helion-reach"].asteroids.reduce((total, asteroid) => total + asteroid.amount, 0)).toBe(1);
+    expect(miner.task.kind).toBe("mining");
+    expect(miner.statusLabel).toMatch(/^MINING · /);
+  });
+
   it("lets miners collect ore and sell it back into station inventory", () => {
     const state = createInitialEconomyState();
     const miner = state.npcs.find((npc) => npc.id === "econ-kuro-belt-miner-3")!;

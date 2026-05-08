@@ -171,6 +171,7 @@ const exactText = {
     "Watching": "正在观看",
     "Cockpit": "驾驶舱",
     "Chase": "追尾",
+    "Belt depleted": "矿带耗尽",
     "Mouse look": "鼠标观察",
     "Esc Return": "Esc 返回",
     "NPC signal lost.": "NPC 信号丢失。",
@@ -370,6 +371,7 @@ const exactText = {
     "Watching": "観察中",
     "Cockpit": "コックピット",
     "Chase": "追尾",
+    "Belt depleted": "鉱脈枯渇",
     "Mouse look": "マウス視点",
     "Esc Return": "Esc 戻る",
     "NPC signal lost.": "NPC信号をロスト。",
@@ -447,6 +449,7 @@ const exactText = {
     "Watching": "Observation",
     "Cockpit": "Cockpit",
     "Chase": "Poursuite",
+    "Belt depleted": "Ceinture épuisée",
     "Mouse look": "Vue souris",
     "Esc Return": "Esc retour",
     "NPC signal lost.": "Signal PNJ perdu.",
@@ -1278,6 +1281,14 @@ export function formatRuntimeText(locale: Locale, source: string | undefined | n
     const status = localizeGenericName(economyStatusMatch[1], locale);
     const detail = economyStatusMatch[2] ? translateDisplayName(economyStatusMatch[2], locale) : "";
     return detail ? `${status} · ${detail}` : status;
+  }
+  const holdingNearMatch = source.match(/^Holding near (.+)$/);
+  if (holdingNearMatch) {
+    const station = translateDisplayName(holdingNearMatch[1], locale);
+    if (locale === "zh-CN") return `停泊于 ${station} 附近`;
+    if (locale === "zh-TW") return `停泊於 ${station} 附近`;
+    if (locale === "ja") return `${station} 付近で待機`;
+    return `En attente près de ${station}`;
   }
   const freightMatch = source.match(/^FREIGHTER · (\d+)\/(\d+)$/);
   if (freightMatch) return `${localizeGenericName("FREIGHTER", locale)} · ${freightMatch[1]}/${freightMatch[2]}`;

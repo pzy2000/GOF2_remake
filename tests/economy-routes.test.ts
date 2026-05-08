@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { EconomyNpcEntity } from "../src/types/economy";
-import { getEconomyNpcRouteSummary } from "../src/systems/economyRoutes";
+import { getEconomyEventSystemName, getEconomyFlightRouteSummary, getEconomyNpcRouteSummary } from "../src/systems/economyRoutes";
 
 function npc(patch: Partial<EconomyNpcEntity>): EconomyNpcEntity {
   return {
@@ -56,5 +56,21 @@ describe("economy NPC route summaries", () => {
       task: { kind: "returning", commodityId: "iron", destinationStationId: "kuro-deep", startedAt: 0 },
       statusLabel: "RETURNING · 6/20"
     }))).toMatchObject({ taskKind: "returning", routeLabel: "Returning", targetName: "Kuro Deepworks" });
+  });
+
+  it("describes idle station holding and depleted belts for station economy rows", () => {
+    expect(getEconomyFlightRouteSummary({
+      economyTaskKind: "idle",
+      economyTargetId: "cinder-yard",
+      economyStatus: "IDLE · Belt depleted"
+    }, [], "helion-reach")).toMatchObject({
+      targetLabel: "Holding near Cinder Yard",
+      detailLabels: ["Belt depleted"]
+    });
+  });
+
+  it("labels global economy events by source system", () => {
+    expect(getEconomyEventSystemName({ systemId: "mirr-vale" })).toBe("Mirr Vale");
+    expect(getEconomyEventSystemName({ systemId: undefined })).toBe("Unknown system");
   });
 });

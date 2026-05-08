@@ -488,6 +488,16 @@ test.describe("browser smoke", () => {
             commodityId: "iron",
             amount: 1,
             snapshotId: 101
+          },
+          {
+            id: "econ-e2e-global-event",
+            type: "npc-task",
+            clock: 13,
+            message: "Vossari Smuggler plotted Luxury Goods freight to Mirr Lattice.",
+            systemId: "mirr-vale",
+            npcId: "econ-e2e-smuggler",
+            commodityId: "luxury-goods",
+            snapshotId: 102
           }
         ],
         marketState: {
@@ -526,6 +536,27 @@ test.describe("browser smoke", () => {
               economyCargo: {},
               economyCommodityId: asteroid.resource,
               economyTargetId: asteroid.id
+            },
+            {
+              id: "econ-e2e-depleted-miner",
+              name: "Ore Cutter",
+              role: "miner",
+              factionId: "free-belt-union",
+              position: [80, 18, -40],
+              velocity: [0, 0, 0],
+              hull: 125,
+              shield: 58,
+              maxHull: 125,
+              maxShield: 58,
+              lastDamageAt: -999,
+              fireCooldown: 0.6,
+              aiProfileId: "miner",
+              aiState: "patrol",
+              aiTimer: 0,
+              economyTaskKind: "idle",
+              economyStatus: "IDLE · Belt depleted",
+              economyCargo: {},
+              economyTargetId: "cinder-yard"
             }
           ]
         }
@@ -538,9 +569,13 @@ test.describe("browser smoke", () => {
     await expect(economy).toContainText("Snapshot 101");
     await expect(economy).toContainText("Ore Cutter");
     await expect(economy).toContainText("MINING · Iron");
+    await expect(economy).toContainText("Holding near Cinder Yard");
+    await expect(economy).toContainText("Belt depleted");
     await expect(economy).toContainText("Shortage");
     const eventsList = economy.locator(".economy-events-list");
     await expect(eventsList).toContainText("Ore Cutter mined 1 Iron.");
+    await expect(eventsList).toContainText("[Helion Reach]");
+    await expect(eventsList).toContainText("[Mirr Vale]");
     expect(await eventsList.evaluate((element) => getComputedStyle(element).overflowY)).toBe("auto");
     const resetButton = page.getByRole("button", { name: "Reset Economy" });
     await expect(resetButton).toBeVisible();

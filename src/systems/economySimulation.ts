@@ -50,6 +50,7 @@ const NPC_SELL_LIMIT_PER_STATION_MINUTE = 14;
 const RECENT_EVENT_LIMIT = 36;
 const ARRIVE_STATION_DISTANCE = 155;
 const ARRIVE_ASTEROID_DISTANCE = 70;
+const DEPLETED_BELT_REGEN_SECONDS = 180;
 
 const roleProfiles: Record<
   EconomyNpcEntity["role"],
@@ -259,10 +260,37 @@ function chooseMiningAsteroid(state: EconomyServiceState, npc: EconomyNpcEntity)
   return candidates[hashText(npc.id) % candidates.length];
 }
 
+function isMiningBeltDepleted(state: EconomyServiceState, systemId: string): boolean {
+  const belt = state.resourceBelts[systemId];
+  return !!belt && belt.asteroids.length > 0 && belt.asteroids.every((asteroid) => asteroid.amount <= 0);
+}
+
+function baselineAsteroidAmount(systemId: string, asteroidId: string): number | undefined {
+  const system = systemById[systemId];
+  return system ? createAsteroidsForSystem(system.id, system.risk).find((asteroid) => asteroid.id === asteroidId)?.amount : undefined;
+}
+
+function regenerateDepletedBeltUnit(state: EconomyServiceState, systemId: string): boolean {
+  const belt = state.resourceBelts[systemId];
+  if (!belt) return false;
+  const depleted = belt.asteroids.filter((asteroid) => {
+    const baselineAmount = baselineAsteroidAmount(systemId, asteroid.id);
+    return baselineAmount !== undefined && asteroid.amount < baselineAmount;
+  });
+  if (!depleted.length) return false;
+  const asteroid = depleted[hashText(`${systemId}-${Math.floor(state.clock / DEPLETED_BELT_REGEN_SECONDS)}`) % depleted.length];
+  const baselineAmount = baselineAsteroidAmount(systemId, asteroid.id);
+  if (baselineAmount === undefined || asteroid.amount >= baselineAmount) return false;
+  asteroid.amount = Math.min(baselineAmount, asteroid.amount + 1);
+  asteroid.miningProgress = 0;
+  return true;
+}
+
 function startMiningTask(state: EconomyServiceState, npc: EconomyNpcEntity): void {
   const asteroid = chooseMiningAsteroid(state, npc);
   if (!asteroid) {
-    npc.task = { kind: "idle", originStationId: homeStationFor(npc.systemId, npc.role), startedAt: state.clock };
+    const startedAt = npc.task.kind === "idle" ? npc.task.startedAt : state.clock;
+    npc.task = { kind: "idle", originStationId: homeStationFor(npc.systemId, npc.role), startedAt };
     npc.statusLabel = "IDLE";
     return;
   }
@@ -381,7 +409,16 @@ function chooseTradeRoute(state: EconomyServiceState, npc: EconomyNpcEntity) {
 }
 
 function tickMiner(state: EconomyServiceState, npc: EconomyNpcEntity, delta: number): void {
-  if (npc.task.kind === "idle") startMiningTask(state, npc);
+  if (npc.task.kind === "idle") {
+    if (isMiningBeltDepleted(state, npc.systemId) && state.clock - npc.task.startedAt >= DEPLETED_BELT_REGEN_SECONDS) {
+      regenerateDepletedBeltUnit(state, npc.systemId);
+    }
+    startMiningTask(state, npc);
+    if (npc.task.kind === "idle") {
+      orbitHome(npc, delta);
+      return;
+    }
+  }
   if (npc.task.kind === "mining") {
     const belt = state.resourceBelts[npc.systemId];
     const asteroid = belt?.asteroids.find((item) => item.id === npc.task.asteroidId && item.amount > 0);
@@ -530,7 +567,7 @@ function tickTrader(state: EconomyServiceState, npc: EconomyNpcEntity, delta: nu
   }
 }
 
-function updateNpcStatus(npc: EconomyNpcEntity): void {
+function updateNpcStatus(state: EconomyServiceState, npc: EconomyNpcEntity): void {
   const entry = firstCargoEntry(npc.cargo);
   const commodityName = (npc.task.commodityId && commodityById[npc.task.commodityId]?.name) || (entry && commodityById[entry[0]]?.name);
   if (npc.task.kind === "mining") npc.statusLabel = `MINING · ${commodityName ?? "Ore"}`;
@@ -539,6 +576,7 @@ function updateNpcStatus(npc: EconomyNpcEntity): void {
   else if (npc.task.kind === "hauling") npc.statusLabel = `HAULING · ${commodityName ?? "Cargo"}`;
   else if (npc.task.kind === "selling") npc.statusLabel = `SELLING · ${commodityName ?? "Cargo"}`;
   else if (npc.task.kind === "destroyed") npc.statusLabel = "DESTROYED";
+  else if (npc.role === "miner" && isMiningBeltDepleted(state, npc.systemId)) npc.statusLabel = "IDLE · Belt depleted";
   else npc.statusLabel = "IDLE";
 }
 
@@ -549,12 +587,12 @@ export function tickEconomyState(state: EconomyServiceState, delta: number): Eco
   for (const npc of state.npcs) {
     if (npc.task.kind === "destroyed" || npc.hull <= 0) {
       npc.task = { kind: "destroyed", startedAt: npc.task.startedAt };
-      updateNpcStatus(npc);
+      updateNpcStatus(state, npc);
       continue;
     }
     if (npc.role === "miner") tickMiner(state, npc, delta);
     else tickTrader(state, npc, delta);
-    updateNpcStatus(npc);
+    updateNpcStatus(state, npc);
   }
   state.snapshotId += 1;
   return state;
@@ -632,7 +670,7 @@ export function markEconomyNpcDestroyed(state: EconomyServiceState, request: Npc
   npc.shield = 0;
   npc.velocity = [0, 0, 0];
   npc.task = { kind: "destroyed", startedAt: state.clock };
-  updateNpcStatus(npc);
+  updateNpcStatus(state, npc);
   state.snapshotId += 1;
   return pushEvent(state, {
     type: "npc-destroyed",

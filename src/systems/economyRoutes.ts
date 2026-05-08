@@ -1,6 +1,6 @@
-import { commodityById, stationById } from "../data/world";
+import { commodityById, stationById, systemById } from "../data/world";
 import type { AsteroidEntity, CommodityId, EconomyNpcTaskKind, FlightEntity, Vec3 } from "../types/game";
-import type { EconomyNpcEntity } from "../types/economy";
+import type { EconomyEvent, EconomyNpcEntity } from "../types/economy";
 
 export type EconomyRouteTargetKind = "asteroid" | "station" | "transit" | "idle" | "unknown";
 
@@ -27,6 +27,11 @@ export interface EconomyFlightRouteCue {
   targetKind: Exclude<EconomyRouteTargetKind, "transit" | "idle" | "unknown">;
 }
 
+export interface EconomyFlightRouteSummary {
+  targetLabel: string;
+  detailLabels: string[];
+}
+
 function cargoUnits(cargo: Record<string, number | undefined> | undefined): number {
   return Object.values(cargo ?? {}).reduce<number>((total, amount) => total + (amount ?? 0), 0);
 }
@@ -37,6 +42,10 @@ function commodityName(commodityId: CommodityId | undefined): string {
 
 function stationName(stationId: string | undefined): string {
   return stationId ? stationById[stationId]?.name ?? stationId : "Unknown station";
+}
+
+function hasBeltDepletedStatus(status: string | undefined): boolean {
+  return !!status && status.includes("Belt depleted");
 }
 
 function routeVerb(kind: EconomyNpcTaskKind): string {
@@ -164,4 +173,34 @@ export function getEconomyFlightRouteCue(
     targetPosition: station.position,
     targetKind: "station"
   };
+}
+
+export function getEconomyFlightRouteSummary(
+  ship: Pick<FlightEntity, "economyTaskKind" | "economyTargetId" | "economyCommodityId" | "economyStatus">,
+  asteroids: AsteroidEntity[],
+  currentSystemId: string
+): EconomyFlightRouteSummary {
+  const route = getEconomyFlightRouteCue(ship, asteroids, currentSystemId);
+  const detailLabels = hasBeltDepletedStatus(ship.economyStatus) ? ["Belt depleted"] : [];
+  if (route) {
+    return {
+      targetLabel: route.targetName,
+      detailLabels
+    };
+  }
+  if (ship.economyTaskKind === "idle") {
+    return {
+      targetLabel: ship.economyTargetId ? `Holding near ${stationName(ship.economyTargetId)}` : "In transit or awaiting signal",
+      detailLabels
+    };
+  }
+  return {
+    targetLabel: "In transit or awaiting signal",
+    detailLabels
+  };
+}
+
+export function getEconomyEventSystemName(event: Pick<EconomyEvent, "systemId">): string {
+  if (!event.systemId) return "Unknown system";
+  return systemById[event.systemId]?.name ?? event.systemId;
 }
