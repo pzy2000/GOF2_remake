@@ -601,7 +601,8 @@ export function hydrateActiveMission(mission: MissionDefinition): MissionDefinit
     ...templateClone,
     ...savedClone,
     storyEncounter: templateClone.storyEncounter,
-    storyTargetDestroyedIds: savedClone.storyTargetDestroyedIds ?? []
+    storyTargetDestroyedIds: savedClone.storyTargetDestroyedIds ?? [],
+    storyEchoLockedTargetIds: savedClone.storyEchoLockedTargetIds ?? []
   };
 }
 

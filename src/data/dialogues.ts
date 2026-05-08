@@ -313,6 +313,156 @@ const storyScenes: DialogueSceneDefinition[] = [
       { speakerId: "captain", text: "And you?", textI18n: l("那你呢？", "あなたは？", "Et vous ?") },
       { speakerId: "mirr-analyst", text: "I will call it a door closing from the wrong side. Next time, they may knock.", textI18n: l("我会称它为一扇从错误一侧关上的门。下次，它们也许会敲门。", "私は、間違った側から閉じた扉と呼びます。次は、彼らがノックするかもしれません。", "Je l'appellerai une porte fermee du mauvais cote. La prochaine fois, ils pourraient frapper.") }
     ]
+  },
+  {
+    id: "dialogue-story-name-in-the-wake-accept",
+    group: "story",
+    title: "Name in the Wake Briefing",
+    titleI18n: l("尾迹中的名字简报", "航跡の名 ブリーフィング", "Briefing du nom dans le sillage"),
+    maskedTitle: "Signal Masked",
+    maskedTitleI18n: l("信号已遮蔽", "信号マスク中", "Signal masque"),
+    trigger: { kind: "story-accept", missionId: "story-name-in-the-wake", chapterId: "glass-wake-09" },
+    lines: [
+      { speakerId: "celest-archivist", text: "The Crown core kept one private return address: your ship name inside PTD Home storage traffic.", textI18n: l("王冠核心保留了一个私人回信地址：你的船名藏在 PTD Home 仓储流量里。", "王冠コアは私的な返信先を一つ保持していました。PTD Home の保管通信にあるあなたの船名です。", "Le noyau Crown gardait une adresse de retour privee: le nom de votre vaisseau dans le trafic de stockage PTD Home.") },
+      { speakerId: "captain", text: "So the door did knock.", textI18n: l("所以那扇门真的敲回来了。", "つまり扉は本当に叩き返した。", "Donc la porte a vraiment frappe.") },
+      { speakerId: "ship-ai", text: "New protocol available: Echo Lock. Hold target lock inside range until the hostile carrier desynchronizes.", textI18n: l("新协议可用：Echo Lock。保持目标锁定并进入范围，直到敌对载波失同步。", "新プロトコル使用可能: Echo Lock。範囲内で目標ロックを維持し、敵性搬送波を同期解除してください。", "Nouveau protocole disponible: Echo Lock. Maintenez le verrouillage dans la portee jusqu'a la desynchronisation du porteur hostile.") },
+      { speakerId: "mirr-analyst", text: "Do not kill it too early. First make it forget which name it stole.", textI18n: l("别太早杀掉它。先让它忘记自己偷了哪个名字。", "早く殺しすぎないで。まず、盗んだ名を忘れさせてください。", "Ne le tuez pas trop tot. Faites-lui d'abord oublier quel nom il a vole.") }
+    ]
+  },
+  {
+    id: "dialogue-story-name-in-the-wake-complete",
+    group: "story",
+    title: "Name in the Wake Debrief",
+    titleI18n: l("尾迹中的名字复盘", "航跡の名 デブリーフ", "Debriefing du nom dans le sillage"),
+    maskedTitle: "Signal Masked",
+    maskedTitleI18n: l("信号已遮蔽", "信号マスク中", "Signal masque"),
+    trigger: { kind: "story-complete", missionId: "story-name-in-the-wake", chapterId: "glass-wake-09" },
+    lines: [
+      { speakerId: "ship-ai", text: "Keel Name Listener destroyed. Echo Lock stripped the ship name before detonation.", textI18n: l("Keel Name Listener 已摧毁。Echo Lock 在引爆前剥离了船名。", "Keel Name Listener 破壊。Echo Lock は爆発前に船名を剥がしました。", "Keel Name Listener detruit. Echo Lock a retire le nom du vaisseau avant la detonation.") },
+      { speakerId: "captain", text: "It was using my name like a route key.", textI18n: l("它把我的船名当成航线钥匙。", "あれは私の名を航路キーのように使っていた。", "Il utilisait mon nom comme une cle de route.") },
+      { speakerId: "mirr-analyst", text: "A name-key. That is worse than a beacon and better than a curse. We can cut it.", textI18n: l("名字钥匙。它比信标更糟，比诅咒更好。我们能切断它。", "名前キーです。ビーコンより悪く、呪いよりはましです。切断できます。", "Une cle-nom. Pire qu'une balise, mieux qu'une malediction. Nous pouvons la couper.") },
+      { speakerId: "celest-archivist", text: "PTD Home recommends a decoy hull. The listener still expects storage traffic to sleep.", textI18n: l("PTD Home 建议使用诱饵船体。监听者仍以为仓储流量应该沉睡。", "PTD Home は囮船体を推奨しています。聞き手はまだ保管通信が眠るものと思っています。", "PTD Home recommande une coque leurre. L'ecouteur s'attend encore a ce que le trafic de stockage dorme.") }
+    ]
+  },
+  {
+    id: "dialogue-story-borrowed-hulls-accept",
+    group: "story",
+    title: "Borrowed Hulls Briefing",
+    titleI18n: l("借来的船体简报", "借り物の船体 ブリーフィング", "Briefing des coques empruntees"),
+    maskedTitle: "Signal Masked",
+    maskedTitleI18n: l("信号已遮蔽", "信号マスク中", "Signal masque"),
+    trigger: { kind: "story-accept", missionId: "story-borrowed-hulls", chapterId: "glass-wake-10" },
+    lines: [
+      { speakerId: "helion-handler", text: "The decoy tender will look like a stored hull waking for maintenance. Keep it alive.", textI18n: l("诱饵拖船会看起来像一艘存放船体醒来维护。护住它。", "囮テンダーは保管船体が整備のため起きたように見えます。生かしてください。", "Le tender leurre ressemblera a une coque stockee qui se reveille pour maintenance. Gardez-le en vie.") },
+      { speakerId: "captain", text: "And if something borrows the route?", textI18n: l("如果有什么东西借用了这条路线呢？", "何かがその航路を借りたら？", "Et si quelque chose emprunte la route ?") },
+      { speakerId: "ship-ai", text: "Borrowed-hull relay signatures will be hostile. Convoy protection priority elevated.", textI18n: l("借船体中继签名将视为敌对。护航保护优先级已提升。", "借用船体中継署名は敵性と判断。護衛優先度を上げます。", "Les signatures de relais de coque empruntee seront hostiles. Priorite de protection du convoi elevee.") },
+      { speakerId: "helion-handler", text: "PTD Home is quiet by design. If it gets loud, assume Glass Wake is wearing our silence.", textI18n: l("PTD Home 的安静是设计出来的。如果它变吵，就假设 Glass Wake 穿上了我们的沉默。", "PTD Home は設計上静かです。騒がしくなったら、Glass Wake が我々の沈黙を着ていると考えてください。", "PTD Home est silencieux par conception. S'il devient bruyant, supposez que Glass Wake porte notre silence.") }
+    ]
+  },
+  {
+    id: "dialogue-story-borrowed-hulls-complete",
+    group: "story",
+    title: "Borrowed Hulls Debrief",
+    titleI18n: l("借来的船体复盘", "借り物の船体 デブリーフ", "Debriefing des coques empruntees"),
+    maskedTitle: "Signal Masked",
+    maskedTitleI18n: l("信号已遮蔽", "信号マスク中", "Signal masque"),
+    trigger: { kind: "story-complete", missionId: "story-borrowed-hulls", chapterId: "glass-wake-10" },
+    lines: [
+      { speakerId: "helion-handler", text: "Decoy tender returned. The borrowed hulls were routes wearing ship-shaped sleep.", textI18n: l("诱饵拖船已返回。那些借来的船体是披着船形沉睡的航线。", "囮テンダー帰還。借り物の船体は、船の眠りをまとった航路でした。", "Tender leurre revenu. Les coques empruntees etaient des routes portant un sommeil en forme de vaisseau.") },
+      { speakerId: "captain", text: "They need habits to move.", textI18n: l("它们需要习惯才能移动。", "動くには習慣が必要なのか。", "Ils ont besoin d'habitudes pour se deplacer.") },
+      { speakerId: "mirr-analyst", text: "Yes. We can wound a habit. Mirr Vale can index where your name is attached.", textI18n: l("对。我们能割伤一个习惯。Mirr Vale 可以索引你的名字附着在哪里。", "はい。習慣なら傷つけられます。Mirr Vale はあなたの名が付着した場所を索引できます。", "Oui. Nous pouvons blesser une habitude. Mirr Vale peut indexer l'endroit ou votre nom est attache.") }
+    ]
+  },
+  {
+    id: "dialogue-story-parallax-wound-accept",
+    group: "story",
+    title: "Parallax Wound Briefing",
+    titleI18n: l("视差伤口简报", "パララックスの傷 ブリーフィング", "Briefing de la blessure Parallax"),
+    maskedTitle: "Signal Masked",
+    maskedTitleI18n: l("信号已遮蔽", "信号マスク中", "Signal masque"),
+    trigger: { kind: "story-accept", missionId: "story-parallax-wound", chapterId: "glass-wake-11" },
+    lines: [
+      { speakerId: "mirr-analyst", text: "We can recover the Parallax Name Index without exposing the Hermitage. Follow Mirr Lattice routing only.", textI18n: l("我们可以在不暴露 Hermitage 的情况下回收 Parallax Name Index。只按 Mirr Lattice 路由行动。", "Hermitage を露出せずに Parallax Name Index を回収できます。Mirr Lattice の経路だけを使ってください。", "Nous pouvons recuperer le Parallax Name Index sans exposer l'Hermitage. Suivez seulement le routage Mirr Lattice.") },
+      { speakerId: "captain", text: "You are asking me to do surgery through a mirror.", textI18n: l("你是在让我隔着镜子做手术。", "鏡越しに手術しろと言っているのか。", "Vous me demandez de faire de la chirurgie a travers un miroir.") },
+      { speakerId: "mirr-analyst", text: "Exactly. The index will show where the carrier expects your name to answer.", textI18n: l("正是如此。索引会显示载波预期你的名字在哪里回应。", "その通りです。索引は、搬送波があなたの名の応答を期待する場所を示します。", "Exactement. L'index montrera ou le porteur attend que votre nom reponde.") },
+      { speakerId: "ship-ai", text: "Two guardians marked near the recovery vector.", textI18n: l("回收向量附近已标记两个守卫。", "回収ベクトル付近に二体の番人をマーキング。", "Deux gardiens marques pres du vecteur de recuperation.") }
+    ]
+  },
+  {
+    id: "dialogue-story-parallax-wound-complete",
+    group: "story",
+    title: "Parallax Wound Debrief",
+    titleI18n: l("视差伤口复盘", "パララックスの傷 デブリーフ", "Debriefing de la blessure Parallax"),
+    maskedTitle: "Signal Masked",
+    maskedTitleI18n: l("信号已遮蔽", "信号マスク中", "Signal masque"),
+    trigger: { kind: "story-complete", missionId: "story-parallax-wound", chapterId: "glass-wake-11" },
+    lines: [
+      { speakerId: "mirr-analyst", text: "The index calls your ship name a wound in the carrier.", textI18n: l("索引把你的船名称为载波中的伤口。", "索引はあなたの船名を搬送波内の傷と呼んでいます。", "L'index appelle le nom de votre vaisseau une blessure dans le porteur.") },
+      { speakerId: "captain", text: "Can wounds be closed?", textI18n: l("伤口能闭合吗？", "傷は閉じられるか？", "Les blessures peuvent-elles se refermer ?") },
+      { speakerId: "mirr-analyst", text: "Or infected. Ashen is already selling name fragments to people who think they are buying leverage.", textI18n: l("也可能被感染。Ashen 已经在把名字碎片卖给以为自己买到筹码的人。", "あるいは感染します。Ashen は、交渉材料を買っていると思う者たちに名前の断片を売っています。", "Ou s'infecter. Ashen vend deja des fragments de nom a ceux qui croient acheter un levier.") },
+      { speakerId: "ashen-broker", text: "Bring me a false name that bites back, and I will open the ledger.", textI18n: l("给我带来一个会反咬的假名字，我就打开账本。", "噛み返す偽名を持ってきな。そうすれば台帳を開く。", "Apportez-moi un faux nom qui mord, et j'ouvrirai le registre.") }
+    ]
+  },
+  {
+    id: "dialogue-story-black-ledger-chorus-accept",
+    group: "story",
+    title: "Black Ledger Chorus Briefing",
+    titleI18n: l("黑账本合唱简报", "黒台帳合唱 ブリーフィング", "Briefing du choeur du registre noir"),
+    maskedTitle: "Signal Masked",
+    maskedTitleI18n: l("信号已遮蔽", "信号マスク中", "Signal masque"),
+    trigger: { kind: "story-accept", missionId: "story-black-ledger-chorus", chapterId: "glass-wake-12" },
+    lines: [
+      { speakerId: "ashen-broker", text: "Ashen sells everything twice. This time the second buyer is a drone chorus.", textI18n: l("Ashen 什么东西都卖两遍。这次第二个买家是一支无人机合唱。", "Ashen は何でも二度売る。今回の二人目の買い手はドローン合唱だ。", "Ashen vend tout deux fois. Cette fois, le second acheteur est un choeur de drones.") },
+      { speakerId: "captain", text: "The false ledger draws them out.", textI18n: l("假账本把它们引出来。", "偽台帳で誘い出す。", "Le faux registre les attire.") },
+      { speakerId: "ashen-broker", text: "And embarrasses my competitors. Try not to destroy the freeport while improving my market share.", textI18n: l("还会让我的竞争对手难堪。提升我市场份额的时候，尽量别炸掉自由港。", "それに競争相手に恥をかかせる。私の市場占有率を上げる間、自由港は壊さないで。", "Et embarrasse mes concurrents. Essayez de ne pas detruire le freeport en ameliorant ma part de marche.") },
+      { speakerId: "ship-ai", text: "Name Auction Relay predicted outside Ashen Freeport after ledger handoff.", textI18n: l("账本交接后，预计 Name Auction Relay 会出现在 Ashen Freeport 外。", "台帳引き渡し後、Ashen Freeport 外に Name Auction Relay が予測されます。", "Name Auction Relay prevu hors d'Ashen Freeport apres remise du registre.") }
+    ]
+  },
+  {
+    id: "dialogue-story-black-ledger-chorus-complete",
+    group: "story",
+    title: "Black Ledger Chorus Debrief",
+    titleI18n: l("黑账本合唱复盘", "黒台帳合唱 デブリーフ", "Debriefing du choeur du registre noir"),
+    maskedTitle: "Signal Masked",
+    maskedTitleI18n: l("信号已遮蔽", "信号マスク中", "Signal masque"),
+    trigger: { kind: "story-complete", missionId: "story-black-ledger-chorus", chapterId: "glass-wake-12" },
+    lines: [
+      { speakerId: "ashen-broker", text: "Relay burned. Ledger ash says every buyer was also a transmitter.", textI18n: l("中继烧毁。账本灰烬显示每个买家也是发射器。", "中継は燃えた。台帳の灰は、買い手全員が送信機でもあったことを示している。", "Relais brule. Les cendres du registre disent que chaque acheteur etait aussi un emetteur.") },
+      { speakerId: "captain", text: "The chorus points back to Celest.", textI18n: l("合唱又指回 Celest。", "合唱は Celest へ戻っている。", "Le choeur pointe vers Celest.") },
+      { speakerId: "celest-archivist", text: "Then the archive was not clean. It was scarred.", textI18n: l("那档案不是干净了。它只是留疤了。", "なら記録は清浄ではありません。傷ついていたのです。", "Alors l'archive n'etait pas propre. Elle etait cicatrisee.") },
+      { speakerId: "mirr-analyst", text: "We can hurt the scar now. Bring Echo Lock back under the Crown.", textI18n: l("现在我们能伤到那道疤。把 Echo Lock 带回王冠之下。", "今ならその傷を痛められます。Echo Lock を王冠の下へ戻してください。", "Nous pouvons blesser la cicatrice maintenant. Ramenez Echo Lock sous la Couronne.") }
+    ]
+  },
+  {
+    id: "dialogue-story-listener-scar-accept",
+    group: "story",
+    title: "Listener Scar Briefing",
+    titleI18n: l("监听者伤疤简报", "聞き手の傷 ブリーフィング", "Briefing de la cicatrice de l'ecouteur"),
+    maskedTitle: "Signal Masked",
+    maskedTitleI18n: l("信号已遮蔽", "信号マスク中", "Signal masque"),
+    trigger: { kind: "story-accept", missionId: "story-listener-scar", chapterId: "glass-wake-13" },
+    lines: [
+      { speakerId: "celest-archivist", text: "The Listener Scar Anchor sits where the Quiet Crown core used to listen.", textI18n: l("Listener Scar Anchor 位于 Quiet Crown 核心曾经监听的位置。", "Listener Scar Anchor は Quiet Crown コアがかつて聞いていた場所にあります。", "Le Listener Scar Anchor se trouve la ou le noyau Quiet Crown ecoutait.") },
+      { speakerId: "ship-ai", text: "Echo Lock required. Anchor hull should remain invulnerable to lethal damage until synchronization completes.", textI18n: l("需要 Echo Lock。同步完成前，锚点船体应免于致命伤害。", "Echo Lock 必須。同期完了まで、アンカー船体は致命損傷に耐える見込みです。", "Echo Lock requis. La coque de l'ancre devrait resister aux degats mortels jusqu'a la synchronisation.") },
+      { speakerId: "captain", text: "So we make it remember the name, then make it lose the name.", textI18n: l("所以我们先让它记起名字，再让它失去名字。", "つまり名を思い出させてから、名を失わせる。", "Donc nous lui faisons se souvenir du nom, puis le perdre.") },
+      { speakerId: "mirr-analyst", text: "Yes. Break the wardens, recover the scar core, and we can build something that stops the next name-call faster.", textI18n: l("对。打碎守卫，回收伤疤核心，我们就能造出更快阻断下次点名的东西。", "はい。番人を破り、傷コアを回収すれば、次の名呼びをより早く止めるものを作れます。", "Oui. Brisez les gardiens, recuperez le noyau de cicatrice, et nous pourrons construire de quoi stopper le prochain appel de nom plus vite.") }
+    ]
+  },
+  {
+    id: "dialogue-story-listener-scar-complete",
+    group: "story",
+    title: "Listener Scar Debrief",
+    titleI18n: l("监听者伤疤复盘", "聞き手の傷 デブリーフ", "Debriefing de la cicatrice de l'ecouteur"),
+    maskedTitle: "Signal Masked",
+    maskedTitleI18n: l("信号已遮蔽", "信号マスク中", "Signal masque"),
+    trigger: { kind: "story-complete", missionId: "story-listener-scar", chapterId: "glass-wake-13" },
+    lines: [
+      { speakerId: "ship-ai", text: "Listener Scar Anchor destroyed. Echo Nullifier blueprint compiled from recovered scar core.", textI18n: l("Listener Scar Anchor 已摧毁。Echo Nullifier 蓝图已由回收的伤疤核心编译。", "Listener Scar Anchor 破壊。回収した傷コアから Echo Nullifier 設計図を編纂しました。", "Listener Scar Anchor detruit. Plan Echo Nullifier compile depuis le noyau de cicatrice recupere.") },
+      { speakerId: "captain", text: "Did it forget us?", textI18n: l("它忘了我们吗？", "あれは私たちを忘れたか？", "Nous a-t-il oublies ?") },
+      { speakerId: "mirr-analyst", text: "This scar did. The network behind it felt the cut.", textI18n: l("这道疤忘了。它背后的网络感到了切口。", "この傷は忘れました。その背後のネットワークは切断を感じました。", "Cette cicatrice, oui. Le reseau derriere elle a senti la coupure.") },
+      { speakerId: "celest-archivist", text: "Celest will record the emergency as contained. I will record it as wounded.", textI18n: l("Celest 会把这次紧急事态记录为已控制。我会把它记录为已受伤。", "Celest はこの緊急事態を封じ込め済みと記録します。私は負傷済みと記録します。", "Celest consignera l'urgence comme contenue. Moi, je la consignerai comme blessee.") },
+      { speakerId: "captain", text: "Good. If it comes back, it comes back limping.", textI18n: l("很好。如果它回来，也会一瘸一拐地回来。", "いい。戻ってくるなら、足を引きずって戻る。", "Bien. S'il revient, il reviendra en boitant.") }
+    ]
   }
 ];
 

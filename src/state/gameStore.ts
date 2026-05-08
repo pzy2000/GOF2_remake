@@ -7,6 +7,7 @@ import type {
   FlightEntity,
   FlightInput,
   LootEntity,
+  MissionDefinition,
   NpcInteractionAction,
   ProjectileEntity,
   RuntimeState,
@@ -35,7 +36,9 @@ import {
   areMissionPrerequisitesMet,
   markEscortArrived,
   markSalvageRecovered,
-  markStoryTargetDestroyed
+  markStoryTargetDestroyed,
+  markStoryTargetEchoLocked,
+  isStoryTargetEchoLocked
 } from "../systems/missions";
 import { deleteSave as deleteSaveSlot, getLatestSaveSlotId, readSave, readSaveSlots, writeSave } from "../systems/save";
 import { audioSystem } from "../systems/audio";
@@ -294,6 +297,91 @@ function lootForCargo(cargo: CargoHold | undefined, position: Vec3): LootEntity[
 
 function backendActionFor(action: NpcInteractionAction): EconomyNpcInteractionAction | undefined {
   return action === "rob" || action === "rescue" || action === "report" ? action : undefined;
+}
+
+function storyTargetMission(activeMissions: MissionDefinition[], ship: FlightEntity): MissionDefinition | undefined {
+  return ship.storyTarget && ship.missionId ? activeMissions.find((mission) => mission.id === ship.missionId) : undefined;
+}
+
+function storyTargetDefinition(activeMissions: MissionDefinition[], ship: FlightEntity) {
+  return storyTargetMission(activeMissions, ship)?.storyEncounter?.targets.find((target) => target.id === ship.id);
+}
+
+function protectEchoLockedStoryTargetDeath(
+  damaged: FlightEntity,
+  original: FlightEntity,
+  activeMissions: MissionDefinition[]
+): { ship: FlightEntity; blocked: boolean } {
+  if (damaged.hull > 0 || original.hull <= 0) return { ship: damaged, blocked: false };
+  const mission = storyTargetMission(activeMissions, original);
+  const target = storyTargetDefinition(activeMissions, original);
+  if (!mission || !target?.echoLock || isStoryTargetEchoLocked(mission, target.id)) return { ship: damaged, blocked: false };
+  return { ship: { ...damaged, hull: 1, shield: 0 }, blocked: true };
+}
+
+function advanceStoryEchoLock({
+  runtime,
+  activeMissions,
+  player,
+  targetId,
+  delta,
+  echoLockRangeBonus,
+  echoLockRateMultiplier
+}: {
+  runtime: RuntimeState;
+  activeMissions: MissionDefinition[];
+  player: { position: Vec3 };
+  targetId?: string;
+  delta: number;
+  echoLockRangeBonus: number;
+  echoLockRateMultiplier: number;
+}): { runtime: RuntimeState; activeMissions: MissionDefinition[]; message?: string } {
+  const selectedShip = targetId ? runtime.enemies.find((ship) => ship.id === targetId && ship.hull > 0 && ship.deathTimer === undefined) : undefined;
+  const selectedMission = selectedShip ? storyTargetMission(activeMissions, selectedShip) : undefined;
+  const selectedTarget = selectedShip ? storyTargetDefinition(activeMissions, selectedShip) : undefined;
+  const selectedNeedsLock = !!selectedMission && !!selectedTarget?.echoLock && !isStoryTargetEchoLocked(selectedMission, selectedTarget.id);
+  const prior = runtime.storyEchoLock;
+  const lockTargetId = selectedNeedsLock ? selectedTarget!.id : prior?.targetId;
+  const lockMissionId = selectedNeedsLock ? selectedMission!.id : prior?.missionId;
+  if (!lockTargetId || !lockMissionId) return { runtime: { ...runtime, storyEchoLock: undefined }, activeMissions };
+
+  const mission = activeMissions.find((item) => item.id === lockMissionId);
+  const targetDef = mission?.storyEncounter?.targets.find((target) => target.id === lockTargetId);
+  const ship = runtime.enemies.find((item) => item.id === lockTargetId && item.hull > 0 && item.deathTimer === undefined);
+  if (!mission || !targetDef?.echoLock || !ship || isStoryTargetEchoLocked(mission, lockTargetId)) {
+    return { runtime: { ...runtime, storyEchoLock: undefined }, activeMissions };
+  }
+
+  const isSelected = selectedNeedsLock && targetId === lockTargetId;
+  const maxRange = targetDef.echoLock.rangeMeters + echoLockRangeBonus;
+  const inRange = isSelected && distance(player.position, ship.position) <= maxRange;
+  const currentProgress = prior?.targetId === lockTargetId && prior.missionId === lockMissionId ? prior.progressSeconds : 0;
+  const progressSeconds = clamp(
+    currentProgress + (inRange ? delta * echoLockRateMultiplier : -delta),
+    0,
+    targetDef.echoLock.requiredSeconds
+  );
+  if (progressSeconds <= 0 && !inRange) return { runtime: { ...runtime, storyEchoLock: undefined }, activeMissions };
+  const completed = progressSeconds >= targetDef.echoLock.requiredSeconds;
+  const nextActiveMissions = completed
+    ? activeMissions.map((item) => (item.id === mission.id ? markStoryTargetEchoLocked(item, lockTargetId) : item))
+    : activeMissions;
+  return {
+    activeMissions: nextActiveMissions,
+    runtime: {
+      ...runtime,
+      storyEchoLock: completed
+        ? undefined
+        : {
+            missionId: mission.id,
+            targetId: lockTargetId,
+            progressSeconds,
+            requiredSeconds: targetDef.echoLock.requiredSeconds,
+            inRange
+          }
+    },
+    message: completed ? `Echo Lock complete: ${ship.name} desynchronized.` : undefined
+  };
 }
 
 export const useGameStore = create<GameStore>((set, get) => ({
@@ -1059,6 +1147,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
     let secondaryCooldown = Math.max(0, state.secondaryCooldown - delta);
     let pendingDialogueSceneId: string | undefined;
     const target = runtime.enemies.find((ship) => ship.id === state.targetId && ship.hull > 0);
+    let activeMissions = state.activeMissions;
+    let echoLockMessage: string | undefined;
+    const echoLockAdvance = advanceStoryEchoLock({
+      runtime,
+      activeMissions,
+      player,
+      targetId: state.targetId,
+      delta,
+      echoLockRangeBonus: equipmentEffects.echoLockRangeBonus,
+      echoLockRateMultiplier: equipmentEffects.echoLockRateMultiplier
+    });
+    runtime = echoLockAdvance.runtime;
+    activeMissions = echoLockAdvance.activeMissions;
+    echoLockMessage = echoLockAdvance.message;
+    let echoLockBlockedMessage: string | undefined;
 
     const nearestAsteroid = runtime.asteroids
       .filter((asteroid) => asteroid.amount > 0)
@@ -1431,6 +1534,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
             );
             damaged = { ...damaged, distressThreatId: threat?.id ?? ship.distressThreatId ?? "hostile-contact", distressCalledAt: now };
           }
+          const echoProtection = protectEchoLockedStoryTargetDeath(damaged, ship, activeMissions);
+          if (echoProtection.blocked) {
+            damaged = echoProtection.ship;
+            echoLockBlockedMessage = `Echo Lock required: hold ${ship.name} in range before lethal damage.`;
+          }
           consumed = true;
           runtime.effects.push({
             id: projectileId(shielded ? "shield-hit" : "hit"),
@@ -1504,6 +1612,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
           const shielded = ship.shield > 0;
           const wasHostile = isHostileToPlayer(ship);
           let damaged = applyDamage(ship, projectile.damage, now);
+          const echoProtection = protectEchoLockedStoryTargetDeath(damaged, ship, activeMissions);
+          if (echoProtection.blocked) {
+            damaged = echoProtection.ship;
+            echoLockBlockedMessage = `Echo Lock required: hold ${ship.name} in range before lethal damage.`;
+          }
           const destroyedByHit = damaged.hull <= 0 && ship.hull > 0;
           const consequenceKind = !ship.storyTarget ? incidentKindForShip(ship.role, destroyedByHit) : undefined;
           if (consequenceKind && (!wasHostile || ship.provokedByPlayer || destroyedByHit)) {
@@ -1689,15 +1802,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
       enemies: runtime.enemies.filter((ship) => ship.hull > 0 || (ship.deathTimer ?? 0) > 0),
       loot: [...runtime.loot, ...lootDrops],
       destroyedPirates,
-      message: playerAggressionMessage ?? npcObjectiveMessage ?? (destroyedBossName ? `${destroyedBossName} destroyed. Boss cargo scattered.` : runtime.message)
+      message: playerAggressionMessage ?? echoLockBlockedMessage ?? echoLockMessage ?? npcObjectiveMessage ?? (destroyedBossName ? `${destroyedBossName} destroyed. Boss cargo scattered.` : runtime.message)
     };
 
-    let activeMissions = destroyedStoryTargets.length > 0
-      ? state.activeMissions.map((mission) => {
+    activeMissions = destroyedStoryTargets.length > 0
+      ? activeMissions.map((mission) => {
           const targetKills = destroyedStoryTargets.filter((target) => target.missionId === mission.id);
           return targetKills.reduce((nextMission, target) => markStoryTargetDestroyed(nextMission, target.targetId), mission);
         })
-      : state.activeMissions;
+      : activeMissions;
     const storyTargetMessage = destroyedStoryTargets.length > 0
       ? `${destroyedStoryTargets[destroyedStoryTargets.length - 1].name} destroyed. Story objective updated.`
       : undefined;
@@ -1809,6 +1922,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
               ? contrabandScanMessage
             : storyTargetMessage
               ? storyTargetMessage
+            : echoLockBlockedMessage
+              ? echoLockBlockedMessage
+            : echoLockMessage
+              ? echoLockMessage
             : destroyedBossName
               ? `${destroyedBossName} destroyed. Boss cargo scattered.`
             : npcObjectiveMessage
@@ -2263,9 +2380,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const marketState = generatedDispatchMission ? applyEconomyDispatchMissionDelivery(state.marketState, mission) : state.marketState;
     const dialogueScene = generatedDispatchMission ? undefined : getStoryMissionDialogueScene(mission.id, "complete");
     const dialoguePatch = dialogueScene ? dialogueOpenPatch(state, dialogueScene.id) : {};
+    const newlyUnlockedBlueprints = (mission.blueprintRewardIds ?? [])
+      .filter((equipmentId) => !state.player.unlockedBlueprintIds?.includes(equipmentId))
+      .map((equipmentId) => equipmentById[equipmentId]?.name ?? equipmentId);
+    const blueprintRewardMessage = newlyUnlockedBlueprints.length > 0
+      ? ` ${newlyUnlockedBlueprints.join(", ")} blueprint unlocked.`
+      : "";
     const completeMessage = generatedDispatchMission
       ? `${mission.title} delivered. ${isMarketSmugglingMissionId(mission.id) ? "Black-market pressure shifted" : "Market pressure eased"}. +${mission.reward} credits.`
-      : `${mission.title} complete. +${mission.reward} credits.`;
+      : `${mission.title} complete. +${mission.reward} credits.${blueprintRewardMessage}`;
     const dispatchDeliveryRequest = generatedDispatchMission && mission.cargoRequired
       ? {
           missionId: mission.id,

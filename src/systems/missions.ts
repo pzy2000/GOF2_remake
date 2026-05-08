@@ -24,7 +24,9 @@ export function cloneMission(mission: MissionDefinition): MissionDefinition {
           requiredTargetIds: [...mission.storyEncounter.requiredTargetIds]
         }
       : undefined,
-    storyTargetDestroyedIds: mission.storyTargetDestroyedIds ? [...mission.storyTargetDestroyedIds] : undefined
+    storyTargetDestroyedIds: mission.storyTargetDestroyedIds ? [...mission.storyTargetDestroyedIds] : undefined,
+    storyEchoLockedTargetIds: mission.storyEchoLockedTargetIds ? [...mission.storyEchoLockedTargetIds] : undefined,
+    blueprintRewardIds: mission.blueprintRewardIds ? [...mission.blueprintRewardIds] : undefined
   };
 }
 
@@ -133,7 +135,8 @@ export function acceptMission(
     completed: false,
     failed: false,
     acceptedAt: gameClock,
-    storyTargetDestroyedIds: mission.storyEncounter ? [] : mission.storyTargetDestroyedIds
+    storyTargetDestroyedIds: mission.storyEncounter ? [] : mission.storyTargetDestroyedIds,
+    storyEchoLockedTargetIds: mission.storyEncounter ? [] : mission.storyEchoLockedTargetIds
   };
   return {
     ok: true,
@@ -188,6 +191,7 @@ export function completeMission(
   reputation: ReputationState
 ): { player: PlayerState; reputation: ReputationState; completed: MissionDefinition } {
   const nextCargo = removeCargo(player.cargo, cargoToConsume(mission));
+  const unlockedBlueprintIds = Array.from(new Set([...(player.unlockedBlueprintIds ?? []), ...(mission.blueprintRewardIds ?? [])]));
   const reputationDeltas = mission.reputationRewards ?? { [mission.factionId]: mission.type === "Pirate bounty" ? 6 : 4 };
   const nextReputation = Object.entries(reputationDeltas).reduce(
     (next, [factionId, delta]) => updateReputation(next, factionId as FactionId, delta ?? 0),
@@ -199,7 +203,8 @@ export function completeMission(
     player: {
       ...player,
       cargo: nextCargo,
-      credits: player.credits + mission.reward
+      credits: player.credits + mission.reward,
+      unlockedBlueprintIds
     }
   };
 }
@@ -231,7 +236,11 @@ export function areStoryEncounterTargetsComplete(mission: MissionDefinition): bo
   const required = mission.storyEncounter?.requiredTargetIds ?? [];
   if (required.length === 0) return true;
   const destroyed = new Set(mission.storyTargetDestroyedIds ?? []);
-  return required.every((targetId) => destroyed.has(targetId));
+  const echoLocked = new Set(mission.storyEchoLockedTargetIds ?? []);
+  return required.every((targetId) => {
+    const target = mission.storyEncounter?.targets.find((item) => item.id === targetId);
+    return destroyed.has(targetId) && (!target?.echoLock || echoLocked.has(targetId));
+  });
 }
 
 export function getStoryEncounterRemainingTargets(mission: MissionDefinition | undefined): StoryEncounterTargetDefinition[] {
@@ -246,4 +255,16 @@ export function markStoryTargetDestroyed(mission: MissionDefinition, targetId: s
     ...cloneMission(mission),
     storyTargetDestroyedIds: Array.from(new Set([...(mission.storyTargetDestroyedIds ?? []), targetId]))
   };
+}
+
+export function markStoryTargetEchoLocked(mission: MissionDefinition, targetId: string): MissionDefinition {
+  if (!mission.storyEncounter?.targets.some((target) => target.id === targetId && target.echoLock)) return mission;
+  return {
+    ...cloneMission(mission),
+    storyEchoLockedTargetIds: Array.from(new Set([...(mission.storyEchoLockedTargetIds ?? []), targetId]))
+  };
+}
+
+export function isStoryTargetEchoLocked(mission: MissionDefinition | undefined, targetId: string): boolean {
+  return !!mission?.storyEchoLockedTargetIds?.includes(targetId);
 }

@@ -324,6 +324,26 @@ export const equipmentList: EquipmentDefinition[] = [
     slotType: "engineering",
     craftCost: { credits: 820, cargo: { optics: 1, microchips: 1 } },
     modifiers: { weaponCooldownMultiplier: 0.88 }
+  },
+  {
+    id: "echo-nullifier",
+    name: "Echo Nullifier",
+    techLevel: 5,
+    marketPrice: 9800,
+    marketStock: 0,
+    dropWeight: 0,
+    category: "Utility",
+    role: "Story-grade counter-listener for Glass Wake echoes.",
+    description: "A tuned null-field array built from the Listener Scar core, designed to desynchronize name-bearing drone carriers.",
+    effect: "Adds 100m to loot, salvage, and mining signal awareness, extends Echo Lock range by 120m, and accelerates Echo Lock by 25%.",
+    displayStats: [
+      { label: "Interact", value: "+100m" },
+      { label: "Vein HUD", value: "+100m" },
+      { label: "Echo Lock", value: "+120m / +25%" }
+    ],
+    slotType: "utility",
+    craftCost: { credits: 4800, cargo: { "data-cores": 2, voidglass: 2, microchips: 2 } },
+    modifiers: { scannerRangeBonus: 100, miningHudRangeBonus: 100, echoLockRangeBonus: 120, echoLockRateMultiplier: 1.25 }
   }
 ];
 
@@ -352,6 +372,7 @@ export const blueprintDefinitions: BlueprintDefinition[] = [
   { equipmentId: "mining-beam", path: "exploration", tier: 1, unlockCost: { credits: 0 }, starterUnlocked: true },
   { equipmentId: "scanner", path: "exploration", tier: 1, unlockCost: { credits: 0 }, starterUnlocked: true },
   { equipmentId: "survey-array", path: "exploration", tier: 2, prerequisiteEquipmentIds: ["scanner"], unlockCost: { credits: 760 } },
+  { equipmentId: "echo-nullifier", path: "exploration", tier: 4, prerequisiteEquipmentIds: ["survey-array"], unlockCost: { credits: 0 }, rewardOnly: true },
   { equipmentId: "cargo-expansion", path: "engineering", tier: 1, unlockCost: { credits: 0 }, starterUnlocked: true },
   { equipmentId: "afterburner", path: "engineering", tier: 2, prerequisiteEquipmentIds: ["cargo-expansion"], unlockCost: { credits: 420 } },
   { equipmentId: "energy-reactor", path: "engineering", tier: 2, prerequisiteEquipmentIds: ["cargo-expansion"], unlockCost: { credits: 620 } },

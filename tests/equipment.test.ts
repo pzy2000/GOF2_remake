@@ -11,6 +11,7 @@ import {
   getEquipmentEffects,
   getEquipmentSlotUsage,
   getShipSlotCapacity,
+  isBlueprintVisibleToPlayer,
   getWeaponCooldown,
   hasMiningBeam,
   installEquipmentFromInventory,
@@ -141,7 +142,8 @@ describe("equipment definitions and helpers", () => {
       "energy-reactor",
       "quantum-reactor",
       "repair-drone",
-      "targeting-computer"
+      "targeting-computer",
+      "echo-nullifier"
     ];
     expect(ids.every((id) => equipmentById[id]?.displayStats.length > 0)).toBe(true);
   });
@@ -165,6 +167,9 @@ describe("equipment definitions and helpers", () => {
     expect(effects.salvageInteractionRange).toBe(170);
     expect(effects.miningHudRange).toBe(470);
     expect(effects.weaponCooldownMultiplier).toBeCloseTo(0.88);
+    const echoEffects = getEquipmentEffects(["echo-nullifier"]);
+    expect(echoEffects.echoLockRangeBonus).toBe(120);
+    expect(echoEffects.echoLockRateMultiplier).toBe(1.25);
     expect(getEquipmentEffects([]).afterburnerMultiplier).toBe(BASE_AFTERBURNER_MULTIPLIER);
     expect(getEquipmentEffects([]).afterburnerEnergyDrain).toBe(BASE_AFTERBURNER_ENERGY_DRAIN);
   });
@@ -217,6 +222,20 @@ describe("equipment definitions and helpers", () => {
     const railgun = unlockBlueprint(plasma.player, "railgun");
     expect(railgun.ok).toBe(true);
     expect(isBlueprintUnlocked(railgun.player, "railgun")).toBe(true);
+  });
+
+  it("keeps reward-only blueprints hidden and locked until awarded", () => {
+    const player = normalizePlayerEquipmentStats(playerForShip());
+
+    expect(canUnlockBlueprint(player, "echo-nullifier")).toMatchObject({
+      ok: false,
+      message: "Blueprint unlocks through story rewards."
+    });
+    expect(isBlueprintVisibleToPlayer({ equipmentId: "echo-nullifier", path: "exploration", tier: 4, unlockCost: { credits: 0 }, rewardOnly: true }, player)).toBe(false);
+    expect(isBlueprintVisibleToPlayer({ equipmentId: "echo-nullifier", path: "exploration", tier: 4, unlockCost: { credits: 0 }, rewardOnly: true }, {
+      ...player,
+      unlockedBlueprintIds: [...(player.unlockedBlueprintIds ?? []), "echo-nullifier"]
+    })).toBe(true);
   });
 
   it("compares candidate equipment against current slot and ship stats", () => {

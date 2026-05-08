@@ -51,7 +51,8 @@ import {
   getEquipmentSlotUsage,
   getShipSlotCapacity,
   hasCraftMaterials,
-  isBlueprintUnlocked
+  isBlueprintUnlocked,
+  isBlueprintVisibleToPlayer
 } from "../systems/equipment";
 import { getContrabandLawSummary } from "../systems/combatAi";
 import { hasActiveCivilianDistress } from "../state/domains/combatRuntime";
@@ -1193,6 +1194,7 @@ function BlueprintTab() {
   const equipmentPopover = useEquipmentPopover();
   const visibleBlueprints = blueprintDefinitions
     .filter((blueprint) => craftable.includes(blueprint.equipmentId))
+    .filter((blueprint) => isBlueprintVisibleToPlayer(blueprint, player))
     .filter((blueprint) => pathFilter === "all" || blueprint.path === pathFilter)
     .sort((a, b) => a.path.localeCompare(b.path) || a.tier - b.tier || equipmentName(a.equipmentId).localeCompare(equipmentName(b.equipmentId)));
   return (

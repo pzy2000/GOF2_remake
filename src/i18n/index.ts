@@ -845,7 +845,8 @@ const equipmentNames: LocalizedCatalog = {
   "energy-reactor": { "zh-CN": "能量反应堆", ja: "エネルギー炉", fr: "Réacteur énergétique" },
   "quantum-reactor": { "zh-CN": "量子反应堆", ja: "量子炉", fr: "Réacteur quantique" },
   "repair-drone": { "zh-CN": "维修无人机", ja: "修理ドローン", fr: "Drone de réparation" },
-  "targeting-computer": { "zh-CN": "瞄准计算机", ja: "照準コンピューター", fr: "Ordinateur de ciblage" }
+  "targeting-computer": { "zh-CN": "瞄准计算机", ja: "照準コンピューター", fr: "Ordinateur de ciblage" },
+  "echo-nullifier": { "zh-CN": "回声消隐器", ja: "エコー・ヌリファイア", fr: "Neutraliseur d'écho" }
 };
 
 const shipNames: LocalizedCatalog = {
@@ -1086,6 +1087,7 @@ const displayNameAliases: LocalizedCatalog = {
   "Quantum Reactor": equipmentNames["quantum-reactor"],
   "Repair Drone": equipmentNames["repair-drone"],
   "Targeting Computer": equipmentNames["targeting-computer"],
+  "Echo Nullifier": equipmentNames["echo-nullifier"],
   "Sparrow MK-I": shipNames["sparrow-mk1"],
   "Mule LX": shipNames["mule-lx"],
   "Raptor V": shipNames["raptor-v"],

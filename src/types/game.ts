@@ -139,7 +139,8 @@ export type EquipmentId =
   | "energy-reactor"
   | "quantum-reactor"
   | "repair-drone"
-  | "targeting-computer";
+  | "targeting-computer"
+  | "echo-nullifier";
 
 export type EquipmentSlotType = "primary" | "secondary" | "utility" | "defense" | "engineering";
 
@@ -222,6 +223,7 @@ export interface BlueprintDefinition {
   prerequisiteEquipmentIds?: EquipmentId[];
   unlockCost: BlueprintUnlockCost;
   starterUnlocked?: boolean;
+  rewardOnly?: boolean;
 }
 
 export interface EquipmentModifiers {
@@ -234,6 +236,8 @@ export interface EquipmentModifiers {
   scannerRangeBonus?: number;
   miningHudRangeBonus?: number;
   weaponCooldownMultiplier?: number;
+  echoLockRangeBonus?: number;
+  echoLockRateMultiplier?: number;
 }
 
 export interface EquipmentDefinition {
@@ -456,6 +460,11 @@ export interface StoryEncounterTargetDefinition {
   aiProfileId?: FlightAiProfileId;
   elite?: boolean;
   objective: string;
+  echoLock?: {
+    rangeMeters: number;
+    requiredSeconds: number;
+    label: string;
+  };
 }
 
 export interface StoryEncounterDefinition {
@@ -499,8 +508,10 @@ export interface MissionDefinition {
   storyCritical?: boolean;
   storyEncounter?: StoryEncounterDefinition;
   storyTargetDestroyedIds?: string[];
+  storyEchoLockedTargetIds?: string[];
   prerequisiteMissionIds?: string[];
   retryOnFailure?: boolean;
+  blueprintRewardIds?: EquipmentId[];
   reputationRewards?: Partial<Record<FactionId, number>>;
   passengerCount?: number;
   consumeCargoOnComplete?: boolean;
@@ -811,6 +822,13 @@ export interface RuntimeState {
   graceUntil: number;
   message: string;
   explorationScan?: ExplorationScanRuntime;
+  storyEchoLock?: {
+    missionId: string;
+    targetId: string;
+    progressSeconds: number;
+    requiredSeconds: number;
+    inRange: boolean;
+  };
   storyNotification?: StoryNotification;
   lawNotification?: LawNotification;
 }

@@ -256,8 +256,8 @@ describe("content data", () => {
   });
 
   it("connects every Glass Wake chapter to a valid story mission chain", () => {
-    expect(glassWakeProtocol.chapters).toHaveLength(8);
-    expect(glassWakeProtocol.epilogue).toContain("Quiet Crown core");
+    expect(glassWakeProtocol.chapters).toHaveLength(13);
+    expect(glassWakeProtocol.epilogue).toContain("Listener Scar");
     const missionById = new Map(missionTemplates.map((mission) => [mission.id, mission]));
     for (const [index, chapter] of glassWakeProtocol.chapters.entries()) {
       const mission = missionById.get(chapter.missionId);
@@ -274,7 +274,17 @@ describe("content data", () => {
         expect(mission?.storyEncounter?.targets.length).toBeGreaterThan(0);
         expect(mission?.storyEncounter?.requiredTargetIds.length).toBeGreaterThan(0);
       }
+      for (const target of mission?.storyEncounter?.targets ?? []) {
+        if (target.echoLock) {
+          expect(mission?.storyEncounter?.requiredTargetIds).toContain(target.id);
+          expect(target.echoLock.rangeMeters).toBeGreaterThan(0);
+          expect(target.echoLock.requiredSeconds).toBeGreaterThan(0);
+          expect(target.echoLock.label.trim().length).toBeGreaterThan(0);
+        }
+      }
     }
+    expect(missionById.get("story-name-in-the-wake")?.storyEncounter?.targets.some((target) => !!target.echoLock)).toBe(true);
+    expect(missionById.get("story-listener-scar")?.storyEncounter?.targets.some((target) => !!target.echoLock)).toBe(true);
   });
 
   it("defines voiced dialogue coverage for story chapters and exploration signals", () => {

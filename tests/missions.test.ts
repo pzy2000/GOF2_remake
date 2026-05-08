@@ -11,7 +11,8 @@ import {
   isMissionExpired,
   markEscortArrived,
   markSalvageRecovered,
-  markStoryTargetDestroyed
+  markStoryTargetDestroyed,
+  markStoryTargetEchoLocked
 } from "../src/systems/missions";
 import { getOccupiedCargo } from "../src/systems/economy";
 import { createInitialReputation } from "../src/systems/reputation";
@@ -136,6 +137,23 @@ describe("missions", () => {
 
     const cleared = markStoryTargetDestroyed(recovered, "glass-echo-drone");
     expect(canCompleteMission(cleared, player(), "mirr-vale", "mirr-lattice", 0, 10)).toBe(true);
+  });
+
+  it("requires Echo Lock before Echo-locked story targets count as cleared", () => {
+    const mission = {
+      ...missionTemplates.find((item) => item.id === "story-name-in-the-wake")!,
+      accepted: true,
+      acceptedAt: 0,
+      storyTargetDestroyedIds: [],
+      storyEchoLockedTargetIds: []
+    };
+    const loaded = { ...player(), cargo: { "data-cores": 1 } };
+    const destroyedWithoutLock = markStoryTargetDestroyed(mission, "keel-name-listener");
+
+    expect(canCompleteMission(destroyedWithoutLock, loaded, "ptd-home", "ptd-home", 0, 10)).toBe(false);
+
+    const lockedAndDestroyed = markStoryTargetDestroyed(markStoryTargetEchoLocked(mission, "keel-name-listener"), "keel-name-listener");
+    expect(canCompleteMission(lockedAndDestroyed, loaded, "ptd-home", "ptd-home", 0, 10)).toBe(true);
   });
 
   it("does not let random pirate kills complete the Knife Wing story relay", () => {

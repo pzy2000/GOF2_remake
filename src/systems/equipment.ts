@@ -1,6 +1,6 @@
 import { blueprintByEquipmentId, blueprintDefinitions, equipmentById } from "../data/equipment";
 import { shipById, weapons } from "../data/ships";
-import type { CargoHold, EquipmentId, EquipmentInventory, EquipmentSlotType, PlayerState, ShipDefinition, ShipStats, WeaponDefinition } from "../types/game";
+import type { BlueprintDefinition, CargoHold, EquipmentId, EquipmentInventory, EquipmentSlotType, PlayerState, ShipDefinition, ShipStats, WeaponDefinition } from "../types/game";
 
 export const BASE_AFTERBURNER_MULTIPLIER = 1.88;
 export const BASE_AFTERBURNER_ENERGY_DRAIN = 58;
@@ -24,6 +24,8 @@ export interface EquipmentRuntimeEffects {
   salvageInteractionRange: number;
   miningHudRange: number;
   weaponCooldownMultiplier: number;
+  echoLockRangeBonus: number;
+  echoLockRateMultiplier: number;
 }
 
 export type EquipmentSlotUsage = Record<EquipmentSlotType, number>;
@@ -79,7 +81,9 @@ export function getEquipmentEffects(equipment: EquipmentId[]): EquipmentRuntimeE
         lootInteractionRange: effects.lootInteractionRange + (modifiers.scannerRangeBonus ?? 0),
         salvageInteractionRange: effects.salvageInteractionRange + (modifiers.scannerRangeBonus ?? 0),
         miningHudRange: effects.miningHudRange + (modifiers.miningHudRangeBonus ?? 0),
-        weaponCooldownMultiplier: effects.weaponCooldownMultiplier * (modifiers.weaponCooldownMultiplier ?? 1)
+        weaponCooldownMultiplier: effects.weaponCooldownMultiplier * (modifiers.weaponCooldownMultiplier ?? 1),
+        echoLockRangeBonus: effects.echoLockRangeBonus + (modifiers.echoLockRangeBonus ?? 0),
+        echoLockRateMultiplier: effects.echoLockRateMultiplier * (modifiers.echoLockRateMultiplier ?? 1)
       };
     },
     {
@@ -91,7 +95,9 @@ export function getEquipmentEffects(equipment: EquipmentId[]): EquipmentRuntimeE
       lootInteractionRange: BASE_LOOT_INTERACTION_RANGE,
       salvageInteractionRange: BASE_SALVAGE_INTERACTION_RANGE,
       miningHudRange: BASE_MINING_HUD_RANGE,
-      weaponCooldownMultiplier: 1
+      weaponCooldownMultiplier: 1,
+      echoLockRangeBonus: 0,
+      echoLockRateMultiplier: 1
     }
   );
 }
@@ -218,6 +224,7 @@ export function formatCraftRequirement(cargo: CargoHold): string {
 export function canUnlockBlueprint(player: PlayerState, equipmentId: EquipmentId): { ok: boolean; message: string } {
   const blueprint = blueprintByEquipmentId[equipmentId];
   if (!blueprint) return { ok: false, message: "No blueprint research entry." };
+  if (blueprint.rewardOnly) return { ok: false, message: "Blueprint unlocks through story rewards." };
   const unlocked = normalizeUnlockedBlueprintIds(player.unlockedBlueprintIds);
   if (unlocked.includes(equipmentId)) return { ok: false, message: "Blueprint already unlocked." };
   const missingPrerequisites = (blueprint.prerequisiteEquipmentIds ?? []).filter((id) => !unlocked.includes(id));
@@ -241,6 +248,10 @@ export function unlockBlueprint(player: PlayerState, equipmentId: EquipmentId): 
       unlockedBlueprintIds: [...normalizeUnlockedBlueprintIds(player.unlockedBlueprintIds), equipmentId]
     })
   };
+}
+
+export function isBlueprintVisibleToPlayer(blueprint: BlueprintDefinition, player: PlayerState): boolean {
+  return !blueprint.rewardOnly || isBlueprintUnlocked(player, blueprint.equipmentId);
 }
 
 export function canInstallEquipment(player: PlayerState, equipmentId: EquipmentId): { ok: boolean; message: string } {

@@ -70,7 +70,8 @@ const equipmentFallbacks: Partial<Record<EquipmentId, number>> = {
   "torpedo-rack": 2,
   "shield-matrix": 4,
   "survey-array": 7,
-  "quantum-reactor": 9
+  "quantum-reactor": 9,
+  "echo-nullifier": 7
 };
 
 function titleize(id: string): string {

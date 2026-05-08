@@ -172,4 +172,121 @@ describe("story mission store flow", () => {
     expect(store.getState().completedMissionIds).toContain("story-quiet-crown-relay");
     expect(store.getState().activeDialogue?.sceneId).toBe("dialogue-story-quiet-crown-relay-complete");
   });
+
+  it("unlocks Act II after Quiet Crown and accepts chapter 09", async () => {
+    const store = await freshStore();
+    store.setState({
+      currentSystemId: "celest-gate",
+      currentStationId: "celest-vault",
+      completedMissionIds: ["story-clean-carrier", "story-probe-in-glass", "story-kuro-resonance", "story-bastion-calibration", "story-ashen-decoy-manifest", "story-knife-wing-relay", "story-witnesses-to-celest", "story-quiet-crown-relay"]
+    });
+
+    store.getState().acceptMission("story-name-in-the-wake");
+
+    expect(store.getState().activeMissions.some((mission) => mission.id === "story-name-in-the-wake")).toBe(true);
+    expect(store.getState().activeDialogue?.sceneId).toBe("dialogue-story-name-in-the-wake-accept");
+  });
+
+  it("tracks Echo Lock progress, decay, and completion on a targeted story contact", async () => {
+    const store = await freshStore();
+    const { missionTemplates } = await import("../src/data/world");
+    const { cloneMission } = await import("../src/systems/missions");
+    const { createRuntimeForSystem } = await import("../src/state/domains/runtimeFactory");
+    const template = missionTemplates.find((mission) => mission.id === "story-name-in-the-wake")!;
+    const target = template.storyEncounter!.targets.find((item) => item.id === "keel-name-listener")!;
+    const activeMission = { ...cloneMission(template), accepted: true, acceptedAt: 0, storyTargetDestroyedIds: [], storyEchoLockedTargetIds: [] };
+    const runtime = createRuntimeForSystem("ptd-home", [activeMission]);
+    store.setState((state) => ({
+      currentSystemId: "ptd-home",
+      currentStationId: undefined,
+      activeMissions: [activeMission],
+      targetId: target.id,
+      player: { ...state.player, position: [target.position[0], target.position[1], target.position[2] - 120], velocity: [0, 0, 0], throttle: 0 },
+      runtime: { ...runtime, graceUntil: 0, enemies: runtime.enemies.map((ship) => ship.id === target.id ? { ...ship, aiState: "patrol", velocity: [0, 0, 0] } : ship) }
+    }));
+
+    store.getState().tick(1);
+    const partial = store.getState().runtime.storyEchoLock;
+    expect(partial).toMatchObject({ missionId: activeMission.id, targetId: target.id, inRange: true });
+    expect(partial!.progressSeconds).toBeGreaterThan(0);
+
+    store.setState((state) => ({ player: { ...state.player, position: [2400, 0, 2400], velocity: [0, 0, 0], throttle: 0 } }));
+    store.getState().tick(0.25);
+    expect(store.getState().runtime.storyEchoLock?.progressSeconds).toBeLessThan(partial!.progressSeconds);
+
+    store.setState((state) => ({ player: { ...state.player, position: [target.position[0], target.position[1], target.position[2] - 120], velocity: [0, 0, 0], throttle: 0 } }));
+    store.getState().tick(target.echoLock!.requiredSeconds + 0.25);
+
+    expect(store.getState().activeMissions[0].storyEchoLockedTargetIds).toContain(target.id);
+    expect(store.getState().runtime.message).toContain("Echo Lock complete");
+  });
+
+  it("prevents lethal damage against Echo-locked story targets until Echo Lock completes", async () => {
+    const store = await freshStore();
+    const { missionTemplates } = await import("../src/data/world");
+    const { cloneMission } = await import("../src/systems/missions");
+    const { createRuntimeForSystem } = await import("../src/state/domains/runtimeFactory");
+    const template = missionTemplates.find((mission) => mission.id === "story-name-in-the-wake")!;
+    const target = template.storyEncounter!.targets.find((item) => item.id === "keel-name-listener")!;
+    const activeMission = { ...cloneMission(template), accepted: true, acceptedAt: 0, storyTargetDestroyedIds: [], storyEchoLockedTargetIds: [] };
+    const runtime = createRuntimeForSystem("ptd-home", [activeMission]);
+    store.setState((state) => ({
+      currentSystemId: "ptd-home",
+      activeMissions: [activeMission],
+      targetId: target.id,
+      player: { ...state.player, position: target.position, velocity: [0, 0, 0], throttle: 0 },
+      runtime: {
+        ...runtime,
+        graceUntil: 0,
+        enemies: runtime.enemies.map((ship) => ship.id === target.id ? { ...ship, position: target.position, hull: 4, shield: 0, velocity: [0, 0, 0] } : ship),
+        projectiles: [{
+          id: "echo-lock-test-shot",
+          owner: "player",
+          kind: "laser",
+          position: target.position,
+          direction: [0, 0, 0],
+          speed: 0,
+          damage: 999,
+          life: 1,
+          targetId: target.id
+        }]
+      }
+    }));
+
+    store.getState().tick(0.05);
+
+    const protectedTarget = store.getState().runtime.enemies.find((ship) => ship.id === target.id);
+    expect(protectedTarget).toMatchObject({ hull: 1, deathTimer: undefined });
+    expect(store.getState().activeMissions[0].storyTargetDestroyedIds).not.toContain(target.id);
+    expect(store.getState().runtime.message).toContain("Echo Lock required");
+  });
+
+  it("unlocks the Echo Nullifier blueprint when chapter 13 completes", async () => {
+    const store = await freshStore();
+    const { missionTemplates } = await import("../src/data/world");
+    const { cloneMission } = await import("../src/systems/missions");
+    const template = missionTemplates.find((mission) => mission.id === "story-listener-scar")!;
+    const echoTargetId = template.storyEncounter!.targets.find((target) => target.echoLock)!.id;
+    const activeMission = {
+      ...cloneMission(template),
+      accepted: true,
+      acceptedAt: 0,
+      storyTargetDestroyedIds: [...template.storyEncounter!.requiredTargetIds],
+      storyEchoLockedTargetIds: [echoTargetId],
+      salvage: { ...template.salvage!, recovered: true }
+    };
+    store.setState((state) => ({
+      currentSystemId: "celest-gate",
+      currentStationId: "celest-vault",
+      activeMissions: [activeMission],
+      completedMissionIds: ["story-clean-carrier", "story-probe-in-glass", "story-kuro-resonance", "story-bastion-calibration", "story-ashen-decoy-manifest", "story-knife-wing-relay", "story-witnesses-to-celest", "story-quiet-crown-relay", "story-name-in-the-wake", "story-borrowed-hulls", "story-parallax-wound", "story-black-ledger-chorus"],
+      player: { ...state.player, unlockedBlueprintIds: state.player.unlockedBlueprintIds?.filter((id) => id !== "echo-nullifier") }
+    }));
+
+    store.getState().completeMission("story-listener-scar");
+
+    expect(store.getState().completedMissionIds).toContain("story-listener-scar");
+    expect(store.getState().player.unlockedBlueprintIds).toContain("echo-nullifier");
+    expect(store.getState().runtime.message).toContain("Echo Nullifier blueprint unlocked");
+  });
 });

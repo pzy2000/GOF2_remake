@@ -441,6 +441,307 @@ export const missionTemplates: MissionDefinition[] = [
     }
   },
   {
+    id: "story-name-in-the-wake",
+    title: "Glass Wake 09: Name in the Wake",
+    type: "Courier delivery",
+    originSystemId: "celest-gate",
+    destinationSystemId: "ptd-home",
+    destinationStationId: "ptd-home",
+    factionId: "mirr-collective",
+    description: "Carry the Quiet Crown name fragment to PTD Home and sever the first drone listener that can answer with the captain's ship name.",
+    reward: 3100,
+    deadlineSeconds: 1050,
+    failureReputationDelta: -8,
+    storyArcId: GLASS_WAKE_ARC_ID,
+    storyChapterId: "glass-wake-09",
+    storyCritical: true,
+    prerequisiteMissionIds: ["story-quiet-crown-relay"],
+    retryOnFailure: true,
+    reputationRewards: { "mirr-collective": 6, "solar-directorate": 4 },
+    storyEncounter: {
+      fieldObjective: "Hold Echo Lock on the Keel Name Listener, destroy it, then dock at PTD Home.",
+      twist: "The listener repeats the captain's ship name as if it were a dormant storage route.",
+      completionText: "Keel Name Listener destroyed; PTD Home confirms the name fragment was attached to storage traffic.",
+      targets: [
+        {
+          id: "keel-name-listener",
+          name: "Keel Name Listener",
+          kind: "drone",
+          role: "drone",
+          systemId: "ptd-home",
+          position: [290, 60, -610],
+          hull: 118,
+          shield: 120,
+          factionId: "unknown-drones",
+          aiProfileId: "drone-hunter",
+          objective: "Hold Echo Lock on the listener carrying your ship name, then destroy it.",
+          echoLock: {
+            rangeMeters: 520,
+            requiredSeconds: 3,
+            label: "KEEL NAME"
+          }
+        }
+      ],
+      requiredTargetIds: ["keel-name-listener"]
+    },
+    cargoProvided: { "data-cores": 1 }
+  },
+  {
+    id: "story-borrowed-hulls",
+    title: "Glass Wake 10: Borrowed Hulls",
+    type: "Escort convoy",
+    originSystemId: "ptd-home",
+    destinationSystemId: "ptd-home",
+    destinationStationId: "ptd-home",
+    factionId: "solar-directorate",
+    description: "Escort a decoy storage tender through PTD Home and force borrowed-hull echoes to reveal their route mask.",
+    reward: 3300,
+    deadlineSeconds: 760,
+    failureReputationDelta: -8,
+    storyArcId: GLASS_WAKE_ARC_ID,
+    storyChapterId: "glass-wake-10",
+    storyCritical: true,
+    prerequisiteMissionIds: ["story-name-in-the-wake"],
+    retryOnFailure: true,
+    reputationRewards: { "solar-directorate": 6, "mirr-collective": 3 },
+    storyEncounter: {
+      fieldObjective: "Escort Decoy Storage Tender D-3 and destroy the borrowed-hull relay pair.",
+      twist: "The attackers do not steal hulls; they borrow storage routes and let traffic assume the ships are asleep.",
+      completionText: "Decoy tender survived; borrowed-hull relay mask exposed.",
+      targets: [
+        {
+          id: "borrowed-hull-relay",
+          name: "Borrowed Hull Relay",
+          kind: "relay",
+          role: "relay",
+          systemId: "ptd-home",
+          position: [410, 45, -740],
+          hull: 166,
+          shield: 136,
+          factionId: "unknown-drones",
+          aiProfileId: "relay-core",
+          objective: "Break the relay masking itself as dormant storage traffic."
+        },
+        {
+          id: "borrowed-hull-knife",
+          name: "Borrowed Hull Knife",
+          kind: "drone",
+          role: "drone",
+          systemId: "ptd-home",
+          position: [170, 35, -690],
+          hull: 104,
+          shield: 94,
+          factionId: "unknown-drones",
+          aiProfileId: "drone-hunter",
+          objective: "Destroy the drone cutting the decoy tender's route wake."
+        }
+      ],
+      requiredTargetIds: ["borrowed-hull-relay", "borrowed-hull-knife"]
+    },
+    escort: {
+      convoyId: "glass-wake-decoy-storage-tender",
+      convoyName: "Decoy Storage Tender D-3",
+      originPosition: [-340, 30, -420],
+      destinationPosition: [120, 10, -710],
+      hull: 165
+    }
+  },
+  {
+    id: "story-parallax-wound",
+    title: "Glass Wake 11: Parallax Wound",
+    type: "Recovery/salvage",
+    originSystemId: "mirr-vale",
+    destinationSystemId: "mirr-vale",
+    destinationStationId: "mirr-lattice",
+    factionId: "mirr-collective",
+    description: "Recover a Parallax Name Index from Mirr Vale without routing the mission through hidden station charts.",
+    reward: 3520,
+    deadlineSeconds: 1020,
+    failureReputationDelta: -8,
+    storyArcId: GLASS_WAKE_ARC_ID,
+    storyChapterId: "glass-wake-11",
+    storyCritical: true,
+    prerequisiteMissionIds: ["story-borrowed-hulls"],
+    retryOnFailure: true,
+    reputationRewards: { "mirr-collective": 8, "free-belt-union": 3 },
+    storyEncounter: {
+      fieldObjective: "Destroy the Parallax Wound guardians, recover the Parallax Name Index, then return to Mirr Lattice.",
+      twist: "The index treats the captain's ship name like a wound in the carrier rather than a registry value.",
+      completionText: "Parallax Name Index recovered; Mirr can now map the name wound inside the carrier.",
+      targets: [
+        {
+          id: "parallax-wound-guardian",
+          name: "Parallax Wound Guardian",
+          kind: "drone",
+          role: "drone",
+          systemId: "mirr-vale",
+          position: [-420, 70, -620],
+          hull: 112,
+          shield: 112,
+          factionId: "unknown-drones",
+          aiProfileId: "drone-hunter",
+          objective: "Destroy the first guardian orbiting the name index."
+        },
+        {
+          id: "parallax-wound-censor",
+          name: "Parallax Wound Censor",
+          kind: "jammer",
+          role: "relay",
+          systemId: "mirr-vale",
+          position: [-560, 120, -700],
+          hull: 150,
+          shield: 142,
+          factionId: "unknown-drones",
+          aiProfileId: "relay-core",
+          objective: "Destroy the censor suppressing the Parallax index."
+        }
+      ],
+      requiredTargetIds: ["parallax-wound-guardian", "parallax-wound-censor"]
+    },
+    salvage: {
+      salvageId: "parallax-name-index",
+      name: "Parallax Name Index",
+      systemId: "mirr-vale",
+      position: [-500, 95, -660],
+      commodityId: "data-cores",
+      amount: 1
+    }
+  },
+  {
+    id: "story-black-ledger-chorus",
+    title: "Glass Wake 12: Black Ledger Chorus",
+    type: "Courier delivery",
+    originSystemId: "mirr-vale",
+    destinationSystemId: "ashen-drift",
+    destinationStationId: "ashen-freeport",
+    factionId: "vossari-clans",
+    description: "Carry a false name ledger into Ashen Freeport and destroy the black-market relay turning buyers into a chorus.",
+    reward: 3760,
+    deadlineSeconds: 1120,
+    failureReputationDelta: -8,
+    storyArcId: GLASS_WAKE_ARC_ID,
+    storyChapterId: "glass-wake-12",
+    storyCritical: true,
+    prerequisiteMissionIds: ["story-parallax-wound"],
+    retryOnFailure: true,
+    reputationRewards: { "vossari-clans": 6, "mirr-collective": 4 },
+    storyEncounter: {
+      fieldObjective: "Deliver the false name ledger, then destroy the Name Auction Relay and its guard outside Ashen Freeport.",
+      twist: "Every buyer bidding on the captain's name becomes another broadcast throat for the drones.",
+      completionText: "Name Auction Relay destroyed; the chorus of buyers is cut out of the local wake.",
+      targets: [
+        {
+          id: "name-auction-relay",
+          name: "Name Auction Relay",
+          kind: "relay",
+          role: "relay",
+          systemId: "ashen-drift",
+          position: [-260, 40, -780],
+          hull: 176,
+          shield: 150,
+          factionId: "unknown-drones",
+          aiProfileId: "relay-core",
+          objective: "Destroy the relay converting black-market buyers into a chorus."
+        },
+        {
+          id: "ledger-choir-guard",
+          name: "Ledger Choir Guard",
+          kind: "guard",
+          role: "smuggler",
+          systemId: "ashen-drift",
+          position: [-210, 35, -710],
+          hull: 126,
+          shield: 88,
+          factionId: "vossari-clans",
+          aiProfileId: "smuggler",
+          objective: "Defeat the guard trying to sell the false name ledger."
+        }
+      ],
+      requiredTargetIds: ["name-auction-relay", "ledger-choir-guard"]
+    },
+    cargoProvided: { "data-cores": 1 }
+  },
+  {
+    id: "story-listener-scar",
+    title: "Glass Wake 13: Listener Scar",
+    type: "Recovery/salvage",
+    originSystemId: "ashen-drift",
+    destinationSystemId: "celest-gate",
+    destinationStationId: "celest-vault",
+    factionId: "mirr-collective",
+    description: "Break the Listener Scar Anchor beneath Celest Crown, recover its core, and force the local wake to forget the captain's ship name.",
+    reward: 4600,
+    deadlineSeconds: 1120,
+    failureReputationDelta: -10,
+    storyArcId: GLASS_WAKE_ARC_ID,
+    storyChapterId: "glass-wake-13",
+    storyCritical: true,
+    prerequisiteMissionIds: ["story-black-ledger-chorus"],
+    retryOnFailure: true,
+    blueprintRewardIds: ["echo-nullifier"],
+    reputationRewards: { "mirr-collective": 9, "solar-directorate": 6, "free-belt-union": 4, "vossari-clans": 3 },
+    storyEncounter: {
+      fieldObjective: "Hold Echo Lock on the Listener Scar Anchor, destroy its wardens and anchor, recover the scar core, then report to Celest Vault.",
+      twist: "The anchor speaks the captain's ship name as a route command, not a threat.",
+      completionText: "Listener Scar Anchor destroyed; scar core recovered and local name-calling severed.",
+      targets: [
+        {
+          id: "listener-scar-anchor",
+          name: "Listener Scar Anchor",
+          kind: "relay",
+          role: "relay",
+          systemId: "celest-gate",
+          position: [360, 90, -780],
+          hull: 220,
+          shield: 188,
+          factionId: "unknown-drones",
+          aiProfileId: "relay-core",
+          objective: "Hold Echo Lock on the Listener Scar Anchor before destroying it.",
+          echoLock: {
+            rangeMeters: 560,
+            requiredSeconds: 4,
+            label: "LISTENER SCAR"
+          }
+        },
+        {
+          id: "scar-warden-one",
+          name: "Scar Warden One",
+          kind: "drone",
+          role: "drone",
+          systemId: "celest-gate",
+          position: [250, 120, -720],
+          hull: 122,
+          shield: 118,
+          factionId: "unknown-drones",
+          aiProfileId: "drone-hunter",
+          objective: "Destroy the first Scar Warden."
+        },
+        {
+          id: "scar-warden-two",
+          name: "Scar Warden Two",
+          kind: "drone",
+          role: "drone",
+          systemId: "celest-gate",
+          position: [470, 55, -850],
+          hull: 122,
+          shield: 118,
+          factionId: "unknown-drones",
+          aiProfileId: "drone-hunter",
+          objective: "Destroy the second Scar Warden."
+        }
+      ],
+      requiredTargetIds: ["listener-scar-anchor", "scar-warden-one", "scar-warden-two"]
+    },
+    salvage: {
+      salvageId: "listener-scar-core",
+      name: "Listener Scar Core",
+      systemId: "celest-gate",
+      position: [350, 78, -760],
+      commodityId: "data-cores",
+      amount: 1
+    }
+  },
+  {
     id: "courier-helion-kuro",
     title: "Courier: Helion Seals",
     type: "Courier delivery",

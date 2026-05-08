@@ -23,6 +23,7 @@ export type StoryObjectiveStatus = "available" | "active" | "failed-retry" | "co
 export type StoryObjectiveFocus =
   | "accept"
   | "travel"
+  | "echo-lock"
   | "clear-targets"
   | "recover-salvage"
   | "escort"
@@ -175,6 +176,22 @@ export function getStoryObjectiveSummary({
   const remainingTargets = getStoryEncounterRemainingTargets(activeMission);
   if (remainingTargets.length > 0) {
     const focusTarget = remainingTargets[0];
+    const needsEchoLock = !!focusTarget.echoLock && !activeMission.storyEchoLockedTargetIds?.includes(focusTarget.id);
+    if (needsEchoLock) {
+      return withDistance({
+        status: "active",
+        chapterLabel,
+        chapterOrder: current.chapter.order,
+        missionId: activeMission.id,
+        title: activeMission.title,
+        objectiveText: `Hold Echo Lock on ${focusTarget.name}; then clear the remaining contact and report to ${destinationName}.`,
+        targetSystemId: focusTarget.systemId,
+        targetStationId: activeMission.destinationStationId,
+        targetPosition: [...focusTarget.position],
+        focus: "echo-lock",
+        remainingTargetNames: remainingTargets.map((target) => target.name)
+      }, playerPosition);
+    }
     return withDistance({
       status: "active",
       chapterLabel,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { commodityById, glassWakeProtocol, missionTemplates, stationById, systemById } from "../src/data/world";
-import { cloneMission, markEscortArrived, markSalvageRecovered, markStoryTargetDestroyed } from "../src/systems/missions";
+import { cloneMission, markEscortArrived, markSalvageRecovered, markStoryTargetDestroyed, markStoryTargetEchoLocked } from "../src/systems/missions";
 import { getStoryObjectiveSummary } from "../src/systems/story";
 import type { CargoHold, MissionDefinition } from "../src/types/game";
 
@@ -133,5 +133,58 @@ describe("story objective summary", () => {
       remainingTargetNames: []
     });
     expect(result.missionId).toBeUndefined();
+  });
+
+  it("unlocks Act II after Quiet Crown and holds the epilogue until chapter 13", () => {
+    const completedThroughQuietCrown = [
+      "story-clean-carrier",
+      "story-probe-in-glass",
+      "story-kuro-resonance",
+      "story-bastion-calibration",
+      "story-ashen-decoy-manifest",
+      "story-knife-wing-relay",
+      "story-witnesses-to-celest",
+      "story-quiet-crown-relay"
+    ];
+
+    expect(summary({ completedMissionIds: completedThroughQuietCrown })).toMatchObject({
+      status: "available",
+      focus: "accept",
+      missionId: "story-name-in-the-wake",
+      chapterLabel: "Glass Wake 09",
+      targetSystemId: "celest-gate"
+    });
+  });
+
+  it("points active Echo Lock chapters at the lock target before destruction", () => {
+    const mission = acceptedMission("story-name-in-the-wake");
+    const completedThroughQuietCrown = [
+      "story-clean-carrier",
+      "story-probe-in-glass",
+      "story-kuro-resonance",
+      "story-bastion-calibration",
+      "story-ashen-decoy-manifest",
+      "story-knife-wing-relay",
+      "story-witnesses-to-celest",
+      "story-quiet-crown-relay"
+    ];
+
+    expect(summary({ activeMissions: [mission], completedMissionIds: completedThroughQuietCrown, currentSystemId: "ptd-home" })).toMatchObject({
+      status: "active",
+      focus: "echo-lock",
+      targetSystemId: "ptd-home",
+      remainingTargetNames: ["Keel Name Listener"]
+    });
+
+    const locked = markStoryTargetEchoLocked(mission, "keel-name-listener");
+    expect(summary({ activeMissions: [locked], completedMissionIds: completedThroughQuietCrown, currentSystemId: "ptd-home" })).toMatchObject({
+      focus: "clear-targets",
+      remainingTargetNames: ["Keel Name Listener"]
+    });
+
+    const cleared = markStoryTargetDestroyed(locked, "keel-name-listener");
+    expect(summary({ activeMissions: [cleared], completedMissionIds: completedThroughQuietCrown, currentSystemId: "ptd-home", currentStationId: "ptd-home", playerCargo: { "data-cores": 1 } })).toMatchObject({
+      focus: "deliver"
+    });
   });
 });
