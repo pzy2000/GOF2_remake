@@ -13,6 +13,7 @@ import { getNavigationTargetCue, getNearestNavigationTarget } from "../systems/n
 import type { NavigationCueTone, NavigationTarget } from "../systems/navigation";
 import { getIncompleteExplorationSignals, getVisibleStationsForSystem, isExplorationSignalDiscovered } from "../systems/exploration";
 import { getStoryObjectiveSummary } from "../systems/story";
+import { getEconomyFlightRouteCue } from "../systems/economyRoutes";
 import {
   formatDistance,
   formatRuntimeText,
@@ -1257,6 +1258,50 @@ function StoryObjectiveMarker() {
   );
 }
 
+function economyRouteColor(taskKind: FlightEntity["economyTaskKind"]): string {
+  if (taskKind === "mining") return "#ffd166";
+  if (taskKind === "hauling") return "#9bffe8";
+  if (taskKind === "selling") return "#8bd3ff";
+  if (taskKind === "buying") return "#b9a7ff";
+  if (taskKind === "returning") return "#ffb36e";
+  return "#dff8ff";
+}
+
+function EconomyRouteMarkers() {
+  const runtime = useGameStore((state) => state.runtime);
+  const currentSystemId = useGameStore((state) => state.currentSystemId);
+  const locale = useGameStore((state) => state.locale);
+  const pulse = 0.5 + Math.sin(runtime.clock * 3.8) * 0.5;
+  const ships = runtime.enemies
+    .filter((ship) => !!ship.economyStatus && ship.hull > 0 && ship.deathTimer === undefined)
+    .slice(0, 10);
+  return (
+    <>
+      {ships.map((ship) => {
+        const route = getEconomyFlightRouteCue(ship, runtime.asteroids, currentSystemId);
+        if (!route) return null;
+        const color = economyRouteColor(ship.economyTaskKind);
+        const midpoint = scale(add(ship.position, route.targetPosition), 0.5);
+        return (
+          <group key={`econ-route-${ship.id}`}>
+            <Line points={[ship.position, route.targetPosition]} color={color} lineWidth={1.2} transparent opacity={0.18 + pulse * 0.16} />
+            <group position={toThree(route.targetPosition)}>
+              <mesh rotation={[Math.PI / 2, 0, runtime.clock * 0.35]}>
+                <torusGeometry args={[route.targetKind === "asteroid" ? 42 : 58, 1.1, 8, 48]} />
+                <meshBasicMaterial color={color} transparent opacity={0.2 + pulse * 0.16} toneMapped={false} />
+              </mesh>
+            </group>
+            <Html center distanceFactor={14} className="economy-route-label" position={toThree(midpoint)}>
+              <b>{formatRuntimeText(locale, route.routeLabel)}</b>
+              <span>{translateDisplayName(route.targetName, locale)}</span>
+            </Html>
+          </group>
+        );
+      })}
+    </>
+  );
+}
+
 function SceneContent({ onShipModelStatus }: { onShipModelStatus: (status: ShipModelStatus | null) => void }) {
   const runtime = useGameStore((state) => state.runtime);
   const currentSystemId = useGameStore((state) => state.currentSystemId);
@@ -1278,6 +1323,7 @@ function SceneContent({ onShipModelStatus }: { onShipModelStatus: (status: ShipM
       <TargetLock />
       <WaypointMarker />
       <StoryObjectiveMarker />
+      <EconomyRouteMarkers />
       {runtime.enemies.map((ship) => (
         <NpcShip key={ship.id} ship={ship} />
       ))}

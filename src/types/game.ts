@@ -63,6 +63,7 @@ export type GalaxyMapMode = "browse" | "gate" | "station-route";
 
 export type StationTab =
   | "Market"
+  | "Economy"
   | "Hangar"
   | "Shipyard"
   | "Mission Board"

@@ -15,9 +15,12 @@ Browser-playable WebGL vertical slice for an original space combat/trading game.
 ```bash
 npm install
 npm run dev
+npm run dev:full
 npm run build
 npm test
 ```
+
+`npm run dev:full` starts the local authoritative economy server on `127.0.0.1:19777` and the Vite frontend together. Use plain `npm run dev` when you want the browser-only fallback economy.
 
 ## Controls
 
@@ -59,7 +62,7 @@ Galaxy Map jumps now target discovered planet stations instead of only whole sys
 
 ## Trading And Contracts
 
-Station markets now track saved stock, demand, and baseline recovery. Buying reduces local stock and pushes buy prices upward; selling increases stock and cools demand. Lounge rumors list live profitable trade routes, including ore exports, frontier supply runs, and high-risk restricted goods lanes.
+Station markets now track saved stock, demand, and baseline recovery. Buying reduces local stock and pushes buy prices upward; selling increases stock and cools demand. The local REST + SSE economy backend globally ticks NPC miners, couriers, freighters, traders, and smugglers, then streams market events and visible NPC traffic back into the game. The Station Economy tab shows backend status, NPC routes, market pressure, favored routes, and recent supply events.
 
 Contracts use saved shipboard time. Courier, cargo, passenger, mining, bounty, escort, and salvage missions have deadlines and reputation penalties. Passenger contracts reserve cargo capacity, cargo transport consumes player-provided goods on delivery, escort missions spawn a convoy ship in flight, and salvage missions spawn recoverable crates.
 
@@ -81,4 +84,4 @@ Audio uses a hybrid runtime: SFX, warnings, and fallback music are synthesized w
 
 ## Known Limitations
 
-This is a vertical slice, not a full campaign. Dynamic markets react to player trades and drift back toward station baselines, but NPC trade fleets do not globally simulate supply chains yet. Escort routes are currently same-system contracts so they stay independent from jump-gate autopilot. Commodity, equipment, and faction sprite sheets are sliced in the UI with CSS atlas positioning. Procedural SFX and fallback music are intentionally lightweight, while authored BGM coverage is limited to the current CC0 track set.
+This is a vertical slice, not a full campaign. The authoritative economy backend is a local development service; if it is offline, the browser falls back to local market simulation so trading remains playable. Escort routes are currently same-system contracts so they stay independent from jump-gate autopilot. Commodity, equipment, and faction sprite sheets are sliced in the UI with CSS atlas positioning. Procedural SFX and fallback music are intentionally lightweight, while authored BGM coverage is limited to the current CC0 track set.

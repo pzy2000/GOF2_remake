@@ -90,6 +90,7 @@ import {
   connectEconomyEvents,
   ECONOMY_SERVICE_URL,
   fetchEconomySnapshot,
+  postEconomyReset,
   postNpcDestroyed,
   postPlayerTrade
 } from "../systems/economyClient";
@@ -329,6 +330,32 @@ export const useGameStore = create<GameStore>((set, get) => ({
   stopEconomyStream: () => {
     closeEconomyStream?.();
     closeEconomyStream = undefined;
+  },
+  resetEconomyBackend: async () => {
+    const requestedSystemId = get().currentSystemId;
+    try {
+      const snapshot = await postEconomyReset(requestedSystemId);
+      set((state) => {
+        if (state.currentSystemId !== requestedSystemId) return {};
+        const patch = applyEconomySnapshotPatch(state, snapshot, "Economy state reset.");
+        return {
+          ...patch,
+          runtime: {
+            ...patch.runtime,
+            message: "Economy backend reset."
+          }
+        };
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Economy reset failed.";
+      set((state) => ({
+        ...offlineEconomyPatch(state, message),
+        runtime: {
+          ...state.runtime,
+          message: `Economy reset failed: ${message}`
+        }
+      }));
+    }
   },
   setScreen: (screen) => set((state) => ({ previousScreen: state.screen, screen })),
   setStationTab: (stationTab) => set({ stationTab, galaxyMapMode: stationTab === "Galaxy Map" ? "station-route" : get().galaxyMapMode }),

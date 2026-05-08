@@ -30,6 +30,7 @@ import {
   getMarketSupplyBrief,
   isMarketGapMissionId
 } from "../systems/marketMissions";
+import { getEconomyFlightRouteCue } from "../systems/economyRoutes";
 import { reputationLabel } from "../systems/reputation";
 import { GalaxyMap } from "./GalaxyMap";
 import { AtlasIcon } from "./AtlasIcon";
@@ -55,6 +56,7 @@ import {
   formatCredits,
   formatDateTime,
   formatNumber,
+  formatRuntimeText,
   formatTechLevel,
   localizeCommodityName,
   localizeEquipmentName,
@@ -70,7 +72,7 @@ import {
   type Locale
 } from "../i18n";
 
-const tabs: StationTab[] = ["Market", "Hangar", "Shipyard", "Mission Board", "Captain's Log", "Blueprint Workshop", "Lounge", "Galaxy Map"];
+const tabs: StationTab[] = ["Market", "Economy", "Hangar", "Shipyard", "Mission Board", "Captain's Log", "Blueprint Workshop", "Lounge", "Galaxy Map"];
 const craftable: EquipmentId[] = equipmentList.filter((item) => !!item.craftCost).map((item) => item.id);
 const equipmentSlotOrder: EquipmentSlotType[] = ["primary", "secondary", "utility", "defense", "engineering"];
 const equipmentSlotLabels: Record<EquipmentSlotType, string> = {
@@ -364,6 +366,7 @@ export function StationScreen() {
       </nav>
       <section className={`station-body ${isHangarTab ? "station-body--hangar" : ""} ${isGalaxyMapTab ? "station-body--galaxy" : ""}`}>
         {tab === "Market" ? <MarketTab /> : null}
+        {tab === "Economy" ? <EconomyTab /> : null}
         {tab === "Hangar" ? <HangarTab /> : null}
         {tab === "Shipyard" ? <ShipyardTab /> : null}
         {tab === "Mission Board" ? <MissionBoardTab /> : null}
@@ -472,6 +475,111 @@ function MarketTab() {
         popoverRef={equipmentPopover.popoverRef}
       />
     </>
+  );
+}
+
+function EconomyTab() {
+  const locale = useGameStore((state) => state.locale);
+  const currentSystem = useGameStore((state) => systemById[state.currentSystemId]);
+  const runtime = useGameStore((state) => state.runtime);
+  const marketState = useGameStore((state) => state.marketState);
+  const economyService = useGameStore((state) => state.economyService);
+  const economyEvents = useGameStore((state) => state.economyEvents);
+  const refreshEconomySnapshot = useGameStore((state) => state.refreshEconomySnapshot);
+  const resetEconomyBackend = useGameStore((state) => state.resetEconomyBackend);
+  const supplyBrief = getMarketSupplyBrief(marketState, currentSystem.id, economyEvents);
+  const economyShips = runtime.enemies
+    .filter((ship) => !!ship.economyStatus && ship.hull > 0 && ship.deathTimer === undefined)
+    .sort((a, b) => (a.economyTaskKind ?? "").localeCompare(b.economyTaskKind ?? "") || a.name.localeCompare(b.name));
+  const events = [...economyEvents].reverse().slice(0, 8);
+  const resetLabel = translateText("Reset Economy", locale);
+  return (
+    <div className="economy-panel" data-testid="economy-tab">
+      <header className="economy-header">
+        <div>
+          <p className="eyebrow">{translateText("Live Economy", locale)}</p>
+          <h2>{localizeSystemName(currentSystem.id, locale, currentSystem.name)} {translateText("Supply Network", locale)}</h2>
+          <p>
+            {translateText("Backend", locale)}: {translateText(economyService.status.toUpperCase(), locale)}
+            {economyService.snapshotId !== undefined ? ` · ${translateText("Snapshot", locale)} ${formatNumber(locale, economyService.snapshotId)}` : ""}
+            {economyService.lastError ? ` · ${translateText(economyService.lastError, locale)}` : ""}
+          </p>
+        </div>
+        {import.meta.env.DEV ? (
+          <div className="economy-debug-actions">
+            <button onClick={() => void refreshEconomySnapshot()}>{translateText("Refresh", locale)}</button>
+            <button
+              className="danger"
+              onClick={() => {
+                if (window.confirm(translateText("Reset local economy backend state?", locale))) void resetEconomyBackend();
+              }}
+            >
+              {resetLabel}
+            </button>
+          </div>
+        ) : null}
+      </header>
+      <div className="economy-dashboard">
+        <section className="economy-card economy-routes-card">
+          <h3>{translateText("NPC Routes", locale)}</h3>
+          {economyShips.length > 0 ? (
+            <div className="economy-npc-list">
+              {economyShips.map((ship) => {
+                const route = getEconomyFlightRouteCue(ship, runtime.asteroids, currentSystem.id);
+                return (
+                  <article key={ship.id} className={`economy-npc-row task-${ship.economyTaskKind ?? "idle"}`}>
+                    <div>
+                      <b>{translateDisplayName(ship.name, locale)}</b>
+                      <span>{formatRuntimeText(locale, ship.economyStatus)}</span>
+                    </div>
+                    <p>
+                      {translateText("Target", locale)}: {route ? translateDisplayName(route.targetName, locale) : translateText("In transit or awaiting signal", locale)}
+                      {ship.economyCargo && Object.keys(ship.economyCargo).length > 0 ? ` · ${formatCargoContents(locale, ship.economyCargo)}` : ` · ${translateText("Empty hold", locale)}`}
+                    </p>
+                  </article>
+                );
+              })}
+            </div>
+          ) : (
+            <p>{translateText("No backend economy NPCs are currently visible in this system.", locale)}</p>
+          )}
+        </section>
+        <section className="economy-card">
+          <h3>{translateText("Market Pressure", locale)}</h3>
+          {supplyBrief.shortages.slice(0, 4).map((signal) => (
+            <p key={`short-${signal.stationId}-${signal.commodityId}`}>
+              {shortageLabel(locale)}: {localizeStationName(signal.stationId, locale, stationById[signal.stationId].name)} {needsLabel(locale)} {localizeCommodityName(signal.commodityId, locale, commodityById[signal.commodityId].name)} · {translateText(signal.severity.toUpperCase(), locale)}
+            </p>
+          ))}
+          {supplyBrief.shortages.length === 0 ? <p>{translateText("No critical station shortages on the public sheet.", locale)}</p> : null}
+          {supplyBrief.surpluses.slice(0, 4).map((signal) => (
+            <p key={`surplus-${signal.stationId}-${signal.commodityId}`}>
+              {surplusLabel(locale)}: {localizeStationName(signal.stationId, locale, stationById[signal.stationId].name)} {heavyOnLabel(locale)} {localizeCommodityName(signal.commodityId, locale, commodityById[signal.commodityId].name)}.
+            </p>
+          ))}
+        </section>
+        <section className="economy-card">
+          <h3>{translateText("Favored Routes", locale)}</h3>
+          {supplyBrief.routes.slice(0, 6).map((hint) => (
+            <p key={`${hint.commodityId}-${hint.fromStationId}-${hint.toStationId}`}>
+              {localizeCommodityName(hint.commodityId, locale, hint.commodityName)}: {translateDisplayName(hint.fromStationName, locale)} {"->"} {translateDisplayName(hint.toStationName, locale)} · +{formatCredits(locale, hint.profit, true)}/{unitLabel(locale)}
+            </p>
+          ))}
+        </section>
+        <section className="economy-card economy-events-card">
+          <h3>{translateText("Recent Economy Events", locale)}</h3>
+          {events.length > 0 ? (
+            events.map((event) => (
+              <p key={event.id}>
+                <span>{event.type.toUpperCase()}</span> {formatRuntimeText(locale, event.message)}
+              </p>
+            ))
+          ) : (
+            <p>{translateText("No backend events received yet.", locale)}</p>
+          )}
+        </section>
+      </div>
+    </div>
   );
 }
 

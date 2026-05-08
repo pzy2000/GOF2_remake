@@ -432,7 +432,107 @@ test.describe("browser smoke", () => {
       });
     });
 
-    await expect(page.getByText("MINING · Iron")).toBeVisible();
+    await expect(page.locator(".target-label.npc-label", { hasText: "MINING · Iron" })).toBeVisible();
+  });
+
+  test("surfaces the station economy cockpit and flight NPC route lines", async ({ page }) => {
+    await resetApp(page);
+    await startNewGame(page);
+    await dockAtStation(page, "helion-prime");
+
+    await page.evaluate(() => {
+      const state = window.__GOF2_E2E__!.getState() as {
+        stopEconomyStream: () => void;
+        currentSystemId: string;
+        marketState: Record<string, Record<string, { stock: number; demand: number; baselineDemand: number }>>;
+        runtime: {
+          asteroids: Array<{ id: string; resource: string; position: [number, number, number] }>;
+          enemies: unknown[];
+        };
+      };
+      state.stopEconomyStream();
+      const asteroid = state.runtime.asteroids[0];
+      const basicFood = state.marketState["helion-prime"]["basic-food"];
+      window.__GOF2_E2E__!.setState({
+        economyService: {
+          status: "connected",
+          url: "http://127.0.0.1:19777",
+          snapshotId: 101,
+          lastEvent: "Ore Cutter mined 1 Iron."
+        },
+        economyEvents: [
+          {
+            id: "econ-e2e-event",
+            type: "npc-mined",
+            clock: 12,
+            message: "Ore Cutter mined 1 Iron.",
+            systemId: "helion-reach",
+            npcId: "econ-e2e-miner",
+            commodityId: "iron",
+            amount: 1,
+            snapshotId: 101
+          }
+        ],
+        marketState: {
+          ...state.marketState,
+          "helion-prime": {
+            ...state.marketState["helion-prime"],
+            "basic-food": {
+              ...basicFood,
+              stock: 0,
+              demand: basicFood.baselineDemand + 0.7
+            }
+          }
+        },
+        runtime: {
+          ...state.runtime,
+          enemies: [
+            ...state.runtime.enemies,
+            {
+              id: "econ-e2e-miner",
+              name: "Ore Cutter",
+              role: "miner",
+              factionId: "free-belt-union",
+              position: [0, 12, 20],
+              velocity: [0, 0, 0],
+              hull: 125,
+              shield: 58,
+              maxHull: 125,
+              maxShield: 58,
+              lastDamageAt: -999,
+              fireCooldown: 0.6,
+              aiProfileId: "miner",
+              aiState: "patrol",
+              aiTimer: 0,
+              economyTaskKind: "mining",
+              economyStatus: "MINING · Iron",
+              economyCargo: {},
+              economyCommodityId: asteroid.resource,
+              economyTargetId: asteroid.id
+            }
+          ]
+        }
+      });
+    });
+
+    await page.getByRole("button", { name: "Economy" }).click();
+    const economy = page.getByTestId("economy-tab");
+    await expect(economy).toContainText("CONNECTED");
+    await expect(economy).toContainText("Snapshot 101");
+    await expect(economy).toContainText("Ore Cutter");
+    await expect(economy).toContainText("MINING · Iron");
+    await expect(economy).toContainText("Shortage");
+    await expect(economy).toContainText("Ore Cutter mined 1 Iron.");
+    const resetButton = page.getByRole("button", { name: "Reset Economy" });
+    await expect(resetButton).toBeVisible();
+    page.once("dialog", async (dialog) => {
+      expect(dialog.message()).toContain("Reset");
+      await dialog.dismiss();
+    });
+    await resetButton.click();
+
+    await page.getByRole("button", { name: "Launch" }).click();
+    await expect(page.locator(".economy-route-label")).toContainText("MINING · Iron");
   });
 
   test("auto-advances voiced story dialogue when each line ends", async ({ page }) => {

@@ -38,6 +38,12 @@ export function fetchEconomySnapshot(systemId: string): Promise<EconomySnapshot>
   return requestJson<EconomySnapshot>(`/api/economy/snapshot?systemId=${encodeURIComponent(systemId)}`);
 }
 
+export function postEconomyReset(systemId: string): Promise<EconomySnapshot> {
+  return requestJson<EconomySnapshot>(`/api/economy/reset?systemId=${encodeURIComponent(systemId)}`, {
+    method: "POST"
+  });
+}
+
 export function postPlayerTrade(request: PlayerTradeRequest): Promise<PlayerTradeResponse> {
   return new Promise((resolve, reject) => {
     const controller = new AbortController();

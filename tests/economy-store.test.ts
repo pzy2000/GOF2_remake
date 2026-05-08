@@ -129,6 +129,51 @@ describe("economy store integration", () => {
     expect(state.runtime.message).toContain("Bought 1 Basic Food");
   });
 
+  it("applies an economy backend reset snapshot without touching player cargo", async () => {
+    const store = await freshStore();
+    const marketState = createInitialMarketState();
+    const snapshot: EconomySnapshot = {
+      version: 1,
+      snapshotId: 1,
+      clock: 0,
+      marketState,
+      status: "connected",
+      recentEvents: [],
+      resourceBelts: [],
+      visibleNpcs: []
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      expect(String(input)).toContain("/api/economy/reset?systemId=helion-reach");
+      return new Response(JSON.stringify(snapshot), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    store.setState((state) => ({ player: { ...state.player, cargo: { ...state.player.cargo, iron: 2 } } }));
+
+    await store.getState().resetEconomyBackend();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(store.getState().economyService).toMatchObject({ status: "connected", snapshotId: 1, lastEvent: "Economy state reset." });
+    expect(store.getState().runtime.message).toBe("Economy backend reset.");
+    expect(store.getState().player.cargo.iron).toBe(2);
+  });
+
+  it("keeps the local market available when economy reset fails", async () => {
+    const store = await freshStore();
+    const marketState = createInitialMarketState();
+    const entry = getMarketEntry(marketState, "helion-prime", "basic-food");
+    setMarketEntry(marketState, "helion-prime", "basic-food", { stock: 3, demand: entry.baselineDemand + 0.4 });
+    store.setState({ marketState });
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw new Error("reset offline");
+    }));
+
+    await store.getState().resetEconomyBackend();
+
+    expect(store.getState().economyService).toMatchObject({ status: "offline", lastError: "reset offline" });
+    expect(store.getState().runtime.message).toContain("Economy reset failed");
+    expect(getMarketEntry(store.getState().marketState, "helion-prime", "basic-food").stock).toBe(3);
+  });
+
   it("accepts generated market gap contracts and applies delivery to local market pressure", async () => {
     const store = await freshStore();
     const marketState = createInitialMarketState();

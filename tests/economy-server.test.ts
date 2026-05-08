@@ -126,4 +126,19 @@ describe("economy HTTP server", () => {
     activeServer = createEconomyHttpServer({ stateFile, autoTick: false });
     expect(activeServer.getState().clock).toBeGreaterThanOrEqual(12);
   });
+
+  it("resets the authoritative economy state and returns a fresh snapshot", async () => {
+    const { app, baseUrl } = await startServer();
+    app.tick(12);
+    expect(app.getState().clock).toBeGreaterThan(0);
+
+    const response = await fetch(`${baseUrl}/api/economy/reset?systemId=helion-reach`, { method: "POST" });
+    const snapshot = await response.json() as EconomySnapshot;
+
+    expect(response.ok).toBe(true);
+    expect(snapshot.clock).toBe(0);
+    expect(snapshot.snapshotId).toBe(1);
+    expect(snapshot.visibleNpcs.some((npc) => npc.id === "econ-helion-reach-miner-3")).toBe(true);
+    expect(app.getState().recentEvents).toHaveLength(0);
+  });
 });

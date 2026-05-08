@@ -65,6 +65,7 @@ export interface GameStore {
   refreshEconomySnapshot: () => Promise<void>;
   startEconomyStream: () => void;
   stopEconomyStream: () => void;
+  resetEconomyBackend: () => Promise<void>;
   setScreen: (screen: Screen) => void;
   setStationTab: (tab: StationTab) => void;
   openGalaxyMap: (mode: GalaxyMapMode) => void;
