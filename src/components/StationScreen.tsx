@@ -451,6 +451,21 @@ function MarketTab() {
   );
 }
 
+function formatEconomyLedgerNet(
+  locale: Locale,
+  ledger: { revenue: number; expenses: number; losses: number } | undefined
+): string {
+  if (!ledger) return formatCredits(locale, 0, true);
+  const value = ledger.revenue - ledger.expenses - ledger.losses;
+  const sign = value > 0 ? "+" : value < 0 ? "-" : "";
+  return `${sign}${formatCredits(locale, Math.abs(value), true)}`;
+}
+
+function formatRiskPreferenceLabel(value: string | undefined, locale: Locale): string {
+  if (!value) return translateText("Balanced", locale);
+  return translateText(value[0].toUpperCase() + value.slice(1), locale);
+}
+
 function EconomyTab() {
   const locale = useGameStore((state) => state.locale);
   const currentSystem = useGameStore((state) => systemById[state.currentSystemId]);
@@ -506,10 +521,11 @@ function EconomyTab() {
               {economyShips.map((ship) => {
                 const route = getEconomyFlightRouteSummary(ship, runtime.asteroids, currentSystem.id);
                 const distressActive = hasActiveCivilianDistress(ship, runtime.clock);
+                const homeStation = ship.economyHomeStationId ? stationById[ship.economyHomeStationId] : undefined;
                 return (
                   <article key={ship.id} className={`economy-npc-row task-${ship.economyTaskKind ?? "idle"}${distressActive ? " distress" : ""}`}>
                     <div>
-                      <b>{translateDisplayName(ship.name, locale)}</b>
+                      <b>{translateDisplayName(ship.name, locale)}{ship.economySerial ? ` · ${ship.economySerial}` : ""}</b>
                       <span>{distressActive ? `${translateText("DISTRESS", locale)} · ${formatRuntimeText(locale, ship.economyStatus)}` : formatRuntimeText(locale, ship.economyStatus)}</span>
                       <button className="economy-watch-button" onClick={() => startEconomyNpcWatch(ship.id)}>
                         {translateText("Watch", locale)}
@@ -520,6 +536,10 @@ function EconomyTab() {
                       {distressActive ? ` · ${translateText("Under attack", locale)}` : ""}
                       {route.detailLabels.length > 0 ? route.detailLabels.map((detail) => ` · ${formatRuntimeText(locale, detail)}`).join("") : ""}
                       {ship.economyCargo && Object.keys(ship.economyCargo).length > 0 ? ` · ${formatCargoContents(locale, ship.economyCargo)}` : ` · ${translateText("Empty hold", locale)}`}
+                      {homeStation ? ` · ${translateText("Home", locale)}: ${localizeStationName(homeStation.id, locale, homeStation.name)}` : ""}
+                      {` · ${translateText("Risk", locale)}: ${formatRiskPreferenceLabel(ship.economyRiskPreference, locale)}`}
+                      {ship.economyContractId ? ` · ${translateText("Contract", locale)}: ${ship.economyContractId}` : ""}
+                      {` · ${translateText("P/L", locale)}: ${formatEconomyLedgerNet(locale, ship.economyLedger)}`}
                     </p>
                   </article>
                 );

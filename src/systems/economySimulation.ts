@@ -1,9 +1,11 @@
 import { commodityById, stationById, stations, systemById, systems } from "../data/world";
-import type { CargoHold, CommodityId, FactionId, MarketState, PlayerState, Vec3 } from "../types/game";
+import type { CargoHold, CommodityId, EconomyNpcLedger, EconomyNpcRiskPreference, FactionId, MarketState, PlayerState, Vec3 } from "../types/game";
 import type {
   EconomyEvent,
   EconomyNpcEntity,
   EconomyNpcResponse,
+  EconomyNpcReplacement,
+  EconomyNpcRole,
   EconomyResourceBelt,
   EconomySnapshot,
   NpcDestroyedRequest,
@@ -39,6 +41,7 @@ export interface EconomyServiceState {
   clock: number;
   marketState: MarketState;
   npcs: EconomyNpcEntity[];
+  replacementQueue: EconomyNpcReplacement[];
   resourceBelts: Record<string, EconomyResourceBelt>;
   recentEvents: EconomyEvent[];
   stationThroughput: Record<string, StationThroughputWindow>;
@@ -52,6 +55,15 @@ const RECENT_EVENT_LIMIT = 36;
 const ARRIVE_STATION_DISTANCE = 155;
 const ARRIVE_ASTEROID_DISTANCE = 70;
 const DEPLETED_BELT_REGEN_SECONDS = 180;
+const REPLACEMENT_BASE_DELAY_SECONDS = 90;
+
+const roleCodes: Record<EconomyNpcRole, string> = {
+  trader: "TR",
+  freighter: "FR",
+  courier: "CR",
+  miner: "MN",
+  smuggler: "SM"
+};
 
 const roleProfiles: Record<
   EconomyNpcEntity["role"],
@@ -94,6 +106,62 @@ function hashText(input: string): number {
   return hash;
 }
 
+function emptyNpcLedger(): EconomyNpcLedger {
+  return {
+    revenue: 0,
+    expenses: 0,
+    losses: 0,
+    completedContracts: 0,
+    failedContracts: 0,
+    minedUnits: 0
+  };
+}
+
+function normalizeNpcLedger(ledger: Partial<EconomyNpcLedger> | undefined): EconomyNpcLedger {
+  return {
+    ...emptyNpcLedger(),
+    ...(ledger ?? {})
+  };
+}
+
+function systemCode(systemId: string): string {
+  return systemId
+    .split("-")
+    .filter(Boolean)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("")
+    .slice(0, 3) || "SYS";
+}
+
+function npcSerial(systemId: string, role: EconomyNpcRole, slotIndex: number, generation = 0): string {
+  const sequence = slotIndex + 1 + generation * 10;
+  return `${systemCode(systemId)}-${roleCodes[role]}-${String(sequence).padStart(2, "0")}`;
+}
+
+function riskPreferenceFor(systemId: string, role: EconomyNpcRole, slotIndex: number): EconomyNpcRiskPreference {
+  if (role === "smuggler") return "bold";
+  const roll = hashText(`${systemId}-${role}-${slotIndex}`) % 3;
+  return roll === 0 ? "cautious" : roll === 1 ? "balanced" : "bold";
+}
+
+function npcCallsign(npc: EconomyNpcEntity): string {
+  return `${npc.name} ${npc.serial}`;
+}
+
+function contractIdFor(npc: EconomyNpcEntity, state: EconomyServiceState, purpose: string, targetId?: string): string {
+  return `${npc.serial}-${purpose}-${Math.max(0, Math.floor(state.clock))}-${hashText(targetId ?? npc.id).toString(36)}`.toUpperCase();
+}
+
+function cargoBaseValue(cargo: CargoHold): number {
+  return Object.entries(cargo).reduce((total, [commodityId, amount]) => {
+    return total + (commodityById[commodityId as CommodityId]?.basePrice ?? 0) * (amount ?? 0);
+  }, 0);
+}
+
+function completeNpcContract(npc: EconomyNpcEntity): void {
+  if (npc.task.contractId) npc.ledger.completedContracts += 1;
+}
+
 function trafficPosition(systemId: string, index: number): Vec3 {
   const system = systemById[systemId];
   const station = stationById[system.stationIds[0]];
@@ -104,7 +172,7 @@ function trafficPosition(systemId: string, index: number): Vec3 {
   return add(anchor, [Math.cos(angle) * radius, (index % 3 - 1) * 38, Math.sin(angle) * radius]);
 }
 
-function homeStationFor(systemId: string, role: EconomyNpcEntity["role"]): string {
+function homeStationFor(systemId: string, role: EconomyNpcRole): string {
   const system = systemById[systemId];
   if (role === "miner") {
     const miningStation = system.stationIds.map((id) => stationById[id]).find((station) => station?.archetype === "Mining Station");
@@ -119,16 +187,24 @@ function homeStationFor(systemId: string, role: EconomyNpcEntity["role"]): strin
   return system.stationIds[0];
 }
 
-function createNpc(systemId: string, role: EconomyNpcEntity["role"], index: number): EconomyNpcEntity {
+function createNpc(systemId: string, role: EconomyNpcRole, index: number, generation = 0, lineageId?: string): EconomyNpcEntity {
   const profile = roleProfiles[role];
-  const position = trafficPosition(systemId, index);
-  const task: NpcTask = { kind: "idle", startedAt: 0, originStationId: homeStationFor(systemId, role) };
+  const baseId = `econ-${systemId}-${role}-${index}`;
+  const id = generation === 0 ? baseId : `${lineageId ?? baseId}-g${generation}`;
+  const homeStationId = homeStationFor(systemId, role);
+  const position = trafficPosition(systemId, index + generation);
+  const task: NpcTask = { kind: "idle", startedAt: 0, originStationId: homeStationId };
   return {
-    id: `econ-${systemId}-${role}-${index}`,
+    id,
     name: profile.name,
+    serial: npcSerial(systemId, role, index, generation),
     role,
     factionId: profile.factionId,
     systemId,
+    homeStationId,
+    riskPreference: riskPreferenceFor(systemId, role, index),
+    lineageId: lineageId ?? baseId,
+    generation,
     position,
     velocity: [0, 0, 0],
     hull: profile.hull,
@@ -138,6 +214,7 @@ function createNpc(systemId: string, role: EconomyNpcEntity["role"], index: numb
     cargoCapacity: profile.cargoCapacity,
     cargo: {},
     credits: profile.credits,
+    ledger: emptyNpcLedger(),
     task,
     statusLabel: "IDLE",
     lastTradeAt: -999
@@ -156,7 +233,7 @@ export function createInitialEconomyState(): EconomyServiceState {
   ) as Record<string, EconomyResourceBelt>;
 
   const npcs = systems.flatMap((system) => {
-    const roles: EconomyNpcEntity["role"][] = ["trader", "freighter", "courier", "miner"];
+    const roles: EconomyNpcRole[] = ["trader", "freighter", "courier", "miner"];
     if (system.risk >= 0.35 || system.id === "ashen-drift") roles.push("smuggler");
     return roles.map((role, index) => createNpc(system.id, role, index));
   });
@@ -168,10 +245,59 @@ export function createInitialEconomyState(): EconomyServiceState {
     clock: 0,
     marketState: createInitialMarketState(),
     npcs,
+    replacementQueue: [],
     resourceBelts,
     recentEvents: [],
     stationThroughput: {}
   };
+}
+
+function slotIndexFromNpc(npc: Partial<EconomyNpcEntity>, fallback: number): number {
+  const match = npc.id?.match(/-(\d+)(?:-g\d+)?$/);
+  return match ? Number(match[1]) : fallback;
+}
+
+function normalizeEconomyNpcEntity(raw: Partial<EconomyNpcEntity>, fallback: EconomyNpcEntity, index: number): EconomyNpcEntity {
+  const role = raw.role ?? fallback.role;
+  const homeStationId = raw.homeStationId && stationById[raw.homeStationId]
+    ? raw.homeStationId
+    : raw.task?.originStationId && stationById[raw.task.originStationId]
+      ? raw.task.originStationId
+      : fallback.homeStationId;
+  const homeSystemId = stationById[homeStationId]?.systemId ?? fallback.systemId;
+  const generation = raw.generation ?? fallback.generation ?? 0;
+  const slotIndex = slotIndexFromNpc(raw, index);
+  const lineageId = raw.lineageId ?? fallback.lineageId ?? raw.id ?? fallback.id;
+  const systemId = raw.systemId ?? fallback.systemId;
+  return {
+    ...fallback,
+    ...raw,
+    role,
+    serial: raw.serial ?? npcSerial(homeSystemId, role, slotIndex, generation),
+    homeStationId,
+    riskPreference: raw.riskPreference ?? fallback.riskPreference ?? riskPreferenceFor(homeSystemId, role, slotIndex),
+    lineageId,
+    generation,
+    cargo: cloneCargo(raw.cargo ?? fallback.cargo),
+    ledger: normalizeNpcLedger(raw.ledger ?? fallback.ledger),
+    task: { ...fallback.task, ...(raw.task ?? {}) }
+  };
+}
+
+function normalizeReplacementQueue(queue: Partial<EconomyNpcReplacement>[] | undefined): EconomyNpcReplacement[] {
+  return (queue ?? [])
+    .filter((item): item is Partial<EconomyNpcReplacement> => !!item && !!item.homeStationId && !!item.role)
+    .map((item, index) => ({
+      id: item.id ?? `replacement-${item.lineageId ?? index}-${item.generation ?? 1}`,
+      role: item.role!,
+      factionId: item.factionId ?? roleProfiles[item.role!].factionId,
+      homeStationId: item.homeStationId!,
+      lineageId: item.lineageId ?? item.id ?? `replacement-lineage-${index}`,
+      generation: item.generation ?? 1,
+      slotIndex: item.slotIndex ?? index,
+      lostAt: item.lostAt ?? 0,
+      dueAt: item.dueAt ?? 0
+    }));
 }
 
 export function normalizeEconomyState(parsed: Partial<EconomyServiceState> | null | undefined): EconomyServiceState {
@@ -179,6 +305,7 @@ export function normalizeEconomyState(parsed: Partial<EconomyServiceState> | nul
     return createInitialEconomyState();
   }
   const fresh = createInitialEconomyState();
+  const freshById = new Map(fresh.npcs.map((npc) => [npc.id, npc]));
   return {
     ...fresh,
     ...parsed,
@@ -186,7 +313,8 @@ export function normalizeEconomyState(parsed: Partial<EconomyServiceState> | nul
     eventSeq: parsed.eventSeq ?? 0,
     clock: parsed.clock ?? 0,
     marketState: parsed.marketState,
-    npcs: parsed.npcs.map((npc) => ({ ...npc, cargo: cloneCargo(npc.cargo ?? {}) })),
+    npcs: parsed.npcs.map((npc, index) => normalizeEconomyNpcEntity(npc, freshById.get(npc.id) ?? fresh.npcs[index % fresh.npcs.length], index)),
+    replacementQueue: normalizeReplacementQueue(parsed.replacementQueue as Partial<EconomyNpcReplacement>[] | undefined),
     resourceBelts: parsed.resourceBelts ?? fresh.resourceBelts,
     recentEvents: (parsed.recentEvents ?? []).slice(-RECENT_EVENT_LIMIT),
     stationThroughput: parsed.stationThroughput ?? {}
@@ -242,7 +370,7 @@ function moveNpcToward(npc: EconomyNpcEntity, target: Vec3, delta: number, arriv
 }
 
 function orbitHome(npc: EconomyNpcEntity, delta: number): void {
-  const station = stationById[npc.task.originStationId ?? homeStationFor(npc.systemId, npc.role)];
+  const station = stationById[npc.task.originStationId ?? npc.homeStationId];
   if (!station) return;
   const angle = statefulOrbitAngle(npc, delta);
   const target: Vec3 = add(station.position, [Math.cos(angle) * 180, 42 + (hashText(npc.id) % 70), Math.sin(angle) * 180]);
@@ -291,15 +419,16 @@ function startMiningTask(state: EconomyServiceState, npc: EconomyNpcEntity): voi
   const asteroid = chooseMiningAsteroid(state, npc);
   if (!asteroid) {
     const startedAt = npc.task.kind === "idle" ? npc.task.startedAt : state.clock;
-    npc.task = { kind: "idle", originStationId: homeStationFor(npc.systemId, npc.role), startedAt };
+    npc.task = { kind: "idle", originStationId: npc.homeStationId, startedAt };
     npc.statusLabel = "IDLE";
     return;
   }
   npc.task = {
     kind: "mining",
+    contractId: contractIdFor(npc, state, "MINING", asteroid.id),
     asteroidId: asteroid.id,
     commodityId: asteroid.resource,
-    originStationId: homeStationFor(npc.systemId, npc.role),
+    originStationId: npc.homeStationId,
     progress: 0,
     startedAt: state.clock
   };
@@ -355,6 +484,7 @@ function buyNpcCargo(state: EconomyServiceState, npc: EconomyNpcEntity, stationI
   state.marketState = result.marketState;
   npc.cargo = result.player.cargo;
   npc.credits = result.player.credits;
+  npc.ledger.expenses += result.total;
   npc.lastTradeAt = state.clock;
   throughputFor(state, station.id).boughtByNpcs += amount;
   pushEvent(state, {
@@ -364,7 +494,7 @@ function buyNpcCargo(state: EconomyServiceState, npc: EconomyNpcEntity, stationI
     npcId: npc.id,
     commodityId,
     amount,
-    message: `${npc.name} bought ${amount} ${commodityById[commodityId].name} at ${station.name}.`
+    message: `${npcCallsign(npc)} bought ${amount} ${commodityById[commodityId].name} at ${station.name}.`
   });
   return amount;
 }
@@ -382,6 +512,7 @@ function sellNpcCargo(state: EconomyServiceState, npc: EconomyNpcEntity, station
     state.marketState = result.marketState;
     npc.cargo = result.player.cargo;
     npc.credits = result.player.credits;
+    npc.ledger.revenue += result.total;
     npc.lastTradeAt = state.clock;
     throughputFor(state, station.id).soldByNpcs += amount;
     totalSold += amount;
@@ -392,7 +523,7 @@ function sellNpcCargo(state: EconomyServiceState, npc: EconomyNpcEntity, station
       npcId: npc.id,
       commodityId,
       amount,
-      message: `${npc.name} sold ${amount} ${commodityById[commodityId].name} at ${station.name}.`
+      message: `${npcCallsign(npc)} sold ${amount} ${commodityById[commodityId].name} at ${station.name}.`
     });
   }
   return totalSold;
@@ -406,7 +537,20 @@ function chooseTradeRoute(state: EconomyServiceState, npc: EconomyNpcEntity) {
     return origin?.systemId === npc.systemId && (!legalOnly || commodity.legal);
   });
   if (!hints.length) return undefined;
-  return hints[hashText(`${npc.id}-${Math.floor(state.clock / 30)}`) % Math.min(8, hints.length)];
+  const riskWeight = npc.riskPreference === "cautious" ? -180 : npc.riskPreference === "bold" ? 160 : 0;
+  const scored = hints
+    .map((hint) => {
+      const origin = stationById[hint.fromStationId];
+      const destination = stationById[hint.toStationId];
+      const originRisk = origin ? systemById[origin.systemId]?.risk ?? 0 : 0;
+      const destinationRisk = destination ? systemById[destination.systemId]?.risk ?? 0 : 0;
+      return {
+        hint,
+        score: hint.profit + ((originRisk + destinationRisk) / 2) * riskWeight
+      };
+    })
+    .sort((a, b) => b.score - a.score);
+  return scored[hashText(`${npc.id}-${Math.floor(state.clock / 30)}`) % Math.min(8, scored.length)]?.hint;
 }
 
 function tickMiner(state: EconomyServiceState, npc: EconomyNpcEntity, delta: number): void {
@@ -424,7 +568,7 @@ function tickMiner(state: EconomyServiceState, npc: EconomyNpcEntity, delta: num
     const belt = state.resourceBelts[npc.systemId];
     const asteroid = belt?.asteroids.find((item) => item.id === npc.task.asteroidId && item.amount > 0);
     if (!asteroid || cargoUnits(npc.cargo) >= npc.cargoCapacity) {
-      npc.task = { kind: "returning", destinationStationId: npc.task.originStationId ?? homeStationFor(npc.systemId, npc.role), startedAt: state.clock };
+      npc.task = { kind: "returning", contractId: npc.task.contractId, destinationStationId: npc.task.originStationId ?? npc.homeStationId, startedAt: state.clock };
       return;
     }
     const arrived = moveNpcToward(npc, asteroid.position, delta, ARRIVE_ASTEROID_DISTANCE);
@@ -434,6 +578,7 @@ function tickMiner(state: EconomyServiceState, npc: EconomyNpcEntity, delta: num
     asteroid.amount = Math.max(0, asteroid.amount - 1);
     asteroid.miningProgress = 0;
     npc.cargo = { ...npc.cargo, [asteroid.resource]: (npc.cargo[asteroid.resource] ?? 0) + 1 };
+    npc.ledger.minedUnits += 1;
     npc.task.progress = 0;
     pushEvent(state, {
       type: "npc-mined",
@@ -441,26 +586,29 @@ function tickMiner(state: EconomyServiceState, npc: EconomyNpcEntity, delta: num
       npcId: npc.id,
       commodityId: asteroid.resource,
       amount: 1,
-      message: `${npc.name} mined 1 ${commodityById[asteroid.resource].name}.`
+      message: `${npcCallsign(npc)} mined 1 ${commodityById[asteroid.resource].name}.`
     });
     if (cargoUnits(npc.cargo) >= Math.ceil(npc.cargoCapacity * 0.7) || asteroid.amount <= 0) {
       npc.task = {
         kind: "returning",
+        contractId: npc.task.contractId,
         commodityId: asteroid.resource,
-        destinationStationId: npc.task.originStationId ?? homeStationFor(npc.systemId, npc.role),
+        destinationStationId: npc.task.originStationId ?? npc.homeStationId,
         startedAt: state.clock
       };
     }
   }
   if (npc.task.kind === "returning" || npc.task.kind === "selling") {
-    const stationId = npc.task.destinationStationId ?? homeStationFor(npc.systemId, npc.role);
+    const stationId = npc.task.destinationStationId ?? npc.homeStationId;
     const station = stationById[stationId];
     if (!station) return;
     const arrived = moveNpcToward(npc, station.position, delta, ARRIVE_STATION_DISTANCE);
     if (!arrived) return;
     sellNpcCargo(state, npc, station.id);
+    const contractId = npc.task.contractId;
+    if (cargoUnits(npc.cargo) <= 0) completeNpcContract(npc);
     npc.task = cargoUnits(npc.cargo) > 0
-      ? { kind: "selling", destinationStationId: station.id, startedAt: state.clock }
+      ? { kind: "selling", contractId, destinationStationId: station.id, startedAt: state.clock }
       : { kind: "idle", originStationId: station.id, startedAt: state.clock };
   }
 }
@@ -468,11 +616,13 @@ function tickMiner(state: EconomyServiceState, npc: EconomyNpcEntity, delta: num
 function beginTradeTask(state: EconomyServiceState, npc: EconomyNpcEntity): void {
   const route = chooseTradeRoute(state, npc);
   if (!route) {
-    npc.task = { kind: "idle", originStationId: homeStationFor(npc.systemId, npc.role), progress: (npc.task.progress ?? 0) + 0.12, startedAt: state.clock };
+    npc.task = { kind: "idle", originStationId: npc.homeStationId, progress: (npc.task.progress ?? 0) + 0.12, startedAt: state.clock };
     return;
   }
+  const contractId = contractIdFor(npc, state, "FREIGHT", route.toStationId);
   npc.task = {
     kind: "buying",
+    contractId,
     commodityId: route.commodityId,
     originStationId: route.fromStationId,
     destinationStationId: route.toStationId,
@@ -485,7 +635,7 @@ function beginTradeTask(state: EconomyServiceState, npc: EconomyNpcEntity): void
     stationId: route.fromStationId,
     npcId: npc.id,
     commodityId: route.commodityId,
-    message: `${npc.name} plotted ${commodityById[route.commodityId].name} freight to ${stationById[route.toStationId].name}.`
+    message: `${npcCallsign(npc)} plotted ${commodityById[route.commodityId].name} freight to ${stationById[route.toStationId].name}.`
   });
 }
 
@@ -502,7 +652,7 @@ function tickTrader(state: EconomyServiceState, npc: EconomyNpcEntity, delta: nu
   if (npc.task.kind === "buying") {
     const origin = npc.task.originStationId ? stationById[npc.task.originStationId] : undefined;
     if (!origin || !npc.task.commodityId) {
-      npc.task = { kind: "idle", originStationId: homeStationFor(npc.systemId, npc.role), startedAt: state.clock };
+      npc.task = { kind: "idle", originStationId: npc.homeStationId, startedAt: state.clock };
       return;
     }
     if (npc.systemId !== origin.systemId) {
@@ -517,8 +667,10 @@ function tickTrader(state: EconomyServiceState, npc: EconomyNpcEntity, delta: nu
       return;
     }
     const destination = stationById[npc.task.destinationStationId ?? origin.id];
+    const contractId = npc.task.contractId;
     npc.task = {
       kind: "hauling",
+      contractId,
       commodityId: npc.task.commodityId,
       originStationId: origin.id,
       destinationStationId: destination.id,
@@ -536,7 +688,7 @@ function tickTrader(state: EconomyServiceState, npc: EconomyNpcEntity, delta: nu
   if (npc.task.kind === "hauling") {
     const destination = npc.task.destinationStationId ? stationById[npc.task.destinationStationId] : undefined;
     if (!destination) {
-      npc.task = { kind: "idle", originStationId: homeStationFor(npc.systemId, npc.role), startedAt: state.clock };
+      npc.task = { kind: "idle", originStationId: npc.homeStationId, startedAt: state.clock };
       return;
     }
     if (npc.systemId === TRANSIT_SYSTEM_ID) {
@@ -562,6 +714,7 @@ function tickTrader(state: EconomyServiceState, npc: EconomyNpcEntity, delta: nu
     const arrived = moveNpcToward(npc, destination.position, delta, ARRIVE_STATION_DISTANCE);
     if (!arrived) return;
     sellNpcCargo(state, npc, destination.id);
+    if (cargoUnits(npc.cargo) <= 0) completeNpcContract(npc);
     npc.task = cargoUnits(npc.cargo) > 0
       ? { ...npc.task, startedAt: state.clock }
       : { kind: "idle", originStationId: destination.id, startedAt: state.clock };
@@ -581,14 +734,62 @@ function updateNpcStatus(state: EconomyServiceState, npc: EconomyNpcEntity): voi
   else npc.statusLabel = "IDLE";
 }
 
+function replacementDelaySeconds(homeStationId: string, generation: number): number {
+  const systemId = stationById[homeStationId]?.systemId;
+  const risk = systemId ? systemById[systemId]?.risk ?? 0 : 0;
+  return REPLACEMENT_BASE_DELAY_SECONDS + risk * 90 + generation * 30;
+}
+
+function queueNpcReplacement(state: EconomyServiceState, npc: EconomyNpcEntity): void {
+  if (state.replacementQueue.some((replacement) => replacement.lineageId === npc.lineageId && replacement.generation === npc.generation + 1)) return;
+  const generation = npc.generation + 1;
+  const slotIndex = slotIndexFromNpc(npc, hashText(npc.lineageId) % 9);
+  state.replacementQueue.push({
+    id: `${npc.lineageId}-g${generation}`,
+    role: npc.role,
+    factionId: npc.factionId,
+    homeStationId: npc.homeStationId,
+    lineageId: npc.lineageId,
+    generation,
+    slotIndex,
+    lostAt: state.clock,
+    dueAt: state.clock + replacementDelaySeconds(npc.homeStationId, generation)
+  });
+}
+
+function processReplacementQueue(state: EconomyServiceState): void {
+  const due = state.replacementQueue.filter((replacement) => state.clock >= replacement.dueAt);
+  if (!due.length) return;
+  state.replacementQueue = state.replacementQueue.filter((replacement) => state.clock < replacement.dueAt);
+  for (const replacement of due) {
+    const homeStation = stationById[replacement.homeStationId];
+    if (!homeStation) continue;
+    const npc = createNpc(homeStation.systemId, replacement.role, replacement.slotIndex, replacement.generation, replacement.lineageId);
+    npc.id = replacement.id;
+    npc.factionId = replacement.factionId;
+    npc.homeStationId = replacement.homeStationId;
+    npc.position = add(homeStation.position, [110 + (hashText(npc.id) % 90), 38, -80 + (hashText(npc.serial) % 160)]);
+    npc.task = { kind: "idle", originStationId: replacement.homeStationId, startedAt: state.clock };
+    state.npcs.push(npc);
+    pushEvent(state, {
+      type: "npc-replacement",
+      systemId: homeStation.systemId,
+      stationId: homeStation.id,
+      npcId: npc.id,
+      message: `${npcCallsign(npc)} entered service at ${homeStation.name}.`
+    });
+  }
+}
+
 function cloneEconomyNpc(npc: EconomyNpcEntity): EconomyNpcEntity {
-  return { ...npc, cargo: cloneCargo(npc.cargo), task: { ...npc.task } };
+  return { ...npc, cargo: cloneCargo(npc.cargo), ledger: { ...npc.ledger }, task: { ...npc.task } };
 }
 
 export function tickEconomyState(state: EconomyServiceState, delta: number): EconomyServiceState {
   if (delta <= 0) return state;
   state.clock = Number((state.clock + delta).toFixed(3));
   state.marketState = advanceMarketState(state.marketState, delta);
+  processReplacementQueue(state);
   for (const npc of state.npcs) {
     if (npc.task.kind === "destroyed" || npc.hull <= 0) {
       npc.task = { kind: "destroyed", startedAt: npc.task.startedAt };
@@ -683,17 +884,20 @@ export function handlePlayerTrade(state: EconomyServiceState, request: PlayerTra
 export function markEconomyNpcDestroyed(state: EconomyServiceState, request: NpcDestroyedRequest): EconomyEvent | undefined {
   const npc = state.npcs.find((candidate) => candidate.id === request.npcId);
   if (!npc || npc.task.kind === "destroyed") return undefined;
+  if (npc.task.contractId) npc.ledger.failedContracts += 1;
+  npc.ledger.losses += cargoBaseValue(npc.cargo);
   npc.hull = 0;
   npc.shield = 0;
   npc.velocity = [0, 0, 0];
   npc.task = { kind: "destroyed", startedAt: state.clock };
   updateNpcStatus(state, npc);
+  queueNpcReplacement(state, npc);
   state.snapshotId += 1;
   return pushEvent(state, {
     type: "npc-destroyed",
     systemId: request.systemId,
     npcId: npc.id,
-    message: `${npc.name} was destroyed. Its cargo route was interrupted.`
+    message: `${npcCallsign(npc)} was destroyed. Its cargo route was interrupted.`
   });
 }
 

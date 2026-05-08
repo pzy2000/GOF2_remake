@@ -430,6 +430,17 @@ export type EconomyNpcTaskKind =
   | "selling"
   | "destroyed";
 
+export type EconomyNpcRiskPreference = "cautious" | "balanced" | "bold";
+
+export interface EconomyNpcLedger {
+  revenue: number;
+  expenses: number;
+  losses: number;
+  completedContracts: number;
+  failedContracts: number;
+  minedUnits: number;
+}
+
 export type StoryEncounterTargetKind = "drone" | "relay" | "pirate-relay" | "jammer" | "guard";
 
 export interface StoryEncounterTargetDefinition {
@@ -594,6 +605,11 @@ export interface FlightEntity {
   storyTargetKind?: StoryEncounterTargetKind;
   provokedByPlayer?: boolean;
   economySystemId?: string;
+  economySerial?: string;
+  economyHomeStationId?: string;
+  economyRiskPreference?: EconomyNpcRiskPreference;
+  economyContractId?: string;
+  economyLedger?: EconomyNpcLedger;
   economyTaskKind?: EconomyNpcTaskKind;
   economyTaskProgress?: number;
   economyStatus?: string;

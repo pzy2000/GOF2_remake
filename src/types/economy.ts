@@ -2,6 +2,8 @@ import type {
   AsteroidEntity,
   CargoHold,
   CommodityId,
+  EconomyNpcLedger,
+  EconomyNpcRiskPreference,
   EconomyNpcTaskKind,
   FactionId,
   FlightEntityRole,
@@ -20,10 +22,14 @@ export type EconomyEventType =
   | "npc-mined"
   | "npc-trade"
   | "npc-destroyed"
+  | "npc-replacement"
   | "reset";
+
+export type EconomyNpcRole = Extract<FlightEntityRole, "trader" | "freighter" | "courier" | "miner" | "smuggler">;
 
 export interface NpcTask {
   kind: EconomyNpcTaskKind;
+  contractId?: string;
   commodityId?: CommodityId;
   asteroidId?: string;
   originStationId?: string;
@@ -35,9 +41,14 @@ export interface NpcTask {
 export interface EconomyNpcEntity {
   id: string;
   name: string;
-  role: Extract<FlightEntityRole, "trader" | "freighter" | "courier" | "miner" | "smuggler">;
+  serial: string;
+  role: EconomyNpcRole;
   factionId: FactionId;
   systemId: string;
+  homeStationId: string;
+  riskPreference: EconomyNpcRiskPreference;
+  lineageId: string;
+  generation: number;
   position: Vec3;
   velocity: Vec3;
   hull: number;
@@ -47,9 +58,22 @@ export interface EconomyNpcEntity {
   cargoCapacity: number;
   cargo: CargoHold;
   credits: number;
+  ledger: EconomyNpcLedger;
   task: NpcTask;
   statusLabel: string;
   lastTradeAt: number;
+}
+
+export interface EconomyNpcReplacement {
+  id: string;
+  role: EconomyNpcRole;
+  factionId: FactionId;
+  homeStationId: string;
+  lineageId: string;
+  generation: number;
+  slotIndex: number;
+  lostAt: number;
+  dueAt: number;
 }
 
 export interface EconomyResourceBelt {

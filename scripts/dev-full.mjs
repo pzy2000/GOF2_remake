@@ -3,6 +3,9 @@ import { spawn } from "node:child_process";
 
 const npmBin = process.platform === "win32" ? "npm.cmd" : "npm";
 const children = new Set();
+const economyHost = process.env.GOF2_ECONOMY_HOST ?? "127.0.0.1";
+const economyPort = process.env.GOF2_ECONOMY_PORT ?? "19777";
+const frontendHost = process.env.GOF2_FRONTEND_HOST;
 
 function spawnChild(label, command, args, options = {}) {
   const child = spawn(command, args, {
@@ -33,7 +36,8 @@ function runOnce(label, command, args, options = {}) {
 }
 
 async function waitForEconomyServer() {
-  const healthUrl = "http://127.0.0.1:19777/health";
+  const healthHost = economyHost === "0.0.0.0" || economyHost === "::" ? "127.0.0.1" : economyHost;
+  const healthUrl = `http://${healthHost}:${economyPort}/health`;
   for (let attempt = 0; attempt < 40; attempt += 1) {
     try {
       const response = await fetch(healthUrl);
@@ -59,12 +63,15 @@ process.on("SIGTERM", () => shutdown(0));
 try {
   await runOnce("server:build", npmBin, ["run", "server:build"]);
   const server = spawnChild("economy", process.execPath, ["dist-server/economy-server.mjs"], {
-    env: { GOF2_ECONOMY_PORT: "19777" }
+    env: {
+      GOF2_ECONOMY_HOST: economyHost,
+      GOF2_ECONOMY_PORT: economyPort
+    }
   });
   await waitForEconomyServer();
-  const vite = spawnChild("vite", npmBin, ["run", "dev"], {
-    env: { VITE_ECONOMY_API_URL: "http://127.0.0.1:19777" }
-  });
+  const viteArgs = ["run", "dev"];
+  if (frontendHost) viteArgs.push("--", "--host", frontendHost);
+  const vite = spawnChild("vite", npmBin, viteArgs);
   server.on("exit", (code) => shutdown(code ?? 1));
   vite.on("exit", (code) => shutdown(code ?? 0));
 } catch (error) {

@@ -14,7 +14,11 @@ if [ ! -d "node_modules" ]; then
   npm install
 fi
 
+export GOF2_FRONTEND_HOST="${GOF2_FRONTEND_HOST:-0.0.0.0}"
+export GOF2_ECONOMY_HOST="${GOF2_ECONOMY_HOST:-0.0.0.0}"
+export GOF2_ECONOMY_PORT="${GOF2_ECONOMY_PORT:-19777}"
+
 echo "Starting GOF2 frontend and authoritative economy backend..."
-echo "Economy backend: http://127.0.0.1:19777"
-echo "Frontend: Vite will print the local URL below."
+echo "Economy backend: http://${GOF2_ECONOMY_HOST}:${GOF2_ECONOMY_PORT}"
+echo "Frontend: Vite will print the local and network URLs below."
 exec npm run dev:full

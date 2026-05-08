@@ -1575,6 +1575,18 @@ function watchUnitLabel(locale: Locale): string {
   return "unit";
 }
 
+function formatWatchLedgerNet(locale: Locale, ledger: { revenue: number; expenses: number; losses: number } | undefined): string {
+  if (!ledger) return formatCredits(locale, 0, true);
+  const value = ledger.revenue - ledger.expenses - ledger.losses;
+  const sign = value > 0 ? "+" : value < 0 ? "-" : "";
+  return `${sign}${formatCredits(locale, Math.abs(value), true)}`;
+}
+
+function formatWatchRiskPreference(locale: Locale, risk: string | undefined): string {
+  if (!risk) return translateText("Balanced", locale);
+  return translateText(risk[0].toUpperCase() + risk.slice(1), locale);
+}
+
 function getWatchMarketPressure(ship: FlightEntity, marketState: MarketState, target: EconomyWatchTarget | undefined) {
   if (!target?.stationId || !ship.economyCommodityId) return undefined;
   const station = stationById[target.stationId];
@@ -1612,6 +1624,8 @@ function EconomyWatchOverlay() {
   const marketPressure = getWatchMarketPressure(ship, marketState, target);
   const routeProfit = getWatchRouteProfit(ship, marketState, target, locale);
   const recentEvents = economyEvents.filter((event) => event.npcId === ship.id).slice(-3).reverse();
+  const homeStation = ship.economyHomeStationId ? stationById[ship.economyHomeStationId] : undefined;
+  const ledger = ship.economyLedger;
   const distressActive = hasActiveCivilianDistress(ship, runtime.clock);
   const threat = distressActive && ship.distressThreatId
     ? runtime.enemies.find((item) => item.id === ship.distressThreatId && item.hull > 0 && item.deathTimer === undefined)
@@ -1643,6 +1657,11 @@ function EconomyWatchOverlay() {
         {distressActive ? <span className="economy-watch-pill danger">{translateText("DISTRESS", locale)}</span> : null}
       </div>
       <div className="economy-watch-grid">
+        <p><b>{translateText("Identity", locale)}</b><span>{ship.economySerial ?? ship.id}</span></p>
+        <p><b>{translateText("Home", locale)}</b><span>{homeStation ? localizeStationName(homeStation.id, locale, homeStation.name) : translateText("Unknown", locale)}</span></p>
+        <p><b>{translateText("Risk", locale)}</b><span>{formatWatchRiskPreference(locale, ship.economyRiskPreference)}</span></p>
+        <p><b>{translateText("Contract", locale)}</b><span>{ship.economyContractId ?? translateText("None", locale)}</span></p>
+        <p><b>{translateText("P/L", locale)}</b><span>{formatWatchLedgerNet(locale, ledger)}</span></p>
         <p><b>{translateText("Task", locale)}</b><span>{translateText((ship.economyTaskKind ?? "idle").toUpperCase(), locale)}</span></p>
         <p><b>{translateText("Progress", locale)}</b><span>{taskProgress ?? translateText("Tracking", locale)}</span></p>
         <p><b>{translateText("ETA", locale)}</b><span>{eta}</span></p>
@@ -1656,6 +1675,20 @@ function EconomyWatchOverlay() {
         <h3>{translateText("Cargo", locale)}</h3>
         <p>{cargo}</p>
       </section>
+      {ledger ? (
+        <section className="economy-watch-section">
+          <h3>{translateText("Ledger", locale)}</h3>
+          <p>
+            {translateText("Revenue", locale)} {formatCredits(locale, ledger.revenue, true)}
+            {" · "}
+            {translateText("Expenses", locale)} {formatCredits(locale, ledger.expenses, true)}
+            {" · "}
+            {translateText("Losses", locale)} {formatCredits(locale, ledger.losses, true)}
+            {" · "}
+            {translateText("Contracts", locale)} {formatNumber(locale, ledger.completedContracts)}/{formatNumber(locale, ledger.failedContracts)}
+          </p>
+        </section>
+      ) : null}
       {distressActive ? (
         <section className="economy-watch-section economy-watch-alert">
           <h3>{translateText("Under attack", locale)}</h3>

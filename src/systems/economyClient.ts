@@ -7,8 +7,15 @@ import type {
   PlayerTradeResponse
 } from "../types/economy";
 
+function getDefaultEconomyServiceUrl(): string {
+  if (typeof window !== "undefined" && window.location.hostname) {
+    return `http://${window.location.hostname}:19777`;
+  }
+  return "http://127.0.0.1:19777";
+}
+
 export const ECONOMY_SERVICE_URL =
-  (import.meta.env.VITE_ECONOMY_API_URL as string | undefined)?.replace(/\/$/, "") ?? "http://127.0.0.1:19777";
+  ((import.meta.env.VITE_ECONOMY_API_URL as string | undefined) ?? getDefaultEconomyServiceUrl()).replace(/\/$/, "");
 
 const REQUEST_TIMEOUT_MS = 1_400;
 

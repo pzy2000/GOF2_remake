@@ -249,10 +249,11 @@ export function createEconomyHttpServer(options: EconomyHttpServerOptions = {}):
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const port = Number(process.env.GOF2_ECONOMY_PORT ?? DEFAULT_PORT);
+  const host = process.env.GOF2_ECONOMY_HOST ?? "127.0.0.1";
   const stateFile = process.env.GOF2_ECONOMY_STATE_FILE;
   const app = createEconomyHttpServer({ stateFile });
-  app.server.listen(port, "127.0.0.1", () => {
-    console.log(`GOF2 economy server listening on http://127.0.0.1:${port}`);
+  app.server.listen(port, host, () => {
+    console.log(`GOF2 economy server listening on http://${host}:${port}`);
     console.log(`Economy state: ${app.stateFile}`);
   });
 }
