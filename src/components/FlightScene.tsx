@@ -1,7 +1,7 @@
 import { Canvas, useFrame, useLoader, useThree } from "@react-three/fiber";
 import { Html, Line, Stars, useGLTF } from "@react-three/drei";
 import { Component, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ReactNode } from "react";
+import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import * as THREE from "three";
 import { planetById, planets, shipById, stationById, systemById, useGameStore } from "../state/gameStore";
 import { commodityById, glassWakeProtocol, missionTemplates } from "../data/world";
@@ -136,6 +136,182 @@ function FlightControls() {
     };
   }, [setInput]);
   return null;
+}
+
+type TouchPadState = {
+  x: number;
+  y: number;
+};
+
+function TouchFlightControls() {
+  const screen = useGameStore((state) => state.screen);
+  const locale = useGameStore((state) => state.locale);
+  const setInput = useGameStore((state) => state.setInput);
+  const throttlePointerId = useRef<number | null>(null);
+  const lookPointer = useRef<{ pointerId: number; x: number; y: number } | null>(null);
+  const [throttlePad, setThrottlePad] = useState<TouchPadState>({ x: 0, y: 0 });
+  const [lookPad, setLookPad] = useState<TouchPadState>({ x: 0, y: 0 });
+  const isFlight = screen === "flight";
+
+  useEffect(() => {
+    if (isFlight) return undefined;
+    throttlePointerId.current = null;
+    lookPointer.current = null;
+    setThrottlePad({ x: 0, y: 0 });
+    setLookPad({ x: 0, y: 0 });
+    setInput({
+      throttleUp: false,
+      throttleDown: false,
+      rollLeft: false,
+      rollRight: false,
+      afterburner: false,
+      firePrimary: false,
+      fireSecondary: false
+    });
+    return undefined;
+  }, [isFlight, setInput]);
+
+  if (!isFlight) return null;
+
+  function updateThrottlePad(event: ReactPointerEvent<HTMLElement>) {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const rawX = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    const rawY = ((event.clientY - rect.top) / rect.height) * 2 - 1;
+    const x = clamp(rawX, -1, 1);
+    const y = clamp(rawY, -1, 1);
+    setThrottlePad({ x, y });
+    setInput({
+      throttleUp: y < -0.18,
+      throttleDown: y > 0.18,
+      rollLeft: x < -0.18,
+      rollRight: x > 0.18
+    });
+  }
+
+  function resetThrottlePad() {
+    throttlePointerId.current = null;
+    setThrottlePad({ x: 0, y: 0 });
+    setInput({ throttleUp: false, throttleDown: false, rollLeft: false, rollRight: false });
+  }
+
+  function handleThrottlePointerDown(event: ReactPointerEvent<HTMLElement>) {
+    event.preventDefault();
+    throttlePointerId.current = event.pointerId;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    updateThrottlePad(event);
+  }
+
+  function handleThrottlePointerMove(event: ReactPointerEvent<HTMLElement>) {
+    if (throttlePointerId.current !== event.pointerId) return;
+    event.preventDefault();
+    updateThrottlePad(event);
+  }
+
+  function handleThrottlePointerUp(event: ReactPointerEvent<HTMLElement>) {
+    if (throttlePointerId.current !== event.pointerId) return;
+    event.preventDefault();
+    resetThrottlePad();
+  }
+
+  function handleLookPointerDown(event: ReactPointerEvent<HTMLElement>) {
+    event.preventDefault();
+    lookPointer.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setLookPad({ x: 0, y: 0 });
+  }
+
+  function handleLookPointerMove(event: ReactPointerEvent<HTMLElement>) {
+    const active = lookPointer.current;
+    if (!active || active.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    const dx = event.clientX - active.x;
+    const dy = event.clientY - active.y;
+    lookPointer.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY };
+    const state = useGameStore.getState();
+    if (!state.autopilot) {
+      setInput({
+        mouseDX: state.input.mouseDX + dx * 1.35,
+        mouseDY: state.input.mouseDY + dy * 1.35
+      });
+    }
+    const rect = event.currentTarget.getBoundingClientRect();
+    setLookPad({
+      x: clamp(((event.clientX - rect.left) / rect.width) * 2 - 1, -1, 1),
+      y: clamp(((event.clientY - rect.top) / rect.height) * 2 - 1, -1, 1)
+    });
+  }
+
+  function handleLookPointerUp(event: ReactPointerEvent<HTMLElement>) {
+    if (lookPointer.current?.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    lookPointer.current = null;
+    setLookPad({ x: 0, y: 0 });
+  }
+
+  function holdInput(key: "firePrimary" | "fireSecondary" | "afterburner") {
+    return {
+      onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => {
+        event.preventDefault();
+        event.currentTarget.setPointerCapture(event.pointerId);
+        setInput({ [key]: true });
+      },
+      onPointerUp: (event: ReactPointerEvent<HTMLButtonElement>) => {
+        event.preventDefault();
+        setInput({ [key]: false });
+      },
+      onPointerCancel: () => setInput({ [key]: false }),
+      onLostPointerCapture: () => setInput({ [key]: false })
+    };
+  }
+
+  function tapInput(key: "interact" | "cycleTarget" | "toggleMap" | "toggleCamera" | "pause") {
+    return (event: ReactPointerEvent<HTMLButtonElement>) => {
+      event.preventDefault();
+      setInput({ [key]: true });
+    };
+  }
+
+  return (
+    <div className="touch-flight-controls" data-testid="touch-flight-controls" aria-label={translateText("Touch flight controls", locale)}>
+      <div className="touch-orientation-hint">{translateText("Landscape flight recommended", locale)}</div>
+      <section
+        className="touch-pad touch-throttle-pad"
+        data-testid="touch-throttle-pad"
+        aria-label={translateText("Throttle and roll", locale)}
+        style={{ "--touch-x": throttlePad.x, "--touch-y": throttlePad.y } as CSSProperties}
+        onPointerDown={handleThrottlePointerDown}
+        onPointerMove={handleThrottlePointerMove}
+        onPointerUp={handleThrottlePointerUp}
+        onPointerCancel={handleThrottlePointerUp}
+      >
+        <span />
+      </section>
+      <section className="touch-action-cluster touch-action-cluster-left" aria-label={translateText("Flight toggles", locale)}>
+        <button type="button" aria-label={translateText("Interact", locale)} onPointerDown={tapInput("interact")}>E</button>
+        <button type="button" aria-label={translateText("Cycle target", locale)} onPointerDown={tapInput("cycleTarget")}>TAB</button>
+        <button type="button" aria-label={translateText("Open map", locale)} onPointerDown={tapInput("toggleMap")}>MAP</button>
+      </section>
+      <section
+        className="touch-pad touch-look-pad"
+        data-testid="touch-look-pad"
+        aria-label={translateText("Look and steer", locale)}
+        style={{ "--touch-x": lookPad.x, "--touch-y": lookPad.y } as CSSProperties}
+        onPointerDown={handleLookPointerDown}
+        onPointerMove={handleLookPointerMove}
+        onPointerUp={handleLookPointerUp}
+        onPointerCancel={handleLookPointerUp}
+      >
+        <span />
+      </section>
+      <section className="touch-action-cluster touch-action-cluster-right" aria-label={translateText("Weapons and systems", locale)}>
+        <button type="button" className="touch-fire-primary" data-testid="touch-fire-primary" aria-label={translateText("Fire primary weapon", locale)} {...holdInput("firePrimary")}>FIRE</button>
+        <button type="button" aria-label={translateText("Fire secondary weapon", locale)} {...holdInput("fireSecondary")}>MSL</button>
+        <button type="button" className="touch-afterburner" data-testid="touch-afterburner" aria-label={translateText("Afterburner", locale)} {...holdInput("afterburner")}>BOOST</button>
+        <button type="button" aria-label={translateText("Toggle camera", locale)} onPointerDown={tapInput("toggleCamera")}>CAM</button>
+        <button type="button" aria-label={translateText("Pause", locale)} onPointerDown={tapInput("pause")}>II</button>
+      </section>
+    </div>
+  );
 }
 
 function SimulationTicker() {
@@ -1758,6 +1934,7 @@ export function FlightScene() {
       }}
     >
       <FlightControls />
+      <TouchFlightControls />
       <Canvas camera={{ position: [0, 36, 210], fov: 68, near: 0.1, far: 5200 }} dpr={[1, 1.7]} shadows>
         <Suspense fallback={null}>
           <SimulationTicker />

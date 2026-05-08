@@ -1226,6 +1226,221 @@ test.describe("browser smoke", () => {
     });
   });
 
+  test.describe("mobile and foldable layouts", () => {
+    test.use({ hasTouch: true, isMobile: true });
+
+    async function expectMobileFlightLayout(page: Page, viewportName: string) {
+      const metrics = await page.evaluate(() => {
+        const viewport = { width: window.innerWidth, height: window.innerHeight };
+        const visibleRect = (selector: string) =>
+          [...document.querySelectorAll(selector)]
+            .filter((element) => {
+              const style = window.getComputedStyle(element);
+              const rect = element.getBoundingClientRect();
+              return style.display !== "none" && style.visibility !== "hidden" && rect.width > 0 && rect.height > 0;
+            })
+            .map((element) => {
+              const rect = element.getBoundingClientRect();
+              return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom, width: rect.width, height: rect.height };
+            });
+        const panels = visibleRect(".hud-panel");
+        const actions = visibleRect("[data-testid='touch-flight-controls'] button, [data-testid='touch-throttle-pad'], [data-testid='touch-look-pad']");
+        let overlaps = 0;
+        for (let i = 0; i < panels.length; i++) {
+          for (let j = i + 1; j < panels.length; j++) {
+            const a = panels[i];
+            const b = panels[j];
+            const area = Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) * Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+            if (area > 1) overlaps += 1;
+          }
+        }
+        const inside = [...panels, ...actions].every((rect) =>
+          rect.left >= -1 &&
+          rect.top >= -1 &&
+          rect.right <= viewport.width + 1 &&
+          rect.bottom <= viewport.height + 1
+        );
+        return {
+          bodyOverflowX: document.documentElement.scrollWidth - viewport.width,
+          inside,
+          overlaps,
+          panels: panels.length,
+          actions: actions.length,
+          viewport
+        };
+      });
+
+      expect(metrics.bodyOverflowX, viewportName).toBeLessThanOrEqual(1);
+      expect(metrics.inside, viewportName).toBe(true);
+      expect(metrics.overlaps, viewportName).toBe(0);
+      expect(metrics.panels, viewportName).toBeGreaterThan(0);
+      expect(metrics.actions, viewportName).toBeGreaterThan(2);
+    }
+
+    test("keeps flight HUD and touch controls inside phone and foldable viewports", async ({ page }) => {
+      test.setTimeout(120_000);
+      const viewports = [
+        { name: "phone portrait 375x667", width: 375, height: 667 },
+        { name: "phone portrait 393x852", width: 393, height: 852 },
+        { name: "phone portrait 430x932", width: 430, height: 932 },
+        { name: "phone landscape 667x375", width: 667, height: 375 },
+        { name: "phone landscape 852x393", width: 852, height: 393 },
+        { name: "phone landscape 932x430", width: 932, height: 430 },
+        { name: "fold cover proxy", width: 390, height: 844 },
+        { name: "fold unfolded portrait", width: 820, height: 900 },
+        { name: "fold unfolded landscape", width: 900, height: 820 },
+        { name: "tablet portrait", width: 768, height: 1024 },
+        { name: "tablet landscape", width: 1024, height: 768 }
+      ];
+
+      for (const viewport of viewports) {
+        await page.setViewportSize({ width: viewport.width, height: viewport.height });
+        await resetApp(page);
+        await startNewGame(page);
+        await expect(page.getByTestId("touch-flight-controls")).toBeVisible();
+        await expectMobileFlightLayout(page, viewport.name);
+        if (viewport.name === "phone landscape 852x393") await expectWebGlCanvasHasPixels(page);
+      }
+    });
+
+    test("maps touch pads and action buttons onto existing flight input", async ({ page }) => {
+      await page.setViewportSize({ width: 852, height: 393 });
+      await resetApp(page);
+      await startNewGame(page);
+
+      const throttlePad = page.getByTestId("touch-throttle-pad");
+      const throttleBox = await throttlePad.boundingBox();
+      expect(throttleBox).not.toBeNull();
+      await page.mouse.move(throttleBox!.x + throttleBox!.width * 0.5, throttleBox!.y + throttleBox!.height * 0.5);
+      await page.mouse.down();
+      await page.mouse.move(throttleBox!.x + throttleBox!.width * 0.84, throttleBox!.y + throttleBox!.height * 0.16);
+      await expect.poll(() =>
+        page.evaluate(() => {
+          const input = (window.__GOF2_E2E__!.getState() as { input: { rollRight: boolean; throttleUp: boolean } }).input;
+          return { rollRight: input.rollRight, throttleUp: input.throttleUp };
+        })
+      ).toEqual({ rollRight: true, throttleUp: true });
+      await page.mouse.up();
+      await expect.poll(() =>
+        page.evaluate(() => {
+          const input = (window.__GOF2_E2E__!.getState() as { input: { rollRight: boolean; throttleUp: boolean } }).input;
+          return { rollRight: input.rollRight, throttleUp: input.throttleUp };
+        })
+      ).toEqual({ rollRight: false, throttleUp: false });
+
+      const beforeYaw = await page.evaluate(() => (window.__GOF2_E2E__!.getState() as { player: { rotation: number[] } }).player.rotation[1]);
+      const lookPad = page.getByTestId("touch-look-pad");
+      const lookBox = await lookPad.boundingBox();
+      expect(lookBox).not.toBeNull();
+      await page.mouse.move(lookBox!.x + lookBox!.width * 0.5, lookBox!.y + lookBox!.height * 0.5);
+      await page.mouse.down();
+      await page.mouse.move(lookBox!.x + lookBox!.width * 0.82, lookBox!.y + lookBox!.height * 0.35);
+      await page.mouse.up();
+      await expect.poll(async () => {
+        const yaw = await page.evaluate(() => (window.__GOF2_E2E__!.getState() as { player: { rotation: number[] } }).player.rotation[1]);
+        return Math.abs(yaw - beforeYaw) > 0.01;
+      }).toBe(true);
+
+      const fireButton = page.getByTestId("touch-fire-primary");
+      const fireBox = await fireButton.boundingBox();
+      expect(fireBox).not.toBeNull();
+      await page.mouse.move(fireBox!.x + fireBox!.width / 2, fireBox!.y + fireBox!.height / 2);
+      await page.mouse.down();
+      await expect.poll(() => page.evaluate(() => (window.__GOF2_E2E__!.getState() as { input: { firePrimary: boolean } }).input.firePrimary)).toBe(true);
+      await page.mouse.up();
+      await expect.poll(() => page.evaluate(() => (window.__GOF2_E2E__!.getState() as { input: { firePrimary: boolean } }).input.firePrimary)).toBe(false);
+
+      const boostButton = page.getByTestId("touch-afterburner");
+      const boostBox = await boostButton.boundingBox();
+      expect(boostBox).not.toBeNull();
+      await page.mouse.move(boostBox!.x + boostBox!.width / 2, boostBox!.y + boostBox!.height / 2);
+      await page.mouse.down();
+      await expect.poll(() => page.evaluate(() => (window.__GOF2_E2E__!.getState() as { input: { afterburner: boolean } }).input.afterburner)).toBe(true);
+      await page.mouse.up();
+      await expect.poll(() => page.evaluate(() => (window.__GOF2_E2E__!.getState() as { input: { afterburner: boolean } }).input.afterburner)).toBe(false);
+
+      await page.getByRole("button", { name: "Open map" }).click();
+      await expect(page.getByText("Route Planning")).toBeVisible();
+    });
+
+    test("keeps mobile route planning and station panels reachable on phones and unfolded folds", async ({ page }) => {
+      test.setTimeout(90_000);
+      const viewports = [
+        { name: "phone portrait", width: 393, height: 852, folded: false },
+        { name: "phone landscape", width: 852, height: 393, folded: false },
+        { name: "unfolded fold", width: 820, height: 900, folded: true },
+        { name: "tablet landscape", width: 1024, height: 768, folded: true }
+      ];
+
+      for (const viewport of viewports) {
+        await page.setViewportSize({ width: viewport.width, height: viewport.height });
+        await resetApp(page);
+        await startNewGame(page);
+
+        await page.getByRole("button", { name: "Open map" }).click();
+        await expect(page.getByText("Route Planning")).toBeVisible();
+        await page.getByRole("button", { name: "Mirr Vale known" }).click();
+        await expect(page.getByRole("button", { name: "Set Route" })).toBeVisible();
+
+        const mapMetrics = await page.evaluate(() => {
+          const panel = document.querySelector(".galaxy-panel");
+          const chart = document.querySelector(".galaxy-chart");
+          const details = document.querySelector(".galaxy-details");
+          const routeButton = [...document.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Set Route");
+          if (!panel || !chart || !details || !routeButton) return null;
+          const panelRect = panel.getBoundingClientRect();
+          const chartRect = chart.getBoundingClientRect();
+          const detailsRect = details.getBoundingClientRect();
+          const routeRect = routeButton.getBoundingClientRect();
+          return {
+            chartTop: chartRect.top,
+            detailsTop: detailsRect.top,
+            panelLeft: panelRect.left,
+            panelRight: panelRect.right,
+            routeBottom: routeRect.bottom,
+            routeTop: routeRect.top,
+            viewportHeight: window.innerHeight,
+            viewportWidth: window.innerWidth,
+            columns: window.getComputedStyle(document.querySelector(".galaxy-layout")!).gridTemplateColumns.split(" ").length
+          };
+        });
+        expect(mapMetrics).not.toBeNull();
+        expect(mapMetrics!.panelLeft, viewport.name).toBeGreaterThanOrEqual(-1);
+        expect(mapMetrics!.panelRight, viewport.name).toBeLessThanOrEqual(mapMetrics!.viewportWidth + 1);
+        expect(mapMetrics!.routeTop, viewport.name).toBeGreaterThanOrEqual(-1);
+        expect(mapMetrics!.routeBottom, viewport.name).toBeLessThanOrEqual(mapMetrics!.viewportHeight + 1);
+        if (viewport.folded) expect(mapMetrics!.columns, viewport.name).toBeGreaterThanOrEqual(2);
+
+        await dockAtStation(page, "helion-prime");
+        await expect(page.getByRole("heading", { name: "Helion Prime Exchange" })).toBeVisible();
+        await page.getByRole("button", { name: "Economy" }).click();
+        await expect(page.getByTestId("economy-tab")).toBeVisible();
+        await page.getByRole("button", { name: "Hangar" }).click();
+        await expect(page.getByRole("heading", { name: "Current Ship" })).toBeVisible();
+
+        const stationMetrics = await page.evaluate(() => {
+          const body = document.querySelector(".station-body");
+          const tabs = document.querySelector(".tab-row");
+          const hangarGrid = document.querySelector(".hangar-build-grid");
+          if (!body || !tabs || !hangarGrid) return null;
+          const bodyRect = body.getBoundingClientRect();
+          const tabsRect = tabs.getBoundingClientRect();
+          return {
+            bodyBottom: bodyRect.bottom,
+            tabsRight: tabsRect.right,
+            viewportHeight: window.innerHeight,
+            viewportWidth: window.innerWidth,
+            hangarColumns: window.getComputedStyle(hangarGrid).gridTemplateColumns.split(" ").length
+          };
+        });
+        expect(stationMetrics).not.toBeNull();
+        expect(stationMetrics!.bodyBottom, viewport.name).toBeLessThanOrEqual(stationMetrics!.viewportHeight + 1);
+        expect(stationMetrics!.tabsRight, viewport.name).toBeLessThanOrEqual(stationMetrics!.viewportWidth + 1);
+        if (viewport.folded) expect(stationMetrics!.hangarColumns, viewport.name).toBeGreaterThanOrEqual(2);
+      }
+    });
+  });
+
   test("delays market equipment details until hover intent or click", async ({ page }) => {
     await page.setViewportSize({ width: 2048, height: 1138 });
     await resetApp(page);

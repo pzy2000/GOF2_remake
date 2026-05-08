@@ -171,6 +171,20 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
           </div>
           <div className="galaxy-controls">
             <span>{Math.round(zoom * 100)}%</span>
+            <button
+              className="galaxy-zoom-touch"
+              aria-label={translateText("Zoom out", locale)}
+              onClick={() => setZoom((current) => clamp(current - 0.16, 0.72, 1.85))}
+            >
+              -
+            </button>
+            <button
+              className="galaxy-zoom-touch"
+              aria-label={translateText("Zoom in", locale)}
+              onClick={() => setZoom((current) => clamp(current + 0.16, 0.72, 1.85))}
+            >
+              +
+            </button>
             <button onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}>{translateText("Reset View", locale)}</button>
             {!embedded ? <button onClick={() => setScreen("flight")}>{translateText("Return", locale)}</button> : null}
           </div>
