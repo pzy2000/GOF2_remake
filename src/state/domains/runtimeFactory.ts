@@ -166,6 +166,7 @@ export function materializeEconomyNpc(npc: EconomyNpcEntity): FlightEntity {
     aiState: "patrol",
     aiTimer: 0,
     economyTaskKind: npc.task.kind,
+    economyTaskProgress: npc.task.progress,
     economyStatus: npc.statusLabel,
     economyCargo: { ...npc.cargo },
     economyCommodityId: npc.task.commodityId,

@@ -594,6 +594,7 @@ export interface FlightEntity {
   storyTargetKind?: StoryEncounterTargetKind;
   provokedByPlayer?: boolean;
   economyTaskKind?: EconomyNpcTaskKind;
+  economyTaskProgress?: number;
   economyStatus?: string;
   economyCargo?: CargoHold;
   economyCommodityId?: CommodityId;

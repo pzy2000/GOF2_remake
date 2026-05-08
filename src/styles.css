@@ -498,18 +498,32 @@ h3 {
 
 .economy-watch-overlay {
   position: absolute;
-  left: 24px;
-  top: 24px;
+  left: 16px;
+  top: 16px;
   display: grid;
-  gap: 5px;
-  max-width: min(360px, calc(100vw - 48px));
+  gap: 10px;
+  width: min(430px, calc(100vw - 32px));
+  max-height: min(74vh, 680px);
+  overflow-y: auto;
   border: 1px solid rgba(155, 255, 232, 0.34);
   border-radius: 8px;
-  background: rgba(2, 12, 18, 0.78);
+  background: rgba(2, 12, 18, 0.86);
   box-shadow: 0 18px 60px rgba(0, 0, 0, 0.28);
   color: #e8f7ff;
   padding: 14px;
-  pointer-events: none;
+  pointer-events: auto;
+}
+
+.economy-watch-overlay.distress {
+  border-color: rgba(255, 94, 108, 0.52);
+  box-shadow: 0 18px 60px rgba(79, 12, 24, 0.36);
+}
+
+.economy-watch-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
 }
 
 .economy-watch-overlay h2 {
@@ -523,14 +537,32 @@ h3 {
   line-height: 1.35;
 }
 
-.economy-watch-overlay div {
+.economy-watch-return {
+  border: 1px solid rgba(155, 255, 232, 0.34);
+  border-radius: 6px;
+  background: rgba(38, 178, 160, 0.22);
+  color: #e8fffb;
+  cursor: pointer;
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  font-weight: 900;
+  padding: 7px 10px;
+  text-transform: uppercase;
+}
+
+.economy-watch-return:hover {
+  background: rgba(58, 210, 188, 0.32);
+}
+
+.economy-watch-status-row,
+.economy-watch-hints {
   display: flex;
   flex-wrap: wrap;
   gap: 7px;
-  padding-top: 3px;
 }
 
-.economy-watch-overlay span {
+.economy-watch-pill,
+.economy-watch-hints span {
   border: 1px solid rgba(128, 214, 255, 0.22);
   border-radius: 6px;
   background: rgba(48, 114, 160, 0.18);
@@ -539,6 +571,69 @@ h3 {
   font-weight: 900;
   padding: 4px 7px;
   text-transform: uppercase;
+}
+
+.economy-watch-pill.danger {
+  border-color: rgba(255, 94, 108, 0.46);
+  background: rgba(160, 42, 58, 0.32);
+  color: #ffd8dd;
+}
+
+.economy-watch-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.economy-watch-grid p,
+.economy-watch-section {
+  border: 1px solid rgba(128, 214, 255, 0.16);
+  border-radius: 6px;
+  background: rgba(9, 30, 42, 0.46);
+  padding: 8px;
+}
+
+.economy-watch-grid b,
+.economy-watch-section h3 {
+  display: block;
+  color: #e8f7ff;
+  font-size: 0.68rem;
+  margin: 0 0 3px;
+  text-transform: uppercase;
+}
+
+.economy-watch-grid span {
+  color: #acc4d8;
+  font-size: 0.82rem;
+}
+
+.economy-watch-section {
+  display: grid;
+  gap: 4px;
+}
+
+.economy-watch-alert {
+  border-color: rgba(255, 94, 108, 0.34);
+  background: rgba(72, 18, 30, 0.52);
+}
+
+.economy-watch-events {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 18px;
+}
+
+.economy-watch-events li {
+  color: #acc4d8;
+  font-size: 0.78rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 560px) {
+  .economy-watch-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .hud {

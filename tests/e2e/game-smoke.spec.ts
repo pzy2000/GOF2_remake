@@ -637,6 +637,18 @@ test.describe("browser smoke", () => {
             snapshotId: 101
           },
           {
+            id: "econ-e2e-hauler-event",
+            type: "npc-trade",
+            clock: 12.5,
+            message: "Union Bulk Freighter bought 4 Basic Food.",
+            systemId: "helion-reach",
+            stationId: "cinder-yard",
+            npcId: "econ-e2e-hauler",
+            commodityId: "basic-food",
+            amount: 4,
+            snapshotId: 101
+          },
+          {
             id: "econ-e2e-global-event",
             type: "npc-task",
             clock: 13,
@@ -679,10 +691,54 @@ test.describe("browser smoke", () => {
               aiState: "patrol",
               aiTimer: 0,
               economyTaskKind: "mining",
+              economyTaskProgress: 0.42,
               economyStatus: "MINING · Iron",
               economyCargo: {},
               economyCommodityId: asteroid.resource,
               economyTargetId: asteroid.id
+            },
+            {
+              id: "econ-e2e-hauler",
+              name: "Union Bulk Freighter",
+              role: "freighter",
+              factionId: "free-belt-union",
+              position: [460, 34, -260],
+              velocity: [-64, 0, 24],
+              hull: 132,
+              shield: 21,
+              maxHull: 170,
+              maxShield: 70,
+              lastDamageAt: -999,
+              fireCooldown: 0.6,
+              aiProfileId: "freighter",
+              aiState: "patrol",
+              aiTimer: 0,
+              economyTaskKind: "hauling",
+              economyTaskProgress: 0.35,
+              economyStatus: "HAULING · Basic Food",
+              economyCargo: { "basic-food": 4 },
+              economyCommodityId: "basic-food",
+              economyTargetId: "helion-prime",
+              distressThreatId: "e2e-watch-pirate",
+              distressCalledAt: 0
+            },
+            {
+              id: "e2e-watch-pirate",
+              name: "Watch Pirate",
+              role: "pirate",
+              factionId: "independent-pirates",
+              position: [520, 30, -230],
+              velocity: [0, 0, 0],
+              hull: 70,
+              shield: 42,
+              maxHull: 70,
+              maxShield: 42,
+              lastDamageAt: -999,
+              fireCooldown: 0.6,
+              aiProfileId: "raider",
+              aiState: "attack",
+              aiTargetId: "econ-e2e-hauler",
+              aiTimer: 0
             },
             {
               id: "econ-e2e-depleted-miner",
@@ -701,6 +757,7 @@ test.describe("browser smoke", () => {
               aiState: "patrol",
               aiTimer: 0,
               economyTaskKind: "idle",
+              economyTaskProgress: 0,
               economyStatus: "IDLE · Belt depleted",
               economyCargo: {},
               economyTargetId: "cinder-yard"
@@ -742,8 +799,23 @@ test.describe("browser smoke", () => {
     await page.keyboard.press("Escape");
     await expect(page.getByTestId("economy-tab")).toContainText("Ore Cutter");
 
+    await economy.locator(".economy-npc-row", { hasText: "HAULING · Basic Food" }).getByRole("button", { name: "Watch" }).click();
+    await expect(watchOverlay).toContainText("Union Bulk Freighter");
+    await expect(watchOverlay).toContainText("DISTRESS");
+    await expect(watchOverlay).toContainText("Watch Pirate");
+    await expect(watchOverlay).toContainText("Hull");
+    await expect(watchOverlay).toContainText("Shield");
+    await expect(watchOverlay).toContainText("Cargo");
+    await expect(watchOverlay).toContainText("ETA");
+    await expect(watchOverlay).toContainText("Target Market");
+    await expect(watchOverlay).toContainText("Stock");
+    await expect(watchOverlay).toContainText("Demand");
+    await expect(watchOverlay).toContainText("Union Bulk Freighter bought 4 Basic Food.");
+    await watchOverlay.getByRole("button", { name: "Return" }).click();
+    await expect(page.getByTestId("economy-tab")).toContainText("Union Bulk Freighter");
+
     await page.getByRole("button", { name: "Launch" }).click();
-    await expect(page.locator(".economy-route-label")).toContainText("MINING · Iron");
+    await expect(page.locator(".economy-route-label", { hasText: "MINING · Iron" })).toBeVisible();
   });
 
   test("auto-advances voiced story dialogue when each line ends", async ({ page }) => {

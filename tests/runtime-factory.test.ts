@@ -44,6 +44,7 @@ describe("runtime factory domain helpers", () => {
         kind: "hauling",
         commodityId: "electronics",
         destinationStationId: "helion-prime",
+        progress: 0.5,
         startedAt: 0
       },
       statusLabel: "HAULING",
@@ -57,6 +58,7 @@ describe("runtime factory domain helpers", () => {
       aiProfileId: "freighter",
       loadoutId: "union-freighter",
       economyTaskKind: "hauling",
+      economyTaskProgress: 0.5,
       economyStatus: "HAULING",
       economyCommodityId: "electronics",
       economyTargetId: "helion-prime",

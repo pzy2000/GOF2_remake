@@ -5,8 +5,8 @@ import type { ReactNode } from "react";
 import * as THREE from "three";
 import { planetById, planets, shipById, stationById, systemById, useGameStore } from "../state/gameStore";
 import { commodityById, glassWakeProtocol, missionTemplates } from "../data/world";
-import type { AsteroidEntity, ConvoyEntity, ExplorationSignalDefinition, FlightEntity, LootEntity, PlanetDefinition, ProjectileEntity, SalvageEntity, StationDefinition, Vec3, VisualEffectEntity } from "../types/game";
-import { add, clamp, forwardFromRotation, normalize, scale, sub } from "../systems/math";
+import type { AsteroidEntity, ConvoyEntity, ExplorationSignalDefinition, FlightEntity, LootEntity, MarketState, PlanetDefinition, ProjectileEntity, SalvageEntity, StationDefinition, Vec3, VisualEffectEntity } from "../types/game";
+import { add, clamp, distance, forwardFromRotation, normalize, scale, sub } from "../systems/math";
 import { getOreColor } from "../systems/difficulty";
 import { getJumpGatePosition } from "../systems/autopilot";
 import { getNavigationTargetCue, getNearestNavigationTarget } from "../systems/navigation";
@@ -15,10 +15,13 @@ import { getIncompleteExplorationSignals, getVisibleStationsForSystem, isExplora
 import { getExplorationObjectiveSummaryForSignal } from "../systems/explorationObjectives";
 import { getStoryObjectiveSummary } from "../systems/story";
 import { getEconomyFlightRouteCue } from "../systems/economyRoutes";
+import { getMarketEntry, getTradeHints } from "../systems/economy";
 import { hasActiveCivilianDistress } from "../state/domains/combatRuntime";
 import {
   formatCargoContents,
+  formatCredits,
   formatDistance,
+  formatNumber,
   formatRuntimeText,
   formatTechLevel,
   localizeCommodityName,
@@ -1496,27 +1499,191 @@ function stationTechLabel(level: number, locale: Locale): string {
   return locale === "en" ? `TECH ${level}` : formatTechLevel(locale, level, true);
 }
 
+const economyWatchCruiseSpeeds: Partial<Record<FlightEntity["role"], number>> = {
+  trader: 112,
+  freighter: 86,
+  courier: 150,
+  miner: 95,
+  smuggler: 138
+};
+
+interface EconomyWatchTarget {
+  name: string;
+  position?: Vec3;
+  stationId?: string;
+}
+
+function getEconomyWatchTarget(
+  ship: FlightEntity,
+  asteroids: AsteroidEntity[],
+  currentSystemId: string
+): EconomyWatchTarget | undefined {
+  const route = getEconomyFlightRouteCue(ship, asteroids, currentSystemId);
+  const targetStation = ship.economyTargetId ? stationById[ship.economyTargetId] : undefined;
+  if (route) {
+    return {
+      name: route.targetName,
+      position: route.targetPosition,
+      stationId: targetStation?.id
+    };
+  }
+  if (targetStation) {
+    return {
+      name: targetStation.name,
+      position: targetStation.systemId === currentSystemId ? targetStation.position : undefined,
+      stationId: targetStation.id
+    };
+  }
+  return undefined;
+}
+
+function formatTaskProgress(locale: Locale, progress: number | undefined): string | undefined {
+  return progress === undefined ? undefined : `${formatNumber(locale, Math.round(progress * 100))}%`;
+}
+
+function formatEtaDuration(locale: Locale, seconds: number): string {
+  const rounded = Math.max(1, Math.round(seconds));
+  const minutes = Math.floor(rounded / 60);
+  const remainingSeconds = rounded % 60;
+  if (minutes <= 0) return `${formatNumber(locale, rounded)}s`;
+  return `${formatNumber(locale, minutes)}m ${formatNumber(locale, remainingSeconds)}s`;
+}
+
+function formatWatchEta(locale: Locale, ship: FlightEntity, target: EconomyWatchTarget | undefined): string {
+  if (target?.position) {
+    const currentSpeed = Math.hypot(...ship.velocity);
+    const cruiseSpeed = economyWatchCruiseSpeeds[ship.role] ?? 100;
+    return formatEtaDuration(locale, distance(ship.position, target.position) / Math.max(12, currentSpeed || cruiseSpeed));
+  }
+  return formatTaskProgress(locale, ship.economyTaskProgress) ?? translateText("In transit", locale);
+}
+
+function cargoUnitCount(ship: FlightEntity): number {
+  return Object.values(ship.economyCargo ?? {}).reduce((total, amount) => total + (amount ?? 0), 0);
+}
+
+function watchUnitLabel(locale: Locale): string {
+  if (locale === "zh-CN" || locale === "zh-TW") return "单位";
+  if (locale === "ja") return "単位";
+  if (locale === "fr") return "unité";
+  return "unit";
+}
+
+function getWatchMarketPressure(ship: FlightEntity, marketState: MarketState, target: EconomyWatchTarget | undefined) {
+  if (!target?.stationId || !ship.economyCommodityId) return undefined;
+  const station = stationById[target.stationId];
+  if (!station) return undefined;
+  return {
+    station,
+    commodityId: ship.economyCommodityId,
+    entry: getMarketEntry(marketState, station.id, ship.economyCommodityId)
+  };
+}
+
+function getWatchRouteProfit(ship: FlightEntity, marketState: MarketState, target: EconomyWatchTarget | undefined, locale: Locale): string | undefined {
+  if (!target?.stationId || !ship.economyCommodityId) return undefined;
+  const hints = getTradeHints(marketState, 80).filter((hint) => hint.commodityId === ship.economyCommodityId);
+  const match = (ship.economyTaskKind === "buying"
+    ? hints.find((hint) => hint.fromStationId === target.stationId)
+    : hints.find((hint) => hint.toStationId === target.stationId)) ?? hints.find((hint) => hint.fromStationId === target.stationId || hint.toStationId === target.stationId);
+  if (!match) return undefined;
+  return `${localizeStationName(match.fromStationId, locale, match.fromStationName)} -> ${localizeStationName(match.toStationId, locale, match.toStationName)} · +${formatCredits(locale, match.profit, true)}/${watchUnitLabel(locale)}`;
+}
+
 function EconomyWatchOverlay() {
   const locale = useGameStore((state) => state.locale);
   const currentSystemId = useGameStore((state) => state.currentSystemId);
   const runtime = useGameStore((state) => state.runtime);
+  const marketState = useGameStore((state) => state.marketState);
+  const economyEvents = useGameStore((state) => state.economyEvents);
   const watch = useGameStore((state) => state.economyNpcWatch);
+  const stopEconomyNpcWatch = useGameStore((state) => state.stopEconomyNpcWatch);
   const ship = watch ? runtime.enemies.find((item) => item.id === watch.npcId) : undefined;
   if (!watch || !ship) return null;
-  const route = getEconomyFlightRouteCue(ship, runtime.asteroids, currentSystemId);
+  const target = getEconomyWatchTarget(ship, runtime.asteroids, currentSystemId);
+  const taskProgress = formatTaskProgress(locale, ship.economyTaskProgress);
+  const eta = formatWatchEta(locale, ship, target);
+  const marketPressure = getWatchMarketPressure(ship, marketState, target);
+  const routeProfit = getWatchRouteProfit(ship, marketState, target, locale);
+  const recentEvents = economyEvents.filter((event) => event.npcId === ship.id).slice(-3).reverse();
+  const distressActive = hasActiveCivilianDistress(ship, runtime.clock);
+  const threat = distressActive && ship.distressThreatId
+    ? runtime.enemies.find((item) => item.id === ship.distressThreatId && item.hull > 0 && item.deathTimer === undefined)
+    : undefined;
   const cargo = ship.economyCargo && Object.keys(ship.economyCargo).length > 0
     ? formatCargoContents(locale, ship.economyCargo)
     : translateText("Empty hold", locale);
   return (
-    <div className="economy-watch-overlay" data-testid="economy-watch-overlay">
-      <p className="eyebrow">{translateText("Watching", locale)}</p>
-      <h2>{translateDisplayName(ship.name, locale)}</h2>
-      <p>{formatRuntimeText(locale, ship.economyStatus)} · {cargo}</p>
-      <p>
-        {translateText(watch.cameraMode === "cockpit" ? "Cockpit" : "Chase", locale)}
-        {route ? ` · ${translateDisplayName(route.targetName, locale)}` : ""}
-      </p>
-      <div>
+    <div className={`economy-watch-overlay${distressActive ? " distress" : ""}`} data-testid="economy-watch-overlay">
+      <header className="economy-watch-header">
+        <div>
+          <p className="eyebrow">{translateText("Watching", locale)}</p>
+          <h2>{translateDisplayName(ship.name, locale)}</h2>
+        </div>
+        <button
+          type="button"
+          className="economy-watch-return"
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            stopEconomyNpcWatch();
+          }}
+        >
+          {translateText("Return", locale)}
+        </button>
+      </header>
+      <div className="economy-watch-status-row">
+        <span className={`economy-watch-pill task-${ship.economyTaskKind ?? "idle"}`}>{formatRuntimeText(locale, ship.economyStatus)}</span>
+        {distressActive ? <span className="economy-watch-pill danger">{translateText("DISTRESS", locale)}</span> : null}
+      </div>
+      <div className="economy-watch-grid">
+        <p><b>{translateText("Task", locale)}</b><span>{translateText((ship.economyTaskKind ?? "idle").toUpperCase(), locale)}</span></p>
+        <p><b>{translateText("Progress", locale)}</b><span>{taskProgress ?? translateText("Tracking", locale)}</span></p>
+        <p><b>{translateText("ETA", locale)}</b><span>{eta}</span></p>
+        <p><b>{translateText("Target", locale)}</b><span>{target ? translateDisplayName(target.name, locale) : translateText("In transit", locale)}</span></p>
+        <p><b>{translateText("Hull", locale)}</b><span>{formatNumber(locale, Math.round(ship.hull))}/{formatNumber(locale, ship.maxHull)}</span></p>
+        <p><b>{translateText("Shield", locale)}</b><span>{formatNumber(locale, Math.round(ship.shield))}/{formatNumber(locale, ship.maxShield)}</span></p>
+        <p><b>{translateText("Cargo", locale)}</b><span>{formatNumber(locale, cargoUnitCount(ship))}</span></p>
+        <p><b>{translateText("Camera", locale)}</b><span>{translateText(watch.cameraMode === "cockpit" ? "Cockpit" : "Chase", locale)}</span></p>
+      </div>
+      <section className="economy-watch-section">
+        <h3>{translateText("Cargo", locale)}</h3>
+        <p>{cargo}</p>
+      </section>
+      {distressActive ? (
+        <section className="economy-watch-section economy-watch-alert">
+          <h3>{translateText("Under attack", locale)}</h3>
+          <p>
+            {threat ? translateDisplayName(threat.name, locale) : translateText("Hostile contact", locale)}
+            {threat ? ` · ${formatDistance(locale, distance(ship.position, threat.position))}` : ""}
+          </p>
+        </section>
+      ) : null}
+      {marketPressure ? (
+        <section className="economy-watch-section">
+          <h3>{translateText("Target Market", locale)}</h3>
+          <p>
+            {localizeStationName(marketPressure.station.id, locale, marketPressure.station.name)} · {localizeCommodityName(marketPressure.commodityId, locale, commodityById[marketPressure.commodityId].name)}
+          </p>
+          <p>
+            {translateText("Stock", locale)} {formatNumber(locale, Math.round(marketPressure.entry.stock))}/{formatNumber(locale, marketPressure.entry.maxStock)}
+            {" · "}
+            {translateText("Demand", locale)} {formatNumber(locale, Number(marketPressure.entry.demand.toFixed(2)))}
+          </p>
+          {routeProfit ? <p>{translateText("Estimated margin", locale)}: {routeProfit}</p> : null}
+        </section>
+      ) : null}
+      {recentEvents.length > 0 ? (
+        <section className="economy-watch-section">
+          <h3>{translateText("Recent Events", locale)}</h3>
+          <ol className="economy-watch-events">
+            {recentEvents.map((event) => (
+              <li key={event.id}>{formatRuntimeText(locale, event.message)}</li>
+            ))}
+          </ol>
+        </section>
+      ) : null}
+      <div className="economy-watch-hints">
         <span>{translateText("Mouse look", locale)}</span>
         <span>C {translateText(watch.cameraMode === "cockpit" ? "Chase" : "Cockpit", locale)}</span>
         <span>{translateText("Esc Return", locale)}</span>
