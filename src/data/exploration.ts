@@ -49,6 +49,31 @@ export const explorationSignals: ExplorationSignalDefinition[] = [
       "Meridian Afterimage resolved. The mirror farm was not broadcasting a false order; it was replaying a true one from a different angle. Glass Wake can make honest paper arrive twice."
   },
   {
+    id: "quiet-signal-sundog-crown-shard",
+    systemId: "helion-reach",
+    kind: "cache",
+    title: "Sundog Crown Shard",
+    maskedTitle: "Deep Crown Refraction",
+    description: "A crown-shaped coordinate shard only resolves when a wide-band scanner separates the mirrored carrier.",
+    position: [430, 430, -840],
+    scanRange: 260,
+    scanBand: [55, 60],
+    scanTime: 4.8,
+    rewards: { credits: 1450, cargo: { optics: 2, "data-cores": 1 } },
+    chainId: "helion-sundog-chain",
+    chainTitle: "Sundog Lattice Chain",
+    stage: 3,
+    prerequisiteSignalIds: ["quiet-signal-meridian-afterimage"],
+    requiredEquipmentAny: ["survey-array", "echo-nullifier"],
+    storyInfluence: {
+      missionId: "story-name-in-the-wake",
+      headline: "Helion's reflected traffic contains name-bearing crown coordinates.",
+      note: "The shard proves the wake can index a ship by how legal traffic reflects around it."
+    },
+    log:
+      "Sundog Crown Shard resolved. The mirrored Helion route contains a name-bearing coordinate shard, too narrow for basic scanners and too deliberate to be stray archive light."
+  },
+  {
     id: "quiet-signal-foundry-ark-wreck",
     systemId: "kuro-belt",
     kind: "wreck",
@@ -96,6 +121,33 @@ export const explorationSignals: ExplorationSignalDefinition[] = [
       "Anvil Listener Spoor resolved. The dust pattern was a microphone with no hull around it, using mining telemetry as camouflage. The next drone does not need to look like a ship."
   },
   {
+    id: "quiet-signal-obsidian-foundry-wake",
+    systemId: "kuro-belt",
+    kind: "cache",
+    title: "Obsidian Foundry Wake",
+    maskedTitle: "Deep Forge Wake",
+    description: "A black forge wake inside Kuro Anvil keeps a hidden foundry off public union charts.",
+    position: [360, -210, -820],
+    scanRange: 255,
+    scanBand: [66, 72],
+    scanTime: 5,
+    rewards: { credits: 1180, cargo: { voidglass: 1, titanium: 2 } },
+    chainId: "kuro-foundry-chain",
+    chainTitle: "Foundry Ark Chain",
+    stage: 3,
+    prerequisiteSignalIds: ["quiet-signal-anvil-listener-spoor"],
+    requiredEquipmentAny: ["survey-array", "echo-nullifier"],
+    storyInfluence: {
+      missionId: "story-kuro-resonance",
+      headline: "Kuro's ore telemetry hides a foundry that never filed a transponder.",
+      note: "Obsidian Foundry can refine the same dust pattern that made the listener invisible."
+    },
+    revealStationId: "obsidian-foundry",
+    revealPlanetIds: ["kuro-anvil"],
+    log:
+      "Obsidian Foundry Wake resolved. The ore-band microphone was using a hidden foundry as its shadow. Obsidian Foundry now answers on private Kuro charts."
+  },
+  {
     id: "quiet-signal-ghost-iff-challenge",
     systemId: "vantara",
     kind: "event",
@@ -141,6 +193,31 @@ export const explorationSignals: ExplorationSignalDefinition[] = [
     },
     log:
       "Redoubt Silence Test resolved. The bunker did call for support. The archive then voted the call out of existence. Glass Wake can forge a salute and bury the reply."
+  },
+  {
+    id: "quiet-signal-redoubt-ghost-permit",
+    systemId: "vantara",
+    kind: "event",
+    title: "Redoubt Ghost Permit",
+    maskedTitle: "Deep Patrol Permit",
+    description: "A Directorate permit ghost authorizes a ship that no active command ledger admits exists.",
+    position: [720, 210, -820],
+    scanRange: 260,
+    scanBand: [32, 37],
+    scanTime: 5.1,
+    rewards: { reputation: { "solar-directorate": 3 }, cargo: { "data-cores": 1, "medical-supplies": 1 } },
+    chainId: "vantara-iff-chain",
+    chainTitle: "Ghost IFF Chain",
+    stage: 3,
+    prerequisiteSignalIds: ["quiet-signal-redoubt-silence-test"],
+    requiredEquipmentAny: ["survey-array", "echo-nullifier"],
+    storyInfluence: {
+      missionId: "story-borrowed-hulls",
+      headline: "Borrowed hulls can move on permits the patrol archive denies issuing.",
+      note: "The ghost permit is a clean route for ships that should be asleep in storage."
+    },
+    log:
+      "Redoubt Ghost Permit resolved. The permit is valid enough for gates and false enough for every officer to deny. Someone learned to issue silence with a signature."
   },
   {
     id: "quiet-signal-folded-reflection",
@@ -192,6 +269,31 @@ export const explorationSignals: ExplorationSignalDefinition[] = [
       "Parallax Deep Index recovered. The Hermitage catalogued a Crown-band listener before anyone called it a crisis. The archive entry ends with a warning: the wake answers names."
   },
   {
+    id: "quiet-signal-parallax-outer-index",
+    systemId: "mirr-vale",
+    kind: "cache",
+    title: "Parallax Outer Index",
+    maskedTitle: "Deep Hermitage Index",
+    description: "An outer Hermitage shard points away from Mirr Vale, as if the archive is afraid to face the wider net directly.",
+    position: [-720, 210, -840],
+    scanRange: 260,
+    scanBand: [53, 58],
+    scanTime: 5.2,
+    rewards: { credits: 1280, cargo: { "data-cores": 2, voidglass: 1 } },
+    chainId: "mirr-parallax-chain",
+    chainTitle: "Parallax Hermitage Chain",
+    stage: 3,
+    prerequisiteSignalIds: ["quiet-signal-parallax-deep-index"],
+    requiredEquipmentAny: ["survey-array", "echo-nullifier"],
+    storyInfluence: {
+      missionId: "story-parallax-wound",
+      headline: "Parallax kept an outer index for names too dangerous to store in one mirror.",
+      note: "The recovered index points to a distributed listener scar rather than a single relay."
+    },
+    log:
+      "Parallax Outer Index recovered. The Hermitage split its evidence across mirrored shards. This outer index does not name the whole net, but it proves the net is larger than one relay."
+  },
+  {
     id: "quiet-signal-dead-letter-convoy",
     systemId: "ashen-drift",
     kind: "wreck",
@@ -237,6 +339,33 @@ export const explorationSignals: ExplorationSignalDefinition[] = [
     },
     log:
       "False Mercy Ledger decrypted. The broker did not track victims; they tracked which distress keys sold twice. The next relay will answer to profit before it answers to fear."
+  },
+  {
+    id: "quiet-signal-moth-vault-ledger",
+    systemId: "ashen-drift",
+    kind: "cache",
+    title: "Moth Vault Ledger",
+    maskedTitle: "Deep Black Ledger",
+    description: "A ledger fragment flutters around Grave Moon, priced in distress keys and sealed docking windows.",
+    position: [610, 170, -880],
+    scanRange: 250,
+    scanBand: [82, 89],
+    scanTime: 5.4,
+    rewards: { credits: 1500, cargo: { "illegal-contraband": 1, "luxury-goods": 1 } },
+    chainId: "ashen-dead-letter-chain",
+    chainTitle: "Dead Letter Chain",
+    stage: 3,
+    prerequisiteSignalIds: ["quiet-signal-false-mercy-ledger"],
+    requiredEquipmentAny: ["survey-array", "echo-nullifier"],
+    storyInfluence: {
+      missionId: "story-black-ledger-chorus",
+      headline: "Ashen's black ledger routes stolen names through a hidden vault market.",
+      note: "Moth Vault keeps the name-auction habit alive after the visible broker burns."
+    },
+    revealStationId: "moth-vault",
+    revealPlanetIds: ["grave-moon"],
+    log:
+      "Moth Vault Ledger decrypted. The distress keys were only the front page. Moth Vault now appears on private Ashen charts, where names are collateral before they are victims."
   },
   {
     id: "quiet-signal-crownside-whisper",
@@ -286,6 +415,33 @@ export const explorationSignals: ExplorationSignalDefinition[] = [
       "Pearl Witness Chorus separated. The consulate beacons were not corrupted together; they were braided into one approved voice. Glass Wake prefers consensus when panic would draw attention."
   },
   {
+    id: "quiet-signal-crownshade-occlusion",
+    systemId: "celest-gate",
+    kind: "anomaly",
+    title: "Crownshade Occlusion",
+    maskedTitle: "Deep Crown Occlusion",
+    description: "A research occlusion hides behind Celest's crown traffic, visible only when the witness chorus is separated.",
+    position: [90, 430, -950],
+    scanRange: 255,
+    scanBand: [19, 24],
+    scanTime: 5.5,
+    rewards: { credits: 1700, reputation: { "solar-directorate": 2 }, cargo: { "data-cores": 1, optics: 2 } },
+    chainId: "celest-crownside-chain",
+    chainTitle: "Crownside Whisper Chain",
+    stage: 3,
+    prerequisiteSignalIds: ["quiet-signal-pearl-witness-chorus"],
+    requiredEquipmentAny: ["survey-array", "echo-nullifier"],
+    storyInfluence: {
+      missionId: "story-listener-scar",
+      headline: "Celest's clean crown traffic casts a shadow around a local listener scar.",
+      note: "Crownshade Observatory can see the occlusion that polite Celest records flatten into routine traffic."
+    },
+    revealStationId: "crownshade-observatory",
+    revealPlanetIds: ["celest-crown"],
+    log:
+      "Crownshade Occlusion resolved. The witness chorus was hiding the absence around a research station. Crownshade Observatory now marks the place where Celest traffic bends around a scar."
+  },
+  {
     id: "quiet-signal-locked-keel-cache",
     systemId: "ptd-home",
     kind: "cache",
@@ -331,6 +487,31 @@ export const explorationSignals: ExplorationSignalDefinition[] = [
     },
     log:
       "Keel Ghost Route resolved. The route is a harmless storage convenience until someone sells it to a relay crew. A ship can leave no wake if the station expects it to sleep."
+  },
+  {
+    id: "quiet-signal-keel-archive-prism",
+    systemId: "ptd-home",
+    kind: "cache",
+    title: "Keel Archive Prism",
+    maskedTitle: "Deep Keel Prism",
+    description: "A PTD archive prism cross-references every recovered coordinate shard against old storage routes.",
+    position: [-340, -180, -660],
+    scanRange: 275,
+    scanBand: [86, 92],
+    scanTime: 4.9,
+    rewards: { credits: 1250, cargo: { "ship-components": 2, "data-cores": 1 } },
+    chainId: "ptd-keel-chain",
+    chainTitle: "Locked Keel Chain",
+    stage: 3,
+    prerequisiteSignalIds: ["quiet-signal-keel-ghost-route"],
+    requiredEquipmentAny: ["survey-array", "echo-nullifier"],
+    storyInfluence: {
+      missionId: "story-borrowed-hulls",
+      headline: "PTD's private archive can assemble recovered deep coordinates into a cartographic pattern.",
+      note: "The prism turns scattered Quiet Signal shards into a route map for future relic scans."
+    },
+    log:
+      "Keel Archive Prism resolved. PTD's private archive aligns the recovered deep coordinates into one cartographic lattice. The route is no longer just evidence; it is a tool."
   }
 ];
 

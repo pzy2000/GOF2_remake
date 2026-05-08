@@ -21,7 +21,7 @@ import {
 } from "../src/systems/equipment";
 import { createInitialMarketState } from "../src/systems/economy";
 import { createInitialDialogueState } from "../src/systems/dialogue";
-import { createInitialExplorationState } from "../src/systems/exploration";
+import { createInitialExplorationState, getEffectiveSignalScanBand, getEffectiveSignalScanRange } from "../src/systems/exploration";
 import { createInitialFactionHeat } from "../src/systems/factionConsequences";
 import { createInitialReputation } from "../src/systems/reputation";
 import { writeSave } from "../src/systems/save";
@@ -236,6 +236,50 @@ describe("equipment definitions and helpers", () => {
       ...player,
       unlockedBlueprintIds: [...(player.unlockedBlueprintIds ?? []), "echo-nullifier"]
     })).toBe(true);
+  });
+
+  it("defines relic cartographer as a hidden reward blueprint with Quiet Signal scan effects", () => {
+    const player = normalizePlayerEquipmentStats(playerForShip());
+    expect(equipmentById["relic-cartographer"]).toMatchObject({
+      category: "Utility",
+      slotType: "utility",
+      techLevel: 5
+    });
+    expect(canUnlockBlueprint(player, "relic-cartographer")).toMatchObject({
+      ok: false,
+      message: "Blueprint unlocks through story rewards."
+    });
+    expect(isBlueprintVisibleToPlayer({ equipmentId: "relic-cartographer", path: "exploration", tier: 5, unlockCost: { credits: 0 }, rewardOnly: true }, player)).toBe(false);
+    expect(isBlueprintVisibleToPlayer({ equipmentId: "relic-cartographer", path: "exploration", tier: 5, unlockCost: { credits: 0 }, rewardOnly: true }, {
+      ...player,
+      unlockedBlueprintIds: [...(player.unlockedBlueprintIds ?? []), "relic-cartographer"]
+    })).toBe(true);
+
+    const effects = getEquipmentEffects(["relic-cartographer"]);
+    expect(effects.signalScanRangeBonus).toBeGreaterThan(0);
+    expect(effects.signalScanBandBonus).toBeGreaterThan(0);
+    expect(effects.signalScanRateMultiplier).toBeGreaterThan(1);
+  });
+
+  it("applies scanner utility modifiers to Quiet Signal range and band", () => {
+    const signal = {
+      id: "test-signal",
+      systemId: "helion-reach",
+      kind: "anomaly" as const,
+      title: "Test Signal",
+      maskedTitle: "Masked Signal",
+      description: "test",
+      position: [0, 0, 0] as [number, number, number],
+      scanRange: 300,
+      scanBand: [40, 50] as [number, number],
+      scanTime: 4,
+      rewards: {},
+      log: "test"
+    };
+    expect(getEffectiveSignalScanRange(signal, ["scanner"])).toBeGreaterThan(300);
+    expect(getEffectiveSignalScanRange(signal, ["survey-array"])).toBeGreaterThan(getEffectiveSignalScanRange(signal, ["scanner"]));
+    expect(getEffectiveSignalScanRange(signal, ["relic-cartographer"])).toBeGreaterThan(getEffectiveSignalScanRange(signal, ["survey-array"]));
+    expect(getEffectiveSignalScanBand(signal, ["relic-cartographer"])).toEqual([30, 60]);
   });
 
   it("compares candidate equipment against current slot and ship stats", () => {

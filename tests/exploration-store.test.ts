@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { explorationSignalById, stationById } from "../src/data/world";
-import { getIncompleteExplorationSignals } from "../src/systems/exploration";
+import { getIncompleteExplorationSignals, getVisibleStationsForSystem } from "../src/systems/exploration";
 
 class MemoryStorage implements Storage {
   private data = new Map<string, string>();
@@ -157,6 +157,125 @@ describe("exploration store flow", () => {
     ]));
     expect(state.player.unlockedBlueprintIds).toContain("survey-array");
     expect(state.runtime.message).toContain("Survey Array blueprint unlocked");
+  });
+
+  it("requires upgraded scanner equipment before a deep signal can be scanned", async () => {
+    const store = await freshStore();
+    await completeSignal(store, "quiet-signal-sundog-lattice");
+    store.getState().closeDialogue();
+    await completeSignal(store, "quiet-signal-meridian-afterimage");
+    store.getState().closeDialogue();
+
+    const deepSignal = explorationSignalById["quiet-signal-sundog-crown-shard"];
+    store.setState((state) => ({
+      screen: "flight",
+      currentSystemId: deepSignal.systemId,
+      currentStationId: undefined,
+      player: {
+        ...state.player,
+        equipment: ["scanner"],
+        position: deepSignal.position,
+        velocity: [0, 0, 0],
+        throttle: 0
+      },
+      runtime: {
+        ...state.runtime,
+        enemies: [],
+        projectiles: [],
+        effects: [],
+        message: "",
+        explorationScan: undefined
+      }
+    }));
+    store.getState().interact();
+    expect(store.getState().runtime.explorationScan).toBeUndefined();
+    expect(store.getState().runtime.message).toContain("requires Survey Array or Echo Nullifier");
+
+    store.setState((state) => ({
+      player: {
+        ...state.player,
+        equipment: ["echo-nullifier"]
+      },
+      runtime: { ...state.runtime, message: "" }
+    }));
+    store.getState().interact();
+    expect(store.getState().runtime.explorationScan?.signalId).toBe(deepSignal.id);
+  });
+
+  it("reveals new hidden stations from deep signal completions", async () => {
+    const store = await freshStore();
+    await completeSignal(store, "quiet-signal-foundry-ark-wreck");
+    store.getState().closeDialogue();
+    await completeSignal(store, "quiet-signal-anvil-listener-spoor");
+    store.getState().closeDialogue();
+    store.setState((state) => ({
+      player: { ...state.player, equipment: ["survey-array"] }
+    }));
+    await completeSignal(store, "quiet-signal-obsidian-foundry-wake");
+
+    const state = store.getState();
+    expect(state.explorationState.revealedStationIds).toContain("obsidian-foundry");
+    expect(stationById["obsidian-foundry"].hidden).toBe(true);
+    expect(getVisibleStationsForSystem("kuro-belt", state.explorationState).map((station) => station.id)).toContain("obsidian-foundry");
+  });
+
+  it("unlocks the relic cartographer blueprint after the final deep signal resolves", async () => {
+    const store = await freshStore();
+    const completedSignalIds = [
+      "quiet-signal-sundog-lattice",
+      "quiet-signal-meridian-afterimage",
+      "quiet-signal-sundog-crown-shard",
+      "quiet-signal-foundry-ark-wreck",
+      "quiet-signal-anvil-listener-spoor",
+      "quiet-signal-obsidian-foundry-wake",
+      "quiet-signal-ghost-iff-challenge",
+      "quiet-signal-redoubt-silence-test",
+      "quiet-signal-redoubt-ghost-permit",
+      "quiet-signal-folded-reflection",
+      "quiet-signal-parallax-deep-index",
+      "quiet-signal-parallax-outer-index",
+      "quiet-signal-dead-letter-convoy",
+      "quiet-signal-false-mercy-ledger",
+      "quiet-signal-moth-vault-ledger",
+      "quiet-signal-crownside-whisper",
+      "quiet-signal-pearl-witness-chorus",
+      "quiet-signal-crownshade-occlusion",
+      "quiet-signal-locked-keel-cache",
+      "quiet-signal-keel-ghost-route"
+    ];
+    store.setState((state) => ({
+      explorationState: {
+        discoveredSignalIds: completedSignalIds,
+        completedSignalIds,
+        revealedStationIds: ["parallax-hermitage", "obsidian-foundry", "moth-vault", "crownshade-observatory"],
+        eventLogIds: completedSignalIds
+      },
+      player: {
+        ...state.player,
+        equipment: ["survey-array"],
+        unlockedBlueprintIds: [
+          "pulse-laser",
+          "homing-missile",
+          "mining-beam",
+          "scanner",
+          "cargo-expansion",
+          "shield-booster",
+          "armor-plating",
+          "survey-array",
+          "repair-drone",
+          "shield-matrix",
+          "targeting-computer",
+          "torpedo-rack",
+          "quantum-reactor",
+          "plasma-cannon"
+        ]
+      }
+    }));
+
+    await completeSignal(store, "quiet-signal-keel-archive-prism");
+
+    expect(store.getState().player.unlockedBlueprintIds).toContain("relic-cartographer");
+    expect(store.getState().runtime.message).toContain("Relic Cartographer blueprint unlocked");
   });
 
   it("marks full-hold scans complete without overfilling cargo", async () => {

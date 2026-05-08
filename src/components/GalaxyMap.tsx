@@ -93,7 +93,7 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
   const dispatchTargetStationId = activeDispatch?.destinationStationId;
   const dispatchTargetVisible = dispatchTargetSystemId && knownSystems.includes(dispatchTargetSystemId) ? dispatchTargetSystemId : undefined;
   const selectedExplorationSummary = selectedKnown
-    ? getExplorationObjectiveSummaryForSystem(selectedSystem.id, explorationState, { playerUnlockedBlueprintIds: player.unlockedBlueprintIds })
+    ? getExplorationObjectiveSummaryForSystem(selectedSystem.id, explorationState, { playerEquipment: player.equipment, playerUnlockedBlueprintIds: player.unlockedBlueprintIds })
     : undefined;
   const stars = useMemo(
     () =>
@@ -225,7 +225,7 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                 const current = system.id === currentSystemId;
                 const selected = system.id === selectedSystem.id;
                 const explorationSummary = known
-                  ? getExplorationObjectiveSummaryForSystem(system.id, explorationState, { playerUnlockedBlueprintIds: player.unlockedBlueprintIds })
+                  ? getExplorationObjectiveSummaryForSystem(system.id, explorationState, { playerEquipment: player.equipment, playerUnlockedBlueprintIds: player.unlockedBlueprintIds })
                   : undefined;
                 const heatRecord = getFactionHeatRecord(factionHeat, system.factionId);
                 const heatLabel = getFactionHeatLevelLabel(heatRecord);

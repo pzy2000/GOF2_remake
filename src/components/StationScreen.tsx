@@ -1037,7 +1037,7 @@ function CaptainLogTab() {
     getCommodityName: (commodityId) => localizeCommodityName(commodityId, locale, commodityById[commodityId]?.name)
   });
   const completedExplorationLogs = explorationSignals.filter((signal) => explorationState.eventLogIds.includes(signal.id));
-  const chainSummaries = getExplorationChainSummaries(explorationState, { playerUnlockedBlueprintIds: player.unlockedBlueprintIds });
+  const chainSummaries = getExplorationChainSummaries(explorationState, { playerEquipment: player.equipment, playerUnlockedBlueprintIds: player.unlockedBlueprintIds });
   const currentFieldIntel = currentMission
     ? completedExplorationLogs.filter((signal) => signal.storyInfluence?.missionId === currentMission.id)
     : [];

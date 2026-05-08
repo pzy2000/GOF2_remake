@@ -2,7 +2,7 @@ import { planetById, planets, stations, stationById, systemById, systems } from 
 import type { EquipmentId, ExplorationSignalDefinition, ExplorationState, PlanetDefinition, StationDefinition, Vec3 } from "../types/game";
 import { getJumpGatePosition } from "./autopilot";
 import { STATION_INTERACTION_RANGE } from "./equipment";
-import { getEffectiveSignalScanRange, getIncompleteExplorationSignals, getVisibleStationsForSystem, isExplorationSignalDiscovered } from "./exploration";
+import { getEffectiveSignalScanRange, getIncompleteExplorationSignals, getVisibleStationsForSystem, hasRequiredSignalEquipment, isExplorationSignalDiscovered, requiredSignalEquipmentLabel } from "./exploration";
 import { distance } from "./math";
 
 export const STARGATE_NAME = "Stargate";
@@ -37,6 +37,8 @@ export type NavigationTarget =
       position: Vec3;
       distance: number;
       inRange: boolean;
+      equipmentReady?: boolean;
+      requiredEquipmentLabel?: string;
     }
   | {
       kind: "stargate";
@@ -97,7 +99,7 @@ export function getNearestNavigationTarget(
       inRange: distance(playerPosition, planet.beaconPosition) < PLANET_SCAN_RANGE
     }))
     .sort((a, b) => a.distance - b.distance)[0];
-  const explorationTarget = options.explorationState
+  const explorationTarget: NavigationTarget | undefined = options.explorationState
     ? getIncompleteExplorationSignals(systemId, options.explorationState)
         .map((signal) => {
           const dist = distance(playerPosition, signal.position);
@@ -108,7 +110,9 @@ export function getNearestNavigationTarget(
             signal,
             position: signal.position,
             distance: dist,
-            inRange: dist <= getEffectiveSignalScanRange(signal, options.installedEquipment)
+            inRange: dist <= getEffectiveSignalScanRange(signal, options.installedEquipment),
+            equipmentReady: hasRequiredSignalEquipment(signal, options.installedEquipment),
+            requiredEquipmentLabel: requiredSignalEquipmentLabel(signal) || undefined
           };
         })
         .sort((a, b) => a.distance - b.distance)[0]
@@ -163,10 +167,10 @@ export function getNavigationTargetCue(target: NavigationTarget | undefined): Na
       targetId: target.id,
       kind: target.kind,
       label: target.name,
-      actionLabel: target.inRange ? "E Scan" : "Signal",
+      actionLabel: target.inRange ? target.equipmentReady === false ? "Scanner Required" : "E Scan" : "Signal",
       distanceLabel: formatNavigationDistance(target.distance),
       tone: "exploration",
-      inRange: target.inRange
+      inRange: target.inRange && target.equipmentReady !== false
     };
   }
   return {
@@ -183,6 +187,9 @@ export function getNavigationTargetCue(target: NavigationTarget | undefined): Na
 export function getNavigationHintText(target: NavigationTarget | undefined): string | undefined {
   const cue = getNavigationTargetCue(target);
   if (!cue) return undefined;
+  if (target?.kind === "exploration-signal" && target.inRange && target.equipmentReady === false) {
+    return `${cue.actionLabel}: ${target.requiredEquipmentLabel ?? "upgraded scanner"}`;
+  }
   return cue.inRange ? `${cue.actionLabel}: ${cue.label}` : `${cue.label} ${cue.distanceLabel}`;
 }
 

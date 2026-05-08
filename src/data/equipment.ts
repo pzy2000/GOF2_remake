@@ -210,11 +210,12 @@ export const equipmentList: EquipmentDefinition[] = [
     effect: "Adds 60m to loot and salvage interaction ranges, and 80m to mining vein HUD detection.",
     displayStats: [
       { label: "Interact", value: "+60m" },
-      { label: "Vein HUD", value: "+80m" }
+      { label: "Vein HUD", value: "+80m" },
+      { label: "Quiet Signal", value: "+90m / +/-4" }
     ],
     slotType: "utility",
     craftCost: { credits: 700, cargo: { electronics: 1, "data-cores": 1 } },
-    modifiers: { scannerRangeBonus: 60, miningHudRangeBonus: 80 }
+    modifiers: { scannerRangeBonus: 60, miningHudRangeBonus: 80, signalScanRangeBonus: 90, signalScanBandBonus: 4 }
   },
   {
     id: "survey-array",
@@ -229,11 +230,12 @@ export const equipmentList: EquipmentDefinition[] = [
     effect: "Adds 120m to loot and salvage interaction ranges, and 150m to mining vein HUD detection.",
     displayStats: [
       { label: "Interact", value: "+120m" },
-      { label: "Vein HUD", value: "+150m" }
+      { label: "Vein HUD", value: "+150m" },
+      { label: "Quiet Signal", value: "+140m / +/-7 / +10%" }
     ],
     slotType: "utility",
     craftCost: { credits: 2100, cargo: { optics: 2, "data-cores": 1, electronics: 1 } },
-    modifiers: { scannerRangeBonus: 120, miningHudRangeBonus: 150 }
+    modifiers: { scannerRangeBonus: 120, miningHudRangeBonus: 150, signalScanRangeBonus: 140, signalScanBandBonus: 7, signalScanRateMultiplier: 1.1 }
   },
   {
     id: "armor-plating",
@@ -339,11 +341,32 @@ export const equipmentList: EquipmentDefinition[] = [
     displayStats: [
       { label: "Interact", value: "+100m" },
       { label: "Vein HUD", value: "+100m" },
+      { label: "Quiet Signal", value: "+130m / +/-6 / +25%" },
       { label: "Echo Lock", value: "+120m / +25%" }
     ],
     slotType: "utility",
     craftCost: { credits: 4800, cargo: { "data-cores": 2, voidglass: 2, microchips: 2 } },
-    modifiers: { scannerRangeBonus: 100, miningHudRangeBonus: 100, echoLockRangeBonus: 120, echoLockRateMultiplier: 1.25 }
+    modifiers: { scannerRangeBonus: 100, miningHudRangeBonus: 100, signalScanRangeBonus: 130, signalScanBandBonus: 6, signalScanRateMultiplier: 1.25, echoLockRangeBonus: 120, echoLockRateMultiplier: 1.25 }
+  },
+  {
+    id: "relic-cartographer",
+    name: "Relic Cartographer",
+    techLevel: 5,
+    marketPrice: 11800,
+    marketStock: 0,
+    dropWeight: 0,
+    category: "Utility",
+    role: "Explorer-grade coordinate resolver for deep Quiet Signals.",
+    description: "A relic-mapped survey core that overlays recovered coordinates onto live scan harmonics.",
+    effect: "Extends Quiet Signal scan range by 190m, widens scan bands by 10 points on each side, and accelerates Quiet Signal scans by 35%.",
+    displayStats: [
+      { label: "Quiet Signal", value: "+190m / +/-10 / +35%" },
+      { label: "Interact", value: "+80m" },
+      { label: "Vein HUD", value: "+120m" }
+    ],
+    slotType: "utility",
+    craftCost: { credits: 5600, cargo: { voidglass: 2, "data-cores": 2, optics: 2 } },
+    modifiers: { scannerRangeBonus: 80, miningHudRangeBonus: 120, signalScanRangeBonus: 190, signalScanBandBonus: 10, signalScanRateMultiplier: 1.35 }
   }
 ];
 
@@ -373,6 +396,7 @@ export const blueprintDefinitions: BlueprintDefinition[] = [
   { equipmentId: "scanner", path: "exploration", tier: 1, unlockCost: { credits: 0 }, starterUnlocked: true },
   { equipmentId: "survey-array", path: "exploration", tier: 2, prerequisiteEquipmentIds: ["scanner"], unlockCost: { credits: 760 } },
   { equipmentId: "echo-nullifier", path: "exploration", tier: 4, prerequisiteEquipmentIds: ["survey-array"], unlockCost: { credits: 0 }, rewardOnly: true },
+  { equipmentId: "relic-cartographer", path: "exploration", tier: 5, prerequisiteEquipmentIds: ["survey-array"], unlockCost: { credits: 0 }, rewardOnly: true },
   { equipmentId: "cargo-expansion", path: "engineering", tier: 1, unlockCost: { credits: 0 }, starterUnlocked: true },
   { equipmentId: "afterburner", path: "engineering", tier: 2, prerequisiteEquipmentIds: ["cargo-expansion"], unlockCost: { credits: 420 } },
   { equipmentId: "energy-reactor", path: "engineering", tier: 2, prerequisiteEquipmentIds: ["cargo-expansion"], unlockCost: { credits: 620 } },

@@ -846,7 +846,8 @@ const equipmentNames: LocalizedCatalog = {
   "quantum-reactor": { "zh-CN": "量子反应堆", ja: "量子炉", fr: "Réacteur quantique" },
   "repair-drone": { "zh-CN": "维修无人机", ja: "修理ドローン", fr: "Drone de réparation" },
   "targeting-computer": { "zh-CN": "瞄准计算机", ja: "照準コンピューター", fr: "Ordinateur de ciblage" },
-  "echo-nullifier": { "zh-CN": "回声消隐器", ja: "エコー・ヌリファイア", fr: "Neutraliseur d'écho" }
+  "echo-nullifier": { "zh-CN": "回声消隐器", ja: "エコー・ヌリファイア", fr: "Neutraliseur d'écho" },
+  "relic-cartographer": { "zh-CN": "遗物制图仪", ja: "遺物カートグラファー", fr: "Cartographe relique" }
 };
 
 const shipNames: LocalizedCatalog = {
@@ -924,16 +925,19 @@ const stationNames: LocalizedCatalog = {
   "hush-array": { "zh-CN": "静默阵列", ja: "沈黙アレイ", fr: "Réseau silencieux" },
   "viridian-lab": { "zh-CN": "翠绿实验室", ja: "ヴィリジアン研究所", fr: "Laboratoire viridien" },
   "parallax-hermitage": { "zh-CN": "视差隐修所", ja: "パララックス隠棲所", fr: "Ermitage Parallaxe" },
+  "obsidian-foundry": { "zh-CN": "黑曜铸造所", ja: "黒曜鋳造所", fr: "Fonderie d'obsidienne" },
   "ashen-freeport": { "zh-CN": "灰烬自由港", ja: "灰燼自由港", fr: "Port libre cendré" },
   "black-arcade": { "zh-CN": "黑弧集市", ja: "ブラックアーケード", fr: "Arcade noire" },
   "emberfall-relay": { "zh-CN": "余烬中继站", ja: "エンバーフォール中継", fr: "Relais Emberfall" },
   "graveyard-spindle": { "zh-CN": "坟场纺锤站", ja: "墓場スピンドル", fr: "Fuseau cimetière" },
   "voss-kel-market": { "zh-CN": "沃斯凯尔市场", ja: "ヴォス・ケル市場", fr: "Marché Voss Kel" },
+  "moth-vault": { "zh-CN": "蛾影金库", ja: "モス・ヴォールト", fr: "Coffre Moth" },
   "celest-vault": { "zh-CN": "天穹宝库", ja: "セレスト金庫", fr: "Coffre céleste" },
   "aurelia-exchange": { "zh-CN": "奥蕾莉亚交易所", ja: "アウレリア取引所", fr: "Bourse Aurelia" },
   "opal-drydock": { "zh-CN": "欧泊干船坞", ja: "オパール乾ドック", fr: "Cale sèche Opale" },
   "zenith-skydock": { "zh-CN": "天顶天港", ja: "ゼニス天空港", fr: "Skydock Zénith" },
   "pearl-consulate": { "zh-CN": "珍珠领事馆", ja: "パール領事館", fr: "Consulat Perle" },
+  "crownshade-observatory": { "zh-CN": "冠影观测站", ja: "クラウンシェード観測所", fr: "Observatoire Crownshade" },
   "ptd-home": { "zh-CN": "PTD 母港", ja: "PTDホーム", fr: "Dépôt PTD Home" }
 };
 
@@ -1088,6 +1092,7 @@ const displayNameAliases: LocalizedCatalog = {
   "Repair Drone": equipmentNames["repair-drone"],
   "Targeting Computer": equipmentNames["targeting-computer"],
   "Echo Nullifier": equipmentNames["echo-nullifier"],
+  "Relic Cartographer": equipmentNames["relic-cartographer"],
   "Sparrow MK-I": shipNames["sparrow-mk1"],
   "Mule LX": shipNames["mule-lx"],
   "Raptor V": shipNames["raptor-v"],
@@ -1123,16 +1128,19 @@ const displayNameAliases: LocalizedCatalog = {
   "Hush Array": stationNames["hush-array"],
   "Viridian Lab": stationNames["viridian-lab"],
   "Parallax Hermitage": stationNames["parallax-hermitage"],
+  "Obsidian Foundry": stationNames["obsidian-foundry"],
   "Ashen Freeport": stationNames["ashen-freeport"],
   "Black Arcade": stationNames["black-arcade"],
   "Emberfall Relay": stationNames["emberfall-relay"],
   "Graveyard Spindle": stationNames["graveyard-spindle"],
   "Voss Kel Market": stationNames["voss-kel-market"],
+  "Moth Vault": stationNames["moth-vault"],
   "Celest Vault": stationNames["celest-vault"],
   "Aurelia Exchange": stationNames["aurelia-exchange"],
   "Opal Drydock": stationNames["opal-drydock"],
   "Zenith Skydock": stationNames["zenith-skydock"],
   "Pearl Consulate": stationNames["pearl-consulate"],
+  "Crownshade Observatory": stationNames["crownshade-observatory"],
   "Trade Hub": stationArchetypeNames["Trade Hub"],
   "Mining Station": stationArchetypeNames["Mining Station"],
   "Research Station": stationArchetypeNames["Research Station"],

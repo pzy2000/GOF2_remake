@@ -1,9 +1,9 @@
 import { equipmentById, explorationSignals, stationById, systemById } from "../data/world";
 import type { EquipmentId, ExplorationSignalDefinition, ExplorationState, PlayerState, Vec3 } from "../types/game";
-import { isExplorationSignalDiscovered, isExplorationSignalUnlocked } from "./exploration";
+import { hasRequiredSignalEquipment, isExplorationSignalDiscovered, isExplorationSignalUnlocked, requiredSignalEquipmentLabel } from "./exploration";
 import { distance } from "./math";
 
-export type ExplorationObjectiveStatus = "locked" | "available" | "discovered" | "scanning" | "complete";
+export type ExplorationObjectiveStatus = "locked" | "equipment-locked" | "available" | "discovered" | "scanning" | "complete";
 
 export interface ExplorationObjectiveSummary {
   systemId: string;
@@ -18,6 +18,7 @@ export interface ExplorationObjectiveSummary {
   totalCount: number;
   revealedStationIds: string[];
   unlockedBlueprintIds: EquipmentId[];
+  requiredEquipmentLabel?: string;
 }
 
 export interface ExplorationChainSummary extends ExplorationObjectiveSummary {
@@ -47,6 +48,9 @@ export const EXPLORATION_CHAIN_BLUEPRINT_REWARDS: Record<string, EquipmentId> = 
   "celest-crownside-chain": "quantum-reactor",
   "ptd-keel-chain": "plasma-cannon"
 };
+
+export const DEEP_EXPLORATION_REWARD_BLUEPRINT_ID: EquipmentId = "relic-cartographer";
+const CHAIN_REWARD_STAGE = 2;
 
 function signalChainId(signal: ExplorationSignalDefinition): string {
   return signal.chainId ?? signal.id;
@@ -80,6 +84,21 @@ function isChainComplete(signals: ExplorationSignalDefinition[], explorationStat
   return signals.every((signal) => explorationState.completedSignalIds.includes(signal.id));
 }
 
+function isChainRewardMilestoneComplete(signals: ExplorationSignalDefinition[], explorationState: ExplorationState): boolean {
+  return signals
+    .filter((signal) => (signal.stage ?? 1) <= CHAIN_REWARD_STAGE)
+    .every((signal) => explorationState.completedSignalIds.includes(signal.id));
+}
+
+function deepSignals(): ExplorationSignalDefinition[] {
+  return explorationSignals.filter((signal) => (signal.stage ?? 1) >= 3 && (signal.requiredEquipmentAny ?? []).length > 0);
+}
+
+function isDeepExplorationComplete(explorationState: ExplorationState): boolean {
+  const signals = deepSignals();
+  return signals.length > 0 && signals.every((signal) => explorationState.completedSignalIds.includes(signal.id));
+}
+
 function revealedStationsFor(signals: ExplorationSignalDefinition[], explorationState: ExplorationState): string[] {
   return signals
     .filter((signal) => signal.revealStationId && explorationState.completedSignalIds.includes(signal.id))
@@ -89,16 +108,17 @@ function revealedStationsFor(signals: ExplorationSignalDefinition[], exploration
 
 function rewardBlueprintsForChain(chainId: string, signals: ExplorationSignalDefinition[], explorationState: ExplorationState): EquipmentId[] {
   const reward = EXPLORATION_CHAIN_BLUEPRINT_REWARDS[chainId];
-  return reward && isChainComplete(signals, explorationState) ? [reward] : [];
+  return reward && isChainRewardMilestoneComplete(signals, explorationState) ? [reward] : [];
 }
 
-function objectiveTextFor(status: ExplorationObjectiveStatus, chainTitle: string, nextTitle: string, rewardBlueprintIds: EquipmentId[], systemId: string): string {
+function objectiveTextFor(status: ExplorationObjectiveStatus, chainTitle: string, nextTitle: string, rewardBlueprintIds: EquipmentId[], systemId: string, requiredEquipment?: string): string {
   const systemName = systemById[systemId]?.name ?? systemId;
   if (status === "complete") {
     const rewards = rewardBlueprintIds.map((id) => `${equipmentById[id]?.name ?? id} blueprint unlocked`).join(" · ");
     return rewards ? `Chain complete: ${chainTitle}. ${rewards}.` : `Chain complete: ${chainTitle}.`;
   }
   if (status === "locked") return `Complete the prior Quiet Signal stage to resolve ${nextTitle}.`;
+  if (status === "equipment-locked") return `${nextTitle} requires ${requiredEquipment || "an upgraded scanner"}.`;
   if (status === "scanning") return `Scanning ${nextTitle}: tune frequency to finish the trace.`;
   if (status === "discovered") return `Return to ${nextTitle} and complete the scan.`;
   return `Locate ${nextTitle} in ${systemName}.`;
@@ -116,20 +136,24 @@ function buildChainSummary(
   const activeSignal = next ?? firstIncomplete ?? signals[signals.length - 1];
   const complete = completed.length === signals.length;
   const discovered = activeSignal ? isExplorationSignalDiscovered(activeSignal.id, explorationState) : false;
+  const equipmentReady = activeSignal ? hasRequiredSignalEquipment(activeSignal, options.playerEquipment) : true;
+  const requiredEquipment = activeSignal ? requiredSignalEquipmentLabel(activeSignal) : undefined;
   const status: ExplorationObjectiveStatus = complete
     ? "complete"
     : !activeSignal || !isExplorationSignalUnlocked(activeSignal, explorationState)
       ? "locked"
-      : options.activeScanSignalId === activeSignal.id
-        ? "scanning"
-        : discovered
-          ? "discovered"
-          : "available";
+      : !equipmentReady
+        ? "equipment-locked"
+        : options.activeScanSignalId === activeSignal.id
+          ? "scanning"
+          : discovered
+            ? "discovered"
+            : "available";
   const title = signals[0]?.chainTitle ?? signals[0]?.title ?? chainId;
   const systemId = signals[0]?.systemId ?? "";
   const rewardBlueprintIds = rewardBlueprintsForChain(chainId, signals, explorationState);
   const nextTitle = activeSignal
-    ? status === "available"
+    ? status === "available" || (status === "equipment-locked" && !discovered)
       ? activeSignal.maskedTitle
       : activeSignal.title
     : title;
@@ -148,12 +172,13 @@ function buildChainSummary(
     status,
     nextSignalId: activeSignal?.id,
     nextTitle,
-    objectiveText: objectiveTextFor(status, title, nextTitle, rewardBlueprintIds, systemId),
+    objectiveText: objectiveTextFor(status, title, nextTitle, rewardBlueprintIds, systemId, requiredEquipment),
     distanceMeters,
     completedCount: completed.length,
     totalCount: signals.length,
     revealedStationIds: revealedStationsFor(signals, explorationState),
     unlockedBlueprintIds: rewardBlueprintIds,
+    requiredEquipmentLabel: requiredEquipment,
     rewardBlueprintId,
     rewardUnlocked: !!rewardBlueprintId && (unlocked.has(rewardBlueprintId) || rewardBlueprintIds.includes(rewardBlueprintId)),
     signals,
@@ -208,21 +233,26 @@ export function getExplorationObjectiveSummaryForSignal(
       distanceMeters: options.playerPosition ? distance(options.playerPosition, signal.position) : undefined
     };
   }
+  const equipmentReady = hasRequiredSignalEquipment(signal, options.playerEquipment);
+  const requiredEquipment = requiredSignalEquipmentLabel(signal);
   const discovered = isExplorationSignalDiscovered(signal.id, explorationState);
-  const status: ExplorationObjectiveStatus = options.activeScanSignalId === signal.id ? "scanning" : discovered ? "discovered" : "available";
-  const nextTitle = status === "available" ? signal.maskedTitle : signal.title;
+  const status: ExplorationObjectiveStatus = !equipmentReady ? "equipment-locked" : options.activeScanSignalId === signal.id ? "scanning" : discovered ? "discovered" : "available";
+  const nextTitle = status === "available" || (status === "equipment-locked" && !discovered) ? signal.maskedTitle : signal.title;
   return {
     ...summary,
     status,
     nextSignalId: signal.id,
     nextTitle,
-    objectiveText: objectiveTextFor(status, summary.chainTitle, nextTitle, [], signal.systemId),
+    objectiveText: objectiveTextFor(status, summary.chainTitle, nextTitle, [], signal.systemId, requiredEquipment),
+    requiredEquipmentLabel: requiredEquipment,
     distanceMeters: options.playerPosition ? distance(options.playerPosition, signal.position) : undefined
   };
 }
 
 export function getCompletedExplorationChainRewardBlueprintIds(explorationState: ExplorationState): EquipmentId[] {
-  return getExplorationChainSummaries(explorationState).flatMap((summary) => summary.unlockedBlueprintIds);
+  const chainRewards = getExplorationChainSummaries(explorationState).flatMap((summary) => summary.unlockedBlueprintIds);
+  const deepRewards = isDeepExplorationComplete(explorationState) ? [DEEP_EXPLORATION_REWARD_BLUEPRINT_ID] : [];
+  return Array.from(new Set([...chainRewards, ...deepRewards]));
 }
 
 export function getMissingExplorationChainRewardBlueprintIds(explorationState: ExplorationState, unlockedBlueprintIds: EquipmentId[] = []): EquipmentId[] {

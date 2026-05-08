@@ -1,6 +1,8 @@
 import { explorationSignalById, explorationSignals } from "../data/exploration";
+import { equipmentById } from "../data/equipment";
 import { stations, systemById } from "../data/systems";
 import type { EquipmentId, ExplorationSignalDefinition, ExplorationState, PlayerState } from "../types/game";
+import { getEquipmentEffects } from "./equipment";
 import { distance } from "./math";
 
 export const SCANNER_SCAN_RANGE_BONUS = 90;
@@ -65,13 +67,28 @@ export function getVisibleStationsForSystem(systemId: string, explorationState: 
   return stations.filter((station) => visibleStationIds.has(station.id));
 }
 
+export function hasRequiredSignalEquipment(signal: ExplorationSignalDefinition, equipment: EquipmentId[] = []): boolean {
+  const required = signal.requiredEquipmentAny ?? [];
+  return required.length === 0 || required.some((equipmentId) => equipment.includes(equipmentId));
+}
+
+export function requiredSignalEquipmentLabel(signal: ExplorationSignalDefinition): string {
+  const required = signal.requiredEquipmentAny ?? [];
+  if (required.length === 0) return "";
+  return required.map((equipmentId) => equipmentById[equipmentId]?.name ?? equipmentId).join(" or ");
+}
+
 export function getEffectiveSignalScanRange(signal: ExplorationSignalDefinition, equipment: EquipmentId[] = []): number {
-  return signal.scanRange + (equipment.includes("scanner") ? SCANNER_SCAN_RANGE_BONUS : 0);
+  return signal.scanRange + getEquipmentEffects(equipment).signalScanRangeBonus;
 }
 
 export function getEffectiveSignalScanBand(signal: ExplorationSignalDefinition, equipment: EquipmentId[] = []): [number, number] {
-  const bonus = equipment.includes("scanner") ? SCANNER_SCAN_BAND_BONUS : 0;
+  const bonus = getEquipmentEffects(equipment).signalScanBandBonus;
   return [Math.max(0, signal.scanBand[0] - bonus), Math.min(100, signal.scanBand[1] + bonus)];
+}
+
+export function getEffectiveSignalScanRateMultiplier(equipment: EquipmentId[] = []): number {
+  return Math.max(0.1, getEquipmentEffects(equipment).signalScanRateMultiplier);
 }
 
 export function isFrequencyInSignalBand(signal: ExplorationSignalDefinition, frequency: number, equipment: EquipmentId[] = []): boolean {
@@ -91,7 +108,8 @@ export function getNearestIncompleteExplorationSignal(
       return {
         signal,
         distance: dist,
-        inRange: dist <= getEffectiveSignalScanRange(signal, equipment)
+        inRange: dist <= getEffectiveSignalScanRange(signal, equipment),
+        equipmentReady: hasRequiredSignalEquipment(signal, equipment)
       };
     })
     .sort((a, b) => a.distance - b.distance)[0];

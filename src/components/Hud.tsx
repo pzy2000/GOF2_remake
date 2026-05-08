@@ -182,6 +182,9 @@ export function Hud() {
                 : nearestNavigation.kind === "exploration-signal"
                   ? explorationSignalLabel(locale)
                   : nearestNavLabel(locale)}: {navigationTargetName(nearestNavigation, locale)} {formatDistance(locale, nearestNavigation.distance)}
+            {nearestNavigation.kind === "exploration-signal" && nearestNavigation.inRange && nearestNavigation.equipmentReady === false
+              ? ` · ${translateText("Requires", locale)} ${nearestNavigation.requiredEquipmentLabel ?? translateText("upgraded scanner", locale)}`
+              : ""}
           </p>
         ) : null}
       </section>

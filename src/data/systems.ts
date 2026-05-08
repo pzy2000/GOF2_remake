@@ -432,6 +432,7 @@ const rawStations: StationDefinition[] = [
   { id: "lode-spindle", name: "Lode Spindle", techLevel: 2, archetype: "Mining Station", factionId: "free-belt-union", systemId: "kuro-belt", planetId: "lode-minor", position: [-650, 30, -830] },
   { id: "niobe-refinery", name: "Niobe Gas Refinery", techLevel: 3, archetype: "Mining Station", factionId: "free-belt-union", systemId: "kuro-belt", planetId: "niobe-ice", position: [640, -20, -850] },
   { id: "bracken-claim", name: "Bracken Claim", techLevel: 1, archetype: "Frontier Port", factionId: "free-belt-union", systemId: "kuro-belt", planetId: "bracken-dust", position: [-200, 330, -930] },
+  { id: "obsidian-foundry", name: "Obsidian Foundry", techLevel: 4, archetype: "Mining Station", factionId: "free-belt-union", systemId: "kuro-belt", planetId: "kuro-anvil", position: [340, -220, -940], hidden: true },
   { id: "vantara-bastion", name: "Vantara Bastion", techLevel: 3, archetype: "Military Outpost", factionId: "solar-directorate", systemId: "vantara", planetId: "vantara-command", position: [-140, 25, -820] },
   { id: "redoubt-arsenal", name: "Redoubt Arsenal", techLevel: 4, archetype: "Military Outpost", factionId: "solar-directorate", systemId: "vantara", planetId: "redoubt-moon", position: [660, 40, -880] },
   { id: "gryphon-carrier", name: "Gryphon Carrier Dock", techLevel: 4, archetype: "Military Outpost", factionId: "solar-directorate", systemId: "vantara", planetId: "gryphon-reef", position: [-650, 30, -860] },
@@ -446,11 +447,13 @@ const rawStations: StationDefinition[] = [
   { id: "emberfall-relay", name: "Emberfall Relay", techLevel: 2, archetype: "Frontier Port", factionId: "vossari-clans", systemId: "ashen-drift", planetId: "emberfall", position: [-720, 35, -870] },
   { id: "graveyard-spindle", name: "Graveyard Spindle", techLevel: 4, archetype: "Pirate Black Market", factionId: "independent-pirates", systemId: "ashen-drift", planetId: "grave-moon", position: [650, 65, -910] },
   { id: "voss-kel-market", name: "Voss Kel Market", techLevel: 3, archetype: "Frontier Port", factionId: "vossari-clans", systemId: "ashen-drift", planetId: "voss-kel", position: [-140, 360, -1010] },
+  { id: "moth-vault", name: "Moth Vault", techLevel: 5, archetype: "Pirate Black Market", factionId: "independent-pirates", systemId: "ashen-drift", planetId: "grave-moon", position: [760, 160, -1020], hidden: true },
   { id: "celest-vault", name: "Celest Vault", techLevel: 4, archetype: "Trade Hub", factionId: "solar-directorate", systemId: "celest-gate", planetId: "celest-crown", position: [0, 60, -880] },
   { id: "aurelia-exchange", name: "Aurelia Exchange", techLevel: 4, archetype: "Trade Hub", factionId: "solar-directorate", systemId: "celest-gate", planetId: "aurelia", position: [680, 50, -940] },
   { id: "opal-drydock", name: "Opal Drydock", techLevel: 4, archetype: "Military Outpost", factionId: "solar-directorate", systemId: "celest-gate", planetId: "opal-minor", position: [-650, 40, -880] },
   { id: "zenith-skydock", name: "Zenith Skydock", techLevel: 5, archetype: "Mining Station", factionId: "solar-directorate", systemId: "celest-gate", planetId: "zenith-gas", position: [210, 350, -1040] },
   { id: "pearl-consulate", name: "Pearl Consulate", techLevel: 5, archetype: "Trade Hub", factionId: "solar-directorate", systemId: "celest-gate", planetId: "pearl-night", position: [-220, -310, -990] },
+  { id: "crownshade-observatory", name: "Crownshade Observatory", techLevel: 5, archetype: "Research Station", factionId: "solar-directorate", systemId: "celest-gate", planetId: "celest-crown", position: [110, 430, -1060], hidden: true },
   { id: "ptd-home", name: "PTD Home", techLevel: 5, archetype: "Trade Hub", factionId: "solar-directorate", systemId: "ptd-home", planetId: "ptd-home-world", position: [0, 0, -720] }
 ];
 
@@ -486,6 +489,7 @@ const rawSystems: StarSystemDefinition[] = [
     jumpGatePosition: [-640, 90, -1180],
     planetIds: ["kuro-anvil", "lode-minor", "niobe-ice", "bracken-dust"],
     stationIds: ["kuro-deep", "lode-spindle", "niobe-refinery", "bracken-claim"],
+    hiddenStationIds: ["obsidian-foundry"],
     marketBias: { iron: 0.72, titanium: 0.78, cesogen: 0.9, "mechanical-parts": 1.16, "energy-cells": 1.12 }
   },
   {
@@ -526,6 +530,7 @@ const rawSystems: StarSystemDefinition[] = [
     jumpGatePosition: [-780, -70, -1320],
     planetIds: ["ashen-harbor", "black-arc", "emberfall", "grave-moon", "voss-kel"],
     stationIds: ["ashen-freeport", "black-arcade", "emberfall-relay", "graveyard-spindle", "voss-kel-market"],
+    hiddenStationIds: ["moth-vault"],
     marketBias: { "illegal-contraband": 0.72, "luxury-goods": 1.24, "medical-supplies": 1.34, gold: 1.18, voidglass: 1.48 }
   },
   {
@@ -539,6 +544,7 @@ const rawSystems: StarSystemDefinition[] = [
     jumpGatePosition: [800, 120, -1380],
     planetIds: ["celest-crown", "aurelia", "opal-minor", "zenith-gas", "pearl-night"],
     stationIds: ["celest-vault", "aurelia-exchange", "opal-drydock", "zenith-skydock", "pearl-consulate"],
+    hiddenStationIds: ["crownshade-observatory"],
     marketBias: { "luxury-goods": 1.36, "ship-components": 1.3, "data-cores": 1.24, "rare-animals": 1.18, "noble-gas": 0.86 }
   },
   {

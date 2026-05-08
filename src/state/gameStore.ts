@@ -87,9 +87,12 @@ import {
   explorationSignalById,
   getEffectiveSignalScanBand,
   getEffectiveSignalScanRange,
+  getEffectiveSignalScanRateMultiplier,
+  hasRequiredSignalEquipment,
   isExplorationSignalUnlocked,
   isFrequencyInSignalBand,
-  normalizeExplorationState
+  normalizeExplorationState,
+  requiredSignalEquipmentLabel
 } from "../systems/exploration";
 import {
   createInitialDialogueState,
@@ -1415,12 +1418,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const signal = explorationSignalById[runtime.explorationScan.signalId];
       if (!signal || explorationState.completedSignalIds.includes(runtime.explorationScan.signalId) || !isExplorationSignalUnlocked(signal, explorationState)) {
         runtime = { ...runtime, explorationScan: undefined };
+      } else if (!hasRequiredSignalEquipment(signal, player.equipment)) {
+        runtime = {
+          ...runtime,
+          explorationScan: undefined,
+          message: `${signal.title} requires ${requiredSignalEquipmentLabel(signal)}.`
+        };
       } else {
         const scanDistance = distance(player.position, signal.position);
         const inRange = scanDistance <= getEffectiveSignalScanRange(signal, player.equipment);
         const inBand = inRange && isFrequencyInSignalBand(signal, runtime.explorationScan.frequency, player.equipment);
         const progress = clamp(
-          runtime.explorationScan.progress + (inBand ? delta / signal.scanTime : -delta * 0.22),
+          runtime.explorationScan.progress + (inBand ? (delta * getEffectiveSignalScanRateMultiplier(player.equipment)) / signal.scanTime : -delta * 0.22),
           0,
           1
         );
@@ -2090,6 +2099,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const alreadyComplete = state.explorationState.completedSignalIds.includes(signal.id);
       if (alreadyComplete) {
         set({ runtime: { ...state.runtime, message: `${signal.title} already resolved.` } });
+        return;
+      }
+      if (!hasRequiredSignalEquipment(signal, state.player.equipment)) {
+        set({ runtime: { ...state.runtime, message: `${signal.title} requires ${requiredSignalEquipmentLabel(signal)}.` } });
         return;
       }
       const initialFrequency = Math.max(0, Math.min(100, Math.round((signal.scanBand[0] + signal.scanBand[1]) / 2) - 18));

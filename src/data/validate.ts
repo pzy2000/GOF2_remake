@@ -209,6 +209,9 @@ export function validateContentData(): ContentValidationResult {
       if (!explorationSignalIds.has(prerequisiteId)) errors.push(`Exploration signal ${signal.id} requires unknown signal ${prerequisiteId}`);
       if (prerequisiteId === signal.id) errors.push(`Exploration signal ${signal.id} cannot require itself`);
     }
+    for (const equipmentId of signal.requiredEquipmentAny ?? []) {
+      if (!hasEquipment(equipmentId)) errors.push(`Exploration signal ${signal.id} requires unknown equipment ${equipmentId}`);
+    }
     if (signal.storyInfluence && !missionIds.has(signal.storyInfluence.missionId)) {
       errors.push(`Exploration signal ${signal.id} influences unknown mission ${signal.storyInfluence.missionId}`);
     }

@@ -877,10 +877,11 @@ function ExplorationSignalMarker({ signal }: { signal: ExplorationSignalDefiniti
   const clock = useGameStore((state) => state.runtime.clock);
   const locale = useGameStore((state) => state.locale);
   const explorationState = useGameStore((state) => state.explorationState);
+  const playerEquipment = useGameStore((state) => state.player.equipment);
   const activeScan = useGameStore((state) => state.runtime.explorationScan);
   const discovered = isExplorationSignalDiscovered(signal.id, explorationState);
   const scanning = activeScan?.signalId === signal.id;
-  const summary = getExplorationObjectiveSummaryForSignal(signal.id, explorationState, { activeScanSignalId: activeScan?.signalId });
+  const summary = getExplorationObjectiveSummaryForSignal(signal.id, explorationState, { activeScanSignalId: activeScan?.signalId, playerEquipment });
   const pulse = 0.5 + Math.sin(clock * (scanning ? 5.2 : 2.6) + signal.position[0] * 0.01) * 0.5;
   const color = signal.kind === "wreck" ? "#ffd166" : signal.kind === "cache" ? "#74e08d" : signal.kind === "event" ? "#ff9bd5" : "#8fe9ff";
   return (
@@ -914,6 +915,7 @@ function ExplorationSignalMarker({ signal }: { signal: ExplorationSignalDefiniti
       <Html center distanceFactor={11} className="target-label exploration-label">
         <b>{scanning ? localizeGenericName("SCANNING", locale) : discovered ? translateText(signal.title, locale).toUpperCase() : translateText(signal.maskedTitle, locale).toUpperCase()}</b>
         {summary ? <small>{translateText("Quiet Signals", locale)} {summary.completedCount}/{summary.totalCount}</small> : null}
+        {summary?.status === "equipment-locked" && summary.requiredEquipmentLabel ? <small>{translateText("Requires", locale)} {summary.requiredEquipmentLabel}</small> : null}
       </Html>
     </group>
   );
@@ -1622,6 +1624,13 @@ function navigationTargetName(target: NavigationTarget, locale: Locale): string 
 }
 
 function navigationActionLabel(target: NavigationTarget, inRange: boolean, locale: Locale): string {
+  if (target.kind === "exploration-signal" && target.inRange && target.equipmentReady === false) {
+    if (locale === "zh-CN") return "需要扫描器";
+    if (locale === "zh-TW") return "需要掃描器";
+    if (locale === "ja") return "スキャナー必要";
+    if (locale === "fr") return "Analyseur requis";
+    return "Scanner Required";
+  }
   if (target.kind === "station") {
     if (locale === "zh-CN") return inRange ? "E 停靠" : "航点";
     if (locale === "zh-TW") return inRange ? "E 停靠" : "航點";
@@ -1654,6 +1663,9 @@ function getLocalizedNavigationHintText(target: NavigationTarget | undefined, lo
   if (!target) return undefined;
   const action = navigationActionLabel(target, target.inRange, locale);
   const label = navigationTargetName(target, locale);
+  if (target.kind === "exploration-signal" && target.inRange && target.equipmentReady === false) {
+    return `${action}: ${target.requiredEquipmentLabel ?? label}`;
+  }
   return target.inRange ? `${action}: ${label}` : `${label} ${formatDistance(locale, target.distance)}`;
 }
 

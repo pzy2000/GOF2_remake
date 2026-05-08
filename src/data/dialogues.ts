@@ -468,11 +468,18 @@ const storyScenes: DialogueSceneDefinition[] = [
 
 const explorationSpeakerBySignal: Record<string, string> = {
   "quiet-signal-sundog-lattice": "helion-handler",
+  "quiet-signal-sundog-crown-shard": "helion-handler",
   "quiet-signal-foundry-ark-wreck": "kuro-foreman",
+  "quiet-signal-obsidian-foundry-wake": "kuro-foreman",
   "quiet-signal-ghost-iff-challenge": "vantara-officer",
+  "quiet-signal-redoubt-ghost-permit": "vantara-officer",
   "quiet-signal-folded-reflection": "mirr-analyst",
+  "quiet-signal-parallax-outer-index": "mirr-analyst",
   "quiet-signal-dead-letter-convoy": "ashen-broker",
+  "quiet-signal-moth-vault-ledger": "ashen-broker",
   "quiet-signal-crownside-whisper": "celest-archivist",
+  "quiet-signal-crownshade-occlusion": "celest-archivist",
+  "quiet-signal-keel-archive-prism": "ship-ai",
   "quiet-signal-locked-keel-cache": "ship-ai"
 };
 
@@ -481,35 +488,49 @@ type DialogueCopy = Omit<DialogueLineDefinition, "speakerId">;
 const explorationSceneTitles: Record<string, DialogueLocalizedText> = {
   "quiet-signal-sundog-lattice": l("日犬晶格信号日志", "幻日格子 信号ログ", "Journal du signal Sundog Lattice"),
   "quiet-signal-meridian-afterimage": l("子午残像信号日志", "子午線残像 信号ログ", "Journal du signal Meridian Afterimage"),
+  "quiet-signal-sundog-crown-shard": l("日犬王冠碎片信号日志", "幻日王冠片 信号ログ", "Journal du signal Sundog Crown Shard"),
   "quiet-signal-foundry-ark-wreck": l("铸造方舟残骸信号日志", "鋳造箱舟の残骸 信号ログ", "Journal du signal Foundry Ark Wreck"),
   "quiet-signal-anvil-listener-spoor": l("铁砧监听痕迹信号日志", "金床リスナー痕跡 信号ログ", "Journal du signal Anvil Listener Spoor"),
+  "quiet-signal-obsidian-foundry-wake": l("黑曜铸造尾迹信号日志", "黒曜鋳造航跡 信号ログ", "Journal du signal Obsidian Foundry Wake"),
   "quiet-signal-ghost-iff-challenge": l("幽灵 IFF 质询信号日志", "幽霊IFFチャレンジ 信号ログ", "Journal du signal Ghost IFF Challenge"),
   "quiet-signal-redoubt-silence-test": l("堡垒静默测试信号日志", "堡塁沈黙試験 信号ログ", "Journal du signal Redoubt Silence Test"),
+  "quiet-signal-redoubt-ghost-permit": l("堡垒幽灵许可信号日志", "堡塁幽霊許可 信号ログ", "Journal du signal Redoubt Ghost Permit"),
   "quiet-signal-folded-reflection": l("折叠反射信号日志", "折り畳まれた反射 信号ログ", "Journal du signal Folded Reflection"),
   "quiet-signal-parallax-deep-index": l("视差深层索引信号日志", "視差深層索引 信号ログ", "Journal du signal Parallax Deep Index"),
+  "quiet-signal-parallax-outer-index": l("视差外层索引信号日志", "視差外縁索引 信号ログ", "Journal du signal Parallax Outer Index"),
   "quiet-signal-dead-letter-convoy": l("死信船队信号日志", "死信船団 信号ログ", "Journal du signal Dead Letter Convoy"),
   "quiet-signal-false-mercy-ledger": l("虚假慈悲账本信号日志", "偽りの慈悲台帳 信号ログ", "Journal du signal False Mercy Ledger"),
+  "quiet-signal-moth-vault-ledger": l("蛾影金库账本信号日志", "モス金庫台帳 信号ログ", "Journal du signal Moth Vault Ledger"),
   "quiet-signal-crownside-whisper": l("王冠侧低语信号日志", "王冠側の囁き 信号ログ", "Journal du signal Crownside Whisper"),
   "quiet-signal-pearl-witness-chorus": l("珍珠证人合唱信号日志", "真珠証人合唱 信号ログ", "Journal du signal Pearl Witness Chorus"),
+  "quiet-signal-crownshade-occlusion": l("冠影遮蔽信号日志", "クラウンシェード掩蔽 信号ログ", "Journal du signal Crownshade Occlusion"),
   "quiet-signal-locked-keel-cache": l("锁定龙骨缓存信号日志", "施錠竜骨キャッシュ 信号ログ", "Journal du signal Locked Keel Cache"),
-  "quiet-signal-keel-ghost-route": l("龙骨幽灵航线信号日志", "竜骨幽霊航路 信号ログ", "Journal du signal Keel Ghost Route")
+  "quiet-signal-keel-ghost-route": l("龙骨幽灵航线信号日志", "竜骨幽霊航路 信号ログ", "Journal du signal Keel Ghost Route"),
+  "quiet-signal-keel-archive-prism": l("龙骨档案棱镜信号日志", "竜骨記録プリズム 信号ログ", "Journal du signal Keel Archive Prism")
 };
 
 const explorationMaskedTitles: Record<string, DialogueLocalizedText> = {
   "quiet-signal-sundog-lattice": l("棱镜贸易回声", "プリズム交易エコー", "Echo commercial prismatique"),
   "quiet-signal-meridian-afterimage": l("太阳档案残像", "太陽記録の残像", "Afterimage d'archive solaire"),
+  "quiet-signal-sundog-crown-shard": l("深层王冠折射", "深層王冠屈折", "Refraction Crown profonde"),
   "quiet-signal-foundry-ark-wreck": l("冰冷船体质量", "冷たい船体質量", "Masse de coque froide"),
   "quiet-signal-anvil-listener-spoor": l("矿频监听痕迹", "鉱石帯リスナー痕跡", "Trace d'ecouteur de bande minerai"),
+  "quiet-signal-obsidian-foundry-wake": l("深层锻炉尾迹", "深層炉航跡", "Sillage de forge profond"),
   "quiet-signal-ghost-iff-challenge": l("军用握手故障", "軍用ハンドシェイク障害", "Defaut de poignee de main militaire"),
   "quiet-signal-redoubt-silence-test": l("被压制的巡逻试验", "抑圧された哨戒試験", "Essai de patrouille supprime"),
+  "quiet-signal-redoubt-ghost-permit": l("深层巡逻许可", "深層哨戒許可", "Permis de patrouille profond"),
   "quiet-signal-folded-reflection": l("镜像信号折叠", "鏡像信号フォールド", "Pli de signal miroir"),
   "quiet-signal-parallax-deep-index": l("隐修院索引碎片", "隠修院索引片", "Fragment d'index de l'ermitage"),
+  "quiet-signal-parallax-outer-index": l("深层隐修院索引", "深層隠修院索引", "Index profond de l'ermitage"),
   "quiet-signal-dead-letter-convoy": l("加密碎片轨迹", "暗号化残骸航跡", "Piste de debris chiffres"),
   "quiet-signal-false-mercy-ledger": l("慈悲钥匙账本", "慈悲キー台帳", "Registre des cles Mercy"),
+  "quiet-signal-moth-vault-ledger": l("深层黑账本", "深層黒台帳", "Grand livre noir profond"),
   "quiet-signal-crownside-whisper": l("高频王冠噪声", "高帯域王冠ノイズ", "Bruit Crown haute bande"),
   "quiet-signal-pearl-witness-chorus": l("领事馆证人合唱", "領事館証人合唱", "Choeur de temoins du consulat"),
+  "quiet-signal-crownshade-occlusion": l("深层王冠遮蔽", "深層王冠掩蔽", "Occlusion Crown profonde"),
   "quiet-signal-locked-keel-cache": l("私人缓存脉冲", "私設キャッシュ ping", "Ping de cache privee"),
-  "quiet-signal-keel-ghost-route": l("休眠龙骨航线", "休眠竜骨航路", "Route de quille dormante")
+  "quiet-signal-keel-ghost-route": l("休眠龙骨航线", "休眠竜骨航路", "Route de quille dormante"),
+  "quiet-signal-keel-archive-prism": l("深层龙骨棱镜", "深層竜骨プリズム", "Prisme de quille profond")
 };
 
 const dialogueArchiveLine: DialogueCopy = {

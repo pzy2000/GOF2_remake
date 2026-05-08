@@ -23,6 +23,9 @@ export interface EquipmentRuntimeEffects {
   lootInteractionRange: number;
   salvageInteractionRange: number;
   miningHudRange: number;
+  signalScanRangeBonus: number;
+  signalScanBandBonus: number;
+  signalScanRateMultiplier: number;
   weaponCooldownMultiplier: number;
   echoLockRangeBonus: number;
   echoLockRateMultiplier: number;
@@ -81,6 +84,9 @@ export function getEquipmentEffects(equipment: EquipmentId[]): EquipmentRuntimeE
         lootInteractionRange: effects.lootInteractionRange + (modifiers.scannerRangeBonus ?? 0),
         salvageInteractionRange: effects.salvageInteractionRange + (modifiers.scannerRangeBonus ?? 0),
         miningHudRange: effects.miningHudRange + (modifiers.miningHudRangeBonus ?? 0),
+        signalScanRangeBonus: effects.signalScanRangeBonus + (modifiers.signalScanRangeBonus ?? 0),
+        signalScanBandBonus: effects.signalScanBandBonus + (modifiers.signalScanBandBonus ?? 0),
+        signalScanRateMultiplier: effects.signalScanRateMultiplier * (modifiers.signalScanRateMultiplier ?? 1),
         weaponCooldownMultiplier: effects.weaponCooldownMultiplier * (modifiers.weaponCooldownMultiplier ?? 1),
         echoLockRangeBonus: effects.echoLockRangeBonus + (modifiers.echoLockRangeBonus ?? 0),
         echoLockRateMultiplier: effects.echoLockRateMultiplier * (modifiers.echoLockRateMultiplier ?? 1)
@@ -95,6 +101,9 @@ export function getEquipmentEffects(equipment: EquipmentId[]): EquipmentRuntimeE
       lootInteractionRange: BASE_LOOT_INTERACTION_RANGE,
       salvageInteractionRange: BASE_SALVAGE_INTERACTION_RANGE,
       miningHudRange: BASE_MINING_HUD_RANGE,
+      signalScanRangeBonus: 0,
+      signalScanBandBonus: 0,
+      signalScanRateMultiplier: 1,
       weaponCooldownMultiplier: 1,
       echoLockRangeBonus: 0,
       echoLockRateMultiplier: 1

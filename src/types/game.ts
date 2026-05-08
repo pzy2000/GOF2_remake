@@ -140,7 +140,8 @@ export type EquipmentId =
   | "quantum-reactor"
   | "repair-drone"
   | "targeting-computer"
-  | "echo-nullifier";
+  | "echo-nullifier"
+  | "relic-cartographer";
 
 export type EquipmentSlotType = "primary" | "secondary" | "utility" | "defense" | "engineering";
 
@@ -235,6 +236,9 @@ export interface EquipmentModifiers {
   hullRegenDelay?: number;
   scannerRangeBonus?: number;
   miningHudRangeBonus?: number;
+  signalScanRangeBonus?: number;
+  signalScanBandBonus?: number;
+  signalScanRateMultiplier?: number;
   weaponCooldownMultiplier?: number;
   echoLockRangeBonus?: number;
   echoLockRateMultiplier?: number;
@@ -360,6 +364,7 @@ export interface ExplorationSignalDefinition {
   chainTitle?: string;
   stage?: number;
   prerequisiteSignalIds?: string[];
+  requiredEquipmentAny?: EquipmentId[];
   storyInfluence?: ExplorationStoryInfluence;
   revealStationId?: string;
   revealPlanetIds?: string[];

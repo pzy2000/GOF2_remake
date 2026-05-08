@@ -177,6 +177,23 @@ describe("content data", () => {
     const missionIds = new Set(missionTemplates.map((mission) => mission.id));
     const chainIds = new Set(explorationSignals.map((signal) => signal.chainId ?? signal.id));
     const blueprintIds = new Set(blueprintDefinitions.map((blueprint) => blueprint.equipmentId));
+    const equipmentIds = new Set(equipmentList.map((equipment) => equipment.id));
+    const chains = new Map<string, typeof explorationSignals>();
+    for (const signal of explorationSignals) {
+      const chainId = signal.chainId ?? signal.id;
+      chains.set(chainId, [...(chains.get(chainId) ?? []), signal]);
+    }
+    expect(chains.size).toBe(7);
+    for (const signals of chains.values()) {
+      expect(signals).toHaveLength(3);
+      expect(signals.map((signal) => signal.stage).sort()).toEqual([1, 2, 3]);
+      const deepSignal = signals.find((signal) => signal.stage === 3);
+      expect(deepSignal?.requiredEquipmentAny).toEqual(expect.arrayContaining(["survey-array", "echo-nullifier"]));
+      expect(deepSignal?.prerequisiteSignalIds).toHaveLength(1);
+    }
+    expect(stationById["obsidian-foundry"]).toMatchObject({ hidden: true, systemId: "kuro-belt", techLevel: 4 });
+    expect(stationById["moth-vault"]).toMatchObject({ hidden: true, systemId: "ashen-drift", techLevel: 5 });
+    expect(stationById["crownshade-observatory"]).toMatchObject({ hidden: true, systemId: "celest-gate", techLevel: 5 });
     for (const system of systems) {
       const systemSignals = explorationSignals.filter((signal) => signal.systemId === system.id);
       expect(systemSignals.length).toBeGreaterThanOrEqual(2);
@@ -186,6 +203,9 @@ describe("content data", () => {
       for (const prerequisiteId of signal.prerequisiteSignalIds ?? []) {
         expect(signalIds.has(prerequisiteId)).toBe(true);
         expect(prerequisiteId).not.toBe(signal.id);
+      }
+      for (const equipmentId of signal.requiredEquipmentAny ?? []) {
+        expect(equipmentIds.has(equipmentId)).toBe(true);
       }
       if (signal.stage !== undefined) expect(signal.stage).toBeGreaterThanOrEqual(1);
       if (signal.storyInfluence) expect(missionIds.has(signal.storyInfluence.missionId)).toBe(true);
