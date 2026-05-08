@@ -2,6 +2,8 @@ export const LOCALE_STORAGE_KEY = "gof2-by-pzy-locale";
 
 export const locales = ["en", "zh-CN", "zh-TW", "ja", "fr"] as const;
 export type Locale = (typeof locales)[number];
+export type ContentLocale = Exclude<Locale, "en">;
+export type LocalizedText = Partial<Record<ContentLocale, string>>;
 
 export const DEFAULT_LOCALE: Locale = "en";
 
@@ -222,6 +224,7 @@ const exactText = {
     "Next": "下一句",
     "Skip": "跳过",
     "Close dialogue": "关闭对白",
+    "Dialogue transcript": "对白记录",
     "Glass Wake Protocol": "Glass Wake 协议",
     "Signal source missing from mission registry.": "任务注册表中缺少信号来源。",
     "Complete prior protocol entries to resolve the next trace.": "完成前序协议条目以解析下一条痕迹。",
@@ -325,6 +328,8 @@ const exactText = {
     "Next": "次へ",
     "Done": "完了",
     "Skip": "スキップ",
+    "Close dialogue": "対話を閉じる",
+    "Dialogue transcript": "対話履歴",
     "Risk": "リスク",
     "Known": "既知",
     "known": "既知",
@@ -385,13 +390,15 @@ const exactText = {
     "Game Over": "Partie terminée",
     "No target": "Aucune cible",
     "Active Missions": "Missions actives",
-    "Comms": "Comms",
+    "Comms": "Communications",
     "Route Planning": "Planification",
     "Set Route": "Définir la route",
     "Voice ready": "Voix prête",
     "Next": "Suivant",
     "Done": "Terminé",
     "Skip": "Passer",
+    "Close dialogue": "Fermer le dialogue",
+    "Dialogue transcript": "Transcription du dialogue",
     "Risk": "Risque",
     "Known": "Connu",
     "known": "connu",
@@ -674,7 +681,6 @@ const phraseGlossaries = {
   ]
 } satisfies Record<Exclude<Locale, "en">, Array<[string, string]>>;
 
-type ContentLocale = Exclude<Locale, "en">;
 type LocalizedCatalog = Record<string, Partial<Record<ContentLocale, string>>>;
 
 const commodityNames: LocalizedCatalog = {
@@ -1379,6 +1385,15 @@ export function translateText(source: string | undefined | null, locale: Locale)
   if (pattern) return pattern;
   const glossed = applyGlossary(source, locale);
   return glossed;
+}
+
+export function localizeTextEntry(source: string, localized: LocalizedText | undefined, locale: Locale): string {
+  if (locale === "en") return source;
+  const direct = localized?.[locale];
+  if (direct) return locale === "zh-TW" ? toTraditional(direct) : direct;
+  const simplified = locale === "zh-TW" ? localized?.["zh-CN"] : undefined;
+  if (simplified) return toTraditional(simplified);
+  return translateText(source, locale);
 }
 
 export function hasExactTranslation(source: string, locale: Locale): boolean {

@@ -32,6 +32,10 @@ type ScanKeyboardState = {
 };
 
 type TestSpeechHarness = {
+  current?: {
+    text: string;
+    lang: string;
+  };
   endCurrent: () => void;
   endLastCanceled: () => void;
 };
@@ -172,6 +176,13 @@ async function endLastCanceledVoice(page: Page) {
   });
 }
 
+async function getCurrentVoice(page: Page): Promise<{ text: string; lang: string } | undefined> {
+  return page.evaluate(() => {
+    const utterance = (window as unknown as { __GOF2_TEST_SPEECH__: TestSpeechHarness }).__GOF2_TEST_SPEECH__.current;
+    return utterance ? { text: utterance.text, lang: utterance.lang } : undefined;
+  });
+}
+
 async function expectWebGlCanvasHasPixels(page: Page) {
   const canvas = page.locator(".flight-canvas canvas");
   await expect(canvas).toBeVisible();
@@ -280,6 +291,7 @@ test.describe("browser smoke", () => {
   });
 
   test("persists Simplified Chinese language selection across menu, HUD, station, and settings", async ({ page }) => {
+    await installSpeechSynthesisStub(page);
     await resetApp(page);
     await page.getByLabel("Select language").selectOption("zh-CN");
     await expect(page.getByRole("button", { name: "新游戏" })).toBeVisible();
@@ -304,6 +316,18 @@ test.describe("browser smoke", () => {
     await expect(page.getByTestId("market-row-basic-food")).toContainText("出口");
     await expect(page.getByTestId("market-row-drinking-water")).toContainText("饮用水");
     await expect(page.locator(".station-screen")).not.toContainText(/Helion Prime Exchange|Solar Directorate|Trade Hub|Basic Food|Drinking Water|Electronics|Medical Supplies|Energy Cells|Hold|Export|Import|Balanced/);
+    await page.getByRole("button", { name: "任务板" }).click();
+    await page.getByTestId("mission-card-story-clean-carrier").getByRole("button", { name: "接受" }).click();
+    const dialogue = page.getByTestId("dialogue-overlay");
+    await expect(dialogue).toContainText("洁净航载简报");
+    await expect(dialogue).toContainText("洁净同步钥");
+    await expect(dialogue).not.toContainText(/Clean Carrier Briefing|Helion traffic|pirate repeater|private courier|Mirr filter/);
+    await expect.poll(() => getCurrentVoice(page)).toMatchObject({
+      lang: "zh-CN",
+      text: expect.stringContaining("洁净同步钥")
+    });
+    await dialogue.getByRole("button", { name: "跳过" }).click();
+    await expect(dialogue).toHaveCount(0);
     await page.evaluate(() => {
       window.__GOF2_E2E__!.setState({ screen: "settings" });
     });

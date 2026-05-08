@@ -2,6 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { dialogueSceneById, dialogueSpeakerById } from "../data/world";
 import { getFactionIcon } from "../data/iconAtlas";
 import { useGameStore } from "../state/gameStore";
+import {
+  localizeDialogueGroupLabel,
+  localizeDialogueLineText,
+  localizeDialogueSceneTitle,
+  localizeDialogueSpeakerName,
+  localizeDialogueSpeakerRole
+} from "../systems/dialogueLocalization";
 import { voiceSystem } from "../systems/voice";
 import { AtlasIcon } from "./AtlasIcon";
 import type { AssetManifest } from "../types/game";
@@ -53,10 +60,11 @@ export function DialogueOverlay() {
   const line = scene ? scene.lines[activeDialogue?.lineIndex ?? 0] : undefined;
   const speaker = line ? dialogueSpeakerById[line.speakerId] : undefined;
   const transcript = useMemo(() => scene?.lines.slice(0, (activeDialogue?.lineIndex ?? 0) + 1) ?? [], [activeDialogue?.lineIndex, scene]);
+  const localizedLineText = line ? localizeDialogueLineText(line, locale) : "";
 
   useEffect(() => {
     if (!line || !speaker) return undefined;
-    voiceSystem.speak(translateText(line.text, locale), speaker.voiceProfile, {
+    voiceSystem.speak(localizeDialogueLineText(line, locale), speaker.voiceProfile, {
       locale,
       onEnd: () => {
         setVoiceStatus(voiceSystem.debugState);
@@ -86,53 +94,57 @@ export function DialogueOverlay() {
 
   function playPause() {
     const state = voiceSystem.pauseOrResume();
-    if (state === "idle" && line && speaker) voiceSystem.speak(translateText(line.text, locale), speaker.voiceProfile, { locale });
+    if (state === "idle" && line && speaker) voiceSystem.speak(localizeDialogueLineText(line, locale), speaker.voiceProfile, { locale });
     setVoiceStatus(voiceSystem.debugState);
   }
 
   function replayVoice() {
     if (!line || !speaker) return;
-    voiceSystem.speak(translateText(line.text, locale), speaker.voiceProfile, { locale });
+    voiceSystem.speak(localizeDialogueLineText(line, locale), speaker.voiceProfile, { locale });
     setVoiceStatus(voiceSystem.debugState);
   }
 
   const isPlayer = speaker.kind === "player";
   const currentIndex = activeDialogue.lineIndex;
   const atEnd = currentIndex >= scene.lines.length - 1;
+  const sceneTitle = localizeDialogueSceneTitle(scene, locale);
+  const groupLabel = localizeDialogueGroupLabel(scene.group, locale);
+  const speakerName = localizeDialogueSpeakerName(speaker, locale);
+  const speakerRole = localizeDialogueSpeakerRole(speaker, locale);
   return (
-    <section className="dialogue-backdrop" role="dialog" aria-modal="true" aria-label={`Comms dialogue: ${translateText(scene.title, locale)}`} data-testid="dialogue-overlay">
+    <section className="dialogue-backdrop" role="dialog" aria-modal="true" aria-label={`${translateText("Comms", locale)}: ${sceneTitle}`} data-testid="dialogue-overlay">
       <div className="dialogue-panel">
         <header className="dialogue-header">
           <div>
-            <p className="eyebrow">{scene.group === "story" ? "Glass Wake Protocol" : "Quiet Signals"}</p>
-            <h2>{translateText(scene.title, locale)}</h2>
+            <p className="eyebrow">{groupLabel}</p>
+            <h2>{sceneTitle}</h2>
           </div>
-          <button className="dialogue-close" onClick={close} aria-label="Close dialogue">X</button>
+          <button className="dialogue-close" onClick={close} aria-label={translateText("Close dialogue", locale)}>X</button>
         </header>
         <div className={`dialogue-current ${isPlayer ? "player-line" : ""}`}>
           <SpeakerBadge manifest={manifest} speakerId={speaker.id} />
           <div>
-            <span>{speaker.name} · {translateText(speaker.role, locale)}</span>
-            <p>{translateText(line.text, locale)}</p>
+            <span>{speakerName} · {speakerRole}</span>
+            <p>{localizedLineText}</p>
           </div>
         </div>
-        <div className="dialogue-transcript" aria-label="Dialogue transcript">
+        <div className="dialogue-transcript" aria-label={translateText("Dialogue transcript", locale)}>
           {transcript.map((item, index) => {
             const itemSpeaker = dialogueSpeakerById[item.speakerId];
             return (
               <p key={`${scene.id}-${index}`} className={index === currentIndex ? "active" : ""}>
-                <b>{itemSpeaker?.name ?? item.speakerId}</b>
-                {translateText(item.text, locale)}
+                <b>{itemSpeaker ? localizeDialogueSpeakerName(itemSpeaker, locale) : item.speakerId}</b>
+                {localizeDialogueLineText(item, locale)}
               </p>
             );
           })}
         </div>
         <footer className="dialogue-actions">
-          <span>{voiceStatus.supported ? voiceStatus.paused ? "Voice paused" : voiceStatus.speaking ? "Voice playing" : "Voice ready" : "Voice unavailable"}</span>
-          <button onClick={playPause}>Play/Pause</button>
-          <button onClick={replayVoice}>Replay Voice</button>
-          <button className="primary" onClick={next}>{atEnd ? "Done" : "Next"}</button>
-          <button onClick={close}>Skip</button>
+          <span>{translateText(voiceStatus.supported ? voiceStatus.paused ? "Voice paused" : voiceStatus.speaking ? "Voice playing" : "Voice ready" : "Voice unavailable", locale)}</span>
+          <button onClick={playPause}>{translateText("Play/Pause", locale)}</button>
+          <button onClick={replayVoice}>{translateText("Replay Voice", locale)}</button>
+          <button className="primary" onClick={next}>{translateText(atEnd ? "Done" : "Next", locale)}</button>
+          <button onClick={close}>{translateText("Skip", locale)}</button>
         </footer>
       </div>
     </section>

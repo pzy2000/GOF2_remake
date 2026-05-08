@@ -35,6 +35,14 @@ function hasEquipment(id: string): id is EquipmentId {
   return id in equipmentById;
 }
 
+const requiredDialogueLocales = ["zh-CN", "ja", "fr"] as const;
+
+function requireDialogueLocalization(localized: Partial<Record<(typeof requiredDialogueLocales)[number], string>> | undefined, label: string, errors: string[]) {
+  for (const locale of requiredDialogueLocales) {
+    if (!localized?.[locale]?.trim()) errors.push(`${label} is missing ${locale} localization`);
+  }
+}
+
 export function validateContentData(): ContentValidationResult {
   const errors: string[] = [];
 
@@ -258,13 +266,17 @@ export function validateContentData(): ContentValidationResult {
 
   for (const speaker of dialogueSpeakers) {
     if (speaker.factionId && !hasFaction(speaker.factionId)) errors.push(`Dialogue speaker ${speaker.id} references unknown faction ${speaker.factionId}`);
+    requireDialogueLocalization(speaker.nameI18n, `Dialogue speaker ${speaker.id} name`, errors);
+    requireDialogueLocalization(speaker.roleI18n, `Dialogue speaker ${speaker.id} role`, errors);
   }
 
   for (const scene of dialogueScenes) {
     if (scene.lines.length === 0) errors.push(`Dialogue scene ${scene.id} has no lines`);
+    requireDialogueLocalization(scene.titleI18n, `Dialogue scene ${scene.id} title`, errors);
     for (const line of scene.lines) {
       if (!speakerIds.has(line.speakerId)) errors.push(`Dialogue scene ${scene.id} references unknown speaker ${line.speakerId}`);
       if (!line.text.trim()) errors.push(`Dialogue scene ${scene.id} has an empty line`);
+      requireDialogueLocalization(line.textI18n, `Dialogue scene ${scene.id} line`, errors);
     }
     if (scene.trigger.kind === "story-accept" || scene.trigger.kind === "story-complete") {
       const trigger = scene.trigger;

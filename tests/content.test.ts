@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { blueprintDefinitions, commodities, contrabandLawBySystem, dialogueScenes, dialogueSpeakers, equipmentById, equipmentList, explorationSignals, glassWakeProtocol, missionTemplates, planetById, planets, ships, stationById, stations, systems } from "../src/data/world";
+import { blueprintDefinitions, commodities, contrabandLawBySystem, dialogueSceneById, dialogueScenes, dialogueSpeakerById, dialogueSpeakers, equipmentById, equipmentList, explorationSignals, glassWakeProtocol, missionTemplates, planetById, planets, ships, stationById, stations, systems } from "../src/data/world";
 import { fallbackAssetManifest } from "../src/systems/assets";
 import { createAsteroidsForSystem } from "../src/systems/asteroids";
 import { getEquipmentSlotUsage, getShipSlotCapacity } from "../src/systems/equipment";
@@ -7,6 +7,7 @@ import { distance } from "../src/systems/math";
 import { validateContentData } from "../src/data/validate";
 import { createInitialMarketState } from "../src/systems/economy";
 import { voiceProfiles } from "../src/systems/voice";
+import { localizeDialogueLineText, localizeDialogueSceneTitle, localizeDialogueSpeakerName, localizeDialogueSpeakerRole } from "../src/systems/dialogueLocalization";
 import type { PlanetDefinition, StationDefinition } from "../src/types/game";
 
 function idsAreUnique(ids: string[]): boolean {
@@ -18,9 +19,17 @@ const PLANET_PAIR_CLEARANCE = 160;
 const JUMP_GATE_VISUAL_RADIUS = 140;
 const ASTEROID_PLANET_CLEARANCE = 100;
 const STATION_PAIR_DISTANCE = 300;
+const requiredDialogueLocales = ["zh-CN", "ja", "fr"] as const;
+const runtimeDialogueLocales = ["zh-CN", "zh-TW", "ja", "fr"] as const;
 
 function formatClearance(clearance: number): string {
   return clearance.toFixed(1);
+}
+
+function expectRequiredDialogueLocalization(localized: Partial<Record<(typeof requiredDialogueLocales)[number], string>> | undefined, label: string) {
+  for (const locale of requiredDialogueLocales) {
+    expect(localized?.[locale]?.trim(), `${label} missing ${locale}`).toBeTruthy();
+  }
 }
 
 describe("content data", () => {
@@ -280,5 +289,36 @@ describe("content data", () => {
     for (const signal of explorationSignals) {
       expect(dialogueScenes.filter((scene) => scene.trigger.kind === "exploration-complete" && scene.trigger.signalId === signal.id)).toHaveLength(1);
     }
+  });
+
+  it("defines required localized dialogue copy for every runtime scene", () => {
+    for (const speaker of dialogueSpeakers) {
+      expectRequiredDialogueLocalization(speaker.nameI18n, `speaker ${speaker.id} name`);
+      expectRequiredDialogueLocalization(speaker.roleI18n, `speaker ${speaker.id} role`);
+    }
+
+    for (const scene of dialogueScenes) {
+      expectRequiredDialogueLocalization(scene.titleI18n, `dialogue scene ${scene.id} title`);
+      for (const [index, line] of scene.lines.entries()) {
+        expectRequiredDialogueLocalization(line.textI18n, `dialogue scene ${scene.id} line ${index}`);
+      }
+    }
+  });
+
+  it("localizes Clean Carrier dialogue from structured copy instead of glossary fragments", () => {
+    const scene = dialogueSceneById["dialogue-story-clean-carrier-accept"];
+    const line = scene.lines[0];
+    const speaker = dialogueSpeakerById[line.speakerId];
+
+    for (const locale of runtimeDialogueLocales) {
+      expect(localizeDialogueSceneTitle(scene, locale)).not.toBe(scene.title);
+      expect(localizeDialogueLineText(line, locale)).not.toBe(line.text);
+      expect(localizeDialogueSpeakerRole(speaker, locale)).not.toBe(speaker.role);
+      expect(localizeDialogueSpeakerName(speaker, locale).trim()).toBeTruthy();
+    }
+
+    const simplified = `${localizeDialogueSceneTitle(scene, "zh-CN")} ${localizeDialogueLineText(line, "zh-CN")} ${localizeDialogueSpeakerRole(speaker, "zh-CN")}`;
+    expect(simplified).toContain("洁净同步钥");
+    expect(simplified).not.toMatch(/Clean Carrier|Helion traffic|pirate repeater|private courier|Mirr filter|traffic handler/);
   });
 });
