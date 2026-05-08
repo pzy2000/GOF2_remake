@@ -539,7 +539,9 @@ test.describe("browser smoke", () => {
     await expect(economy).toContainText("Ore Cutter");
     await expect(economy).toContainText("MINING · Iron");
     await expect(economy).toContainText("Shortage");
-    await expect(economy).toContainText("Ore Cutter mined 1 Iron.");
+    const eventsList = economy.locator(".economy-events-list");
+    await expect(eventsList).toContainText("Ore Cutter mined 1 Iron.");
+    expect(await eventsList.evaluate((element) => getComputedStyle(element).overflowY)).toBe("auto");
     const resetButton = page.getByRole("button", { name: "Reset Economy" });
     await expect(resetButton).toBeVisible();
     page.once("dialog", async (dialog) => {

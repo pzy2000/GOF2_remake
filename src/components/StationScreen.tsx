@@ -572,15 +572,17 @@ function EconomyTab() {
         </section>
         <section className="economy-card economy-events-card">
           <h3>{translateText("Recent Economy Events", locale)}</h3>
-          {events.length > 0 ? (
-            events.map((event) => (
-              <p key={event.id}>
-                <span>{event.type.toUpperCase()}</span> {formatRuntimeText(locale, event.message)}
-              </p>
-            ))
-          ) : (
-            <p>{translateText("No backend events received yet.", locale)}</p>
-          )}
+          <div className="economy-events-list">
+            {events.length > 0 ? (
+              events.map((event) => (
+                <p key={event.id}>
+                  <span>{event.type.toUpperCase()}</span> {formatRuntimeText(locale, event.message)}
+                </p>
+              ))
+            ) : (
+              <p>{translateText("No backend events received yet.", locale)}</p>
+            )}
+          </div>
         </section>
       </div>
     </div>

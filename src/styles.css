@@ -1018,6 +1018,21 @@ button.danger {
   color: #f5fbff;
 }
 
+.economy-events-card {
+  grid-template-rows: auto minmax(0, 1fr);
+  max-height: 360px;
+}
+
+.economy-events-list {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 3px;
+  scrollbar-gutter: stable;
+}
+
 .economy-npc-row span,
 .economy-events-card span {
   color: #9bffe8;
