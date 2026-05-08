@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConvoyEntity, FlightEntity } from "../src/types/game";
+import { createShipEntity } from "../src/state/domains/runtimeFactory";
 
 class MemoryStorage implements Storage {
   private data = new Map<string, string>();
@@ -275,6 +276,74 @@ describe("combat AI store wiring", () => {
     const state = store.getState();
     expect(state.runtime.convoys[0]).toMatchObject({ status: "distress", threatId: "test-pirate" });
     expect(state.runtime.projectiles.some((projectile) => projectile.owner === "npc" && projectile.targetId === "test-pirate")).toBe(true);
+  });
+
+  it("marks attacked civilians as distressed and redirects patrol support to the attacker", async () => {
+    const store = await freshStore();
+    const freighter = createShipEntity("test-freighter", "freighter", [80, 0, 120], "ashen-drift");
+    store.setState((state) => ({
+      currentSystemId: "ashen-drift",
+      player: { ...state.player, position: [900, 0, 900] },
+      runtime: {
+        ...state.runtime,
+        enemies: [
+          patrol([0, 0, 120]),
+          freighter,
+          pirate([130, 0, 120], { aiTargetId: "test-freighter" })
+        ],
+        convoys: [],
+        projectiles: [],
+        effects: [],
+        message: "",
+        clock: 0,
+        graceUntil: 0
+      }
+    }));
+
+    store.getState().tick(0.2);
+
+    const state = store.getState();
+    const distressed = state.runtime.enemies.find((ship) => ship.id === "test-freighter");
+    expect(distressed?.distressThreatId).toBe("test-pirate");
+    expect(state.runtime.enemies.find((ship) => ship.id === "test-patrol")?.aiTargetId).toBe("test-pirate");
+    expect(state.runtime.enemies.filter((ship) => ship.supportWing).every((ship) => ship.aiTargetId === "test-pirate")).toBe(true);
+    expect(state.runtime.message).toContain("Distress call");
+  });
+
+  it("does not let economy status suppress miner distress under local attack", async () => {
+    const store = await freshStore();
+    const miner = {
+      ...createShipEntity("economy-miner", "miner", [80, 0, 120], "ashen-drift"),
+      economyStatus: "IDLE",
+      economyTaskKind: "idle",
+      economyTargetId: undefined
+    } satisfies FlightEntity;
+    store.setState((state) => ({
+      currentSystemId: "ashen-drift",
+      player: { ...state.player, position: [900, 0, 900] },
+      runtime: {
+        ...state.runtime,
+        enemies: [
+          patrol([0, 0, 120]),
+          miner,
+          pirate([130, 0, 120], { aiTargetId: "economy-miner" })
+        ],
+        convoys: [],
+        projectiles: [],
+        effects: [],
+        message: "",
+        clock: 0,
+        graceUntil: 0
+      }
+    }));
+
+    store.getState().tick(0.2);
+
+    const state = store.getState();
+    const distressedMiner = state.runtime.enemies.find((ship) => ship.id === "economy-miner");
+    expect(distressedMiner?.distressThreatId).toBe("test-pirate");
+    expect(distressedMiner?.aiTargetId).toBe("test-pirate");
+    expect(state.runtime.enemies.find((ship) => ship.id === "test-patrol")?.aiTargetId).toBe("test-pirate");
   });
 
   it("lets player attacks destroy civilian NPCs and drop cargo or equipment", async () => {

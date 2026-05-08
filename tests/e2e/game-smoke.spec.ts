@@ -502,6 +502,103 @@ test.describe("browser smoke", () => {
     await expect(page.locator(".target-label.npc-label", { hasText: "MINING · Iron" })).toBeVisible();
   });
 
+  test("surfaces civilian distress and patrol support in flight", async ({ page }) => {
+    await resetApp(page);
+    await startNewGame(page);
+
+    await page.evaluate(() => {
+      const current = window.__GOF2_E2E__!.getState() as {
+        player: Record<string, unknown>;
+        runtime: Record<string, unknown>;
+      };
+      window.__GOF2_E2E__!.setState({
+        currentSystemId: "ashen-drift",
+        player: { ...current.player, position: [900, 0, 900] },
+        runtime: {
+          ...current.runtime,
+          clock: 0,
+          graceUntil: 0,
+          message: "",
+          effects: [],
+          projectiles: [],
+          convoys: [],
+          enemies: [
+            {
+              id: "e2e-patrol",
+              name: "Directorate Patrol",
+              role: "patrol",
+              factionId: "solar-directorate",
+              position: [0, 0, 30],
+              velocity: [0, 0, 0],
+              hull: 115,
+              shield: 85,
+              maxHull: 115,
+              maxShield: 85,
+              lastDamageAt: -999,
+              fireCooldown: 1,
+              aiProfileId: "law-patrol",
+              aiState: "patrol",
+              aiTimer: 0
+            },
+            {
+              id: "e2e-freighter",
+              name: "Tender Freighter",
+              role: "freighter",
+              factionId: "free-belt-union",
+              position: [0, 12, 20],
+              velocity: [0, 0, 0],
+              hull: 140,
+              shield: 70,
+              maxHull: 140,
+              maxShield: 70,
+              lastDamageAt: -999,
+              fireCooldown: 1,
+              aiProfileId: "freighter",
+              aiState: "patrol",
+              aiTimer: 0,
+              economyStatus: "HAULING · Basic Food",
+              economyTaskKind: "hauling",
+              economyCargo: { "basic-food": 4 },
+              distressThreatId: "e2e-pirate",
+              distressCalledAt: 0
+            },
+            {
+              id: "e2e-pirate",
+              name: "Knife Wing Pirate",
+              role: "pirate",
+              factionId: "independent-pirates",
+              position: [60, 0, 20],
+              velocity: [0, 0, 0],
+              hull: 70,
+              shield: 42,
+              maxHull: 70,
+              maxShield: 42,
+              lastDamageAt: -999,
+              fireCooldown: 1,
+              aiProfileId: "raider",
+              loadoutId: "pirate-raider",
+              aiState: "attack",
+              aiTargetId: "e2e-freighter",
+              aiTimer: 0
+            }
+          ]
+        }
+      });
+    });
+
+    await expect(page.locator(".civilian-distress-label")).toContainText("DISTRESS");
+
+    await page.evaluate(() => {
+      const state = window.__GOF2_E2E__!.getState() as { tick: (delta: number) => void };
+      state.tick(0.2);
+    });
+
+    await page.waitForFunction(() => {
+      const state = window.__GOF2_E2E__!.getState() as { runtime: { enemies: Array<{ supportWing?: boolean; aiTargetId?: string }>; message: string } };
+      return state.runtime.enemies.some((ship) => ship.supportWing && ship.aiTargetId === "e2e-pirate") && state.runtime.message.includes("Distress call");
+    });
+  });
+
   test("surfaces the station economy cockpit and flight NPC route lines", async ({ page }) => {
     await resetApp(page);
     await startNewGame(page);

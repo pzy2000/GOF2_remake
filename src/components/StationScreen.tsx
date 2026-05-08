@@ -50,6 +50,7 @@ import {
   isBlueprintUnlocked
 } from "../systems/equipment";
 import { getContrabandLawSummary } from "../systems/combatAi";
+import { hasActiveCivilianDistress } from "../state/domains/combatRuntime";
 import type { AssetManifest, BlueprintPath, CargoHold, CommodityId, EquipmentId, EquipmentSlotType, FactionId, StationTab } from "../types/game";
 import {
   formatCargoContents,
@@ -499,17 +500,19 @@ function EconomyTab() {
             <div className="economy-npc-list">
               {economyShips.map((ship) => {
                 const route = getEconomyFlightRouteSummary(ship, runtime.asteroids, currentSystem.id);
+                const distressActive = hasActiveCivilianDistress(ship, runtime.clock);
                 return (
-                  <article key={ship.id} className={`economy-npc-row task-${ship.economyTaskKind ?? "idle"}`}>
+                  <article key={ship.id} className={`economy-npc-row task-${ship.economyTaskKind ?? "idle"}${distressActive ? " distress" : ""}`}>
                     <div>
                       <b>{translateDisplayName(ship.name, locale)}</b>
-                      <span>{formatRuntimeText(locale, ship.economyStatus)}</span>
+                      <span>{distressActive ? `${translateText("DISTRESS", locale)} · ${formatRuntimeText(locale, ship.economyStatus)}` : formatRuntimeText(locale, ship.economyStatus)}</span>
                       <button className="economy-watch-button" onClick={() => startEconomyNpcWatch(ship.id)}>
                         {translateText("Watch", locale)}
                       </button>
                     </div>
                     <p>
                       {translateText("Target", locale)}: {formatRuntimeText(locale, route.targetLabel)}
+                      {distressActive ? ` · ${translateText("Under attack", locale)}` : ""}
                       {route.detailLabels.length > 0 ? route.detailLabels.map((detail) => ` · ${formatRuntimeText(locale, detail)}`).join("") : ""}
                       {ship.economyCargo && Object.keys(ship.economyCargo).length > 0 ? ` · ${formatCargoContents(locale, ship.economyCargo)}` : ` · ${translateText("Empty hold", locale)}`}
                     </p>

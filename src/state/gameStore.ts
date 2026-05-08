@@ -124,7 +124,9 @@ import {
 import {
   advanceConvoyEntity,
   createPatrolSupportRequest,
-  hasLocalCombatThreat
+  getActiveCivilianDistress,
+  hasLocalCombatThreat,
+  resolveCivilianDistress
 } from "./domains/combatRuntime";
 import { applyEconomySnapshotPatch, offlineEconomyPatch, shouldReportEconomyNpcDestroyed } from "./domains/economyRuntime";
 import { applyExpiredMissions } from "./domains/missionRuntime";
@@ -757,6 +759,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       secondaryCooldown = getWeaponCooldown(secondaryWeapon, player.equipment);
     }
 
+    runtime.enemies = runtime.enemies.map((ship) => resolveCivilianDistress(ship, runtime.enemies, now));
     const pirates = sortPirateTargets(runtime.enemies);
     const graceActive = now < runtime.graceUntil;
     let reputation = state.reputation;
@@ -771,7 +774,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       if (ship.hull <= 0 || ship.deathTimer !== undefined) return ship;
       const wantedByPatrol = ship.role === "patrol" && (isFactionWanted(factionHeat, ship.factionId, gameClock) || isFactionWanted(factionHeat, localLawFactionId, gameClock));
       const aiShip = wantedByPatrol ? { ...ship, aiState: "attack" as const, aiTargetId: "player", scanProgress: 1 } : ship;
-      if (aiShip.economyStatus && !isHostileToPlayer(aiShip) && !hasLocalCombatThreat(aiShip, runtime.enemies)) {
+      if (aiShip.economyStatus && !isHostileToPlayer(aiShip) && !hasLocalCombatThreat(aiShip, runtime.enemies, now)) {
         return regenerateShield(
           {
             ...aiShip,
@@ -801,6 +804,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         velocity: scale(ai.desiredDirection, ai.speed),
         position: add(ship.position, scale(ai.desiredDirection, ai.speed * delta))
       };
+      moved = resolveCivilianDistress(moved, runtime.enemies, now);
       if (ai.scanComplete) {
         const law = getContrabandLaw(state.currentSystemId);
         const contrabandAmount = player.cargo["illegal-contraband"] ?? 0;
@@ -1008,7 +1012,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
           const shielded = ship.shield > 0;
           let damaged = applyDamage(ship, projectile.damage, now);
           if (projectile.owner === "enemy" && ["trader", "freighter", "courier", "miner"].includes(ship.role)) {
-            damaged = { ...damaged, distressThreatId: "hostile-contact", distressCalledAt: gameClock };
+            const threat = runtime.enemies.find((enemy) =>
+              enemy.id !== ship.id &&
+              enemy.aiTargetId === ship.id &&
+              enemy.hull > 0 &&
+              enemy.deathTimer === undefined &&
+              (enemy.storyTarget || enemy.role === "pirate" || enemy.role === "drone" || enemy.role === "relay")
+            );
+            damaged = { ...damaged, distressThreatId: threat?.id ?? ship.distressThreatId ?? "hostile-contact", distressCalledAt: now };
           }
           consumed = true;
           runtime.effects.push({
@@ -1112,7 +1123,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
                 aiTargetId: "player",
                 provokedByPlayer: true,
                 distressThreatId: "player",
-                distressCalledAt: gameClock
+                distressCalledAt: now
               };
               audioSystem.play(incident.wanted ? "mission-fail" : "ui-click");
             }
@@ -1177,6 +1188,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
           : ship
       );
     }
+    runtime.enemies = runtime.enemies.map((ship) => resolveCivilianDistress(ship, runtime.enemies, now));
+    const civilianDistress = getActiveCivilianDistress(runtime.enemies, now)[0];
+    const distressMessage = civilianDistress
+      ? `Distress call: ${civilianDistress.civilian.name} under attack by ${civilianDistress.threat.name}.`
+      : undefined;
     runtime = {
       ...runtime,
       projectiles: remainingProjectiles,
@@ -1309,12 +1325,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
               ? lawNotification.body
             : lootDrops.length
               ? "Target destroyed. Cargo canister released."
-              : miningActive
-                ? expiration.runtime.message
-              : explorationMessageActive
-                ? expiration.runtime.message
-              : graceActive
-                ? `Pirates are sizing you up · weapons free in ${Math.ceil(runtime.graceUntil - now)}s`
+            : miningActive
+              ? expiration.runtime.message
+            : explorationMessageActive
+              ? expiration.runtime.message
+            : distressMessage && (!expiration.runtime.message || expiration.runtime.message.startsWith("Distress call") || expiration.runtime.message.startsWith("Patrol support wing"))
+              ? distressMessage
+            : graceActive
+              ? `Pirates are sizing you up · weapons free in ${Math.ceil(runtime.graceUntil - now)}s`
               : expiration.runtime.message,
         storyNotification,
         lawNotification

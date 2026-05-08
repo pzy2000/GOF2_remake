@@ -398,6 +398,12 @@ h3 {
   color: #ffe0a3;
 }
 
+.civilian-distress-label {
+  border-color: rgba(255, 122, 79, 0.78);
+  background: rgba(35, 8, 8, 0.82);
+  color: #ffe2c4;
+}
+
 .waypoint-label {
   min-width: 126px;
   padding: 6px 8px;
@@ -1147,6 +1153,12 @@ button.danger {
   border-radius: 6px;
   background: rgba(2, 15, 20, 0.58);
   padding: 9px;
+}
+
+.economy-npc-row.distress {
+  border-color: rgba(255, 122, 79, 0.44);
+  background: rgba(32, 10, 8, 0.64);
+  box-shadow: inset 0 0 0 1px rgba(255, 122, 79, 0.12);
 }
 
 .economy-npc-row div {

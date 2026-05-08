@@ -15,6 +15,7 @@ import { getIncompleteExplorationSignals, getVisibleStationsForSystem, isExplora
 import { getExplorationObjectiveSummaryForSignal } from "../systems/explorationObjectives";
 import { getStoryObjectiveSummary } from "../systems/story";
 import { getEconomyFlightRouteCue } from "../systems/economyRoutes";
+import { hasActiveCivilianDistress } from "../state/domains/combatRuntime";
 import {
   formatCargoContents,
   formatDistance,
@@ -363,6 +364,25 @@ function PlayerShip({ onModelStatus }: { onModelStatus: (status: ShipModelStatus
   );
 }
 
+function CivilianDistressMarker({ ship, distanceFactor = 12 }: { ship: FlightEntity; distanceFactor?: number }) {
+  const clock = useGameStore((state) => state.runtime.clock);
+  const locale = useGameStore((state) => state.locale);
+  if (!hasActiveCivilianDistress(ship, clock)) return null;
+  const pulse = 0.5 + Math.sin(clock * 7.4 + ship.position[0] * 0.02) * 0.5;
+  return (
+    <>
+      <mesh rotation={[Math.PI / 2, 0, clock * 1.1]}>
+        <torusGeometry args={[38 + pulse * 7, 1.4, 8, 54]} />
+        <meshBasicMaterial color="#ff7a4f" transparent opacity={0.32 + pulse * 0.28} toneMapped={false} />
+      </mesh>
+      <pointLight color="#ff7a4f" intensity={0.8 + pulse * 0.7} distance={170} />
+      <Html center distanceFactor={distanceFactor} className="target-label civilian-distress-label">
+        {translateText("DISTRESS", locale)} · {ship.economyStatus ? formatRuntimeText(locale, ship.economyStatus) : translateText("Under attack", locale)}
+      </Html>
+    </>
+  );
+}
+
 function FreighterNpcShip({ ship }: { ship: FlightEntity }) {
   const clock = useGameStore((state) => state.runtime.clock);
   const locale = useGameStore((state) => state.locale);
@@ -378,6 +398,7 @@ function FreighterNpcShip({ ship }: { ship: FlightEntity }) {
   const opacity = ship.deathTimer !== undefined ? 0.45 : 1;
   const speed = Math.hypot(...ship.velocity);
   const flameScale = Math.max(0.5, Math.min(1.7, speed / 100));
+  const distressActive = hasActiveCivilianDistress(ship, clock);
   return (
     <group position={toThree(ship.position)} rotation={[0, yaw, 0]} scale={ship.deathTimer !== undefined ? 0.86 : 1}>
       <mesh castShadow>
@@ -409,9 +430,12 @@ function FreighterNpcShip({ ship }: { ship: FlightEntity }) {
         <coneGeometry args={[5.8, 20, 16]} />
         <meshBasicMaterial color="#6ee7ff" transparent opacity={0.32} toneMapped={false} />
       </mesh>
-      <Html center distanceFactor={13} className="target-label npc-label">
-        {ship.economyStatus ? formatRuntimeText(locale, ship.economyStatus) : `${localizeGenericName("FREIGHTER", locale)} · ${Math.round(ship.hull)}/${ship.maxHull}`}
-      </Html>
+      <CivilianDistressMarker ship={ship} distanceFactor={13} />
+      {!distressActive ? (
+        <Html center distanceFactor={13} className="target-label npc-label">
+          {ship.economyStatus ? formatRuntimeText(locale, ship.economyStatus) : `${localizeGenericName("FREIGHTER", locale)} · ${Math.round(ship.hull)}/${ship.maxHull}`}
+        </Html>
+      ) : null}
     </group>
   );
 }
@@ -499,6 +523,7 @@ function NpcShip({ ship }: { ship: FlightEntity }) {
   const speed = Math.hypot(...ship.velocity);
   const flameScale = Math.max(0.45, Math.min(1.45, speed / 115));
   const combatPulse = 0.5 + Math.sin(clock * 5.4 + ship.position[0] * 0.01) * 0.5;
+  const distressActive = hasActiveCivilianDistress(ship, clock);
   const body =
     ship.role === "pirate"
       ? { cone: [7, 25, 3] as [number, number, number], wing: [26, 1.8, 8] as [number, number, number], offset: 6, tail: "#3a111c" }
@@ -573,7 +598,8 @@ function NpcShip({ ship }: { ship: FlightEntity }) {
           <coneGeometry args={[ship.role === "trader" ? 4.2 : 3, 13, 12]} />
           <meshBasicMaterial color={ship.role === "pirate" ? "#ff5f6d" : "#64e4ff"} transparent opacity={0.36} toneMapped={false} />
         </mesh>
-        {ship.economyStatus ? (
+        <CivilianDistressMarker ship={ship} />
+        {!distressActive && ship.economyStatus ? (
           <Html center distanceFactor={12} className="target-label npc-label">
             {formatRuntimeText(locale, ship.economyStatus)}
           </Html>

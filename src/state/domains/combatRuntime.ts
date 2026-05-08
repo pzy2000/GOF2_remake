@@ -10,6 +10,11 @@ import {
 
 export const PATROL_SUPPORT_COOLDOWN_SECONDS = 42;
 export const MAX_PATROL_SUPPORT_WINGS = 2;
+export const CIVILIAN_DISTRESS_SECONDS = 18;
+
+const CIVILIAN_DISTRESS_RANGE = 820;
+const CIVILIAN_DISTRESS_CLOSE_COMBAT_RANGE = 360;
+const CIVILIAN_DISTRESS_PATROL_RANGE = 940;
 
 export interface ConvoyFireRequest {
   position: Vec3;
@@ -30,7 +35,92 @@ export function isPatrolSupportThreat(ship: FlightEntity): boolean {
   return !!ship.storyTarget || ship.role === "pirate" || ship.role === "drone" || ship.role === "relay" || ship.role === "smuggler";
 }
 
-export function hasLocalCombatThreat(ship: FlightEntity, enemies: FlightEntity[]): boolean {
+export function isCivilianDistressRole(role: FlightEntity["role"]): boolean {
+  return role === "trader" || role === "freighter" || role === "courier" || role === "miner";
+}
+
+export function isCivilianDistressThreat(ship: FlightEntity): boolean {
+  return !!ship.storyTarget || ship.role === "pirate" || ship.role === "drone" || ship.role === "relay";
+}
+
+export function hasActiveCivilianDistress(ship: FlightEntity, now: number): boolean {
+  return (
+    isCivilianDistressRole(ship.role) &&
+    !!ship.distressThreatId &&
+    ship.distressCalledAt !== undefined &&
+    now - ship.distressCalledAt <= CIVILIAN_DISTRESS_SECONDS
+  );
+}
+
+function findCivilianThreat(ship: FlightEntity, enemies: FlightEntity[]): { ship: FlightEntity; dist: number; direct: boolean } | undefined {
+  return enemies
+    .filter((candidate) => candidate.id !== ship.id && candidate.hull > 0 && candidate.deathTimer === undefined && isCivilianDistressThreat(candidate))
+    .map((candidate) => ({
+      ship: candidate,
+      dist: distance(candidate.position, ship.position),
+      direct: candidate.aiTargetId === ship.id
+    }))
+    .filter((candidate) => candidate.direct || (candidate.dist < CIVILIAN_DISTRESS_CLOSE_COMBAT_RANGE && candidate.ship.aiState === "attack"))
+    .filter((candidate) => candidate.dist < CIVILIAN_DISTRESS_RANGE || candidate.direct)
+    .sort((a, b) => Number(b.direct) - Number(a.direct) || a.dist - b.dist)[0];
+}
+
+export function resolveCivilianDistress(ship: FlightEntity, enemies: FlightEntity[], now: number): FlightEntity {
+  if (!isCivilianDistressRole(ship.role) || ship.hull <= 0 || ship.deathTimer !== undefined) return ship;
+
+  const detectedThreat = findCivilianThreat(ship, enemies)?.ship;
+  if (detectedThreat) {
+    const keepCallTime = ship.distressThreatId === detectedThreat.id && hasActiveCivilianDistress(ship, now);
+    return {
+      ...ship,
+      distressThreatId: detectedThreat.id,
+      distressCalledAt: keepCallTime ? ship.distressCalledAt : now
+    };
+  }
+
+  if (hasActiveCivilianDistress(ship, now)) return ship;
+  if (ship.distressThreatId || ship.distressCalledAt !== undefined) {
+    return { ...ship, distressThreatId: undefined, distressCalledAt: undefined };
+  }
+  return ship;
+}
+
+export interface CivilianDistressContact {
+  civilian: FlightEntity;
+  threat: FlightEntity;
+  dist: number;
+}
+
+export function getActiveCivilianDistress(enemies: FlightEntity[], now: number): CivilianDistressContact[] {
+  return enemies
+    .filter((ship) => hasActiveCivilianDistress(ship, now))
+    .map((civilian) => {
+      const threat = enemies.find((candidate) => candidate.id === civilian.distressThreatId && candidate.hull > 0 && candidate.deathTimer === undefined && isCivilianDistressThreat(candidate));
+      return threat
+        ? {
+            civilian,
+            threat,
+            dist: distance(civilian.position, threat.position)
+          }
+        : undefined;
+    })
+    .filter((contact): contact is CivilianDistressContact => !!contact)
+    .sort((a, b) => a.dist - b.dist);
+}
+
+export function getCivilianDistressForPatrol(ship: FlightEntity, enemies: FlightEntity[], now: number): CivilianDistressContact | undefined {
+  if (ship.role !== "patrol" || ship.hull <= 0 || ship.deathTimer !== undefined) return undefined;
+  return getActiveCivilianDistress(enemies, now)
+    .map((contact) => ({
+      ...contact,
+      dist: Math.min(distance(ship.position, contact.civilian.position), distance(ship.position, contact.threat.position))
+    }))
+    .filter((contact) => contact.dist < CIVILIAN_DISTRESS_PATROL_RANGE)
+    .sort((a, b) => a.dist - b.dist)[0];
+}
+
+export function hasLocalCombatThreat(ship: FlightEntity, enemies: FlightEntity[], now?: number): boolean {
+  if (now !== undefined && hasActiveCivilianDistress(ship, now)) return true;
   return enemies.some((candidate) => {
     if (candidate.id === ship.id || candidate.hull <= 0 || candidate.deathTimer !== undefined) return false;
     const close = distance(candidate.position, ship.position) < 780;
@@ -113,6 +203,7 @@ export function shouldRequestPatrolSupport(ship: FlightEntity, enemies: FlightEn
   if (ship.aiTargetId === "player" && ship.aiState === "attack") return true;
   const target = enemies.find((enemy) => enemy.id === ship.aiTargetId);
   if (target && isPatrolSupportThreat(target)) return true;
+  if (getCivilianDistressForPatrol(ship, enemies, now)) return true;
   return convoys.some((convoy) => convoy.status === "distress" && distance(ship.position, convoy.position) < 900);
 }
 
@@ -136,19 +227,25 @@ export function createPatrolSupportRequest({
   existingSpawnCount: number;
 }): PatrolSupportRequest | undefined {
   if (!shouldRequestPatrolSupport(ship, enemies, convoys, now)) return undefined;
+  const civilianDistress = getCivilianDistressForPatrol(ship, enemies, now);
   const activeSupportCount = enemies.filter((enemy) => enemy.supportWing && enemy.hull > 0 && enemy.deathTimer === undefined).length + existingSpawnCount;
-  const desiredSupportCount = risk >= 0.55 || convoys.some((convoy) => convoy.status === "distress") ? 2 : 1;
+  const desiredSupportCount = risk >= 0.55 || !!civilianDistress || convoys.some((convoy) => convoy.status === "distress") ? 2 : 1;
   const spawnCount = Math.max(0, Math.min(desiredSupportCount, MAX_PATROL_SUPPORT_WINGS - activeSupportCount));
   if (spawnCount <= 0) return undefined;
-  const targetShip = enemies.find((enemy) => enemy.id === ship.aiTargetId);
-  const anchor = targetShip?.position ?? (ship.aiTargetId === "player" ? playerPosition : ship.position);
+  const supportTargetId = ship.aiTargetId ?? civilianDistress?.threat.id;
+  const targetShip = enemies.find((enemy) => enemy.id === supportTargetId);
+  const anchor = targetShip?.position ?? (supportTargetId === "player" ? playerPosition : ship.position);
   const ships = Array.from({ length: spawnCount }, (_, index) =>
-    createPatrolSupportShip(systemId, activeSupportCount + index, ship.aiTargetId, anchor, now)
+    createPatrolSupportShip(systemId, activeSupportCount + index, supportTargetId, anchor, now)
   );
   return {
     ships,
     effectPositions: ships.map((support) => support.position),
-    message: ship.aiTargetId === "player" ? "Patrol support wing has marked you hostile." : "Patrol support wing inbound.",
+    message: supportTargetId === "player"
+      ? "Patrol support wing has marked you hostile."
+      : civilianDistress
+        ? "Patrol support wing responding to distress."
+        : "Patrol support wing inbound.",
     requestedShip: {
       ...ship,
       supportRequestedAt: now,

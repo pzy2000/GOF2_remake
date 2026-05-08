@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { ConvoyEntity, FlightEntity } from "../src/types/game";
 import {
   advanceConvoyEntity,
-  createPatrolSupportRequest
+  createPatrolSupportRequest,
+  getActiveCivilianDistress,
+  resolveCivilianDistress
 } from "../src/state/domains/combatRuntime";
 import { createShipEntity } from "../src/state/domains/runtimeFactory";
 
@@ -82,6 +84,61 @@ describe("combat runtime domain helpers", () => {
       risk: 0.7,
       playerPosition: [0, 0, 0],
       now: 101,
+      existingSpawnCount: 0
+    });
+    expect(repeated).toBeUndefined();
+  });
+
+  it("marks civilian distress from a direct pirate target and clears it after timeout", () => {
+    const freighter = createShipEntity("freighter-test", "freighter", [0, 0, 0], "ashen-drift");
+    const threat = pirate({ id: "pirate-test", aiTargetId: "freighter-test", position: [70, 0, 0] });
+
+    const distressed = resolveCivilianDistress(freighter, [freighter, threat], 12);
+
+    expect(distressed.distressThreatId).toBe("pirate-test");
+    expect(distressed.distressCalledAt).toBe(12);
+    expect(getActiveCivilianDistress([distressed, threat], 12)[0]).toMatchObject({
+      civilian: { id: "freighter-test" },
+      threat: { id: "pirate-test" }
+    });
+
+    const cleared = resolveCivilianDistress(distressed, [distressed, pirate({ id: "pirate-test", aiTargetId: "player", position: [900, 0, 0] })], 31);
+    expect(cleared.distressThreatId).toBeUndefined();
+    expect(cleared.distressCalledAt).toBeUndefined();
+  });
+
+  it("lets patrol support respond to civilian distress without bypassing cooldown limits", () => {
+    const patrol = createShipEntity("patrol-test", "patrol", [0, 0, 0], "ashen-drift");
+    const civilian = {
+      ...createShipEntity("miner-test", "miner", [80, 0, 0], "ashen-drift"),
+      distressThreatId: "pirate-test",
+      distressCalledAt: 100
+    } satisfies FlightEntity;
+    const threat = pirate({ id: "pirate-test", aiTargetId: "miner-test", position: [120, 0, 0] });
+
+    const request = createPatrolSupportRequest({
+      ship: patrol,
+      enemies: [patrol, civilian, threat],
+      convoys: [],
+      systemId: "ashen-drift",
+      risk: 0.2,
+      playerPosition: [0, 0, 0],
+      now: 105,
+      existingSpawnCount: 0
+    });
+
+    expect(request?.message).toBe("Patrol support wing responding to distress.");
+    expect(request?.ships).toHaveLength(2);
+    expect(request?.ships.every((ship) => ship.aiTargetId === "pirate-test")).toBe(true);
+
+    const repeated = createPatrolSupportRequest({
+      ship: request!.requestedShip,
+      enemies: [patrol, civilian, threat, ...request!.ships],
+      convoys: [],
+      systemId: "ashen-drift",
+      risk: 0.2,
+      playerPosition: [0, 0, 0],
+      now: 106,
       existingSpawnCount: 0
     });
     expect(repeated).toBeUndefined();

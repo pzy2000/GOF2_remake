@@ -59,6 +59,8 @@ interface CombatProfile {
 }
 
 const pirateProfiles: FlightEntity["aiProfileId"][] = ["raider", "interceptor", "gunner"];
+const CIVILIAN_DISTRESS_SECONDS = 18;
+const CIVILIAN_DISTRESS_PATROL_RANGE = 940;
 
 export const combatAiProfileLabels: Record<FlightEntity["aiProfileId"], string> = {
   raider: "Raider",
@@ -147,6 +149,38 @@ export function isHostileToPlayer(ship: FlightEntity): boolean {
   return !!ship.storyTarget || ship.role === "pirate" || ship.role === "drone" || ship.role === "relay" || (ship.aiState === "attack" && ship.aiTargetId === "player");
 }
 
+function isCivilianRole(ship: FlightEntity): boolean {
+  return ship.role === "trader" || ship.role === "freighter" || ship.role === "courier" || ship.role === "miner";
+}
+
+function isCivilianDistressThreat(ship: FlightEntity): boolean {
+  return !!ship.storyTarget || ship.role === "pirate" || ship.role === "drone" || ship.role === "relay";
+}
+
+function getPatrolDistressTarget(input: CombatAiStepInput): FlightEntity | undefined {
+  return input.ships
+    .filter((ship) =>
+      isCivilianRole(ship) &&
+      ship.hull > 0 &&
+      ship.deathTimer === undefined &&
+      !!ship.distressThreatId &&
+      ship.distressCalledAt !== undefined &&
+      input.now - ship.distressCalledAt <= CIVILIAN_DISTRESS_SECONDS
+    )
+    .map((civilian) => {
+      const threat = input.ships.find((ship) => ship.id === civilian.distressThreatId && ship.hull > 0 && ship.deathTimer === undefined && isCivilianDistressThreat(ship));
+      if (!threat) return undefined;
+      return {
+        threat,
+        civilianDistance: distance(input.ship.position, civilian.position),
+        threatDistance: distance(input.ship.position, threat.position)
+      };
+    })
+    .filter((contact): contact is { threat: FlightEntity; civilianDistance: number; threatDistance: number } => !!contact)
+    .filter((contact) => Math.min(contact.civilianDistance, contact.threatDistance) < CIVILIAN_DISTRESS_PATROL_RANGE)
+    .sort((a, b) => Math.min(a.civilianDistance, a.threatDistance) - Math.min(b.civilianDistance, b.threatDistance))[0]?.threat;
+}
+
 export function resolveCombatAiStep(input: CombatAiStepInput): CombatAiStep {
   const profile = combatProfiles[input.ship.aiProfileId] ?? combatProfiles.raider;
   if (input.ship.role === "patrol") return resolvePatrolStep(input, profile);
@@ -215,7 +249,8 @@ function resolvePirateStep(input: CombatAiStepInput, profile: CombatProfile): Co
 function resolvePatrolStep(input: CombatAiStepInput, profile: CombatProfile): CombatAiStep {
   const loadout = getCombatLoadout({ ...input.ship, systemId: input.systemId, risk: input.risk });
   const activePirates = sortPirateTargets(input.pirates);
-  const outlawTarget = [
+  const distressTarget = getPatrolDistressTarget(input);
+  const outlawTarget = distressTarget ?? [
     ...activePirates,
     ...input.ships.filter((ship) => ["smuggler", "drone", "relay"].includes(ship.role) && ship.hull > 0 && ship.deathTimer === undefined)
   ]

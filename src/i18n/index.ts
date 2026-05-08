@@ -189,6 +189,12 @@ const exactText = {
     "Contraband pursuit": "违禁品追捕",
     "Bounty paid": "赏金到账",
     "Fine paid": "罚款已缴",
+    "DISTRESS": "求救",
+    "Distress call": "求救呼叫",
+    "Under attack": "遭受攻击",
+    "Responding to distress": "响应求救",
+    "Civilian distress": "平民求救",
+    "Patrol support wing responding to distress.": "巡逻支援翼正在响应求救。",
     "Watch": "观看",
     "Watching": "正在观看",
     "Cockpit": "驾驶舱",
@@ -395,6 +401,12 @@ const exactText = {
     "Exploration Systems": "探索システム",
     "Watch": "観察",
     "Watching": "観察中",
+    "DISTRESS": "救難",
+    "Distress call": "救難通信",
+    "Under attack": "攻撃中",
+    "Responding to distress": "救難対応中",
+    "Civilian distress": "民間船救難",
+    "Patrol support wing responding to distress.": "巡回支援翼が救難に対応中。",
     "Cockpit": "コックピット",
     "Chase": "追尾",
     "Belt depleted": "鉱脈枯渇",
@@ -477,6 +489,12 @@ const exactText = {
     "Exploration Systems": "Systèmes d'exploration",
     "Watch": "Observer",
     "Watching": "Observation",
+    "DISTRESS": "DÉTRESSE",
+    "Distress call": "Appel de détresse",
+    "Under attack": "Sous attaque",
+    "Responding to distress": "Réponse à la détresse",
+    "Civilian distress": "Détresse civile",
+    "Patrol support wing responding to distress.": "Aile de soutien de patrouille en réponse à la détresse.",
     "Cockpit": "Cockpit",
     "Chase": "Poursuite",
     "Belt depleted": "Ceinture épuisée",
@@ -1289,6 +1307,15 @@ export function formatRuntimeText(locale: Locale, source: string | undefined | n
     if (locale === "zh-TW") return `巡邏支援已啟動：${patrolSupport[1]}`;
     if (locale === "ja") return `巡回支援稼働中: ${patrolSupport[1]}`;
     return `Soutien de patrouille actif : ${patrolSupport[1]}`;
+  }
+  const distressCall = source.match(/^Distress call: (.+) under attack by (.+)\.$/);
+  if (distressCall) {
+    const civilian = translateDisplayName(distressCall[1], locale);
+    const threat = translateDisplayName(distressCall[2], locale);
+    if (locale === "zh-CN") return `求救呼叫：${civilian} 正遭受 ${threat} 攻击。`;
+    if (locale === "zh-TW") return `求救呼叫：${civilian} 正遭受 ${threat} 攻擊。`;
+    if (locale === "ja") return `救難通信: ${civilian} が ${threat} から攻撃中。`;
+    return `Appel de détresse : ${civilian} sous attaque de ${threat}.`;
   }
   const launchMatch = source.match(/^Launch vector clear(?: from (.+))?\.$/);
   if (launchMatch) {
