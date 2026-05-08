@@ -13,6 +13,7 @@ import { combatLoadoutLabels } from "../systems/combatDoctrine";
 import { explorationSignalById, getEffectiveSignalScanBand } from "../systems/exploration";
 import { getExplorationObjectiveSummaryForSystem } from "../systems/explorationObjectives";
 import { getFactionHeatLevelLabel, getFactionHeatRecord } from "../systems/factionConsequences";
+import { getOnboardingView } from "../systems/onboarding";
 import { getStoryObjectiveSummary } from "../systems/story";
 import {
   formatCargoLabel,
@@ -71,6 +72,9 @@ export function Hud() {
   const knownPlanetIds = useGameStore((state) => state.knownPlanetIds);
   const explorationState = useGameStore((state) => state.explorationState);
   const factionHeat = useGameStore((state) => state.factionHeat);
+  const onboardingState = useGameStore((state) => state.onboardingState);
+  const setOnboardingCollapsed = useGameStore((state) => state.setOnboardingCollapsed);
+  const skipOnboarding = useGameStore((state) => state.skipOnboarding);
   const adjustExplorationScanFrequency = useGameStore((state) => state.adjustExplorationScanFrequency);
   const cancelExplorationScan = useGameStore((state) => state.cancelExplorationScan);
   const equipmentEffects = getEquipmentEffects(player.equipment);
@@ -108,6 +112,17 @@ export function Hud() {
     playerEquipment: player.equipment,
     activeScanSignalId: activeScan?.signalId,
     playerUnlockedBlueprintIds: player.unlockedBlueprintIds
+  });
+  const onboardingView = getOnboardingView({
+    onboardingState,
+    screen: "flight",
+    currentSystemId: currentSystem.id,
+    currentStationId,
+    player,
+    activeMissions,
+    completedMissionIds,
+    autopilot,
+    gameClock
   });
   const graceRemaining = Math.max(0, Math.ceil(runtime.graceUntil - runtime.clock));
   const nearestMine = runtime.asteroids
@@ -161,6 +176,26 @@ export function Hud() {
               {translateText(storyObjective.objectiveText, locale)}
               {storyObjective.distanceMeters !== undefined ? ` · ${formatDistance(locale, storyObjective.distanceMeters)}` : ""}
             </p>
+          </div>
+        ) : null}
+        {onboardingView.visible && onboardingView.activeStep ? (
+          <div className={`onboarding-guide ${onboardingView.collapsed ? "collapsed" : ""}`} data-testid="onboarding-guide">
+            <div className="onboarding-guide-header">
+              <span>{translateText("First Flight", locale)} {onboardingView.completedCount}/{onboardingView.totalCount}</span>
+              <div>
+                <button onClick={() => setOnboardingCollapsed(!onboardingView.collapsed)}>
+                  {translateText(onboardingView.collapsed ? "Expand" : "Collapse", locale)}
+                </button>
+                <button onClick={skipOnboarding}>{translateText("Skip", locale)}</button>
+              </div>
+            </div>
+            <b>{translateText(onboardingView.activeStep.title, locale)}</b>
+            {!onboardingView.collapsed ? (
+              <>
+                <p>{translateText(onboardingView.activeStep.objective, locale)}</p>
+                <p>{translateText("Reward", locale)} {formatCredits(locale, onboardingView.activeStep.rewardCredits, true)}</p>
+              </>
+            ) : null}
           </div>
         ) : null}
         {explorationObjective && explorationObjective.status !== "complete" ? (

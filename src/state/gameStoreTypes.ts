@@ -13,6 +13,7 @@ import type {
   NpcInteractionAction,
   NpcInteractionState,
   NpcObjectiveState,
+  OnboardingState,
   GalaxyMapMode,
   MarketState,
   MissionDefinition,
@@ -58,6 +59,7 @@ export interface GameStore {
   knownPlanetIds: string[];
   explorationState: ExplorationState;
   dialogueState: DialogueState;
+  onboardingState?: OnboardingState;
   activeDialogue?: ActiveDialogueState;
   primaryCooldown: number;
   secondaryCooldown: number;
@@ -82,6 +84,9 @@ export interface GameStore {
   openNpcInteraction: (npcId: string, openedFrom?: NpcInteractionState["openedFrom"]) => void;
   closeNpcInteraction: () => void;
   executeNpcInteraction: (action: NpcInteractionAction, npcId?: string) => Promise<void>;
+  setOnboardingCollapsed: (collapsed: boolean) => void;
+  skipOnboarding: () => void;
+  syncOnboardingProgress: () => void;
   setScreen: (screen: Screen) => void;
   setStationTab: (tab: StationTab) => void;
   openGalaxyMap: (mode: GalaxyMapMode) => void;
@@ -138,6 +143,7 @@ export type SavePayloadOverrides = Partial<
     | "knownPlanetIds"
     | "explorationState"
     | "dialogueState"
+    | "onboardingState"
   >
 >;
 

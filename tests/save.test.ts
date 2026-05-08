@@ -109,7 +109,14 @@ describe("save system", () => {
           revealedStationIds: ["parallax-hermitage"],
           eventLogIds: ["quiet-signal-sundog-lattice"]
         },
-        dialogueState: { seenSceneIds: ["dialogue-story-clean-carrier-accept"] }
+        dialogueState: { seenSceneIds: ["dialogue-story-clean-carrier-accept"] },
+        onboardingState: {
+          enabled: true,
+          collapsed: true,
+          completedStepIds: ["first-flight"],
+          claimedRewardStepIds: ["first-flight"],
+          startedAtGameTime: 0
+        }
       }),
       storage,
       "manual-1"
@@ -129,6 +136,12 @@ describe("save system", () => {
     expect(loaded?.explorationState.completedSignalIds).toEqual(["quiet-signal-sundog-lattice"]);
     expect(loaded?.explorationState.revealedStationIds).toEqual(["parallax-hermitage"]);
     expect(loaded?.dialogueState.seenSceneIds).toEqual(["dialogue-story-clean-carrier-accept"]);
+    expect(loaded?.onboardingState).toMatchObject({
+      enabled: true,
+      collapsed: true,
+      completedStepIds: ["first-flight"],
+      claimedRewardStepIds: ["first-flight"]
+    });
     expect(loaded?.factionHeat).toEqual(createInitialFactionHeat());
     expect(loaded?.version).toBe(SAVE_VERSION);
   });
@@ -280,5 +293,29 @@ describe("save system", () => {
     expect(progress.completedCount).toBe(1);
     expect(progress.current?.chapter.id).toBe("glass-wake-02");
     expect("storyState" in loaded).toBe(false);
+  });
+
+  it("keeps old completed first-chapter saves from showing the onboarding checklist", () => {
+    const storage = new MemoryStorage();
+    writeSave(
+      payload({
+        completedMissionIds: ["story-clean-carrier"]
+      }),
+      storage,
+      "manual-1"
+    );
+
+    const raw = JSON.parse(storage.getItem(`${SAVE_SLOT_PREFIX}manual-1`) ?? "{}");
+    delete raw.onboardingState;
+    storage.setItem(`${SAVE_SLOT_PREFIX}manual-1`, JSON.stringify(raw));
+
+    const loaded = readSave(storage, "manual-1")!;
+    expect(loaded.onboardingState).toMatchObject({
+      enabled: false,
+      collapsed: true,
+      completedAtGameTime: loaded.gameClock
+    });
+    expect(loaded.onboardingState?.completedStepIds).toContain("complete-clean-carrier");
+    expect(loaded.version).toBe(SAVE_VERSION);
   });
 });

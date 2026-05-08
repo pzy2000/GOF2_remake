@@ -6,6 +6,7 @@ import { normalizeExplorationState } from "./exploration";
 import { applyExplorationChainBlueprintRewards } from "./explorationObjectives";
 import { normalizeFactionHeat } from "./factionConsequences";
 import { getInitialKnownPlanetIds } from "./navigation";
+import { normalizeOnboardingState } from "./onboarding";
 
 export const SAVE_KEY = "gof2-by-pzy-save";
 export const SAVE_INDEX_KEY = "gof2-by-pzy-save-index";
@@ -70,7 +71,11 @@ function normalizeSave(parsed: Partial<SaveGameData> | null): SaveGameData | nul
     knownSystems,
     knownPlanetIds: parsed.knownPlanetIds ?? getInitialKnownPlanetIds(knownSystems, parsed.currentStationId),
     explorationState,
-    dialogueState: normalizeDialogueState(parsed.dialogueState)
+    dialogueState: normalizeDialogueState(parsed.dialogueState),
+    onboardingState: normalizeOnboardingState(parsed.onboardingState, {
+      completedMissionIds: parsed.completedMissionIds ?? [],
+      gameClock: parsed.gameClock ?? 0
+    })
   } as SaveGameData;
 }
 

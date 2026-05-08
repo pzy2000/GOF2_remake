@@ -8,6 +8,7 @@ import { getExplorationSignalsForSystem, getVisibleStationsForSystem, isExplorat
 import { getExplorationObjectiveSummaryForSystem } from "../systems/explorationObjectives";
 import { getFactionHeatLevelLabel, getFactionHeatRecord, isFactionWanted } from "../systems/factionConsequences";
 import { isEconomyDispatchMissionId, isMarketSmugglingMissionId } from "../systems/marketMissions";
+import { CLEAN_CARRIER_MISSION_ID, getOnboardingView, MIRR_LATTICE_STATION_ID } from "../systems/onboarding";
 import { getStoryObjectiveSummary } from "../systems/story";
 import {
   formatTechLevel,
@@ -42,6 +43,7 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
   const activeMissions = useGameStore((state) => state.activeMissions);
   const completedMissionIds = useGameStore((state) => state.completedMissionIds);
   const failedMissionIds = useGameStore((state) => state.failedMissionIds);
+  const onboardingState = useGameStore((state) => state.onboardingState);
   const player = useGameStore((state) => state.player);
   const explorationState = useGameStore((state) => state.explorationState);
   const factionHeat = useGameStore((state) => state.factionHeat);
@@ -95,6 +97,19 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
   const selectedExplorationSummary = selectedKnown
     ? getExplorationObjectiveSummaryForSystem(selectedSystem.id, explorationState, { playerEquipment: player.equipment, playerUnlockedBlueprintIds: player.unlockedBlueprintIds })
     : undefined;
+  const onboardingView = getOnboardingView({
+    onboardingState,
+    screen: currentStationId ? "station" : "galaxyMap",
+    currentSystemId,
+    currentStationId,
+    player,
+    activeMissions,
+    completedMissionIds,
+    autopilot,
+    gameClock
+  });
+  const cleanCarrierActive = activeMissions.some((mission) => mission.id === CLEAN_CARRIER_MISSION_ID);
+  const onboardingRouteActive = onboardingView.visible && onboardingView.activeStep?.id === "plot-clean-carrier-route" && cleanCarrierActive;
   const stars = useMemo(
     () =>
       Array.from({ length: 120 }, (_, index) => ({
@@ -277,6 +292,13 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                   <p>{translateText(storyObjective.objectiveText, locale)}</p>
                 </div>
               ) : null}
+              {onboardingRouteActive ? (
+                <div className="onboarding-map-brief" data-testid="onboarding-map-brief">
+                  <span>{translateText("First Flight", locale)}</span>
+                  <b>{translateText("Set the Mirr Route", locale)}</b>
+                  <p>{translateText("Select Mirr Lattice and press Set Route to continue Clean Carrier.", locale)}</p>
+                </div>
+              ) : null}
               {activeDispatch && dispatchTargetVisible === selectedSystem.id ? (
                 <div className={`dispatch-map-brief ${isMarketSmugglingMissionId(activeDispatch.id) ? "smuggling" : "supply"}`} data-testid="dispatch-map-brief">
                   <span>{translateText("Economy Dispatch", locale)}</span>
@@ -319,11 +341,12 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                     const selected = selectedStation?.id === station.id;
                     const storyDestination = known && storyTargetStationId === station.id;
                     const dispatchDestination = known && dispatchTargetStationId === station.id;
+                    const onboardingDestination = onboardingRouteActive && station.id === MIRR_LATTICE_STATION_ID;
                     return (
                       <button
                         key={planet.id}
                         type="button"
-                        className={`${selected ? "selected" : ""} ${storyDestination ? "story-destination" : ""} ${dispatchDestination ? "dispatch-destination" : ""}`}
+                        className={`${selected ? "selected" : ""} ${storyDestination ? "story-destination" : ""} ${dispatchDestination ? "dispatch-destination" : ""} ${onboardingDestination ? "onboarding-destination" : ""}`}
                         disabled={!known}
                         onClick={() => setSelectedStationId(station.id)}
                         onDoubleClick={() => executeTravel(station.id)}
@@ -333,6 +356,7 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                           {known ? `${translateText(planet.type, locale)} · ${localizeStationName(station.id, locale, station.name)} · ${formatTechLevel(locale, station.techLevel)}` : translateText("Local scan required", locale)}
                           {storyDestination ? ` · ${translateText("Main Story", locale)}` : ""}
                           {dispatchDestination ? ` · ${translateText("Dispatch", locale)}` : ""}
+                          {onboardingDestination ? ` · ${translateText("First Flight", locale)}` : ""}
                         </small>
                       </button>
                     );

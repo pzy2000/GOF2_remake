@@ -1,0 +1,111 @@
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+class MemoryStorage implements Storage {
+  private data = new Map<string, string>();
+  get length() {
+    return this.data.size;
+  }
+  clear() {
+    this.data.clear();
+  }
+  getItem(key: string) {
+    return this.data.get(key) ?? null;
+  }
+  key(index: number) {
+    return Array.from(this.data.keys())[index] ?? null;
+  }
+  removeItem(key: string) {
+    this.data.delete(key);
+  }
+  setItem(key: string, value: string) {
+    this.data.set(key, value);
+  }
+}
+
+async function freshStore() {
+  vi.resetModules();
+  vi.stubGlobal("localStorage", new MemoryStorage());
+  const module = await import("../src/state/gameStore");
+  module.useGameStore.getState().newGame();
+  return module.useGameStore;
+}
+
+beforeEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe("onboarding store flow", () => {
+  it("initializes and completes the first 15 minute checklist with one-time rewards", async () => {
+    const store = await freshStore();
+    expect(store.getState().onboardingState).toMatchObject({ enabled: true, completedStepIds: [] });
+    expect(store.getState().player.credits).toBe(1500);
+
+    store.setState((state) => ({ player: { ...state.player, position: [0, 0, -80] } }));
+    store.getState().syncOnboardingProgress();
+    expect(store.getState().onboardingState?.completedStepIds).toEqual(["first-flight"]);
+    expect(store.getState().player.credits).toBe(1550);
+
+    store.setState((state) => ({ player: { ...state.player, hull: 10 } }));
+    store.getState().dockAt("helion-prime");
+    expect(store.getState().onboardingState?.completedStepIds).toContain("dock-helion");
+    expect(store.getState().player.credits).toBe(1625);
+    expect(store.getState().player.hull).toBeGreaterThanOrEqual(Math.ceil(store.getState().player.stats.hull * 0.75));
+
+    store.getState().acceptMission("story-clean-carrier");
+    expect(store.getState().onboardingState?.completedStepIds).toContain("accept-clean-carrier");
+    expect(store.getState().player.credits).toBe(1725);
+
+    store.getState().startJumpToStation("mirr-lattice");
+    expect(store.getState().onboardingState?.completedStepIds).toEqual([
+      "first-flight",
+      "dock-helion",
+      "accept-clean-carrier",
+      "plot-clean-carrier-route",
+      "launch-for-mirr"
+    ]);
+    expect(store.getState().player.credits).toBe(1875);
+
+    store.getState().dockAt("mirr-lattice");
+    expect(store.getState().onboardingState?.completedStepIds).toContain("dock-mirr-lattice");
+    expect(store.getState().player.credits).toBe(1975);
+
+    store.getState().completeMission("story-clean-carrier");
+    expect(store.getState().completedMissionIds).toContain("story-clean-carrier");
+    expect(store.getState().onboardingState).toMatchObject({
+      enabled: false,
+      collapsed: true,
+      completedStepIds: [
+        "first-flight",
+        "dock-helion",
+        "accept-clean-carrier",
+        "plot-clean-carrier-route",
+        "launch-for-mirr",
+        "dock-mirr-lattice",
+        "complete-clean-carrier"
+      ],
+      claimedRewardStepIds: [
+        "first-flight",
+        "dock-helion",
+        "accept-clean-carrier",
+        "plot-clean-carrier-route",
+        "launch-for-mirr",
+        "dock-mirr-lattice",
+        "complete-clean-carrier"
+      ]
+    });
+    expect(store.getState().player.credits).toBe(3020);
+
+    store.getState().syncOnboardingProgress();
+    expect(store.getState().player.credits).toBe(3020);
+  });
+
+  it("collapses and skips without granting rewards", async () => {
+    const store = await freshStore();
+    store.getState().setOnboardingCollapsed(true);
+    expect(store.getState().onboardingState?.collapsed).toBe(true);
+
+    store.getState().skipOnboarding();
+    expect(store.getState().onboardingState).toMatchObject({ enabled: false, collapsed: true });
+    expect(store.getState().player.credits).toBe(1500);
+  });
+});

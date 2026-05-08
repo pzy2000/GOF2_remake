@@ -761,6 +761,7 @@ h3 {
 
 .story-tracker,
 .exploration-tracker,
+.onboarding-guide,
 .legal-status {
   display: grid;
   gap: 4px;
@@ -785,6 +786,28 @@ h3 {
   background: rgba(32, 24, 6, 0.42);
 }
 
+.onboarding-guide {
+  border-color: rgba(128, 214, 255, 0.42);
+  background: rgba(7, 25, 40, 0.48);
+}
+
+.onboarding-guide-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.onboarding-guide-header div {
+  display: flex;
+  gap: 6px;
+}
+
+.onboarding-guide button {
+  padding: 4px 7px;
+  font-size: 0.68rem;
+}
+
 .legal-status.heat-wanted,
 .legal-status.heat-kill-on-sight {
   border-color: rgba(255, 98, 112, 0.46);
@@ -793,6 +816,7 @@ h3 {
 
 .story-tracker span,
 .exploration-tracker span,
+.onboarding-guide span,
 .legal-status span {
   color: #ffd6ef;
   font-size: 0.68rem;
@@ -809,6 +833,10 @@ h3 {
   color: #ffdf9b;
 }
 
+.onboarding-guide span {
+  color: #9ee7ff;
+}
+
 .legal-status.heat-wanted span,
 .legal-status.heat-kill-on-sight span {
   color: #ff9bac;
@@ -816,6 +844,7 @@ h3 {
 
 .story-tracker b,
 .exploration-tracker b,
+.onboarding-guide b,
 .legal-status b {
   min-width: 0;
   color: #f7fbff;
@@ -825,6 +854,7 @@ h3 {
 
 .story-tracker p,
 .exploration-tracker p,
+.onboarding-guide p,
 .legal-status p {
   margin: 0;
   font-size: 0.78rem;
@@ -1134,8 +1164,52 @@ h3 {
   gap: 10px;
 }
 
-.tab-row {
+.station-nav-stack {
+  display: grid;
+  gap: 12px;
   margin-bottom: 18px;
+}
+
+.tab-row {
+  margin-bottom: 0;
+}
+
+.station-onboarding-callout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  min-width: 0;
+  border: 1px solid rgba(128, 214, 255, 0.34);
+  border-radius: 8px;
+  background: linear-gradient(135deg, rgba(8, 36, 57, 0.74), rgba(34, 23, 7, 0.62));
+  padding: 11px 13px;
+}
+
+.station-onboarding-callout div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.station-onboarding-callout span,
+.onboarding-board-note span {
+  color: #9ee7ff;
+  font-size: 0.7rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.station-onboarding-callout b {
+  color: #f7fbff;
+  font-size: 0.95rem;
+}
+
+.station-onboarding-callout p,
+.onboarding-board-note p {
+  margin: 0;
+  color: #c7d9e8;
+  line-height: 1.35;
 }
 
 .station-body {
@@ -1894,6 +1968,32 @@ button.equipment-trigger {
   font-weight: 800;
   padding: 4px 8px;
   white-space: nowrap;
+}
+
+.story-pill.onboarding-pill {
+  border-color: rgba(128, 214, 255, 0.52);
+  background: rgba(67, 184, 255, 0.12);
+  color: #bdefff;
+}
+
+.mission-card.onboarding-recommended {
+  border-color: rgba(128, 214, 255, 0.55);
+  box-shadow: inset 0 0 18px rgba(128, 214, 255, 0.08);
+}
+
+.onboarding-board-note {
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgba(128, 214, 255, 0.32);
+  border-radius: 8px;
+  background: rgba(6, 27, 43, 0.56);
+  padding: 10px 12px;
+}
+
+.mission-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .story-log {
@@ -2695,6 +2795,7 @@ button.equipment-trigger {
 }
 
 .story-map-brief,
+.onboarding-map-brief,
 .dispatch-map-brief,
 .exploration-map-brief,
 .law-map-brief {
@@ -2717,6 +2818,12 @@ button.equipment-trigger {
 .dispatch-map-brief.smuggling {
   border-color: rgba(255, 122, 145, 0.4);
   background: linear-gradient(135deg, rgba(36, 8, 18, 0.78), rgba(7, 28, 42, 0.68));
+}
+
+.onboarding-map-brief {
+  border-color: rgba(128, 214, 255, 0.38);
+  background: linear-gradient(135deg, rgba(7, 34, 55, 0.78), rgba(35, 27, 9, 0.68));
+  box-shadow: inset 0 0 20px rgba(128, 214, 255, 0.08);
 }
 
 .exploration-map-brief {
@@ -2742,6 +2849,7 @@ button.equipment-trigger {
 }
 
 .story-map-brief span,
+.onboarding-map-brief span,
 .dispatch-map-brief span,
 .exploration-map-brief span,
 .law-map-brief span {
@@ -2755,6 +2863,10 @@ button.equipment-trigger {
   color: #ffdf9b;
 }
 
+.onboarding-map-brief span {
+  color: #9ee7ff;
+}
+
 .exploration-map-brief span {
   color: #a8fff0;
 }
@@ -2764,6 +2876,7 @@ button.equipment-trigger {
 }
 
 .story-map-brief b,
+.onboarding-map-brief b,
 .dispatch-map-brief b,
 .exploration-map-brief b,
 .law-map-brief b {
@@ -2773,6 +2886,7 @@ button.equipment-trigger {
 }
 
 .story-map-brief p,
+.onboarding-map-brief p,
 .dispatch-map-brief p,
 .exploration-map-brief p,
 .law-map-brief p {
@@ -2862,6 +2976,16 @@ button.equipment-trigger {
 
 .planet-list button.dispatch-destination small {
   color: #ffe2a8;
+}
+
+.planet-list button.onboarding-destination {
+  border-color: rgba(128, 214, 255, 0.64);
+  background: linear-gradient(135deg, rgba(19, 70, 100, 0.24), rgba(73, 54, 14, 0.18));
+  box-shadow: inset 0 0 18px rgba(128, 214, 255, 0.08);
+}
+
+.planet-list button.onboarding-destination small {
+  color: #ccefff;
 }
 
 .exploration-signal-list {
@@ -3528,6 +3652,7 @@ button.equipment-trigger {
   .hud-top-right .legal-status,
   .hud-top-right .story-tracker,
   .hud-top-right .exploration-tracker,
+  .hud-top-right .onboarding-guide,
   .hud-target,
   .hud-bottom-left {
     display: none;
@@ -3920,6 +4045,10 @@ button.equipment-trigger {
     display: none;
   }
 
+  .hud-top-right .onboarding-guide {
+    display: none;
+  }
+
   .hud-bottom-right {
     width: min(280px, 30vw);
   }
@@ -3973,7 +4102,8 @@ button.equipment-trigger {
   .hud-top-right p:nth-of-type(n + 5),
   .hud-top-right .legal-status,
   .hud-top-right .story-tracker,
-  .hud-top-right .exploration-tracker {
+  .hud-top-right .exploration-tracker,
+  .hud-top-right .onboarding-guide {
     display: grid;
   }
 

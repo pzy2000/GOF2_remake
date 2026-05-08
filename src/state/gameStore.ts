@@ -150,6 +150,12 @@ import {
   isMarketSmugglingMissionId
 } from "../systems/marketMissions";
 import {
+  createInitialOnboardingState,
+  getOnboardingStepDefinition,
+  normalizeOnboardingState,
+  resolveOnboardingProgress
+} from "../systems/onboarding";
+import {
   advanceAutopilotPatch,
   activateStargateJumpToStationPatch,
   dockAtPatch,
@@ -193,12 +199,13 @@ function savePayload(state: GameStore, overrides: SavePayloadOverrides = {}): Sa
     knownSystems: overrides.knownSystems ?? state.knownSystems,
     knownPlanetIds: overrides.knownPlanetIds ?? state.knownPlanetIds,
     explorationState: overrides.explorationState ?? state.explorationState,
-    dialogueState: overrides.dialogueState ?? state.dialogueState
+    dialogueState: overrides.dialogueState ?? state.dialogueState,
+    onboardingState: Object.prototype.hasOwnProperty.call(overrides, "onboardingState") ? overrides.onboardingState : state.onboardingState
   };
 }
 
-function writeStationAutoSave(state: GameStore, overrides: SavePayloadOverrides): Pick<GameStore, "hasSave" | "saveSlots" | "activeSaveSlotId"> {
-  writeSave(savePayload(state, overrides), undefined, "auto");
+function writeStationAutoSave(state: GameStore): Pick<GameStore, "hasSave" | "saveSlots" | "activeSaveSlotId"> {
+  writeSave(savePayload(state), undefined, "auto");
   return {
     hasSave: true,
     saveSlots: readSaveSlots(),
@@ -214,6 +221,59 @@ function createStoryNotification(tone: StoryNotificationTone, title: string, bod
     body,
     expiresAt: gameClock + 5
   };
+}
+
+function createOnboardingStorePatch(state: GameStore): Pick<GameStore, "onboardingState" | "player" | "runtime"> | undefined {
+  const progress = resolveOnboardingProgress({
+    onboardingState: state.onboardingState,
+    screen: state.screen,
+    currentSystemId: state.currentSystemId,
+    currentStationId: state.currentStationId,
+    player: state.player,
+    activeMissions: state.activeMissions,
+    completedMissionIds: state.completedMissionIds,
+    autopilot: state.autopilot,
+    gameClock: state.gameClock
+  });
+  if (!progress.changed || !progress.onboardingState) return undefined;
+  let player = state.player;
+  const rewardCredits = progress.rewardStepIds.reduce((total, stepId) => total + getOnboardingStepDefinition(stepId).rewardCredits, 0);
+  if (rewardCredits > 0) {
+    player = { ...player, credits: player.credits + rewardCredits };
+  }
+  if (progress.rewardStepIds.includes("dock-helion")) {
+    player = { ...player, hull: Math.max(player.hull, Math.ceil(player.stats.hull * 0.75)) };
+  }
+  const lastCompletedStep = progress.completedNow[progress.completedNow.length - 1];
+  const lastStep = lastCompletedStep ? getOnboardingStepDefinition(lastCompletedStep) : undefined;
+  const rewardMessage = rewardCredits > 0 ? ` +${rewardCredits.toLocaleString()} cr.` : "";
+  const onboardingMessage = progress.finishedNow
+    ? "Flight checklist complete. Next: follow Glass Wake 02, check Economy, or chase Quiet Signals."
+    : lastStep
+      ? `Onboarding: ${lastStep.title} complete.${rewardMessage}`
+      : state.runtime.message;
+  const preserveRuntimeMessage =
+    !!state.runtime.message &&
+    state.runtime.message !== "Flight systems online." &&
+    !state.runtime.message.startsWith("Onboarding:") &&
+    !state.runtime.message.startsWith("Flight checklist complete.");
+  return {
+    onboardingState: progress.onboardingState,
+    player,
+    runtime: {
+      ...state.runtime,
+      message: preserveRuntimeMessage ? state.runtime.message : onboardingMessage,
+      storyNotification: progress.finishedNow
+        ? state.runtime.storyNotification ?? createStoryNotification("complete", "Flight Checklist Complete", "First run complete. Next: follow Glass Wake 02, Economy, or Quiet Signals.", state.gameClock)
+        : state.runtime.storyNotification
+    }
+  };
+}
+
+function withOnboardingProgress<T extends Partial<GameStore>>(state: GameStore, patch: T): T {
+  const next = { ...state, ...patch } as GameStore;
+  const onboardingPatch = createOnboardingStorePatch(next);
+  return onboardingPatch ? ({ ...patch, ...onboardingPatch } as T) : patch;
 }
 
 function isWatchableEconomyNpc(ship: FlightEntity | undefined): ship is FlightEntity {
@@ -416,6 +476,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   knownPlanetIds: getInitialKnownPlanetIds(getInitialKnownSystems("helion-reach")),
   explorationState: createInitialExplorationState(),
   dialogueState: createInitialDialogueState(),
+  onboardingState: undefined,
   activeDialogue: undefined,
   primaryCooldown: 0,
   secondaryCooldown: 0,
@@ -454,6 +515,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       knownPlanetIds: getInitialKnownPlanetIds(getInitialKnownSystems("helion-reach")),
       explorationState: createInitialExplorationState(),
       dialogueState: createInitialDialogueState(),
+      onboardingState: createInitialOnboardingState(0),
       activeDialogue: undefined,
       primaryCooldown: 0,
       secondaryCooldown: 0,
@@ -482,6 +544,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
       knownPlanetIds: save.knownPlanetIds,
       explorationState: normalizeExplorationState(save.explorationState),
       dialogueState: normalizeDialogueState(save.dialogueState),
+      onboardingState: normalizeOnboardingState(save.onboardingState, {
+        completedMissionIds: save.completedMissionIds,
+        gameClock: save.gameClock
+      }),
       activeDialogue: undefined,
       runtime: createRuntimeForSystem(save.currentSystemId, activeMissions),
       economyService: { status: "offline", url: ECONOMY_SERVICE_URL, snapshotId: save.economySnapshotId },
@@ -495,6 +561,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       activeSaveSlotId: resolvedSlotId,
       targetId: undefined
     });
+    get().syncOnboardingProgress();
     audioSystem.play("ui-click");
     return true;
   },
@@ -965,6 +1032,26 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }));
     }
   },
+  setOnboardingCollapsed: (collapsed) => {
+    set((state) => state.onboardingState ? { onboardingState: { ...state.onboardingState, collapsed } } : {});
+  },
+  skipOnboarding: () => {
+    set((state) => state.onboardingState
+      ? {
+          onboardingState: {
+            ...state.onboardingState,
+            enabled: false,
+            collapsed: true,
+            completedAtGameTime: state.onboardingState.completedAtGameTime ?? state.gameClock
+          },
+          runtime: { ...state.runtime, message: "Flight checklist hidden." }
+        }
+      : {});
+  },
+  syncOnboardingProgress: () => {
+    const patch = createOnboardingStorePatch(get());
+    if (patch) set(patch);
+  },
   setScreen: (screen) => set((state) => ({
     previousScreen: state.screen,
     screen,
@@ -1056,7 +1143,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const result = advanceAutopilotPatch({ state, delta, now, gameClock, marketState, controlInput });
       if (result) {
         for (const event of result.audioEvents ?? []) audioSystem.play(event);
-        const stationAutoSave = result.autoSave ? writeStationAutoSave(state, result.autoSave) : {};
+        const stationAutoSave = result.autoSave ? writeStationAutoSave({ ...state, ...result.patch } as GameStore) : {};
         set({ ...result.patch, ...stationAutoSave });
         return;
       }
@@ -2200,18 +2287,19 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const state = get();
     const result = dockAtPatch(state, stationId);
     if (!result) return;
-    const stationAutoSave = result.autoSave ? writeStationAutoSave(state, result.autoSave) : {};
+    const patch = withOnboardingProgress(state, result.patch);
+    const stationAutoSave = result.autoSave ? writeStationAutoSave({ ...state, ...patch } as GameStore) : {};
     for (const event of result.audioEvents ?? []) audioSystem.play(event);
-    set({ ...result.patch, ...stationAutoSave });
+    set({ ...patch, ...stationAutoSave });
   },
   undock: () => {
     audioSystem.play("undock");
-    set((state) => undockPatch(state));
+    set((state) => withOnboardingProgress(state, undockPatch(state)));
   },
   startJumpToStation: (stationId) => {
     const state = get();
     const patch = startJumpToStationPatch(state, stationId);
-    if (patch) set(patch);
+    if (patch) set(withOnboardingProgress(state, patch));
   },
   startJumpToSystem: (systemId) => {
     const targetStation = getDefaultTargetStation(systemId);
@@ -2223,7 +2311,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const result = activateStargateJumpToStationPatch(state, stationId);
     if (!result) return;
     for (const event of result.audioEvents ?? []) audioSystem.play(event);
-    set(result.patch);
+    set(withOnboardingProgress(state, result.patch));
   },
   activateStargateJumpToSystem: (systemId) => {
     const targetStation = getDefaultTargetStation(systemId);
@@ -2240,7 +2328,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
     });
   },
   jumpToSystem: (systemId) => {
-    set((state) => jumpToSystemPatch(state, systemId) ?? {});
+    set((state) => {
+      const patch = jumpToSystemPatch(state, systemId);
+      return patch ? withOnboardingProgress(state, patch) : {};
+    });
   },
   buy: (commodityId, amount = 1) => {
     const state = get();
@@ -2372,13 +2463,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
       ? createStoryNotification("start", mission.title, result.message, state.gameClock)
       : runtime.storyNotification;
     if (result.ok) audioSystem.play("ui-click");
-    set({
+    set(withOnboardingProgress(state, {
       player: result.player,
       activeMissions: result.activeMissions,
       failedMissionIds: result.ok && (mission.retryOnFailure || generatedDispatchMission) ? state.failedMissionIds.filter((id) => id !== missionId) : state.failedMissionIds,
       runtime: { ...runtime, message: result.message, storyNotification },
       ...dialoguePatch
-    });
+    }));
   },
   completeMission: (missionId) => {
     const state = get();
@@ -2414,7 +2505,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       ? { ...state.economyService, status: "fallback" as const, lastError: "Dispatch delivery recorded locally." }
       : state.economyService;
     audioSystem.play("mission-complete");
-    set({
+    set(withOnboardingProgress(state, {
       player: result.player,
       reputation: result.reputation,
       activeMissions: state.activeMissions.filter((active) => active.id !== missionId),
@@ -2431,7 +2522,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           : state.runtime.storyNotification
       },
       ...dialoguePatch
-    });
+    }));
     if (dispatchDeliveryRequest && state.economyService.status === "connected") {
       void postEconomyDispatchDelivery(dispatchDeliveryRequest)
         .then((delivery) => {

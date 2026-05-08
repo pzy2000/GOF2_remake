@@ -737,6 +737,24 @@ export interface ActiveDialogueState {
   replay?: boolean;
 }
 
+export type OnboardingStepId =
+  | "first-flight"
+  | "dock-helion"
+  | "accept-clean-carrier"
+  | "plot-clean-carrier-route"
+  | "launch-for-mirr"
+  | "dock-mirr-lattice"
+  | "complete-clean-carrier";
+
+export interface OnboardingState {
+  enabled: boolean;
+  collapsed: boolean;
+  completedStepIds: OnboardingStepId[];
+  claimedRewardStepIds: OnboardingStepId[];
+  startedAtGameTime: number;
+  completedAtGameTime?: number;
+}
+
 export interface ProjectileEntity {
   id: string;
   owner: "player" | "enemy" | "patrol" | "npc";
@@ -884,6 +902,7 @@ export interface SaveGameData {
   knownPlanetIds: string[];
   explorationState: ExplorationState;
   dialogueState: DialogueState;
+  onboardingState?: OnboardingState;
 }
 
 declare global {

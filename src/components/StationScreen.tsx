@@ -42,6 +42,7 @@ import { AtlasIcon } from "./AtlasIcon";
 import { SaveSlotsPanel } from "./SaveSlotsPanel";
 import { getCommodityIcon, getEquipmentIcon, getFactionIcon } from "../data/iconAtlas";
 import { getStoryObjectiveSummary, getStoryProgress, storyStatusLabel } from "../systems/story";
+import { CLEAN_CARRIER_MISSION_ID, getOnboardingView, HELION_START_STATION_ID, MIRR_LATTICE_STATION_ID } from "../systems/onboarding";
 import { getDialogueLogEntries } from "../systems/dialogue";
 import { getExplorationChainSummaries, getExplorationObjectiveSummaryForSystem, explorationRewardStationNames } from "../systems/explorationObjectives";
 import {
@@ -308,6 +309,12 @@ export function StationScreen() {
   const locale = useGameStore((state) => state.locale);
   const tab = useGameStore((state) => state.stationTab);
   const manifest = useGameStore((state) => state.assetManifest);
+  const player = useGameStore((state) => state.player);
+  const activeMissions = useGameStore((state) => state.activeMissions);
+  const completedMissionIds = useGameStore((state) => state.completedMissionIds);
+  const onboardingState = useGameStore((state) => state.onboardingState);
+  const autopilot = useGameStore((state) => state.autopilot);
+  const gameClock = useGameStore((state) => state.gameClock);
   const setStationTab = useGameStore((state) => state.setStationTab);
   const undock = useGameStore((state) => state.undock);
   const saveGame = useGameStore((state) => state.saveGame);
@@ -316,6 +323,18 @@ export function StationScreen() {
   const isHangarTab = tab === "Hangar";
   const isGalaxyMapTab = tab === "Galaxy Map";
   if (!station) return null;
+  const onboardingView = getOnboardingView({
+    onboardingState,
+    screen: "station",
+    currentSystemId: station.systemId,
+    currentStationId: station.id,
+    player,
+    activeMissions,
+    completedMissionIds,
+    autopilot,
+    gameClock
+  });
+  const onboardingStepId = onboardingView.activeStep?.id;
   const stationBackground: CSSProperties = {
     backgroundImage: `linear-gradient(rgba(3, 7, 18, 0.88), rgba(3, 7, 18, 0.96)), url(${manifest.nebulaBg})`
   };
@@ -335,13 +354,31 @@ export function StationScreen() {
           <button className="primary" onClick={undock}>{translateText("Launch", locale)}</button>
         </div>
       </header>
-      <nav className="tab-row">
-        {tabs.map((name) => (
-          <button key={name} className={tab === name ? "active" : ""} onClick={() => setStationTab(name)}>
-            {translateText(name, locale)}
-          </button>
-        ))}
-      </nav>
+      <div className="station-nav-stack">
+        <nav className="tab-row">
+          {tabs.map((name) => (
+            <button key={name} className={tab === name ? "active" : ""} onClick={() => setStationTab(name)}>
+              {translateText(name, locale)}
+            </button>
+          ))}
+        </nav>
+        {onboardingView.visible && onboardingStepId ? (
+          <section className="station-onboarding-callout" data-testid="station-onboarding-callout">
+            <div>
+              <span>{translateText("First Flight", locale)} {onboardingView.completedCount}/{onboardingView.totalCount}</span>
+              <b>{translateText(onboardingView.activeStep?.title, locale)}</b>
+              <p>{translateText(onboardingView.activeStep?.objective, locale)}</p>
+            </div>
+            {onboardingStepId === "accept-clean-carrier" && station.id === HELION_START_STATION_ID ? (
+              <button className="primary" onClick={() => setStationTab("Mission Board")}>{translateText("Open Board", locale)}</button>
+            ) : onboardingStepId === "plot-clean-carrier-route" ? (
+              <button className="primary" onClick={() => setStationTab("Galaxy Map")}>{translateText("Open Map", locale)}</button>
+            ) : onboardingStepId === "complete-clean-carrier" && station.id === MIRR_LATTICE_STATION_ID ? (
+              <button className="primary" onClick={() => setStationTab("Mission Board")}>{translateText("Open Board", locale)}</button>
+            ) : null}
+          </section>
+        ) : null}
+      </div>
       <section className={`station-body ${isHangarTab ? "station-body--hangar" : ""} ${isGalaxyMapTab ? "station-body--galaxy" : ""}`}>
         {tab === "Market" ? <MarketTab /> : null}
         {tab === "Economy" ? <EconomyTab /> : null}
@@ -939,13 +976,28 @@ function MissionBoardTab() {
   const explorationState = useGameStore((state) => state.explorationState);
   const completedMissionIds = useGameStore((state) => state.completedMissionIds);
   const failedMissionIds = useGameStore((state) => state.failedMissionIds);
+  const onboardingState = useGameStore((state) => state.onboardingState);
   const gameClock = useGameStore((state) => state.gameClock);
+  const autopilot = useGameStore((state) => state.autopilot);
   const acceptMission = useGameStore((state) => state.acceptMission);
   const completeMission = useGameStore((state) => state.completeMission);
+  const startJumpToStation = useGameStore((state) => state.startJumpToStation);
   const reputation = useGameStore((state) => state.reputation);
   const staticAvailable = getAvailableMissionsForSystem(missionTemplates, currentSystemId, activeMissions, completedMissionIds, failedMissionIds);
   const marketGapAvailable = getAvailableMarketGapMissions({ marketState, systemId: currentSystemId, activeMissions, knownSystemIds: knownSystems, knownPlanetIds, explorationState });
   const available = [...staticAvailable, ...marketGapAvailable];
+  const onboardingView = getOnboardingView({
+    onboardingState,
+    screen: "station",
+    currentSystemId,
+    currentStationId,
+    player,
+    activeMissions,
+    completedMissionIds,
+    autopilot,
+    gameClock
+  });
+  const onboardingStepId = onboardingView.activeStep?.id;
   return (
     <div className="split-layout">
       <aside className="reputation-panel">
@@ -959,6 +1011,12 @@ function MissionBoardTab() {
       </aside>
       <div className="mission-board-panel">
         <h2>{translateText("Mission Board", locale)}</h2>
+        {onboardingView.visible && onboardingStepId === "accept-clean-carrier" ? (
+          <div className="onboarding-board-note" data-testid="onboarding-board-note">
+            <span>{translateText("Recommended first contract", locale)}</span>
+            <p>{translateText("Accept Clean Carrier to learn delivery, routing, and station completion.", locale)}</p>
+          </div>
+        ) : null}
         <div className="mission-list">
           {[...activeMissions, ...available.filter((mission) => !activeMissions.some((active) => active.id === mission.id))].map((mission) => {
             const active = activeMissions.some((item) => item.id === mission.id);
@@ -969,13 +1027,17 @@ function MissionBoardTab() {
               : undefined;
             const marketGap = isMarketGapMissionId(mission.id);
             const remainingStoryTargets = getStoryEncounterRemainingTargets(mission);
+            const onboardingRecommended = onboardingView.visible && mission.id === CLEAN_CARRIER_MISSION_ID && (onboardingStepId === "accept-clean-carrier" || onboardingStepId === "plot-clean-carrier-route");
+            const routeStation = stationById[mission.destinationStationId];
+            const canSetRoute = active && !!routeStation && routeStation.id !== currentStationId && !autopilot;
             return (
-              <article key={mission.id} className="mission-card" data-testid={`mission-card-${mission.id}`}>
+              <article key={mission.id} className={`mission-card ${onboardingRecommended ? "onboarding-recommended" : ""}`} data-testid={`mission-card-${mission.id}`}>
                 <div className="mission-title">
                   <AtlasIcon icon={getFactionIcon(mission.factionId)} manifest={manifest} size={40} />
                   <h3>{translateText(mission.title, locale)}</h3>
                   {storyChapter ? <span className="story-pill">{translateText("Main Story", locale)} {storyChapter.order.toString().padStart(2, "0")}</span> : null}
                   {marketGap ? <span className="story-pill">{translateText("Market Gap", locale)}</span> : null}
+                  {onboardingRecommended ? <span className="story-pill onboarding-pill">{translateText("Recommended first contract", locale)}</span> : null}
                 </div>
                 <p>{localizeMissionType(mission.type, locale)} · {localizeFactionName(mission.factionId, locale, factionNames[mission.factionId])} · {translateText("Reward", locale)} {formatCredits(locale, mission.reward, true)}</p>
                 <p>{translateText(mission.description, locale)}</p>
@@ -995,11 +1057,16 @@ function MissionBoardTab() {
                   </p>
                 ) : null}
                 {mission.targetCommodityId ? <p>{translateText("Requires", locale)} {mission.targetAmount} {localizeCommodityName(mission.targetCommodityId, locale, commodityById[mission.targetCommodityId].name)}</p> : null}
-                {active ? (
-                  <button onClick={() => completeMission(mission.id)} disabled={!complete}>{translateText("Complete", locale)}</button>
-                ) : (
-                  <button onClick={() => acceptMission(mission.id)}>{translateText("Accept", locale)}</button>
-                )}
+                <div className="mission-actions">
+                  {active && routeStation ? (
+                    <button onClick={() => startJumpToStation(routeStation.id)} disabled={!canSetRoute}>{translateText("Set Route", locale)}</button>
+                  ) : null}
+                  {active ? (
+                    <button onClick={() => completeMission(mission.id)} disabled={!complete}>{translateText("Complete", locale)}</button>
+                  ) : (
+                    <button onClick={() => acceptMission(mission.id)}>{translateText("Accept", locale)}</button>
+                  )}
+                </div>
               </article>
             );
           })}
