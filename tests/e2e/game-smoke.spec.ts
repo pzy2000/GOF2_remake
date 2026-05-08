@@ -817,6 +817,10 @@ test.describe("browser smoke", () => {
     await expect(watchOverlay).toContainText("Watching");
     await expect(watchOverlay).toContainText("Ore Cutter");
     await expect(watchOverlay).toContainText("Cockpit");
+    await expect(watchOverlay.getByRole("button", { name: "Hail" })).toBeVisible();
+    await expect(watchOverlay.getByRole("button", { name: "Escort" })).toBeVisible();
+    await expect(watchOverlay.getByRole("button", { name: "Rob" })).toBeVisible();
+    await expect(watchOverlay.getByRole("button", { name: "Report" })).toBeVisible();
     await page.keyboard.press("KeyC");
     await expect(watchOverlay).toContainText("Chase");
     await page.keyboard.press("Escape");
@@ -826,6 +830,7 @@ test.describe("browser smoke", () => {
     await expect(watchOverlay).toContainText("Union Bulk Freighter");
     await expect(watchOverlay).toContainText("DISTRESS");
     await expect(watchOverlay).toContainText("Watch Pirate");
+    await expect(watchOverlay.getByRole("button", { name: "Rescue" })).toBeEnabled();
     await expect(watchOverlay).toContainText("Hull");
     await expect(watchOverlay).toContainText("Shield");
     await expect(watchOverlay).toContainText("Identity");

@@ -590,6 +590,225 @@ describe("economy store integration", () => {
     expect(state.runtime.message).toBe("NPC signal lost.");
   });
 
+  it("opens a flight NPC interaction panel and handles hail plus escort objectives", async () => {
+    const store = await freshStore();
+    store.setState((state) => ({
+      targetId: "econ-watch-freighter",
+      runtime: {
+        ...state.runtime,
+        graceUntil: 999,
+        enemies: [watchableEconomyFreighter()]
+      }
+    }));
+
+    store.getState().interact();
+
+    expect(store.getState().npcInteraction).toMatchObject({
+      npcId: "econ-watch-freighter",
+      openedFrom: "flight"
+    });
+
+    await store.getState().executeNpcInteraction("hail", "econ-watch-freighter");
+    expect(store.getState().npcInteraction?.message).toContain("Freight run active");
+
+    const creditsBefore = store.getState().player.credits;
+    await store.getState().executeNpcInteraction("escort", "econ-watch-freighter");
+    expect(store.getState().npcObjective).toMatchObject({ kind: "escort", npcId: "econ-watch-freighter" });
+
+    store.getState().tick(25);
+
+    expect(store.getState().npcObjective).toBeUndefined();
+    expect(store.getState().player.credits).toBeGreaterThan(creditsBefore);
+    expect(store.getState().runtime.message).toContain("Escort complete");
+  });
+
+  it("robs an economy NPC through the backend and applies law consequences plus dropped cargo", async () => {
+    const store = await freshStore();
+    const response: EconomyNpcInteractionResponse = {
+      ok: true,
+      message: "Union Bulk Freighter surrendered 2 cargo unit(s) under threat.",
+      cargoDropped: { "basic-food": 2 },
+      event: {
+        id: "npc-interaction-rob",
+        type: "npc-interaction",
+        clock: 12,
+        message: "Union Bulk Freighter surrendered 2 cargo unit(s) under threat.",
+        systemId: "helion-reach",
+        npcId: "econ-watch-freighter",
+        amount: 2,
+        snapshotId: 77
+      },
+      snapshot: {
+        version: 1,
+        snapshotId: 77,
+        clock: 12,
+        status: "connected",
+        marketState: createInitialMarketState(),
+        resourceBelts: [],
+        recentEvents: [],
+        visibleNpcs: []
+      }
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(response), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    })));
+    store.setState((state) => ({
+      runtime: {
+        ...state.runtime,
+        enemies: [watchableEconomyFreighter()]
+      }
+    }));
+
+    await store.getState().executeNpcInteraction("rob", "econ-watch-freighter");
+
+    const state = store.getState();
+    expect(state.runtime.loot).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ commodityId: "basic-food", amount: 2 })
+      ])
+    );
+    expect(getFactionHeatRecord(state.factionHeat, "free-belt-union").fineCredits).toBeGreaterThan(0);
+    expect(state.npcInteraction?.message).toContain("Fine 750 cr");
+  });
+
+  it("starts rescue objectives and rewards only after backend confirmation", async () => {
+    const store = await freshStore();
+    const rescueResponse: EconomyNpcInteractionResponse = {
+      ok: true,
+      message: "Union Bulk Freighter rescue confirmed. Patrol logs credited the captain.",
+      event: {
+        id: "npc-interaction-rescue",
+        type: "npc-interaction",
+        clock: 18,
+        message: "Union Bulk Freighter rescue confirmed. Patrol logs credited the captain.",
+        systemId: "helion-reach",
+        npcId: "econ-watch-freighter",
+        snapshotId: 78
+      },
+      snapshot: snapshotWithoutVisibleNpcs(78)
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(rescueResponse), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    })));
+    store.setState((state) => ({
+      runtime: {
+        ...state.runtime,
+        enemies: [
+          watchableEconomyFreighter({
+            distressThreatId: "rescue-pirate",
+            distressCalledAt: state.runtime.clock
+          }),
+          {
+            id: "rescue-pirate",
+            name: "Knife Wing Pirate",
+            role: "pirate",
+            factionId: "independent-pirates",
+            position: [44, 0, 118],
+            velocity: [0, 0, 0],
+            hull: 70,
+            shield: 42,
+            maxHull: 70,
+            maxShield: 42,
+            lastDamageAt: -999,
+            fireCooldown: 0.6,
+            aiProfileId: "raider",
+            aiState: "attack",
+            aiTargetId: "econ-watch-freighter",
+            aiTimer: 0
+          }
+        ]
+      }
+    }));
+
+    await store.getState().executeNpcInteraction("rescue", "econ-watch-freighter");
+    const creditsBefore = store.getState().player.credits;
+    expect(store.getState().npcObjective).toMatchObject({ kind: "rescue", threatId: "rescue-pirate" });
+
+    store.setState((state) => ({
+      runtime: {
+        ...state.runtime,
+        enemies: state.runtime.enemies.filter((ship) => ship.id !== "rescue-pirate")
+      }
+    }));
+    store.getState().tick(1);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await Promise.resolve();
+
+    expect(store.getState().npcObjective).toBeUndefined();
+    expect(store.getState().player.credits).toBeGreaterThan(creditsBefore);
+    expect(store.getState().runtime.message).toContain("Rescue reward");
+  });
+
+  it("reports smuggler activity and keeps backend-required actions non-blocking while offline", async () => {
+    const store = await freshStore();
+    const reportResponse: EconomyNpcInteractionResponse = {
+      ok: true,
+      message: "Vossari Smuggler report filed with local traffic control.",
+      event: {
+        id: "npc-interaction-report",
+        type: "npc-interaction",
+        clock: 20,
+        message: "Vossari Smuggler report filed with local traffic control.",
+        systemId: "helion-reach",
+        npcId: "econ-smuggler",
+        snapshotId: 79
+      },
+      snapshot: snapshotWithoutVisibleNpcs(79)
+    };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(reportResponse), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    store.setState((state) => ({
+      runtime: {
+        ...state.runtime,
+        enemies: [
+          watchableEconomyFreighter({
+            id: "econ-smuggler",
+            name: "Vossari Smuggler",
+            role: "smuggler",
+            factionId: "vossari-clans",
+            aiProfileId: "smuggler",
+            economyStatus: "HAULING · Luxury Goods",
+            economyCargo: { "luxury-goods": 2 },
+            economyCommodityId: "luxury-goods"
+          })
+        ]
+      }
+    }));
+
+    await store.getState().executeNpcInteraction("report", "econ-smuggler");
+    expect(store.getState().npcInteraction?.message).toContain("Reputation improved");
+
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw new Error("offline");
+    }));
+    store.setState((state) => ({
+      runtime: {
+        ...state.runtime,
+        enemies: [
+          watchableEconomyFreighter({
+            id: "econ-smuggler",
+            name: "Vossari Smuggler",
+            role: "smuggler",
+            factionId: "vossari-clans",
+            aiProfileId: "smuggler",
+            economyStatus: "HAULING · Luxury Goods",
+            economyCargo: { "luxury-goods": 2 },
+            economyCommodityId: "luxury-goods"
+          })
+        ]
+      }
+    }));
+    await store.getState().executeNpcInteraction("rob", "econ-smuggler");
+
+    expect(store.getState().economyService).toMatchObject({ status: "offline", lastError: "offline" });
+    expect(store.getState().npcInteraction?.message).toContain("ROB failed");
+  });
+
   it("accepts generated market gap contracts and applies delivery to local market pressure", async () => {
     const store = await freshStore();
     const marketState = createInitialMarketState();
