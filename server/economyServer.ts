@@ -2,10 +2,11 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { EconomyEvent, EconomyNpcInteractionRequest, NpcDestroyedRequest, PlayerTradeRequest } from "../src/types/economy";
+import type { EconomyDispatchDeliveryRequest, EconomyEvent, EconomyNpcInteractionRequest, NpcDestroyedRequest, PlayerTradeRequest } from "../src/types/economy";
 import {
   createEconomyNpcResponse,
   createEconomySnapshot,
+  handleEconomyDispatchDelivery,
   handleEconomyNpcInteraction,
   handlePlayerTrade,
   markEconomyNpcDestroyed,
@@ -213,6 +214,17 @@ export function createEconomyHttpServer(options: EconomyHttpServerOptions = {}):
         }
         const statusCode = result.ok ? 200 : result.message === "Economy NPC not found." ? 404 : 400;
         writeJson(response, statusCode, result);
+        return;
+      }
+
+      if (request.method === "POST" && url.pathname === "/api/economy/dispatch-delivery") {
+        const body = await readJsonBody<EconomyDispatchDeliveryRequest>(request);
+        const result = handleEconomyDispatchDelivery(state, body);
+        if (result.ok) {
+          save();
+          if (result.event) broadcast(result.event);
+        }
+        writeJson(response, result.ok ? 200 : 400, result);
         return;
       }
 

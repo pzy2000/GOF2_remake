@@ -26,9 +26,13 @@ import {
   isCommodityVisibleInMarket
 } from "../systems/economy";
 import {
+  getAvailableEconomyDispatchMissions,
   getAvailableMarketGapMissions,
+  getDispatchMissionSourceStationId,
   getMarketSupplyBrief,
-  isMarketGapMissionId
+  isEconomyDispatchMissionId,
+  isMarketGapMissionId,
+  isMarketSmugglingMissionId
 } from "../systems/marketMissions";
 import { getEconomyEventSystemName, getEconomyFlightRouteSummary } from "../systems/economyRoutes";
 import { getFactionHeatLevelLabel, getFactionHeatRecord } from "../systems/factionConsequences";
@@ -51,7 +55,7 @@ import {
 } from "../systems/equipment";
 import { getContrabandLawSummary } from "../systems/combatAi";
 import { hasActiveCivilianDistress } from "../state/domains/combatRuntime";
-import type { AssetManifest, BlueprintPath, CargoHold, CommodityId, EquipmentId, EquipmentSlotType, FactionId, StationTab } from "../types/game";
+import type { AssetManifest, BlueprintPath, CargoHold, CommodityId, EquipmentId, EquipmentSlotType, FactionId, MissionDefinition, StationTab } from "../types/game";
 import {
   formatCargoContents,
   formatCargoLabel,
@@ -361,6 +365,9 @@ function MarketTab() {
   const system = useGameStore((state) => systemById[state.currentSystemId]);
   const reputation = useGameStore((state) => state.reputation.factions[station.factionId]);
   const marketState = useGameStore((state) => state.marketState);
+  const knownSystems = useGameStore((state) => state.knownSystems);
+  const knownPlanetIds = useGameStore((state) => state.knownPlanetIds);
+  const explorationState = useGameStore((state) => state.explorationState);
   const activeMissions = useGameStore((state) => state.activeMissions);
   const buy = useGameStore((state) => state.buy);
   const sell = useGameStore((state) => state.sell);
@@ -466,6 +473,110 @@ function formatRiskPreferenceLabel(value: string | undefined, locale: Locale): s
   return translateText(value[0].toUpperCase() + value.slice(1), locale);
 }
 
+function dispatchCargoEntry(mission: MissionDefinition): [CommodityId, number] | undefined {
+  return (Object.entries(mission.cargoRequired ?? {}) as [CommodityId, number | undefined][])
+    .find(([, amount]) => (amount ?? 0) > 0) as [CommodityId, number] | undefined;
+}
+
+function hasDispatchCargo(playerCargo: CargoHold, mission: MissionDefinition): boolean {
+  return Object.entries(mission.cargoRequired ?? {}).every(([commodityId, amount]) => (playerCargo[commodityId as CommodityId] ?? 0) >= (amount ?? 0));
+}
+
+function EconomyDispatchBoard() {
+  const locale = useGameStore((state) => state.locale);
+  const currentSystem = useGameStore((state) => systemById[state.currentSystemId]);
+  const currentStationId = useGameStore((state) => state.currentStationId);
+  const marketState = useGameStore((state) => state.marketState);
+  const activeMissions = useGameStore((state) => state.activeMissions);
+  const player = useGameStore((state) => state.player);
+  const knownSystems = useGameStore((state) => state.knownSystems);
+  const knownPlanetIds = useGameStore((state) => state.knownPlanetIds);
+  const explorationState = useGameStore((state) => state.explorationState);
+  const gameClock = useGameStore((state) => state.gameClock);
+  const autopilot = useGameStore((state) => state.autopilot);
+  const acceptMission = useGameStore((state) => state.acceptMission);
+  const completeMission = useGameStore((state) => state.completeMission);
+  const startJumpToStation = useGameStore((state) => state.startJumpToStation);
+  const activeDispatch = activeMissions.filter((mission) => isEconomyDispatchMissionId(mission.id));
+  const activeIds = new Set(activeDispatch.map((mission) => mission.id));
+  const availableDispatch = getAvailableEconomyDispatchMissions({
+    marketState,
+    systemId: currentSystem.id,
+    activeMissions,
+    knownSystemIds: knownSystems,
+    knownPlanetIds,
+    explorationState,
+    limit: 5
+  }).filter((mission) => !activeIds.has(mission.id));
+  const missions = [...activeDispatch, ...availableDispatch].slice(0, 6);
+  return (
+    <section className="economy-dispatch-board" data-testid="economy-dispatch-board">
+      <header>
+        <div>
+          <p className="eyebrow">{translateText("Dispatch Board", locale)}</p>
+          <h3>{translateText("Economic Opportunities", locale)}</h3>
+        </div>
+        <span>{formatNumber(locale, missions.length)} {translateText("signals", locale)}</span>
+      </header>
+      {missions.length === 0 ? (
+        <p>{translateText("No current dispatch opportunities in this network.", locale)}</p>
+      ) : (
+        <div className="economy-dispatch-list">
+          {missions.map((mission) => {
+            const active = activeIds.has(mission.id);
+            const cargoEntry = dispatchCargoEntry(mission);
+            const commodityId = cargoEntry?.[0];
+            const amount = cargoEntry?.[1] ?? 0;
+            const commodityName = commodityId ? localizeCommodityName(commodityId, locale, commodityById[commodityId].name) : translateText("Cargo", locale);
+            const destination = stationById[mission.destinationStationId];
+            const sourceStationId = getDispatchMissionSourceStationId(mission);
+            const source = sourceStationId ? stationById[sourceStationId] : undefined;
+            const hasCargo = hasDispatchCargo(player.cargo, mission);
+            const routeStationId = hasCargo ? mission.destinationStationId : sourceStationId ?? mission.destinationStationId;
+            const routeStation = routeStationId ? stationById[routeStationId] : undefined;
+            const complete = active && canCompleteMission(mission, player, currentSystem.id, currentStationId ?? "", 0, gameClock);
+            const smuggling = isMarketSmugglingMissionId(mission.id);
+            const entry = commodityId && destination ? getMarketEntry(marketState, destination.id, commodityId) : undefined;
+            return (
+              <article key={mission.id} className={`economy-dispatch-card ${active ? "active" : ""} ${smuggling ? "smuggling" : "supply"}`}>
+                <div>
+                  <span>{translateText(smuggling ? "Smuggling Run" : "Supply Run", locale)}</span>
+                  <h4>{translateText(mission.title, locale)}</h4>
+                  <p>
+                    {source ? `${localizeStationName(source.id, locale, source.name)} -> ` : ""}
+                    {destination ? localizeStationName(destination.id, locale, destination.name) : mission.destinationStationId}
+                  </p>
+                </div>
+                <p>
+                  {formatNumber(locale, amount)} {commodityName} · {translateText("Reward", locale)} {formatCredits(locale, mission.reward, true)}
+                  {mission.deadlineSeconds ? ` · ${translateText("Deadline", locale)} ${formatTime(mission.deadlineSeconds, locale)}` : ""}
+                </p>
+                {entry ? (
+                  <p>
+                    {translateText("Market Pressure", locale)}: {translateText("Stock", locale)} {formatNumber(locale, Math.round(entry.stock))}/{formatNumber(locale, entry.maxStock)} · {translateText("Demand", locale)} {formatNumber(locale, Number(entry.demand.toFixed(2)))}
+                  </p>
+                ) : null}
+                {smuggling ? <p className="warning-text">{translateText(getContrabandLawSummary(mission.destinationSystemId), locale)}</p> : <p>{translateText(mission.description, locale)}</p>}
+                <div className="economy-dispatch-actions">
+                  <span>{active ? translateText(hasCargo ? "Ready to deliver" : "Active - source cargo required", locale) : translateText("Available", locale)}</span>
+                  {!active ? <button onClick={() => acceptMission(mission.id)}>{translateText("Accept", locale)}</button> : null}
+                  <button
+                    onClick={() => routeStation && startJumpToStation(routeStation.id)}
+                    disabled={!routeStation || routeStation.id === currentStationId || !!autopilot}
+                  >
+                    {translateText(routeStation && !hasCargo ? "Set Route: Source" : "Set Route", locale)}
+                  </button>
+                  {active ? <button className="primary" onClick={() => completeMission(mission.id)} disabled={!complete}>{translateText("Complete", locale)}</button> : null}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function EconomyTab() {
   const locale = useGameStore((state) => state.locale);
   const currentSystem = useGameStore((state) => systemById[state.currentSystemId]);
@@ -513,6 +624,7 @@ function EconomyTab() {
           </div>
         ) : null}
       </header>
+      <EconomyDispatchBoard />
       <div className="economy-dashboard">
         <section className="economy-card economy-routes-card">
           <h3>{translateText("NPC Routes", locale)}</h3>
@@ -821,6 +933,9 @@ function MissionBoardTab() {
   const runtime = useGameStore((state) => state.runtime);
   const activeMissions = useGameStore((state) => state.activeMissions);
   const marketState = useGameStore((state) => state.marketState);
+  const knownSystems = useGameStore((state) => state.knownSystems);
+  const knownPlanetIds = useGameStore((state) => state.knownPlanetIds);
+  const explorationState = useGameStore((state) => state.explorationState);
   const completedMissionIds = useGameStore((state) => state.completedMissionIds);
   const failedMissionIds = useGameStore((state) => state.failedMissionIds);
   const gameClock = useGameStore((state) => state.gameClock);
@@ -828,7 +943,7 @@ function MissionBoardTab() {
   const completeMission = useGameStore((state) => state.completeMission);
   const reputation = useGameStore((state) => state.reputation);
   const staticAvailable = getAvailableMissionsForSystem(missionTemplates, currentSystemId, activeMissions, completedMissionIds, failedMissionIds);
-  const marketGapAvailable = getAvailableMarketGapMissions({ marketState, systemId: currentSystemId, activeMissions });
+  const marketGapAvailable = getAvailableMarketGapMissions({ marketState, systemId: currentSystemId, activeMissions, knownSystemIds: knownSystems, knownPlanetIds, explorationState });
   const available = [...staticAvailable, ...marketGapAvailable];
   return (
     <div className="split-layout">

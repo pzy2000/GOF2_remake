@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createAsteroidsForSystem } from "../src/systems/asteroids";
 import { createInitialMarketState, getMarketEntry } from "../src/systems/economy";
 import { getFactionHeatRecord } from "../src/systems/factionConsequences";
-import { getAvailableMarketGapMissions } from "../src/systems/marketMissions";
-import type { EconomyNpcInteractionResponse, EconomyNpcResponse, EconomySnapshot } from "../src/types/economy";
+import { getAvailableEconomyDispatchMissions, getAvailableMarketGapMissions, getAvailableSmugglingMissions } from "../src/systems/marketMissions";
+import type { EconomyDispatchDeliveryResponse, EconomyNpcInteractionResponse, EconomyNpcResponse, EconomySnapshot } from "../src/types/economy";
 import type { CommodityId, FlightEntity, MarketState } from "../src/types/game";
 
 class MemoryStorage implements Storage {
@@ -887,5 +887,97 @@ describe("economy store integration", () => {
 
     expect(store.getState().activeMissions.some((active) => active.id === mission.id)).toBe(true);
     expect(store.getState().economyEvents[0]?.message).toContain("Basic Food");
+  });
+
+  it("posts completed dispatch deliveries to the economy backend", async () => {
+    const store = await freshStore();
+    const marketState = createInitialMarketState();
+    const entry = getMarketEntry(marketState, "helion-prime", "basic-food");
+    setMarketEntry(marketState, "helion-prime", "basic-food", { stock: 1, demand: entry.baselineDemand + 0.45 });
+    const backendMarket = createInitialMarketState();
+    setMarketEntry(backendMarket, "helion-prime", "basic-food", { stock: 6, demand: entry.baselineDemand });
+    const response: EconomyDispatchDeliveryResponse = {
+      ok: true,
+      message: "Dispatch delivery logged 4 cargo unit(s) at Helion Prime Exchange.",
+      event: {
+        id: "dispatch-delivery-test",
+        type: "dispatch-delivery",
+        clock: 22,
+        message: "Dispatch delivery logged 4 cargo unit(s) at Helion Prime Exchange.",
+        systemId: "helion-reach",
+        stationId: "helion-prime",
+        commodityId: "basic-food",
+        amount: 4,
+        snapshotId: 88
+      },
+      snapshot: {
+        version: 1,
+        snapshotId: 88,
+        clock: 22,
+        status: "connected",
+        marketState: backendMarket,
+        resourceBelts: [],
+        recentEvents: [],
+        visibleNpcs: []
+      }
+    };
+    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      expect(String(input)).toContain("/api/economy/dispatch-delivery");
+      expect(JSON.parse(String(init?.body))).toMatchObject({ missionId: expect.stringMatching(/^market-gap:/), stationId: "helion-prime" });
+      return new Response(JSON.stringify(response), { status: 200, headers: { "Content-Type": "application/json" } });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    store.setState((state) => ({
+      marketState,
+      economyService: { ...state.economyService, status: "connected", snapshotId: 44 }
+    }));
+    store.getState().dockAt("helion-prime");
+    const mission = getAvailableEconomyDispatchMissions({ marketState, systemId: "helion-reach", activeMissions: [] })[0];
+    store.getState().acceptMission(mission.id);
+    store.setState((state) => ({
+      player: { ...state.player, cargo: { ...state.player.cargo, "basic-food": mission.cargoRequired!["basic-food"] } }
+    }));
+
+    store.getState().completeMission(mission.id);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(store.getState().activeMissions.some((active) => active.id === mission.id)).toBe(false);
+    expect(store.getState().economyService).toMatchObject({ status: "connected", snapshotId: 88 });
+    expect(store.getState().runtime.message).toContain("Dispatch delivery logged");
+  });
+
+  it("keeps smuggling dispatch completion playable when backend delivery is offline", async () => {
+    const store = await freshStore();
+    const marketState = createInitialMarketState();
+    const destinationEntry = getMarketEntry(marketState, "vantara-bastion", "illegal-contraband");
+    setMarketEntry(marketState, "vantara-bastion", "illegal-contraband", { stock: 0, demand: destinationEntry.baselineDemand + 0.5 });
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      throw new Error("dispatch offline");
+    }));
+    store.setState((state) => ({
+      currentSystemId: "ashen-drift",
+      currentStationId: "black-arcade",
+      knownSystems: [...new Set([...state.knownSystems, "ashen-drift", "vantara"])],
+      knownPlanetIds: [...new Set([...state.knownPlanetIds, "black-arc", "vantara-command"])],
+      marketState,
+      economyService: { ...state.economyService, status: "connected", snapshotId: 12 }
+    }));
+    const mission = getAvailableSmugglingMissions({ marketState, systemId: "ashen-drift", activeMissions: [], limit: 1 })[0];
+
+    store.getState().acceptMission(mission.id);
+    store.setState((state) => ({
+      currentSystemId: mission.destinationSystemId,
+      currentStationId: mission.destinationStationId,
+      player: { ...state.player, cargo: { ...state.player.cargo, "illegal-contraband": mission.cargoRequired!["illegal-contraband"] } }
+    }));
+    const before = getMarketEntry(store.getState().marketState, mission.destinationStationId, "illegal-contraband");
+    store.getState().completeMission(mission.id);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const after = getMarketEntry(store.getState().marketState, mission.destinationStationId, "illegal-contraband");
+
+    expect(after.stock).toBeGreaterThan(before.stock);
+    expect(store.getState().economyService).toMatchObject({ status: "fallback", lastError: "dispatch offline" });
+    expect(store.getState().runtime.message).toContain("Economy backend delivery recorded locally");
   });
 });

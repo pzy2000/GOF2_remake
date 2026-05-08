@@ -7,6 +7,7 @@ import { GALAXY_DISCOVERY_DISTANCE, systemDistance } from "../systems/navigation
 import { getExplorationSignalsForSystem, getVisibleStationsForSystem, isExplorationSignalDiscovered, isExplorationSignalUnlocked, isHiddenStationRevealed } from "../systems/exploration";
 import { getExplorationObjectiveSummaryForSystem } from "../systems/explorationObjectives";
 import { getFactionHeatLevelLabel, getFactionHeatRecord, isFactionWanted } from "../systems/factionConsequences";
+import { isEconomyDispatchMissionId, isMarketSmugglingMissionId } from "../systems/marketMissions";
 import { getStoryObjectiveSummary } from "../systems/story";
 import {
   formatTechLevel,
@@ -87,6 +88,10 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
   const storyTargetSystemId = storyObjective.status !== "complete" ? storyObjective.targetSystemId : undefined;
   const storyTargetStationId = storyObjective.status !== "complete" ? storyObjective.targetStationId : undefined;
   const storyTargetSystemVisible = storyTargetSystemId && knownSystems.includes(storyTargetSystemId) ? storyTargetSystemId : undefined;
+  const activeDispatch = activeMissions.find((mission) => isEconomyDispatchMissionId(mission.id));
+  const dispatchTargetSystemId = activeDispatch?.destinationSystemId;
+  const dispatchTargetStationId = activeDispatch?.destinationStationId;
+  const dispatchTargetVisible = dispatchTargetSystemId && knownSystems.includes(dispatchTargetSystemId) ? dispatchTargetSystemId : undefined;
   const selectedExplorationSummary = selectedKnown
     ? getExplorationObjectiveSummaryForSystem(selectedSystem.id, explorationState, { playerUnlockedBlueprintIds: player.unlockedBlueprintIds })
     : undefined;
@@ -228,7 +233,7 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                 return (
                   <button
                     key={system.id}
-                    className={`galaxy-system ${known ? "known" : "locked"} ${current ? "current" : ""} ${selected ? "selected" : ""} ${storyTargetSystemVisible === system.id ? "story-pin" : ""} ${explorationSummary ? "exploration-pin" : ""}`}
+                    className={`galaxy-system ${known ? "known" : "locked"} ${current ? "current" : ""} ${selected ? "selected" : ""} ${storyTargetSystemVisible === system.id ? "story-pin" : ""} ${dispatchTargetVisible === system.id ? "dispatch-pin" : ""} ${explorationSummary ? "exploration-pin" : ""}`}
                     style={{ left: point.x, top: point.y, "--system-tone": systemTone(index, system.risk) } as CSSProperties}
                     onClick={() => selectSystem(system.id)}
                     onDoubleClick={() => {
@@ -244,6 +249,7 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                     <span className="moon moon-two" />
                     <span className="system-name">{known ? localizeSystemName(system.id, locale, system.name) : translateText("Unknown Signal", locale)}</span>
                     {storyTargetSystemVisible === system.id ? <span className="story-map-pin">{translateText("Main Story", locale)}</span> : null}
+                    {dispatchTargetVisible === system.id ? <span className="dispatch-map-pin">{translateText("Dispatch", locale)}</span> : null}
                     {explorationSummary ? (
                       <span className="exploration-map-pin">
                         {translateText("Quiet Signals", locale)} {explorationSummary.completedCount}/{explorationSummary.totalCount}
@@ -269,6 +275,16 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                   <span>{translateText("Main Story", locale)}</span>
                   <b>{translateText(storyObjective.chapterLabel, locale)} · {translateText(storyObjective.title, locale)}</b>
                   <p>{translateText(storyObjective.objectiveText, locale)}</p>
+                </div>
+              ) : null}
+              {activeDispatch && dispatchTargetVisible === selectedSystem.id ? (
+                <div className={`dispatch-map-brief ${isMarketSmugglingMissionId(activeDispatch.id) ? "smuggling" : "supply"}`} data-testid="dispatch-map-brief">
+                  <span>{translateText("Economy Dispatch", locale)}</span>
+                  <b>{translateText(activeDispatch.title, locale)}</b>
+                  <p>
+                    {translateText(isMarketSmugglingMissionId(activeDispatch.id) ? "Smuggling" : "Supply", locale)} {"->"}{" "}
+                    {localizeStationName(activeDispatch.destinationStationId, locale, stationById[activeDispatch.destinationStationId]?.name)}
+                  </p>
                 </div>
               ) : null}
               {selectedKnown ? (
@@ -302,11 +318,12 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                     const station = stationById[planet.stationId];
                     const selected = selectedStation?.id === station.id;
                     const storyDestination = known && storyTargetStationId === station.id;
+                    const dispatchDestination = known && dispatchTargetStationId === station.id;
                     return (
                       <button
                         key={planet.id}
                         type="button"
-                        className={`${selected ? "selected" : ""} ${storyDestination ? "story-destination" : ""}`}
+                        className={`${selected ? "selected" : ""} ${storyDestination ? "story-destination" : ""} ${dispatchDestination ? "dispatch-destination" : ""}`}
                         disabled={!known}
                         onClick={() => setSelectedStationId(station.id)}
                         onDoubleClick={() => executeTravel(station.id)}
@@ -315,6 +332,7 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                         <small>
                           {known ? `${translateText(planet.type, locale)} · ${localizeStationName(station.id, locale, station.name)} · ${formatTechLevel(locale, station.techLevel)}` : translateText("Local scan required", locale)}
                           {storyDestination ? ` · ${translateText("Main Story", locale)}` : ""}
+                          {dispatchDestination ? ` · ${translateText("Dispatch", locale)}` : ""}
                         </small>
                       </button>
                     );
@@ -324,11 +342,12 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                     const known = !!planet && knownPlanetIds.includes(planet.id);
                     const selected = selectedStation?.id === station.id;
                     const storyDestination = known && storyTargetStationId === station.id;
+                    const dispatchDestination = known && dispatchTargetStationId === station.id;
                     return (
                       <button
                         key={station.id}
                         type="button"
-                        className={`hidden-station ${selected ? "selected" : ""} ${storyDestination ? "story-destination" : ""}`}
+                        className={`hidden-station ${selected ? "selected" : ""} ${storyDestination ? "story-destination" : ""} ${dispatchDestination ? "dispatch-destination" : ""}`}
                         disabled={!known}
                         onClick={() => setSelectedStationId(station.id)}
                         onDoubleClick={() => executeTravel(station.id)}
@@ -337,6 +356,7 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                         <small>
                           {known && planet ? `${localizePlanetName(planet.id, locale, planet.name)} · ${hiddenStationFoundLabel(locale)} · ${formatTechLevel(locale, station.techLevel)}` : translateText("Signal masked", locale)}
                           {storyDestination ? ` · ${translateText("Main Story", locale)}` : ""}
+                          {dispatchDestination ? ` · ${translateText("Dispatch", locale)}` : ""}
                         </small>
                       </button>
                     );

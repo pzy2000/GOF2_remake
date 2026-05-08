@@ -1,4 +1,6 @@
 import type {
+  EconomyDispatchDeliveryRequest,
+  EconomyDispatchDeliveryResponse,
   EconomyEvent,
   EconomyNpcInteractionRequest,
   EconomyNpcInteractionResponse,
@@ -108,6 +110,15 @@ export function postEconomyNpcInteraction(
   });
 }
 
+export function postEconomyDispatchDelivery(
+  request: EconomyDispatchDeliveryRequest
+): Promise<EconomyDispatchDeliveryResponse> {
+  return requestJson<EconomyDispatchDeliveryResponse>("/api/economy/dispatch-delivery", {
+    method: "POST",
+    body: JSON.stringify(request)
+  });
+}
+
 export function connectEconomyEvents(
   onEvent: (event: EconomyEvent) => void,
   onError: (message: string) => void
@@ -131,6 +142,7 @@ export function connectEconomyEvents(
     "npc-destroyed",
     "npc-replacement",
     "npc-interaction",
+    "dispatch-delivery",
     "reset"
   ]) {
     source.addEventListener(eventName, handleEvent);

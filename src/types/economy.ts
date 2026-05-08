@@ -24,6 +24,7 @@ export type EconomyEventType =
   | "npc-destroyed"
   | "npc-replacement"
   | "npc-interaction"
+  | "dispatch-delivery"
   | "reset";
 
 export type EconomyNpcRole = Extract<FlightEntityRole, "trader" | "freighter" | "courier" | "miner" | "smuggler">;
@@ -152,6 +153,20 @@ export interface EconomyNpcInteractionResponse {
   event?: EconomyEvent;
   snapshot?: EconomySnapshot;
   cargoDropped?: CargoHold;
+}
+
+export interface EconomyDispatchDeliveryRequest {
+  missionId: string;
+  systemId: string;
+  stationId: string;
+  cargoDelivered: CargoHold;
+}
+
+export interface EconomyDispatchDeliveryResponse {
+  ok: boolean;
+  message: string;
+  event?: EconomyEvent;
+  snapshot?: EconomySnapshot;
 }
 
 export interface EconomyServiceStatus {

@@ -493,6 +493,7 @@ export interface MissionDefinition {
   failed?: boolean;
   failureReason?: string;
   failureReputationDelta?: number;
+  sourceStationId?: string;
   storyArcId?: string;
   storyChapterId?: string;
   storyCritical?: boolean;

@@ -5,6 +5,7 @@ import { getAvailableMarketGapMissions } from "../src/systems/marketMissions";
 import {
   createEconomySnapshot,
   createInitialEconomyState,
+  handleEconomyDispatchDelivery,
   handleEconomyNpcInteraction,
   markEconomyNpcDestroyed,
   normalizeEconomyState,
@@ -245,6 +246,33 @@ describe("NPC economy simulation", () => {
     });
     expect(reported.ok).toBe(true);
     expect(reported.message).toContain("report filed");
+  });
+
+  it("records dispatch deliveries as market events", () => {
+    const state = createInitialEconomyState();
+    const entry = getMarketEntry(state.marketState, "helion-prime", "basic-food");
+    state.marketState["helion-prime"] = {
+      ...state.marketState["helion-prime"],
+      "basic-food": { ...entry, stock: 1, demand: entry.baselineDemand + 0.4 }
+    };
+
+    const delivered = handleEconomyDispatchDelivery(state, {
+      missionId: "market-gap:helion-prime:basic-food:critical",
+      systemId: "helion-reach",
+      stationId: "helion-prime",
+      cargoDelivered: { "basic-food": 4 }
+    });
+
+    expect(delivered.ok).toBe(true);
+    expect(delivered.event?.type).toBe("dispatch-delivery");
+    expect(delivered.snapshot?.marketState["helion-prime"]?.["basic-food"]?.stock).toBeGreaterThan(1);
+    expect(getMarketEntry(state.marketState, "helion-prime", "basic-food").demand).toBeLessThan(entry.baselineDemand + 0.4);
+    expect(handleEconomyDispatchDelivery(state, {
+      missionId: "not-dispatch",
+      systemId: "helion-reach",
+      stationId: "helion-prime",
+      cargoDelivered: { "basic-food": 1 }
+    }).ok).toBe(false);
   });
 
   it("normalizes old economy snapshots with individual NPC defaults", () => {

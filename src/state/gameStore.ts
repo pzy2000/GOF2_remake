@@ -106,6 +106,7 @@ import {
   fetchEconomyNpc,
   fetchEconomySnapshot,
   isEconomyNotFoundError,
+  postEconomyDispatchDelivery,
   postEconomyNpcInteraction,
   postEconomyReset,
   postNpcDestroyed,
@@ -137,9 +138,10 @@ import { applyEconomySnapshotPatch, offlineEconomyPatch, shouldReportEconomyNpcD
 import { applyExpiredMissions } from "./domains/missionRuntime";
 import { applyExplorationReward } from "./domains/explorationRuntime";
 import {
-  applyMarketGapMissionDelivery,
-  getMarketGapMissionById,
-  isMarketGapMissionId
+  applyEconomyDispatchMissionDelivery,
+  getEconomyDispatchMissionById,
+  isEconomyDispatchMissionId,
+  isMarketSmugglingMissionId
 } from "../systems/marketMissions";
 import {
   advanceAutopilotPatch,
@@ -159,6 +161,14 @@ let economyRefreshInFlight = false;
 
 function economyErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Economy service offline.";
+}
+
+function dispatchVisibilityFor(state: Pick<GameStore, "knownSystems" | "knownPlanetIds" | "explorationState">) {
+  return {
+    knownSystemIds: state.knownSystems,
+    knownPlanetIds: state.knownPlanetIds,
+    explorationState: state.explorationState
+  };
 }
 
 function savePayload(state: GameStore, overrides: SavePayloadOverrides = {}): SavePayload {
@@ -2210,23 +2220,23 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
   acceptMission: (missionId) => {
     const state = get();
-    const mission = missionTemplates.find((candidate) => candidate.id === missionId) ?? getMarketGapMissionById(state.marketState, missionId);
-    const generatedMarketMission = isMarketGapMissionId(missionId);
+    const mission = missionTemplates.find((candidate) => candidate.id === missionId) ?? getEconomyDispatchMissionById(state.marketState, missionId, dispatchVisibilityFor(state));
+    const generatedDispatchMission = isEconomyDispatchMissionId(missionId);
     if (!mission) {
       set({ runtime: { ...state.runtime, message: "That market contract is no longer available." } });
       return;
     }
-    if (!generatedMarketMission && (state.completedMissionIds.includes(missionId) || (state.failedMissionIds.includes(missionId) && !mission.retryOnFailure))) {
+    if (!generatedDispatchMission && (state.completedMissionIds.includes(missionId) || (state.failedMissionIds.includes(missionId) && !mission.retryOnFailure))) {
       set({ runtime: { ...state.runtime, message: "That contract is no longer available." } });
       return;
     }
-    if (!generatedMarketMission && !areMissionPrerequisitesMet(mission, state.completedMissionIds)) {
+    if (!generatedDispatchMission && !areMissionPrerequisitesMet(mission, state.completedMissionIds)) {
       set({ runtime: { ...state.runtime, message: "Mission prerequisites are not complete." } });
       return;
     }
     const result = acceptMissionPure(state.player, state.activeMissions, mission, state.gameClock);
     const runtime = result.mission ? addMissionRuntimeEntity(state.runtime, result.mission, state.currentSystemId) : state.runtime;
-    const dialogueScene = result.ok && !generatedMarketMission ? getStoryMissionDialogueScene(mission.id, "accept") : undefined;
+    const dialogueScene = result.ok && !generatedDispatchMission ? getStoryMissionDialogueScene(mission.id, "accept") : undefined;
     const dialoguePatch = dialogueScene ? dialogueOpenPatch(state, dialogueScene.id) : {};
     const storyNotification = result.ok && mission.storyCritical
       ? createStoryNotification("start", mission.title, result.message, state.gameClock)
@@ -2235,7 +2245,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set({
       player: result.player,
       activeMissions: result.activeMissions,
-      failedMissionIds: result.ok && (mission.retryOnFailure || generatedMarketMission) ? state.failedMissionIds.filter((id) => id !== missionId) : state.failedMissionIds,
+      failedMissionIds: result.ok && (mission.retryOnFailure || generatedDispatchMission) ? state.failedMissionIds.filter((id) => id !== missionId) : state.failedMissionIds,
       runtime: { ...runtime, message: result.message, storyNotification },
       ...dialoguePatch
     });
@@ -2249,20 +2259,32 @@ export const useGameStore = create<GameStore>((set, get) => ({
       return;
     }
     const result = completeMissionPure(mission, state.player, state.reputation);
-    const generatedMarketMission = isMarketGapMissionId(mission.id);
-    const marketState = generatedMarketMission ? applyMarketGapMissionDelivery(state.marketState, mission) : state.marketState;
-    const dialogueScene = generatedMarketMission ? undefined : getStoryMissionDialogueScene(mission.id, "complete");
+    const generatedDispatchMission = isEconomyDispatchMissionId(mission.id);
+    const marketState = generatedDispatchMission ? applyEconomyDispatchMissionDelivery(state.marketState, mission) : state.marketState;
+    const dialogueScene = generatedDispatchMission ? undefined : getStoryMissionDialogueScene(mission.id, "complete");
     const dialoguePatch = dialogueScene ? dialogueOpenPatch(state, dialogueScene.id) : {};
-    const completeMessage = generatedMarketMission
-      ? `${mission.title} delivered. Market pressure eased. +${mission.reward} credits.`
+    const completeMessage = generatedDispatchMission
+      ? `${mission.title} delivered. ${isMarketSmugglingMissionId(mission.id) ? "Black-market pressure shifted" : "Market pressure eased"}. +${mission.reward} credits.`
       : `${mission.title} complete. +${mission.reward} credits.`;
+    const dispatchDeliveryRequest = generatedDispatchMission && mission.cargoRequired
+      ? {
+          missionId: mission.id,
+          systemId: state.currentSystemId,
+          stationId: state.currentStationId,
+          cargoDelivered: mission.cargoRequired
+        }
+      : undefined;
+    const economyService = generatedDispatchMission && state.economyService.status !== "connected"
+      ? { ...state.economyService, status: "fallback" as const, lastError: "Dispatch delivery recorded locally." }
+      : state.economyService;
     audioSystem.play("mission-complete");
     set({
       player: result.player,
       reputation: result.reputation,
       activeMissions: state.activeMissions.filter((active) => active.id !== missionId),
-      completedMissionIds: generatedMarketMission ? state.completedMissionIds : [...state.completedMissionIds, missionId],
+      completedMissionIds: generatedDispatchMission ? state.completedMissionIds : [...state.completedMissionIds, missionId],
       marketState,
+      economyService,
       runtime: {
         ...state.runtime,
         convoys: state.runtime.convoys.filter((convoy) => convoy.missionId !== missionId),
@@ -2274,6 +2296,33 @@ export const useGameStore = create<GameStore>((set, get) => ({
       },
       ...dialoguePatch
     });
+    if (dispatchDeliveryRequest && state.economyService.status === "connected") {
+      void postEconomyDispatchDelivery(dispatchDeliveryRequest)
+        .then((delivery) => {
+          set((latest) => {
+            const patch = delivery.snapshot ? applyEconomySnapshotPatch(latest, delivery.snapshot, delivery.message) : undefined;
+            return {
+              marketState: patch?.marketState ?? latest.marketState,
+              runtime: { ...(patch?.runtime ?? latest.runtime), message: delivery.message },
+              economyService: patch?.economyService ?? latest.economyService,
+              economyEvents: patch?.economyEvents ?? (delivery.event ? [...latest.economyEvents, delivery.event].slice(-12) : latest.economyEvents)
+            };
+          });
+        })
+        .catch((error) => {
+          set((latest) => ({
+            economyService: {
+              ...latest.economyService,
+              status: "fallback",
+              lastError: economyErrorMessage(error)
+            },
+            runtime: {
+              ...latest.runtime,
+              message: `${completeMessage} Economy backend delivery recorded locally.`
+            }
+          }));
+        });
+    }
   },
   repairAndRefill: () => {
     const state = get();

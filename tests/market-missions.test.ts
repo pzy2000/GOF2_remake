@@ -2,11 +2,17 @@ import { describe, expect, it } from "vitest";
 import { stationById } from "../src/data/world";
 import { createInitialMarketState, getMarketEntry } from "../src/systems/economy";
 import {
+  applyEconomyDispatchMissionDelivery,
   applyMarketGapMissionDelivery,
   createMarketGapMission,
+  getAvailableEconomyDispatchMissions,
   getAvailableMarketGapMissions,
+  getAvailableSmugglingMissions,
+  getEconomyDispatchMissionById,
   getMarketPressureSignals,
-  isMarketGapMissionId
+  isEconomyDispatchMissionId,
+  isMarketGapMissionId,
+  isMarketSmugglingMissionId
 } from "../src/systems/marketMissions";
 import type { CommodityId, MarketState } from "../src/types/game";
 
@@ -77,5 +83,68 @@ describe("market pressure and generated contracts", () => {
 
     expect(after.stock).toBeGreaterThan(before.stock);
     expect(after.demand).toBeLessThan(before.demand);
+  });
+
+  it("generates smuggling dispatch missions from current-system restricted sources", () => {
+    const marketState = createInitialMarketState();
+    const sourceEntry = getMarketEntry(marketState, "black-arcade", "illegal-contraband");
+    const destinationEntry = getMarketEntry(marketState, "vantara-bastion", "illegal-contraband");
+    setMarketEntry(marketState, "black-arcade", "illegal-contraband", { stock: Math.max(4, sourceEntry.stock), demand: sourceEntry.baselineDemand });
+    setMarketEntry(marketState, "vantara-bastion", "illegal-contraband", { stock: 0, demand: destinationEntry.baselineDemand + 0.5 });
+
+    const [mission] = getAvailableSmugglingMissions({ marketState, systemId: "ashen-drift", activeMissions: [], limit: 2 });
+
+    expect(mission).toBeDefined();
+    expect(isMarketSmugglingMissionId(mission.id)).toBe(true);
+    expect(isEconomyDispatchMissionId(mission.id)).toBe(true);
+    expect(stationById[mission.sourceStationId!].systemId).toBe("ashen-drift");
+    expect(mission.destinationStationId).toBe("vantara-bastion");
+    expect(mission.cargoRequired?.["illegal-contraband"]).toBeGreaterThan(0);
+    expect(mission.description).toContain("Hostile Pursuit");
+  });
+
+  it("resolves dispatch missions by id and filters hidden stations unless revealed", () => {
+    const marketState = createInitialMarketState();
+    const hiddenEntry = getMarketEntry(marketState, "parallax-hermitage", "data-cores");
+    setMarketEntry(marketState, "parallax-hermitage", "data-cores", { stock: 0, demand: hiddenEntry.baselineDemand + 0.8 });
+
+    const withoutHidden = getAvailableEconomyDispatchMissions({
+      marketState,
+      systemId: "mirr-vale",
+      activeMissions: [],
+      knownSystemIds: ["mirr-vale"],
+      knownPlanetIds: ["hush-orbit"],
+      explorationState: { discoveredSignalIds: [], completedSignalIds: [], revealedStationIds: [], eventLogIds: [] }
+    });
+    const withHidden = getAvailableEconomyDispatchMissions({
+      marketState,
+      systemId: "mirr-vale",
+      activeMissions: [],
+      knownSystemIds: ["mirr-vale"],
+      knownPlanetIds: ["hush-orbit"],
+      explorationState: { discoveredSignalIds: [], completedSignalIds: [], revealedStationIds: ["parallax-hermitage"], eventLogIds: [] }
+    });
+
+    expect(withoutHidden.some((mission) => mission.destinationStationId === "parallax-hermitage")).toBe(false);
+    const hiddenMission = withHidden.find((mission) => mission.destinationStationId === "parallax-hermitage");
+    expect(hiddenMission).toBeDefined();
+    expect(getEconomyDispatchMissionById(marketState, hiddenMission!.id, {
+      knownSystemIds: ["mirr-vale"],
+      knownPlanetIds: ["hush-orbit"],
+      explorationState: { discoveredSignalIds: [], completedSignalIds: [], revealedStationIds: ["parallax-hermitage"], eventLogIds: [] }
+    })?.id).toBe(hiddenMission!.id);
+  });
+
+  it("applies smuggling delivery through the shared dispatch delivery helper", () => {
+    const marketState = createInitialMarketState();
+    const destination = getMarketEntry(marketState, "vantara-bastion", "illegal-contraband");
+    setMarketEntry(marketState, "vantara-bastion", "illegal-contraband", { stock: 0, demand: destination.baselineDemand + 0.5 });
+    const mission = getAvailableSmugglingMissions({ marketState, systemId: "ashen-drift", activeMissions: [], limit: 1 })[0];
+
+    const next = applyEconomyDispatchMissionDelivery(marketState, mission);
+    const after = getMarketEntry(next, mission.destinationStationId, "illegal-contraband");
+
+    expect(after.stock).toBeGreaterThan(0);
+    expect(after.demand).toBeLessThan(getMarketEntry(marketState, mission.destinationStationId, "illegal-contraband").demand);
   });
 });

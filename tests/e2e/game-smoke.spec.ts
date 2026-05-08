@@ -799,6 +799,11 @@ test.describe("browser smoke", () => {
     await expect(economy).toContainText("Contract");
     await expect(economy).toContainText("P/L");
     await expect(economy).toContainText("Shortage");
+    const dispatchBoard = economy.getByTestId("economy-dispatch-board");
+    await expect(dispatchBoard).toContainText("Dispatch Board");
+    await expect(dispatchBoard).toContainText("Supply Run");
+    await expect(dispatchBoard.getByRole("button", { name: "Accept" }).first()).toBeVisible();
+    await expect(dispatchBoard.getByRole("button", { name: /Set Route/ }).first()).toBeVisible();
     const eventsList = economy.locator(".economy-events-list");
     await expect(eventsList).toContainText("Ore Cutter mined 1 Iron.");
     await expect(eventsList).toContainText("[Helion Reach]");

@@ -1,6 +1,8 @@
 import { commodityById, stationById, stations, systemById, systems } from "../data/world";
 import type { CargoHold, CommodityId, EconomyNpcLedger, EconomyNpcRiskPreference, FactionId, MarketState, PlayerState, Vec3 } from "../types/game";
 import type {
+  EconomyDispatchDeliveryRequest,
+  EconomyDispatchDeliveryResponse,
   EconomyEvent,
   EconomyNpcEntity,
   EconomyNpcInteractionRequest,
@@ -28,6 +30,7 @@ import {
 import { createAsteroidsForSystem } from "./asteroids";
 import { getJumpGatePosition } from "./autopilot";
 import { getMiningProgressIncrement } from "./difficulty";
+import { applyCargoDeliveryToMarket, isEconomyDispatchMissionId } from "./marketMissions";
 import { add, distance, normalize, scale, sub } from "./math";
 
 export interface StationThroughputWindow {
@@ -987,6 +990,41 @@ export function handleEconomyNpcInteraction(
   }
 
   return { ok: false, message: "Unsupported NPC interaction." };
+}
+
+export function handleEconomyDispatchDelivery(
+  state: EconomyServiceState,
+  request: EconomyDispatchDeliveryRequest
+): EconomyDispatchDeliveryResponse {
+  const station = stationById[request.stationId];
+  if (!station || station.systemId !== request.systemId) {
+    return { ok: false, message: "Unknown dispatch destination." };
+  }
+  if (!isEconomyDispatchMissionId(request.missionId)) {
+    return { ok: false, message: "Unsupported dispatch mission." };
+  }
+  const deliveredEntries = Object.entries(request.cargoDelivered) as [CommodityId, number | undefined][];
+  const deliveredUnits = deliveredEntries.reduce((total, [, amount]) => total + Math.max(0, Math.round(amount ?? 0)), 0);
+  const firstCommodityId = deliveredEntries.find(([, amount]) => (amount ?? 0) > 0)?.[0];
+  if (deliveredUnits <= 0 || !firstCommodityId) {
+    return { ok: false, message: "No dispatch cargo delivered." };
+  }
+  state.marketState = applyCargoDeliveryToMarket(state.marketState, station.id, request.cargoDelivered);
+  state.snapshotId += 1;
+  const event = pushEvent(state, {
+    type: "dispatch-delivery",
+    systemId: station.systemId,
+    stationId: station.id,
+    commodityId: firstCommodityId,
+    amount: deliveredUnits,
+    message: `Dispatch delivery logged ${deliveredUnits} cargo unit(s) at ${station.name}.`
+  });
+  return {
+    ok: true,
+    message: event.message,
+    event,
+    snapshot: createEconomySnapshot(state, request.systemId)
+  };
 }
 
 export function markEconomyNpcDestroyed(state: EconomyServiceState, request: NpcDestroyedRequest): EconomyEvent | undefined {

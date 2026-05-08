@@ -1,8 +1,10 @@
 import { commodities, stationById, systemById, useGameStore } from "../state/gameStore";
 import { commodityById, glassWakeProtocol, missionTemplates } from "../data/world";
+import type { CommodityId } from "../types/game";
 import { getOccupiedCargo } from "../systems/economy";
 import { getEquipmentEffects, hasMiningBeam } from "../systems/equipment";
 import { getMissionDeadlineRemaining } from "../systems/missions";
+import { isEconomyDispatchMissionId, isMarketSmugglingMissionId } from "../systems/marketMissions";
 import { distance } from "../systems/math";
 import { getNearestNavigationTarget } from "../systems/navigation";
 import type { NavigationTarget } from "../systems/navigation";
@@ -116,6 +118,10 @@ export function Hud() {
   const navDistance = autopilot ? Math.round(distance(player.position, autopilot.targetPosition)) : 0;
   const navLabel = autopilot ? autopilotPhaseLabel(autopilot.phase, locale) : "";
   const occupiedCargo = getOccupiedCargo(player.cargo, activeMissions);
+  const activeDispatch = activeMissions.find((mission) => isEconomyDispatchMissionId(mission.id));
+  const activeDispatchCargo = activeDispatch
+    ? (Object.entries(activeDispatch.cargoRequired ?? {}) as [CommodityId, number | undefined][]).find(([, amount]) => (amount ?? 0) > 0)
+    : undefined;
   return (
     <div className="hud">
       <img className="hud-overlay-art" src={manifest.hudOverlay} alt="" />
@@ -233,6 +239,14 @@ export function Hud() {
         <p>
           {economyLabel(locale)} {economyService.status === "connected" ? economyLiveLabel(economyService.snapshotId ?? 0, locale) : economyFallbackLabel(economyService.status, locale)}
         </p>
+        {activeDispatch ? (
+          <p>
+            {translateText("Dispatch", locale)} {translateText(isMarketSmugglingMissionId(activeDispatch.id) ? "Smuggling" : "Supply", locale)}:{" "}
+            {activeDispatchCargo
+              ? `${activeDispatchCargo[1] ?? 0} ${localizeCommodityName(activeDispatchCargo[0], locale, commodityById[activeDispatchCargo[0]].name)} -> ${localizeStationName(activeDispatch.destinationStationId, locale, stationById[activeDispatch.destinationStationId]?.name)}`
+              : localizeStationName(activeDispatch.destinationStationId, locale, stationById[activeDispatch.destinationStationId]?.name)}
+          </p>
+        ) : null}
         {autopilot?.cancelable ? <p>{autopilotCancelLabel(locale)}</p> : null}
         <div className="quick-actions">
           <button onClick={() => openGalaxyMap("station-route")} disabled={!!autopilot}>{translateText("Map", locale)}</button>

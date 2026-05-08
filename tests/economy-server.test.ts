@@ -5,7 +5,7 @@ import { get } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { createEconomyHttpServer, type EconomyHttpServer } from "../server/economyServer";
 import { shipById } from "../src/data/world";
-import type { EconomyNpcInteractionResponse, EconomyNpcResponse, EconomySnapshot, PlayerTradeResponse } from "../src/types/economy";
+import type { EconomyDispatchDeliveryResponse, EconomyNpcInteractionResponse, EconomyNpcResponse, EconomySnapshot, PlayerTradeResponse } from "../src/types/economy";
 import type { PlayerState } from "../src/types/game";
 
 let activeServer: EconomyHttpServer | undefined;
@@ -223,5 +223,43 @@ describe("economy HTTP server", () => {
       })
     });
     expect(missing.status).toBe(404);
+  });
+
+  it("processes dispatch delivery requests and returns updated snapshots", async () => {
+    const { app, baseUrl } = await startServer();
+    const entry = app.getState().marketState["helion-prime"]!["basic-food"]!;
+    app.getState().marketState["helion-prime"] = {
+      ...app.getState().marketState["helion-prime"],
+      "basic-food": { ...entry, stock: 1, demand: entry.baselineDemand + 0.5 }
+    };
+
+    const response = await fetch(`${baseUrl}/api/economy/dispatch-delivery`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        missionId: "market-gap:helion-prime:basic-food:critical",
+        systemId: "helion-reach",
+        stationId: "helion-prime",
+        cargoDelivered: { "basic-food": 3 }
+      })
+    });
+    const result = await response.json() as EconomyDispatchDeliveryResponse;
+
+    expect(response.ok).toBe(true);
+    expect(result.ok).toBe(true);
+    expect(result.event?.type).toBe("dispatch-delivery");
+    expect(result.snapshot?.marketState["helion-prime"]?.["basic-food"]?.stock).toBeGreaterThan(1);
+
+    const invalid = await fetch(`${baseUrl}/api/economy/dispatch-delivery`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        missionId: "story-clean-carrier",
+        systemId: "helion-reach",
+        stationId: "helion-prime",
+        cargoDelivered: { "basic-food": 1 }
+      })
+    });
+    expect(invalid.status).toBe(400);
   });
 });

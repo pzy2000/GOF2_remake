@@ -1,6 +1,7 @@
 import { commodities, commodityById, stationById, stations, systemById } from "../data/world";
-import type { CommodityId, MarketState, MissionDefinition, StationDefinition } from "../types/game";
+import type { CommodityId, ExplorationState, MarketState, MissionDefinition, StationDefinition } from "../types/game";
 import type { EconomyEvent } from "../types/economy";
+import { getContrabandLawSummary } from "./combatAi";
 import {
   canBuyCommodityAtStation,
   cloneMarketState,
@@ -8,6 +9,7 @@ import {
   getMarketEntry,
   getTradeHints
 } from "./economy";
+import { isHiddenStationRevealed } from "./exploration";
 
 export type MarketPressureKind = "shortage" | "surplus" | "route";
 export type MarketPressureSeverity = "strained" | "low" | "critical";
@@ -32,6 +34,20 @@ export interface MarketSupplyBrief {
 }
 
 export const MARKET_GAP_MISSION_PREFIX = "market-gap:";
+export const MARKET_SMUGGLE_MISSION_PREFIX = "market-smuggle:";
+
+export interface DispatchVisibilityOptions {
+  knownSystemIds?: string[];
+  knownPlanetIds?: string[];
+  explorationState?: ExplorationState;
+}
+
+export interface EconomyDispatchMissionOptions extends DispatchVisibilityOptions {
+  marketState: MarketState;
+  systemId: string;
+  activeMissions: MissionDefinition[];
+  limit?: number;
+}
 
 function stockRatioFor(marketState: MarketState, station: StationDefinition, commodityId: CommodityId): number {
   const entry = getMarketEntry(marketState, station.id, commodityId);
@@ -55,6 +71,21 @@ function isContractCommodity(commodityId: CommodityId, station: StationDefinitio
 
 export function isMarketGapMissionId(id: string): boolean {
   return id.startsWith(MARKET_GAP_MISSION_PREFIX);
+}
+
+export function isMarketSmugglingMissionId(id: string): boolean {
+  return id.startsWith(MARKET_SMUGGLE_MISSION_PREFIX);
+}
+
+export function isEconomyDispatchMissionId(id: string): boolean {
+  return isMarketGapMissionId(id) || isMarketSmugglingMissionId(id);
+}
+
+function isStationVisible(station: StationDefinition, options: DispatchVisibilityOptions = {}): boolean {
+  if (options.knownSystemIds && !options.knownSystemIds.includes(station.systemId)) return false;
+  if (options.knownPlanetIds && !options.knownPlanetIds.includes(station.planetId)) return false;
+  if (station.hidden && (!options.explorationState || !isHiddenStationRevealed(station.id, options.explorationState))) return false;
+  return true;
 }
 
 export function getMarketPressureSignals(marketState: MarketState): MarketPressureSignal[] {
@@ -100,9 +131,9 @@ export function getMarketPressureSignals(marketState: MarketState): MarketPressu
   return signals.sort((a, b) => b.score - a.score || a.stationId.localeCompare(b.stationId));
 }
 
-function bestSourceFor(marketState: MarketState, shortage: MarketPressureSignal): StationDefinition | undefined {
+function bestSourceFor(marketState: MarketState, shortage: MarketPressureSignal, options: DispatchVisibilityOptions = {}): StationDefinition | undefined {
   return stations
-    .filter((station) => station.id !== shortage.stationId && canBuyCommodityAtStation(shortage.commodityId, station))
+    .filter((station) => station.id !== shortage.stationId && isStationVisible(station, options) && canBuyCommodityAtStation(shortage.commodityId, station))
     .map((station) => ({ station, ratio: stockRatioFor(marketState, station, shortage.commodityId) }))
     .filter((candidate) => candidate.ratio >= 0.42)
     .sort((a, b) => b.ratio - a.ratio || a.station.name.localeCompare(b.station.name))[0]?.station;
@@ -126,11 +157,11 @@ function missionReward(marketState: MarketState, signal: MarketPressureSignal, s
   return Math.max(420, Math.round(unitValue * amount * multiplier * distancePremium));
 }
 
-export function createMarketGapMission(marketState: MarketState, signal: MarketPressureSignal): MissionDefinition | undefined {
+export function createMarketGapMission(marketState: MarketState, signal: MarketPressureSignal, options: DispatchVisibilityOptions = {}): MissionDefinition | undefined {
   if (signal.kind !== "shortage") return undefined;
   const station = stationById[signal.stationId];
-  if (!station) return undefined;
-  const source = bestSourceFor(marketState, signal);
+  if (!station || !isStationVisible(station, options)) return undefined;
+  const source = bestSourceFor(marketState, signal, options);
   const amount = missionAmount(marketState, signal);
   const reward = missionReward(marketState, signal, source, amount);
   const commodity = commodityById[signal.commodityId];
@@ -143,6 +174,7 @@ export function createMarketGapMission(marketState: MarketState, signal: MarketP
     destinationSystemId: station.systemId,
     destinationStationId: station.id,
     factionId: station.factionId,
+    sourceStationId: source?.id,
     description: `${station.name} is running below reserve stock for ${commodity.name}.${sourceText}`,
     reward,
     deadlineSeconds: 780 + amount * 80 + Math.round(systemById[station.systemId].risk * 260),
@@ -157,41 +189,150 @@ export function getAvailableMarketGapMissions({
   marketState,
   systemId,
   activeMissions,
-  limit = 4
+  limit = 4,
+  ...visibility
 }: {
   marketState: MarketState;
   systemId: string;
   activeMissions: MissionDefinition[];
   limit?: number;
-}): MissionDefinition[] {
+} & DispatchVisibilityOptions): MissionDefinition[] {
   const activeIds = new Set(activeMissions.map((mission) => mission.id));
   return getMarketPressureSignals(marketState)
     .filter((signal) => signal.kind === "shortage" && signal.systemId === systemId)
-    .map((signal) => createMarketGapMission(marketState, signal))
+    .map((signal) => createMarketGapMission(marketState, signal, visibility))
     .filter((mission): mission is MissionDefinition => !!mission && !activeIds.has(mission.id))
     .slice(0, limit);
 }
 
-export function getMarketGapMissionById(marketState: MarketState, missionId: string): MissionDefinition | undefined {
+export function getMarketGapMissionById(marketState: MarketState, missionId: string, options: DispatchVisibilityOptions = {}): MissionDefinition | undefined {
   if (!isMarketGapMissionId(missionId)) return undefined;
   return getMarketPressureSignals(marketState)
     .filter((signal) => signal.kind === "shortage")
-    .map((signal) => createMarketGapMission(marketState, signal))
+    .map((signal) => createMarketGapMission(marketState, signal, options))
     .find((mission) => mission?.id === missionId);
+}
+
+function smugglingAmount(marketState: MarketState, source: StationDefinition, destination: StationDefinition): number {
+  const sourceEntry = getMarketEntry(marketState, source.id, "illegal-contraband");
+  const destinationEntry = getMarketEntry(marketState, destination.id, "illegal-contraband");
+  const reserveNeed = Math.max(2, Math.ceil(destinationEntry.maxStock * 0.28) - Math.floor(destinationEntry.stock));
+  return Math.max(2, Math.min(6, Math.floor(sourceEntry.stock), reserveNeed));
+}
+
+function smugglingReward(marketState: MarketState, source: StationDefinition, destination: StationDefinition, amount: number): number {
+  const sourceSystem = systemById[source.systemId];
+  const destinationSystem = systemById[destination.systemId];
+  const sourceEntry = getMarketEntry(marketState, source.id, "illegal-contraband");
+  const destinationEntry = getMarketEntry(marketState, destination.id, "illegal-contraband");
+  const buyPrice = getCommodityPrice("illegal-contraband", source, sourceSystem, 0, "buy", sourceEntry);
+  const sellPrice = getCommodityPrice("illegal-contraband", destination, destinationSystem, 0, "sell", destinationEntry);
+  const riskPremium = 1.15 + destinationSystem.risk * 1.35 + (destinationSystem.id !== sourceSystem.id ? 0.24 : 0);
+  return Math.max(900, Math.round((sellPrice * amount + Math.max(0, sellPrice - buyPrice) * amount) * riskPremium));
+}
+
+function createSmugglingMission(marketState: MarketState, source: StationDefinition, destination: StationDefinition): MissionDefinition | undefined {
+  const sourceSystem = systemById[source.systemId];
+  const destinationSystem = systemById[destination.systemId];
+  const sourceEntry = getMarketEntry(marketState, source.id, "illegal-contraband");
+  if (sourceEntry.stock < 2) return undefined;
+  const destinationEntry = getMarketEntry(marketState, destination.id, "illegal-contraband");
+  const buyPrice = getCommodityPrice("illegal-contraband", source, sourceSystem, 0, "buy", sourceEntry);
+  const sellPrice = getCommodityPrice("illegal-contraband", destination, destinationSystem, 0, "sell", destinationEntry);
+  const profit = sellPrice - buyPrice;
+  const demandDelta = destinationEntry.demand - destinationEntry.baselineDemand;
+  if (profit <= 0 && demandDelta < 0.18) return undefined;
+  const amount = smugglingAmount(marketState, source, destination);
+  if (amount <= 0) return undefined;
+  return {
+    id: `${MARKET_SMUGGLE_MISSION_PREFIX}${source.id}:${destination.id}:illegal-contraband`,
+    title: `Smuggling Run: Illegal Contraband to ${destination.name}`,
+    type: "Cargo transport",
+    originSystemId: source.systemId,
+    destinationSystemId: destination.systemId,
+    destinationStationId: destination.id,
+    factionId: source.factionId,
+    sourceStationId: source.id,
+    description: `Move unregistered cargo from ${source.name} to ${destination.name}. ${getContrabandLawSummary(destination.systemId)}`,
+    reward: smugglingReward(marketState, source, destination, amount),
+    deadlineSeconds: 900 + Math.round((sourceSystem.risk + destinationSystem.risk) * 460),
+    failureReputationDelta: -4,
+    reputationRewards: { [source.factionId]: 2 },
+    cargoRequired: { "illegal-contraband": amount },
+    consumeCargoOnComplete: true
+  };
+}
+
+export function getAvailableSmugglingMissions({
+  marketState,
+  systemId,
+  activeMissions,
+  limit = 2,
+  ...visibility
+}: EconomyDispatchMissionOptions): MissionDefinition[] {
+  const activeIds = new Set(activeMissions.map((mission) => mission.id));
+  const sources = stations.filter((station) =>
+    station.systemId === systemId &&
+    isStationVisible(station, visibility) &&
+    canBuyCommodityAtStation("illegal-contraband", station)
+  );
+  const missions = sources.flatMap((source) =>
+    stations
+      .filter((destination) => destination.id !== source.id && isStationVisible(destination, visibility))
+      .map((destination) => createSmugglingMission(marketState, source, destination))
+      .filter((mission): mission is MissionDefinition => !!mission && !activeIds.has(mission.id))
+  );
+  return missions
+    .sort((a, b) => b.reward - a.reward || a.destinationStationId.localeCompare(b.destinationStationId))
+    .slice(0, limit);
+}
+
+export function getAvailableEconomyDispatchMissions(options: EconomyDispatchMissionOptions): MissionDefinition[] {
+  const legalLimit = Math.max(0, Math.ceil((options.limit ?? 6) * 0.67));
+  const smugglingLimit = Math.max(0, (options.limit ?? 6) - legalLimit);
+  return [
+    ...getAvailableMarketGapMissions({ ...options, limit: legalLimit }),
+    ...getAvailableSmugglingMissions({ ...options, limit: smugglingLimit })
+  ].slice(0, options.limit ?? 6);
+}
+
+export function getEconomyDispatchMissionById(marketState: MarketState, missionId: string, options: DispatchVisibilityOptions = {}): MissionDefinition | undefined {
+  if (isMarketGapMissionId(missionId)) return getMarketGapMissionById(marketState, missionId, options);
+  if (!isMarketSmugglingMissionId(missionId)) return undefined;
+  const [, sourceId, destinationId] = missionId.match(/^market-smuggle:([^:]+):([^:]+):illegal-contraband$/) ?? [];
+  const source = sourceId ? stationById[sourceId] : undefined;
+  const destination = destinationId ? stationById[destinationId] : undefined;
+  if (!source || !destination || !isStationVisible(source, options) || !isStationVisible(destination, options)) return undefined;
+  return createSmugglingMission(marketState, source, destination);
+}
+
+export function getDispatchMissionSourceStationId(mission: MissionDefinition): string | undefined {
+  if (mission.sourceStationId) return mission.sourceStationId;
+  if (isMarketSmugglingMissionId(mission.id)) return mission.id.match(/^market-smuggle:([^:]+):/)?.[1];
+  return undefined;
+}
+
+export function applyCargoDeliveryToMarket(marketState: MarketState, stationId: string, cargoDelivered: Partial<Record<CommodityId, number | undefined>>): MarketState {
+  const next = cloneMarketState(marketState);
+  for (const [commodityId, amount] of Object.entries(cargoDelivered) as [CommodityId, number | undefined][]) {
+    const delivered = amount ?? 0;
+    if (delivered <= 0) continue;
+    const entry = getMarketEntry(next, stationId, commodityId);
+    entry.stock = Math.min(entry.maxStock, entry.stock + delivered);
+    entry.demand = Math.max(entry.baselineDemand, entry.demand - delivered / Math.max(8, entry.maxStock) - 0.04);
+    next[stationId] = { ...next[stationId], [commodityId]: entry };
+  }
+  return next;
+}
+
+export function applyEconomyDispatchMissionDelivery(marketState: MarketState, mission: MissionDefinition): MarketState {
+  if (!isEconomyDispatchMissionId(mission.id) || !mission.cargoRequired) return marketState;
+  return applyCargoDeliveryToMarket(marketState, mission.destinationStationId, mission.cargoRequired);
 }
 
 export function applyMarketGapMissionDelivery(marketState: MarketState, mission: MissionDefinition): MarketState {
   if (!isMarketGapMissionId(mission.id) || !mission.cargoRequired) return marketState;
-  const next = cloneMarketState(marketState);
-  for (const [commodityId, amount] of Object.entries(mission.cargoRequired) as [CommodityId, number | undefined][]) {
-    const delivered = amount ?? 0;
-    if (delivered <= 0) continue;
-    const entry = getMarketEntry(next, mission.destinationStationId, commodityId);
-    entry.stock = Math.min(entry.maxStock, entry.stock + delivered);
-    entry.demand = Math.max(entry.baselineDemand, entry.demand - delivered / Math.max(8, entry.maxStock) - 0.04);
-    next[mission.destinationStationId] = { ...next[mission.destinationStationId], [commodityId]: entry };
-  }
-  return next;
+  return applyEconomyDispatchMissionDelivery(marketState, mission);
 }
 
 export function getMarketSupplyBrief(marketState: MarketState, systemId: string, recentEvents: EconomyEvent[] = []): MarketSupplyBrief {
