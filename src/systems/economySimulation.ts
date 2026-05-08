@@ -3,6 +3,8 @@ import type { CargoHold, CommodityId, EconomyNpcLedger, EconomyNpcRiskPreference
 import type {
   EconomyEvent,
   EconomyNpcEntity,
+  EconomyNpcInteractionRequest,
+  EconomyNpcInteractionResponse,
   EconomyNpcResponse,
   EconomyNpcReplacement,
   EconomyNpcRole,
@@ -156,6 +158,33 @@ function cargoBaseValue(cargo: CargoHold): number {
   return Object.entries(cargo).reduce((total, [commodityId, amount]) => {
     return total + (commodityById[commodityId as CommodityId]?.basePrice ?? 0) * (amount ?? 0);
   }, 0);
+}
+
+function subtractCargo(cargo: CargoHold, removed: CargoHold): CargoHold {
+  const next = cloneCargo(cargo);
+  for (const [commodityId, amount] of Object.entries(removed) as [CommodityId, number | undefined][]) {
+    const current = next[commodityId] ?? 0;
+    const remaining = current - (amount ?? 0);
+    if (remaining > 0) next[commodityId] = remaining;
+    else delete next[commodityId];
+  }
+  return next;
+}
+
+function robbedCargoFor(npc: EconomyNpcEntity): CargoHold {
+  const total = cargoUnits(npc.cargo);
+  if (total <= 0) return {};
+  let remaining = Math.max(1, Math.min(3, Math.floor(total * 0.35)));
+  const dropped: CargoHold = {};
+  for (const [commodityId, amount] of Object.entries(npc.cargo) as [CommodityId, number | undefined][]) {
+    if (remaining <= 0) break;
+    const take = Math.min(amount ?? 0, remaining);
+    if (take > 0) {
+      dropped[commodityId] = take;
+      remaining -= take;
+    }
+  }
+  return dropped;
 }
 
 function completeNpcContract(npc: EconomyNpcEntity): void {
@@ -879,6 +908,85 @@ export function handlePlayerTrade(state: EconomyServiceState, request: PlayerTra
     total: result.total,
     snapshot: createEconomySnapshot(state, station.systemId)
   };
+}
+
+export function handleEconomyNpcInteraction(
+  state: EconomyServiceState,
+  request: EconomyNpcInteractionRequest
+): EconomyNpcInteractionResponse {
+  const npc = state.npcs.find((candidate) => candidate.id === request.npcId);
+  if (!npc || npc.task.kind === "destroyed" || npc.hull <= 0) {
+    return { ok: false, message: "Economy NPC not found." };
+  }
+
+  if (request.action === "rob") {
+    const cargoDropped = robbedCargoFor(npc);
+    if (cargoUnits(cargoDropped) <= 0) {
+      return { ok: false, message: `${npcCallsign(npc)} has no cargo to surrender.` };
+    }
+    npc.cargo = subtractCargo(npc.cargo, cargoDropped);
+    npc.ledger.losses += cargoBaseValue(cargoDropped);
+    npc.task = {
+      kind: "returning",
+      contractId: npc.task.contractId,
+      commodityId: npc.task.commodityId,
+      destinationStationId: npc.homeStationId,
+      startedAt: state.clock
+    };
+    updateNpcStatus(state, npc);
+    state.snapshotId += 1;
+    const event = pushEvent(state, {
+      type: "npc-interaction",
+      systemId: request.systemId,
+      stationId: npc.homeStationId,
+      npcId: npc.id,
+      amount: cargoUnits(cargoDropped),
+      message: `${npcCallsign(npc)} surrendered ${cargoUnits(cargoDropped)} cargo unit(s) under threat.`
+    });
+    return {
+      ok: true,
+      message: event.message,
+      event,
+      cargoDropped,
+      snapshot: createEconomySnapshot(state, request.systemId)
+    };
+  }
+
+  if (request.action === "rescue") {
+    state.snapshotId += 1;
+    const event = pushEvent(state, {
+      type: "npc-interaction",
+      systemId: request.systemId,
+      stationId: npc.homeStationId,
+      npcId: npc.id,
+      message: `${npcCallsign(npc)} rescue confirmed. Patrol logs credited the captain.`
+    });
+    return {
+      ok: true,
+      message: event.message,
+      event,
+      snapshot: createEconomySnapshot(state, request.systemId)
+    };
+  }
+
+  if (request.action === "report") {
+    state.snapshotId += 1;
+    const event = pushEvent(state, {
+      type: "npc-interaction",
+      systemId: request.systemId,
+      stationId: npc.homeStationId,
+      npcId: npc.id,
+      message: `${npcCallsign(npc)} report filed with local traffic control.`
+    });
+    return {
+      ok: true,
+      message: event.message,
+      event,
+      snapshot: createEconomySnapshot(state, request.systemId)
+    };
+  }
+
+  return { ok: false, message: "Unsupported NPC interaction." };
 }
 
 export function markEconomyNpcDestroyed(state: EconomyServiceState, request: NpcDestroyedRequest): EconomyEvent | undefined {

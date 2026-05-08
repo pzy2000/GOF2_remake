@@ -5,7 +5,7 @@ import { get } from "node:http";
 import { afterEach, describe, expect, it } from "vitest";
 import { createEconomyHttpServer, type EconomyHttpServer } from "../server/economyServer";
 import { shipById } from "../src/data/world";
-import type { EconomyNpcResponse, EconomySnapshot, PlayerTradeResponse } from "../src/types/economy";
+import type { EconomyNpcInteractionResponse, EconomyNpcResponse, EconomySnapshot, PlayerTradeResponse } from "../src/types/economy";
 import type { PlayerState } from "../src/types/game";
 
 let activeServer: EconomyHttpServer | undefined;
@@ -188,5 +188,40 @@ describe("economy HTTP server", () => {
     expect(snapshot.snapshotId).toBe(1);
     expect(snapshot.visibleNpcs.some((npc) => npc.id === "econ-helion-reach-miner-3")).toBe(true);
     expect(app.getState().recentEvents).toHaveLength(0);
+  });
+
+  it("processes NPC interaction requests and emits interaction events", async () => {
+    const { app, baseUrl } = await startServer();
+    const npc = app.getState().npcs.find((candidate) => candidate.id === "econ-helion-reach-freighter-1");
+    expect(npc).toBeDefined();
+    npc!.cargo = { "basic-food": 6 };
+
+    const response = await fetch(`${baseUrl}/api/economy/npc-interaction`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "rob",
+        npcId: npc!.id,
+        systemId: "helion-reach"
+      })
+    });
+    const result = await response.json() as EconomyNpcInteractionResponse;
+
+    expect(response.ok).toBe(true);
+    expect(result.ok).toBe(true);
+    expect(result.event?.type).toBe("npc-interaction");
+    expect(result.cargoDropped).toEqual({ "basic-food": 2 });
+    expect(result.snapshot?.visibleNpcs.some((candidate) => candidate.id === npc!.id)).toBe(true);
+
+    const missing = await fetch(`${baseUrl}/api/economy/npc-interaction`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "report",
+        npcId: "missing-npc",
+        systemId: "helion-reach"
+      })
+    });
+    expect(missing.status).toBe(404);
   });
 });

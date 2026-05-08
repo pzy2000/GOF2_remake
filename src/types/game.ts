@@ -774,6 +774,28 @@ export interface EconomyNpcWatchState {
   enteredAt: number;
 }
 
+export type NpcInteractionAction = "hail" | "escort" | "rob" | "rescue" | "report";
+
+export interface NpcInteractionState {
+  npcId: string;
+  openedFrom: "flight" | "watch";
+  openedAt: number;
+  lastAction?: NpcInteractionAction;
+  message?: string;
+  pending?: boolean;
+}
+
+export interface NpcObjectiveState {
+  kind: "escort" | "rescue";
+  npcId: string;
+  threatId?: string;
+  startedAt: number;
+  expiresAt: number;
+  progressSeconds: number;
+  rewardCredits: number;
+  factionId: FactionId;
+}
+
 export interface RuntimeState {
   enemies: FlightEntity[];
   convoys: ConvoyEntity[];

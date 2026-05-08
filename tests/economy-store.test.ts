@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createAsteroidsForSystem } from "../src/systems/asteroids";
 import { createInitialMarketState, getMarketEntry } from "../src/systems/economy";
+import { getFactionHeatRecord } from "../src/systems/factionConsequences";
 import { getAvailableMarketGapMissions } from "../src/systems/marketMissions";
-import type { EconomyNpcResponse, EconomySnapshot } from "../src/types/economy";
+import type { EconomyNpcInteractionResponse, EconomyNpcResponse, EconomySnapshot } from "../src/types/economy";
 import type { CommodityId, FlightEntity, MarketState } from "../src/types/game";
 
 class MemoryStorage implements Storage {
@@ -73,6 +74,38 @@ function watchableEconomyMiner(targetId: string): FlightEntity {
     economyCargo: {},
     economyCommodityId: "iron",
     economyTargetId: targetId
+  };
+}
+
+function watchableEconomyFreighter(patch: Partial<FlightEntity> = {}): FlightEntity {
+  return {
+    id: "econ-watch-freighter",
+    name: "Union Bulk Freighter",
+    role: "freighter",
+    factionId: "free-belt-union",
+    position: [24, 0, 118],
+    velocity: [0, 0, -18],
+    hull: 170,
+    shield: 70,
+    maxHull: 170,
+    maxShield: 70,
+    lastDamageAt: -999,
+    fireCooldown: 0.6,
+    aiProfileId: "freighter",
+    aiState: "patrol",
+    aiTimer: 0,
+    economySerial: "HR-FR-02",
+    economyHomeStationId: "helion-prime",
+    economyRiskPreference: "balanced",
+    economyContractId: "HR-FR-02-FREIGHT",
+    economyLedger: { revenue: 0, expenses: 0, losses: 0, completedContracts: 0, failedContracts: 0, minedUnits: 0 },
+    economyTaskKind: "hauling",
+    economyTaskProgress: 0.2,
+    economyStatus: "HAULING · Basic Food",
+    economyCargo: { "basic-food": 6 },
+    economyCommodityId: "basic-food",
+    economyTargetId: "helion-prime",
+    ...patch
   };
 }
 

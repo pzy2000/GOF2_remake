@@ -7,12 +7,13 @@ import type {
   FlightEntity,
   FlightInput,
   LootEntity,
+  NpcInteractionAction,
   ProjectileEntity,
   RuntimeState,
   StoryNotificationTone,
   Vec3
 } from "../types/game";
-import type { EconomyEvent, EconomyServiceStatus } from "../types/economy";
+import type { EconomyEvent, EconomyNpcInteractionAction, EconomyServiceStatus } from "../types/economy";
 import type { GameStore, SavePayload, SavePayloadOverrides } from "./gameStoreTypes";
 import { fallbackAssetManifest } from "../systems/assets";
 import { add, clamp, distance, forwardFromRotation, normalize, scale, sub } from "../systems/math";
@@ -105,6 +106,7 @@ import {
   fetchEconomyNpc,
   fetchEconomySnapshot,
   isEconomyNotFoundError,
+  postEconomyNpcInteraction,
   postEconomyReset,
   postNpcDestroyed,
   postPlayerTrade
@@ -127,6 +129,7 @@ import {
   advanceConvoyEntity,
   createPatrolSupportRequest,
   getActiveCivilianDistress,
+  hasActiveCivilianDistress,
   hasLocalCombatThreat,
   resolveCivilianDistress
 } from "./domains/combatRuntime";
@@ -201,6 +204,88 @@ function isWatchableEconomyNpc(ship: FlightEntity | undefined): ship is FlightEn
   return !!ship?.economyStatus && ship.hull > 0 && ship.deathTimer === undefined;
 }
 
+const NPC_INTERACTION_RANGE = 820;
+const NPC_ESCORT_RANGE = 900;
+const NPC_ESCORT_SECONDS = 90;
+const NPC_ESCORT_PROGRESS_SECONDS = 25;
+const NPC_RESCUE_SECONDS = 90;
+const NPC_RESCUE_CLEAR_RANGE = 1200;
+
+function isEconomyNpc(ship: FlightEntity | undefined): ship is FlightEntity {
+  return isWatchableEconomyNpc(ship) && ["trader", "freighter", "courier", "miner", "smuggler"].includes(ship.role);
+}
+
+function isEscortableNpc(ship: FlightEntity): boolean {
+  return ship.role === "trader" || ship.role === "freighter" || ship.role === "courier" || ship.role === "miner";
+}
+
+function cargoUnits(cargo: CargoHold | undefined): number {
+  return Object.values(cargo ?? {}).reduce((total, amount) => total + (amount ?? 0), 0);
+}
+
+function economyNpcById(state: GameStore, npcId: string | undefined): FlightEntity | undefined {
+  return state.runtime.enemies.find((ship) => ship.id === npcId && isEconomyNpc(ship));
+}
+
+function nearestEconomyNpc(state: GameStore): FlightEntity | undefined {
+  const target = economyNpcById(state, state.targetId);
+  if (target && distance(target.position, state.player.position) <= NPC_INTERACTION_RANGE) return target;
+  return state.runtime.enemies
+    .filter(isEconomyNpc)
+    .map((ship) => ({ ship, dist: distance(ship.position, state.player.position) }))
+    .filter((candidate) => candidate.dist <= NPC_INTERACTION_RANGE)
+    .sort((a, b) => a.dist - b.dist)[0]?.ship;
+}
+
+function hailMessageForNpc(ship: FlightEntity, now: number): string {
+  if (ship.distressThreatId && ship.distressCalledAt !== undefined && now - ship.distressCalledAt <= 18) {
+    return `${ship.name}: Distress traffic open. Hostile contact is on our route.`;
+  }
+  if (ship.role === "smuggler") return `${ship.name}: Private freight. Keep patrol ears off this channel.`;
+  if (ship.economyTaskKind === "mining") return `${ship.name}: Cutting ore. Keep pirates off our beam line.`;
+  if (ship.economyTaskKind === "hauling") return `${ship.name}: Freight run active. Cargo and margin are both exposed.`;
+  if (ship.economyTaskKind === "buying" || ship.economyTaskKind === "selling") return `${ship.name}: Docking window is tight. Make it quick.`;
+  return `${ship.name}: Channel open. Status ${ship.economyStatus ?? "IDLE"}.`;
+}
+
+function escortRewardForNpc(ship: FlightEntity, systemId: string): number {
+  const roleBonus = ship.role === "freighter" ? 70 : ship.role === "courier" ? 40 : ship.role === "miner" ? 30 : 0;
+  const riskBonus = Math.round((systemById[systemId]?.risk ?? 0) * 220);
+  return Math.round(clamp(180 + roleBonus + riskBonus, 180, 450));
+}
+
+function rescueRewardForNpc(ship: FlightEntity, systemId: string): number {
+  const roleBonus = ship.role === "freighter" ? 80 : ship.role === "courier" ? 50 : 40;
+  const riskBonus = Math.round((systemById[systemId]?.risk ?? 0) * 220);
+  return Math.round(clamp(260 + roleBonus + riskBonus, 260, 580));
+}
+
+function reportRewardFaction(state: GameStore, ship: FlightEntity): FactionId {
+  return ship.role === "smuggler" ? systemById[state.currentSystemId].factionId : ship.factionId;
+}
+
+function canReportNpc(state: GameStore, ship: FlightEntity): boolean {
+  return ship.role === "smuggler" || hasActiveCivilianDistress(ship, state.runtime.clock) || isHostileToPlayer(ship);
+}
+
+function lootForCargo(cargo: CargoHold | undefined, position: Vec3): LootEntity[] {
+  return (Object.entries(cargo ?? {}) as [keyof CargoHold, number | undefined][])
+    .filter(([, amount]) => (amount ?? 0) > 0)
+    .map(([commodityId, amount], index) => ({
+      id: projectileId(`npc-rob-${commodityId}`),
+      kind: "commodity" as const,
+      commodityId,
+      amount: amount ?? 0,
+      position: add(position, [index * 18 - 12, 6 + index * 3, 0]),
+      velocity: [12 - index * 9, 12, -18 + index * 7],
+      rarity: "uncommon" as const
+    }));
+}
+
+function backendActionFor(action: NpcInteractionAction): EconomyNpcInteractionAction | undefined {
+  return action === "rob" || action === "rescue" || action === "report" ? action : undefined;
+}
+
 export const useGameStore = create<GameStore>((set, get) => ({
   screen: "menu",
   previousScreen: "menu",
@@ -215,6 +300,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
   economyService: { status: "offline", url: ECONOMY_SERVICE_URL },
   economyEvents: [],
   economyNpcWatch: undefined,
+  npcInteraction: undefined,
+  npcObjective: undefined,
   autopilot: undefined,
   input: emptyInput,
   gameClock: 0,
@@ -252,6 +339,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       economyService: { status: "offline", url: ECONOMY_SERVICE_URL },
       economyEvents: [],
       economyNpcWatch: undefined,
+      npcInteraction: undefined,
+      npcObjective: undefined,
       autopilot: undefined,
       gameClock: 0,
       marketState: createInitialMarketState(),
@@ -297,6 +386,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       economyService: { status: "offline", url: ECONOMY_SERVICE_URL, snapshotId: save.economySnapshotId },
       economyEvents: [],
       economyNpcWatch: undefined,
+      npcInteraction: undefined,
+      npcObjective: undefined,
       autopilot: undefined,
       hasSave: true,
       saveSlots: readSaveSlots(),
@@ -483,6 +574,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         lookPitch: 0,
         enteredAt: state.runtime.clock
       },
+      npcInteraction: undefined,
       runtime: {
         ...state.runtime,
         message: `Watching ${npc.name}.`
@@ -502,6 +594,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       stationTab: returnStation ? "Economy" : state.stationTab,
       targetId: undefined,
       economyNpcWatch: undefined,
+      npcInteraction: undefined,
       input: emptyFlightInput(),
       runtime: {
         ...state.runtime,
@@ -520,7 +613,263 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }
     });
   },
-  setScreen: (screen) => set((state) => ({ previousScreen: state.screen, screen, economyNpcWatch: screen === "economyWatch" ? state.economyNpcWatch : undefined })),
+  openNpcInteraction: (npcId, openedFrom = "flight") => {
+    const state = get();
+    const npc = economyNpcById(state, npcId);
+    if (!npc) {
+      set({ runtime: { ...state.runtime, message: "NPC signal lost." }, npcInteraction: undefined });
+      return;
+    }
+    audioSystem.play("ui-click");
+    set({
+      targetId: npc.id,
+      npcInteraction: {
+        npcId: npc.id,
+        openedFrom,
+        openedAt: state.runtime.clock
+      },
+      runtime: {
+        ...state.runtime,
+        message: `Channel open: ${npc.name}.`
+      }
+    });
+  },
+  closeNpcInteraction: () => set({ npcInteraction: undefined }),
+  executeNpcInteraction: async (action, npcId) => {
+    const state = get();
+    const npc = economyNpcById(state, npcId ?? state.npcInteraction?.npcId ?? state.economyNpcWatch?.npcId ?? state.targetId);
+    if (!npc) {
+      set({ runtime: { ...state.runtime, message: "NPC signal lost." }, npcInteraction: undefined });
+      return;
+    }
+    const openedFrom = state.screen === "economyWatch" ? "watch" : "flight";
+    const setInteractionMessage = (message: string, pending = false) => {
+      set((latest) => ({
+        npcInteraction: {
+          npcId: npc.id,
+          openedFrom,
+          openedAt: latest.npcInteraction?.npcId === npc.id ? latest.npcInteraction.openedAt : latest.runtime.clock,
+          lastAction: action,
+          message,
+          pending
+        },
+        runtime: { ...latest.runtime, message }
+      }));
+    };
+
+    if (action === "hail") {
+      audioSystem.play("ui-click");
+      setInteractionMessage(hailMessageForNpc(npc, state.runtime.clock));
+      return;
+    }
+
+    if (action === "escort") {
+      if (!isEscortableNpc(npc)) {
+        setInteractionMessage(`${npc.name} refuses escort terms.`);
+        return;
+      }
+      const rewardCredits = escortRewardForNpc(npc, state.currentSystemId);
+      audioSystem.play("ui-click");
+      set({
+        npcObjective: {
+          kind: "escort",
+          npcId: npc.id,
+          startedAt: state.gameClock,
+          expiresAt: state.gameClock + NPC_ESCORT_SECONDS,
+          progressSeconds: 0,
+          rewardCredits,
+          factionId: npc.factionId
+        },
+        npcInteraction: {
+          npcId: npc.id,
+          openedFrom,
+          openedAt: state.npcInteraction?.npcId === npc.id ? state.npcInteraction.openedAt : state.runtime.clock,
+          lastAction: action,
+          message: `Escort accepted: stay within ${NPC_ESCORT_RANGE}m of ${npc.name}.`
+        },
+        runtime: {
+          ...state.runtime,
+          message: `Escort accepted: stay within ${NPC_ESCORT_RANGE}m of ${npc.name}.`
+        }
+      });
+      return;
+    }
+
+    if (action === "rescue") {
+      const threat = npc.distressThreatId
+        ? state.runtime.enemies.find((ship) => ship.id === npc.distressThreatId && ship.hull > 0 && ship.deathTimer === undefined)
+        : undefined;
+      if (!hasActiveCivilianDistress(npc, state.runtime.clock) || !threat) {
+        setInteractionMessage(`${npc.name} has no active distress lock.`);
+        return;
+      }
+      audioSystem.play("ui-click");
+      set({
+        targetId: threat.id,
+        npcObjective: {
+          kind: "rescue",
+          npcId: npc.id,
+          threatId: threat.id,
+          startedAt: state.gameClock,
+          expiresAt: state.gameClock + NPC_RESCUE_SECONDS,
+          progressSeconds: 0,
+          rewardCredits: rescueRewardForNpc(npc, state.currentSystemId),
+          factionId: npc.factionId
+        },
+        npcInteraction: {
+          npcId: npc.id,
+          openedFrom,
+          openedAt: state.npcInteraction?.npcId === npc.id ? state.npcInteraction.openedAt : state.runtime.clock,
+          lastAction: action,
+          message: `Rescue vector locked: clear ${threat.name}.`
+        },
+        runtime: {
+          ...state.runtime,
+          message: `Rescue vector locked: clear ${threat.name}.`
+        }
+      });
+      return;
+    }
+
+    if (action === "report" && !canReportNpc(state, npc)) {
+      setInteractionMessage(`${npc.name} has nothing reportable on public channels.`);
+      return;
+    }
+    if (action === "rob" && cargoUnits(npc.economyCargo) <= 0) {
+      setInteractionMessage(`${npc.name} has no visible cargo to rob.`);
+      return;
+    }
+
+    const backendAction = backendActionFor(action);
+    if (!backendAction) return;
+    setInteractionMessage(`${action.toUpperCase()} request pending...`, true);
+    try {
+      const result = await postEconomyNpcInteraction({
+        action: backendAction,
+        npcId: npc.id,
+        systemId: state.currentSystemId
+      });
+      if (!result.ok) {
+        setInteractionMessage(result.message);
+        return;
+      }
+      set((latest) => {
+        const latestNpc = economyNpcById(latest, npc.id) ?? npc;
+        const patch = result.snapshot
+          ? applyEconomySnapshotPatch(latest, result.snapshot, result.message)
+          : {
+              marketState: latest.marketState,
+              runtime: latest.runtime,
+              economyService: latest.economyService,
+              economyEvents: result.event ? [...latest.economyEvents, result.event].slice(-12) : latest.economyEvents
+            };
+        let player = latest.player;
+        let reputation = latest.reputation;
+        let factionHeat = latest.factionHeat;
+        let lawNotification = latest.runtime.lawNotification;
+        let message = result.message;
+        let runtime = patch.runtime;
+        if (action === "rob") {
+          const consequenceKind = incidentKindForShip(latestNpc.role, false);
+          if (consequenceKind) {
+            const incident = applyFactionIncident({
+              factionHeat,
+              factionId: latestNpc.factionId,
+              kind: consequenceKind,
+              subjectName: latestNpc.name,
+              now: latest.gameClock
+            });
+            factionHeat = incident.factionHeat;
+            reputation = updateReputation(reputation, latestNpc.factionId, incident.reputationDelta);
+            lawNotification = incident.notification;
+            message = `${result.message} ${incident.notification.body}`;
+          }
+          const droppedLoot = lootForCargo(result.cargoDropped, latestNpc.position);
+          runtime = {
+            ...runtime,
+            loot: [...runtime.loot, ...droppedLoot],
+            effects: [
+              ...runtime.effects,
+              {
+                id: projectileId("npc-rob-effect"),
+                kind: "hit",
+                position: latestNpc.position,
+                color: "#ffb657",
+                secondaryColor: "#ffffff",
+                label: "Cargo dropped",
+                particleCount: 12,
+                spread: 24,
+                size: 18,
+                life: 0.7,
+                maxLife: 0.7,
+                velocity: [0, 10, 0]
+              }
+            ],
+            enemies: runtime.enemies.map((ship) =>
+              ship.id === latestNpc.id
+                ? {
+                    ...ship,
+                    aiState: "retreat",
+                    aiTargetId: undefined,
+                    provokedByPlayer: true,
+                    distressThreatId: "player",
+                    distressCalledAt: runtime.clock
+                  }
+                : ship.role === "patrol" && lawNotification?.tone === "wanted"
+                  ? { ...ship, aiState: "attack", aiTargetId: "player", scanProgress: 1 }
+                  : ship
+            )
+          };
+          audioSystem.play("loot");
+        } else if (action === "report") {
+          const factionId = reportRewardFaction(latest, latestNpc);
+          reputation = updateReputation(reputation, factionId, 1);
+          message = `${result.message} Reputation improved.`;
+          audioSystem.play("mission-complete");
+        }
+        return {
+          ...patch,
+          player,
+          reputation,
+          factionHeat,
+          runtime: {
+            ...runtime,
+            message,
+            lawNotification
+          },
+          npcInteraction: {
+            npcId: latestNpc.id,
+            openedFrom,
+            openedAt: latest.npcInteraction?.npcId === latestNpc.id ? latest.npcInteraction.openedAt : latest.runtime.clock,
+            lastAction: action,
+            message
+          }
+        };
+      });
+    } catch (error) {
+      const message = economyErrorMessage(error);
+      set((latest) => ({
+        ...offlineEconomyPatch(latest, message),
+        npcInteraction: {
+          npcId: npc.id,
+          openedFrom,
+          openedAt: latest.npcInteraction?.npcId === npc.id ? latest.npcInteraction.openedAt : latest.runtime.clock,
+          lastAction: action,
+          message: `${action.toUpperCase()} failed: ${message}`
+        },
+        runtime: {
+          ...latest.runtime,
+          message: `${action.toUpperCase()} failed: ${message}`
+        }
+      }));
+    }
+  },
+  setScreen: (screen) => set((state) => ({
+    previousScreen: state.screen,
+    screen,
+    economyNpcWatch: screen === "economyWatch" ? state.economyNpcWatch : undefined,
+    npcInteraction: screen === "flight" || screen === "economyWatch" ? state.npcInteraction : undefined
+  })),
   setStationTab: (stationTab) => set({ stationTab, galaxyMapMode: stationTab === "Galaxy Map" ? "station-route" : get().galaxyMapMode }),
   openGalaxyMap: (galaxyMapMode) => set((state) => ({ previousScreen: state.screen, screen: "galaxyMap", galaxyMapMode })),
   setInput: (patch) => set((state) => ({ input: { ...state.input, ...patch } })),
@@ -1244,13 +1593,93 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const distressMessage = civilianDistress
       ? `Distress call: ${civilianDistress.civilian.name} under attack by ${civilianDistress.threat.name}.`
       : undefined;
+    let npcObjective = state.npcObjective;
+    let npcObjectiveMessage: string | undefined;
+    if (npcObjective) {
+      const objectiveNpc = runtime.enemies.find((ship) => ship.id === npcObjective?.npcId && ship.hull > 0 && ship.deathTimer === undefined);
+      if (!objectiveNpc) {
+        npcObjectiveMessage = "NPC objective failed: contact lost.";
+        npcObjective = undefined;
+      } else if (gameClock >= npcObjective.expiresAt) {
+        npcObjectiveMessage = `${npcObjective.kind === "escort" ? "Escort" : "Rescue"} failed: response window expired.`;
+        npcObjective = undefined;
+      } else if (npcObjective.kind === "escort") {
+        const closeEnough = distance(player.position, objectiveNpc.position) <= NPC_ESCORT_RANGE;
+        const progressSeconds = closeEnough ? npcObjective.progressSeconds + delta : npcObjective.progressSeconds;
+        const routeTargetId = objectiveNpc.economyTargetId ?? objectiveNpc.economyHomeStationId;
+        const routeTarget = routeTargetId ? stationById[routeTargetId] : undefined;
+        const arrivedAtRouteTarget = !!routeTarget && distance(objectiveNpc.position, routeTarget.position) < 190;
+        if (progressSeconds >= NPC_ESCORT_PROGRESS_SECONDS || arrivedAtRouteTarget) {
+          player = { ...player, credits: player.credits + npcObjective.rewardCredits };
+          reputation = updateReputation(reputation, npcObjective.factionId, 1);
+          npcObjectiveMessage = `Escort complete: ${objectiveNpc.name} paid ${npcObjective.rewardCredits.toLocaleString()} cr.`;
+          npcObjective = undefined;
+          audioSystem.play("mission-complete");
+        } else {
+          npcObjective = { ...npcObjective, progressSeconds };
+          npcObjectiveMessage = closeEnough
+            ? `Escort active: ${Math.ceil(NPC_ESCORT_PROGRESS_SECONDS - progressSeconds)}s coverage remaining.`
+            : `Escort active: return within ${NPC_ESCORT_RANGE}m of ${objectiveNpc.name}.`;
+        }
+      } else {
+        const threat = npcObjective.threatId
+          ? runtime.enemies.find((ship) => ship.id === npcObjective?.threatId && ship.hull > 0 && ship.deathTimer === undefined)
+          : undefined;
+        const threatCleared = !threat || distance(threat.position, objectiveNpc.position) > NPC_RESCUE_CLEAR_RANGE;
+        if (threatCleared) {
+          const completedObjective = npcObjective;
+          npcObjective = undefined;
+          npcObjectiveMessage = `Rescue cleared: confirming ${objectiveNpc.name} with traffic control.`;
+          void postEconomyNpcInteraction({
+            action: "rescue",
+            npcId: completedObjective.npcId,
+            systemId: state.currentSystemId
+          })
+            .then((result) => {
+              if (!result.ok) throw new Error(result.message);
+              set((latest) => {
+                const patch = result.snapshot
+                  ? applyEconomySnapshotPatch(latest, result.snapshot, result.message)
+                  : {
+                      marketState: latest.marketState,
+                      runtime: latest.runtime,
+                      economyService: latest.economyService,
+                      economyEvents: result.event ? [...latest.economyEvents, result.event].slice(-12) : latest.economyEvents
+                    };
+                return {
+                  ...patch,
+                  player: { ...latest.player, credits: latest.player.credits + completedObjective.rewardCredits },
+                  reputation: updateReputation(latest.reputation, completedObjective.factionId, 1),
+                  runtime: {
+                    ...patch.runtime,
+                    message: `${result.message} Rescue reward ${completedObjective.rewardCredits.toLocaleString()} cr.`
+                  }
+                };
+              });
+              audioSystem.play("mission-complete");
+            })
+            .catch((error) => {
+              const message = economyErrorMessage(error);
+              set((latest) => ({
+                ...offlineEconomyPatch(latest, message),
+                runtime: {
+                  ...latest.runtime,
+                  message: `RESCUE failed: ${message}`
+                }
+              }));
+            });
+        } else {
+          npcObjectiveMessage = `Rescue active: clear ${threat.name}.`;
+        }
+      }
+    }
     runtime = {
       ...runtime,
       projectiles: remainingProjectiles,
       enemies: runtime.enemies.filter((ship) => ship.hull > 0 || (ship.deathTimer ?? 0) > 0),
       loot: [...runtime.loot, ...lootDrops],
       destroyedPirates,
-      message: playerAggressionMessage ?? (destroyedBossName ? `${destroyedBossName} destroyed. Boss cargo scattered.` : runtime.message)
+      message: playerAggressionMessage ?? npcObjectiveMessage ?? (destroyedBossName ? `${destroyedBossName} destroyed. Boss cargo scattered.` : runtime.message)
     };
 
     let activeMissions = destroyedStoryTargets.length > 0
@@ -1372,6 +1801,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
               ? storyTargetMessage
             : destroyedBossName
               ? `${destroyedBossName} destroyed. Boss cargo scattered.`
+            : npcObjectiveMessage
+              ? npcObjectiveMessage
             : lawNotification
               ? lawNotification.body
             : lootDrops.length
@@ -1395,6 +1826,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
       failedMissionIds: expiration.failedMissionIds,
       reputation: expiration.reputation,
       factionHeat,
+      npcObjective,
+      npcInteraction: state.npcInteraction && runtime.enemies.some((ship) => ship.id === state.npcInteraction?.npcId && isEconomyNpc(ship))
+        ? state.npcInteraction
+        : undefined,
       explorationState,
       ...dialoguePatch,
       primaryCooldown,
@@ -1577,6 +2012,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
               : "Unknown beacon already scanned."
         }
       });
+      return;
+    }
+    const npc = nearestEconomyNpc(state);
+    if (npc) {
+      get().openNpcInteraction(npc.id, "flight");
       return;
     }
     set({ runtime: { ...state.runtime, message: "No interactable object in range." } });

@@ -5,6 +5,7 @@ import { getAvailableMarketGapMissions } from "../src/systems/marketMissions";
 import {
   createEconomySnapshot,
   createInitialEconomyState,
+  handleEconomyNpcInteraction,
   markEconomyNpcDestroyed,
   normalizeEconomyState,
   tickEconomyState
@@ -201,6 +202,49 @@ describe("NPC economy simulation", () => {
     });
     expect(replacement?.serial).not.toBe(npc.serial);
     expect(state.recentEvents.some((event) => event.type === "npc-replacement" && event.npcId === replacement?.id)).toBe(true);
+  });
+
+  it("records rob, rescue, and report NPC interactions", () => {
+    const state = createInitialEconomyState();
+    const npc = state.npcs.find((candidate) => candidate.id === "econ-helion-reach-freighter-1")!;
+    npc.cargo = { "basic-food": 6, electronics: 2 };
+    npc.task = {
+      kind: "hauling",
+      contractId: "HR-FR-02-FREIGHT",
+      commodityId: "basic-food",
+      originStationId: "helion-prime",
+      destinationStationId: "mirr-lattice",
+      startedAt: state.clock
+    };
+
+    const robbed = handleEconomyNpcInteraction(state, {
+      action: "rob",
+      npcId: npc.id,
+      systemId: "helion-reach"
+    });
+
+    expect(robbed.ok).toBe(true);
+    expect(robbed.cargoDropped).toEqual({ "basic-food": 2 });
+    expect(npc.cargo["basic-food"]).toBe(4);
+    expect(npc.ledger.losses).toBeGreaterThan(0);
+    expect(npc.task.kind).toBe("returning");
+    expect(robbed.event?.type).toBe("npc-interaction");
+
+    const rescued = handleEconomyNpcInteraction(state, {
+      action: "rescue",
+      npcId: npc.id,
+      systemId: "helion-reach"
+    });
+    expect(rescued.ok).toBe(true);
+    expect(rescued.message).toContain("rescue confirmed");
+
+    const reported = handleEconomyNpcInteraction(state, {
+      action: "report",
+      npcId: npc.id,
+      systemId: "helion-reach"
+    });
+    expect(reported.ok).toBe(true);
+    expect(reported.message).toContain("report filed");
   });
 
   it("normalizes old economy snapshots with individual NPC defaults", () => {

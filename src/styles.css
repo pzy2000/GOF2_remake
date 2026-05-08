@@ -561,6 +561,82 @@ h3 {
   gap: 7px;
 }
 
+.npc-interaction-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.npc-interaction-actions.compact {
+  border-top: 1px solid rgba(128, 214, 255, 0.12);
+  padding-top: 8px;
+}
+
+.npc-interaction-actions button {
+  min-width: 0;
+  border: 1px solid rgba(155, 255, 232, 0.3);
+  border-radius: 6px;
+  background: rgba(38, 178, 160, 0.2);
+  color: #e8fffb;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 900;
+  padding: 7px 9px;
+  text-transform: uppercase;
+}
+
+.npc-interaction-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.42;
+}
+
+.npc-interaction-overlay {
+  position: absolute;
+  right: 16px;
+  bottom: 86px;
+  display: grid;
+  gap: 10px;
+  width: min(380px, calc(100vw - 32px));
+  border: 1px solid rgba(128, 214, 255, 0.3);
+  border-radius: 8px;
+  background: rgba(2, 12, 18, 0.88);
+  box-shadow: 0 18px 58px rgba(0, 0, 0, 0.32);
+  color: #e8f7ff;
+  padding: 14px;
+  pointer-events: auto;
+}
+
+.npc-interaction-overlay header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.npc-interaction-overlay h2 {
+  font-size: 1.16rem;
+  line-height: 1.08;
+}
+
+.npc-interaction-overlay p {
+  margin: 0;
+  color: #acc4d8;
+  line-height: 1.38;
+}
+
+.npc-interaction-overlay header button {
+  min-width: 0;
+  padding: 6px 9px;
+}
+
+.npc-interaction-message,
+.npc-interaction-objective {
+  border: 1px solid rgba(128, 214, 255, 0.16);
+  border-radius: 6px;
+  background: rgba(9, 30, 42, 0.46);
+  padding: 8px;
+}
+
 .economy-watch-pill,
 .economy-watch-hints span {
   border: 1px solid rgba(128, 214, 255, 0.22);

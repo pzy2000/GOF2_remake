@@ -5,7 +5,7 @@ import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from
 import * as THREE from "three";
 import { planetById, planets, shipById, stationById, systemById, useGameStore } from "../state/gameStore";
 import { commodityById, glassWakeProtocol, missionTemplates } from "../data/world";
-import type { AsteroidEntity, ConvoyEntity, ExplorationSignalDefinition, FlightEntity, LootEntity, MarketState, PlanetDefinition, ProjectileEntity, SalvageEntity, StationDefinition, Vec3, VisualEffectEntity } from "../types/game";
+import type { AsteroidEntity, ConvoyEntity, ExplorationSignalDefinition, FlightEntity, LootEntity, MarketState, NpcInteractionAction, PlanetDefinition, ProjectileEntity, SalvageEntity, StationDefinition, Vec3, VisualEffectEntity } from "../types/game";
 import { add, clamp, distance, forwardFromRotation, normalize, scale, sub } from "../systems/math";
 import { getOreColor } from "../systems/difficulty";
 import { getJumpGatePosition } from "../systems/autopilot";
@@ -1784,6 +1784,83 @@ function getWatchRouteProfit(ship: FlightEntity, marketState: MarketState, targe
   return `${localizeStationName(match.fromStationId, locale, match.fromStationName)} -> ${localizeStationName(match.toStationId, locale, match.toStationName)} · +${formatCredits(locale, match.profit, true)}/${watchUnitLabel(locale)}`;
 }
 
+const npcInteractionActions: NpcInteractionAction[] = ["hail", "escort", "rob", "rescue", "report"];
+
+function npcInteractionLabel(action: NpcInteractionAction): string {
+  return action[0].toUpperCase() + action.slice(1);
+}
+
+function canUseNpcInteraction(action: NpcInteractionAction, ship: FlightEntity, runtimeClock: number): boolean {
+  if (action === "hail") return true;
+  if (action === "escort") return ship.role === "trader" || ship.role === "freighter" || ship.role === "courier" || ship.role === "miner";
+  if (action === "rob") return cargoUnitCount(ship) > 0;
+  if (action === "rescue") return hasActiveCivilianDistress(ship, runtimeClock);
+  if (action === "report") return ship.role === "smuggler" || hasActiveCivilianDistress(ship, runtimeClock) || ship.aiTargetId === "player" || !!ship.provokedByPlayer;
+  return false;
+}
+
+function NpcInteractionActions({ ship, compact = false }: { ship: FlightEntity; compact?: boolean }) {
+  const locale = useGameStore((state) => state.locale);
+  const runtimeClock = useGameStore((state) => state.runtime.clock);
+  const executeNpcInteraction = useGameStore((state) => state.executeNpcInteraction);
+  return (
+    <div className={compact ? "npc-interaction-actions compact" : "npc-interaction-actions"}>
+      {npcInteractionActions.map((action) => (
+        <button
+          key={action}
+          type="button"
+          disabled={!canUseNpcInteraction(action, ship, runtimeClock)}
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            void executeNpcInteraction(action, ship.id);
+          }}
+        >
+          {translateText(npcInteractionLabel(action), locale)}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function NpcInteractionOverlay() {
+  const locale = useGameStore((state) => state.locale);
+  const interaction = useGameStore((state) => state.npcInteraction);
+  const objective = useGameStore((state) => state.npcObjective);
+  const runtime = useGameStore((state) => state.runtime);
+  const gameClock = useGameStore((state) => state.gameClock);
+  const closeNpcInteraction = useGameStore((state) => state.closeNpcInteraction);
+  const ship = interaction ? runtime.enemies.find((item) => item.id === interaction.npcId) : undefined;
+  if (!interaction || !ship) return null;
+  const objectiveActive = objective?.npcId === ship.id ? objective : undefined;
+  return (
+    <div className="npc-interaction-overlay" data-testid="npc-interaction-overlay" onMouseDown={(event) => event.stopPropagation()}>
+      <header>
+        <div>
+          <p className="eyebrow">{translateText("NPC Interaction", locale)}</p>
+          <h2>{translateDisplayName(ship.name, locale)}</h2>
+        </div>
+        <button type="button" onClick={closeNpcInteraction} aria-label={translateText("Close NPC interaction", locale)}>X</button>
+      </header>
+      <p>
+        {formatRuntimeText(locale, ship.economyStatus)}
+        {ship.economySerial ? ` · ${ship.economySerial}` : ""}
+        {hasActiveCivilianDistress(ship, runtime.clock) ? ` · ${translateText("DISTRESS", locale)}` : ""}
+      </p>
+      <NpcInteractionActions ship={ship} />
+      {interaction.pending ? <p className="npc-interaction-message">{translateText("Pending backend confirmation...", locale)}</p> : null}
+      {interaction.message ? <p className="npc-interaction-message">{formatRuntimeText(locale, interaction.message)}</p> : null}
+      {objectiveActive ? (
+        <p className="npc-interaction-objective">
+          {translateText(objectiveActive.kind === "escort" ? "Escort active" : "Rescue active", locale)}
+          {" · "}
+          {formatNumber(locale, Math.max(0, Math.ceil(objectiveActive.expiresAt - gameClock)))}s
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 function EconomyWatchOverlay() {
   const locale = useGameStore((state) => state.locale);
   const currentSystemId = useGameStore((state) => state.currentSystemId);
@@ -1832,6 +1909,7 @@ function EconomyWatchOverlay() {
         <span className={`economy-watch-pill task-${ship.economyTaskKind ?? "idle"}`}>{formatRuntimeText(locale, ship.economyStatus)}</span>
         {distressActive ? <span className="economy-watch-pill danger">{translateText("DISTRESS", locale)}</span> : null}
       </div>
+      <NpcInteractionActions ship={ship} compact />
       <div className="economy-watch-grid">
         <p><b>{translateText("Identity", locale)}</b><span>{ship.economySerial ?? ship.id}</span></p>
         <p><b>{translateText("Home", locale)}</b><span>{homeStation ? localizeStationName(homeStation.id, locale, homeStation.name) : translateText("Unknown", locale)}</span></p>
@@ -1944,6 +2022,7 @@ export function FlightScene() {
       </Canvas>
       {shipModelStatus ? <div className={`ship-model-status ${shipModelStatus.kind}`}>{shipModelStatus.text}</div> : null}
       {screen === "economyWatch" ? <EconomyWatchOverlay /> : null}
+      <NpcInteractionOverlay />
       {hint ? <div className={`dock-hint ${navigationCue ? `dock-hint-${navigationCue.tone}` : ""} ${navigationCue?.inRange ? "in-range" : ""}`}>{hint}</div> : null}
     </div>
   );

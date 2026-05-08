@@ -10,6 +10,9 @@ import type {
   FactionHeatState,
   FactionId,
   FlightInput,
+  NpcInteractionAction,
+  NpcInteractionState,
+  NpcObjectiveState,
   GalaxyMapMode,
   MarketState,
   MissionDefinition,
@@ -40,6 +43,8 @@ export interface GameStore {
   economyService: EconomyServiceStatus;
   economyEvents: EconomyEvent[];
   economyNpcWatch?: EconomyNpcWatchState;
+  npcInteraction?: NpcInteractionState;
+  npcObjective?: NpcObjectiveState;
   autopilot?: AutoPilotState;
   input: FlightInput;
   gameClock: number;
@@ -74,6 +79,9 @@ export interface GameStore {
   startEconomyNpcWatch: (npcId: string) => void;
   stopEconomyNpcWatch: (reason?: string) => void;
   toggleEconomyNpcWatchCamera: () => void;
+  openNpcInteraction: (npcId: string, openedFrom?: NpcInteractionState["openedFrom"]) => void;
+  closeNpcInteraction: () => void;
+  executeNpcInteraction: (action: NpcInteractionAction, npcId?: string) => Promise<void>;
   setScreen: (screen: Screen) => void;
   setStationTab: (tab: StationTab) => void;
   openGalaxyMap: (mode: GalaxyMapMode) => void;

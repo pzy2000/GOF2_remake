@@ -1,5 +1,7 @@
 import type {
   EconomyEvent,
+  EconomyNpcInteractionRequest,
+  EconomyNpcInteractionResponse,
   EconomyNpcResponse,
   EconomySnapshot,
   NpcDestroyedRequest,
@@ -97,6 +99,15 @@ export async function postNpcDestroyed(request: NpcDestroyedRequest): Promise<vo
   });
 }
 
+export function postEconomyNpcInteraction(
+  request: EconomyNpcInteractionRequest
+): Promise<EconomyNpcInteractionResponse> {
+  return requestJson<EconomyNpcInteractionResponse>("/api/economy/npc-interaction", {
+    method: "POST",
+    body: JSON.stringify(request)
+  });
+}
+
 export function connectEconomyEvents(
   onEvent: (event: EconomyEvent) => void,
   onError: (message: string) => void
@@ -119,6 +130,7 @@ export function connectEconomyEvents(
     "npc-trade",
     "npc-destroyed",
     "npc-replacement",
+    "npc-interaction",
     "reset"
   ]) {
     source.addEventListener(eventName, handleEvent);
