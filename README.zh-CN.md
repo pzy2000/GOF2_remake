@@ -22,6 +22,7 @@ npm run dev
 npm run dev:full
 npm run build
 npm test
+npm run test:e2e:mobile
 ```
 
 `npm run dev:full` 会同时启动本地权威经济后端 `127.0.0.1:19777` 和 Vite 前端。只想使用浏览器内置的经济 fallback 时，可以运行普通的 `npm run dev`。
@@ -31,6 +32,19 @@ npm test
 ```bash
 ./start.sh
 ```
+
+## 移动端 / 折叠屏 / PWA 试玩
+
+浏览器构建已支持安装为 PWA，并以手机横屏飞行为主要可玩形态。竖屏会保留基础按钮并提示建议横屏；展开态折叠屏会在星图、空间站和 Captain's Log 等界面启用更丰富的双栏布局。
+
+Service worker 会缓存应用外壳，以及 `public/assets/` 下生成美术、飞船模型和 CC0 音乐资源；首次在线加载后，可用于完整资源离线试玩预览。移动端和折叠屏回归可运行：
+
+```bash
+npm run test:e2e:mobile
+npm run test:e2e:mobile:screenshots
+```
+
+截图命令会刷新 `docs/mobile-matrix/` 下的可选设备矩阵截图；普通测试只校验布局和触控行为，不会重写图片。
 
 ## 操作
 

@@ -12,6 +12,8 @@
     "server:start": "node dist-server/economy-server.mjs",
     "test": "vitest run --environment node --globals",
     "test:e2e": "playwright test",
+    "test:e2e:mobile": "playwright test --grep \"mobile and foldable layouts|PWA preview\"",
+    "test:e2e:mobile:screenshots": "GOF2_UPDATE_MOBILE_MATRIX=1 playwright test --grep \"mobile and foldable layouts\"",
     "test:watch": "vitest"
   },
   "dependencies": {

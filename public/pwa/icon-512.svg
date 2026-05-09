@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="GOF2 by pzy">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="75%">
+      <stop offset="0" stop-color="#1ec8ff"/>
+      <stop offset="0.42" stop-color="#07182a"/>
+      <stop offset="1" stop-color="#020713"/>
+    </radialGradient>
+    <linearGradient id="ship" x1="92" y1="72" x2="420" y2="448" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff8d5"/>
+      <stop offset="0.45" stop-color="#80d6ff"/>
+      <stop offset="1" stop-color="#ff9bd5"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <circle cx="352" cy="132" r="19" fill="#ffd69a"/>
+  <circle cx="130" cy="324" r="8" fill="#9bffe8"/>
+  <circle cx="406" cy="350" r="5" fill="#ffffff" opacity="0.72"/>
+  <path d="M256 58 336 312 256 274 176 312 256 58Z" fill="url(#ship)" stroke="#eaf9ff" stroke-width="9" stroke-linejoin="round"/>
+  <path d="M256 274 314 438 256 398 198 438 256 274Z" fill="#07182a" stroke="#80d6ff" stroke-width="9" stroke-linejoin="round"/>
+  <path d="M92 404c74-48 254-48 328 0" fill="none" stroke="#ff9bd5" stroke-width="14" stroke-linecap="round" opacity="0.72"/>
+  <text x="256" y="474" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="34" font-weight="900" fill="#dff6ff">GOF2</text>
+</svg>

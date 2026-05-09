@@ -1,5 +1,10 @@
 import { expect, test, type Page } from "@playwright/test";
+import { mkdir } from "node:fs/promises";
+import { resolve } from "node:path";
 import { explorationSignalById } from "../../src/data/world";
+
+const updateMobileMatrix = process.env.GOF2_UPDATE_MOBILE_MATRIX === "1";
+const mobileMatrixDir = resolve(process.cwd(), "docs/mobile-matrix");
 
 type Gof2E2EState = {
   screen: string;
@@ -74,6 +79,12 @@ async function startNewGame(page: Page) {
       }
     });
   });
+}
+
+async function maybeCaptureMobileMatrix(page: Page, filename: string) {
+  if (!updateMobileMatrix) return;
+  await mkdir(mobileMatrixDir, { recursive: true });
+  await page.screenshot({ path: resolve(mobileMatrixDir, filename), fullPage: false });
 }
 
 async function getGameState(page: Page): Promise<Gof2E2EState> {
@@ -1350,6 +1361,7 @@ test.describe("browser smoke", () => {
             });
         const panels = visibleRect(".hud-panel");
         const actions = visibleRect("[data-testid='touch-flight-controls'] button, [data-testid='touch-throttle-pad'], [data-testid='touch-look-pad']");
+        const buttons = visibleRect("[data-testid='touch-flight-controls'] button");
         let overlaps = 0;
         for (let i = 0; i < panels.length; i++) {
           for (let j = i + 1; j < panels.length; j++) {
@@ -1371,6 +1383,7 @@ test.describe("browser smoke", () => {
           overlaps,
           panels: panels.length,
           actions: actions.length,
+          smallButtons: buttons.filter((rect) => rect.width < 44 || rect.height < 44).length,
           viewport
         };
       });
@@ -1380,6 +1393,7 @@ test.describe("browser smoke", () => {
       expect(metrics.overlaps, viewportName).toBe(0);
       expect(metrics.panels, viewportName).toBeGreaterThan(0);
       expect(metrics.actions, viewportName).toBeGreaterThan(2);
+      expect(metrics.smallButtons, viewportName).toBe(0);
     }
 
     test("keeps flight HUD and touch controls inside phone and foldable viewports", async ({ page }) => {
@@ -1403,7 +1417,13 @@ test.describe("browser smoke", () => {
         await resetApp(page);
         await startNewGame(page);
         await expect(page.getByTestId("touch-flight-controls")).toBeVisible();
+        if (viewport.name.includes("portrait")) {
+          await expect(page.getByText("Landscape flight recommended")).toBeVisible();
+        }
         await expectMobileFlightLayout(page, viewport.name);
+        if (viewport.name === "phone portrait 393x852") await maybeCaptureMobileMatrix(page, "phone-portrait-flight.png");
+        if (viewport.name === "phone landscape 852x393") await maybeCaptureMobileMatrix(page, "phone-landscape-flight.png");
+        if (viewport.name === "fold unfolded landscape") await maybeCaptureMobileMatrix(page, "fold-unfolded-flight.png");
         if (viewport.name === "phone landscape 852x393") await expectWebGlCanvasHasPixels(page);
       }
     });
@@ -1437,6 +1457,35 @@ test.describe("browser smoke", () => {
       const lookPad = page.getByTestId("touch-look-pad");
       const lookBox = await lookPad.boundingBox();
       expect(lookBox).not.toBeNull();
+      await page.evaluate(() => {
+        const state = window.__GOF2_E2E__!.getState() as {
+          input: Record<string, unknown>;
+          currentSystemId: string;
+        };
+        window.__GOF2_E2E__!.setState({
+          autopilot: {
+            phase: "to-origin-gate",
+            originSystemId: state.currentSystemId,
+            targetSystemId: "mirr-vale",
+            targetStationId: "mirr-lattice",
+            targetPosition: [0, 0, -760],
+            timer: 0,
+            cancelable: true
+          },
+          input: { ...state.input, mouseDX: 0, mouseDY: 0 }
+        });
+      });
+      await page.mouse.move(lookBox!.x + lookBox!.width * 0.5, lookBox!.y + lookBox!.height * 0.5);
+      await page.mouse.down();
+      await page.mouse.move(lookBox!.x + lookBox!.width * 0.82, lookBox!.y + lookBox!.height * 0.35);
+      await page.mouse.up();
+      await expect.poll(() =>
+        page.evaluate(() => {
+          const input = (window.__GOF2_E2E__!.getState() as { input: { mouseDX: number; mouseDY: number } }).input;
+          return { mouseDX: input.mouseDX, mouseDY: input.mouseDY };
+        })
+      ).toEqual({ mouseDX: 0, mouseDY: 0 });
+      await page.evaluate(() => window.__GOF2_E2E__!.setState({ autopilot: undefined }));
       await page.mouse.move(lookBox!.x + lookBox!.width * 0.5, lookBox!.y + lookBox!.height * 0.5);
       await page.mouse.down();
       await page.mouse.move(lookBox!.x + lookBox!.width * 0.82, lookBox!.y + lookBox!.height * 0.35);
@@ -1484,6 +1533,7 @@ test.describe("browser smoke", () => {
 
         await page.getByRole("button", { name: "Open map" }).click();
         await expect(page.getByText("Route Planning")).toBeVisible();
+        if (viewport.name === "phone landscape") await maybeCaptureMobileMatrix(page, "phone-landscape-map.png");
         await page.getByRole("button", { name: "Mirr Vale known" }).click();
         await expect(page.getByRole("button", { name: "Set Route" })).toBeVisible();
 
@@ -1522,12 +1572,16 @@ test.describe("browser smoke", () => {
         await expect(page.getByTestId("economy-tab")).toBeVisible();
         await page.getByRole("button", { name: "Hangar" }).click();
         await expect(page.getByRole("heading", { name: "Current Ship" })).toBeVisible();
+        if (viewport.name === "unfolded fold") await maybeCaptureMobileMatrix(page, "fold-unfolded-station.png");
+        await page.getByRole("button", { name: "Captain's Log" }).click();
+        await expect(page.getByTestId("captain-log-next-up")).toBeVisible();
+        if (viewport.name === "tablet landscape") await maybeCaptureMobileMatrix(page, "tablet-landscape-captains-log.png");
 
         const stationMetrics = await page.evaluate(() => {
           const body = document.querySelector(".station-body");
           const tabs = document.querySelector(".tab-row");
-          const hangarGrid = document.querySelector(".hangar-build-grid");
-          if (!body || !tabs || !hangarGrid) return null;
+          const storyLog = document.querySelector(".story-log");
+          if (!body || !tabs || !storyLog) return null;
           const bodyRect = body.getBoundingClientRect();
           const tabsRect = tabs.getBoundingClientRect();
           return {
@@ -1535,13 +1589,52 @@ test.describe("browser smoke", () => {
             tabsRight: tabsRect.right,
             viewportHeight: window.innerHeight,
             viewportWidth: window.innerWidth,
-            hangarColumns: window.getComputedStyle(hangarGrid).gridTemplateColumns.split(" ").length
+            storyColumns: window.getComputedStyle(storyLog).gridTemplateColumns.split(" ").length
           };
         });
         expect(stationMetrics).not.toBeNull();
         expect(stationMetrics!.bodyBottom, viewport.name).toBeLessThanOrEqual(stationMetrics!.viewportHeight + 1);
         expect(stationMetrics!.tabsRight, viewport.name).toBeLessThanOrEqual(stationMetrics!.viewportWidth + 1);
-        if (viewport.folded) expect(stationMetrics!.hangarColumns, viewport.name).toBeGreaterThanOrEqual(2);
+        if (viewport.folded) expect(stationMetrics!.storyColumns, viewport.name).toBeGreaterThanOrEqual(2);
+      }
+    });
+
+    test("PWA preview exposes install metadata and offline cached resources", async ({ browser }) => {
+      const context = await browser.newContext({ serviceWorkers: "allow", viewport: { width: 852, height: 393 }, isMobile: true, hasTouch: true });
+      const page = await context.newPage();
+      try {
+        await page.goto("/?pwa=1");
+        await page.waitForFunction(() => !!window.__GOF2_PWA_READY__);
+        await page.evaluate(() => window.__GOF2_PWA_READY__?.then(() => true));
+        await page.waitForFunction(async () => {
+          const keys = await caches.keys();
+          const matches = await Promise.all(keys.map(async (key) => {
+            const cache = await caches.open(key);
+            return !!(await cache.match("/assets/generated/key-art.webp"));
+          }));
+          return matches.some(Boolean);
+        });
+
+        const manifestResponse = await page.request.get("/manifest.webmanifest");
+        expect(manifestResponse.ok()).toBe(true);
+        const manifest = await manifestResponse.json() as { name: string; display: string; icons: Array<{ sizes: string; purpose?: string }> };
+        expect(manifest).toMatchObject({ name: "GOF2 by pzy", display: "standalone" });
+        expect(manifest.icons.some((icon) => icon.sizes === "192x192")).toBe(true);
+        expect(manifest.icons.some((icon) => icon.sizes === "512x512" && icon.purpose === "maskable")).toBe(true);
+
+        await context.setOffline(true);
+        await page.goto("/?pwa=1", { waitUntil: "domcontentloaded" });
+        await expect(page.getByRole("heading", { name: "GOF2 by pzy" })).toBeVisible();
+        await expect(page.evaluate(() => fetch("/assets/generated/key-art.webp").then((response) => response.ok))).resolves.toBe(true);
+      } finally {
+        await context.setOffline(false);
+        await page.evaluate(async () => {
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(registrations.map((registration) => registration.unregister()));
+          const keys = await caches.keys();
+          await Promise.all(keys.filter((key) => key.startsWith("gof2-pwa-")).map((key) => caches.delete(key)));
+        }).catch(() => undefined);
+        await context.close();
       }
     });
   });

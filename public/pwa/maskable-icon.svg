@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="GOF2 by pzy maskable icon">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="42%" r="78%">
+      <stop offset="0" stop-color="#1ec8ff"/>
+      <stop offset="0.48" stop-color="#07182a"/>
+      <stop offset="1" stop-color="#020713"/>
+    </radialGradient>
+    <linearGradient id="ship" x1="112" y1="96" x2="400" y2="420" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#fff8d5"/>
+      <stop offset="0.5" stop-color="#80d6ff"/>
+      <stop offset="1" stop-color="#ff9bd5"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#bg)"/>
+  <circle cx="356" cy="142" r="22" fill="#ffd69a"/>
+  <circle cx="128" cy="330" r="10" fill="#9bffe8"/>
+  <path d="M256 94 326 306 256 274 186 306 256 94Z" fill="url(#ship)" stroke="#eaf9ff" stroke-width="10" stroke-linejoin="round"/>
+  <path d="M256 274 308 410 256 374 204 410 256 274Z" fill="#07182a" stroke="#80d6ff" stroke-width="10" stroke-linejoin="round"/>
+  <path d="M100 396c78-46 234-46 312 0" fill="none" stroke="#ff9bd5" stroke-width="14" stroke-linecap="round" opacity="0.76"/>
+</svg>

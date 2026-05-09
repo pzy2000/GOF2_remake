@@ -4084,11 +4084,13 @@ button.equipment-trigger {
   }
 }
 
-@media (pointer: coarse) and (orientation: portrait) and (max-width: 720px) {
+@media (pointer: coarse) and (orientation: portrait) {
   .touch-orientation-hint {
     display: block;
   }
+}
 
+@media (pointer: coarse) and (orientation: portrait) and (max-width: 720px) {
   .touch-pad {
     display: none;
   }
@@ -4147,6 +4149,25 @@ button.equipment-trigger {
 }
 
 @media (pointer: coarse) and (orientation: landscape) and (max-height: 520px) {
+  .station-screen {
+    padding: calc(var(--mobile-top) + 8px) calc(var(--mobile-edge) + 10px) calc(var(--mobile-bottom) + 8px);
+  }
+
+  .station-header,
+  .screen-header {
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  .station-onboarding-callout,
+  .station-guidance-callout {
+    display: none;
+  }
+
+  .station-body {
+    padding: 10px;
+  }
+
   .hud-top-left {
     width: min(260px, 32vw);
   }
@@ -4191,7 +4212,7 @@ button.equipment-trigger {
 
   .touch-action-cluster button {
     min-width: 48px;
-    min-height: 40px;
+    min-height: 44px;
   }
 
   .dock-hint {
@@ -4280,6 +4301,10 @@ button.equipment-trigger {
 
   .hangar-build-grid {
     grid-template-columns: minmax(240px, 0.9fr) minmax(280px, 1fr);
+  }
+
+  .story-log {
+    grid-template-columns: minmax(240px, 0.86fr) minmax(300px, 1.14fr);
   }
 
   .hangar-build-grid .hangar-panel:first-child {

@@ -22,6 +22,7 @@ npm run dev
 npm run dev:full
 npm run build
 npm test
+npm run test:e2e:mobile
 ```
 
 `npm run dev:full` starts the local authoritative economy server on `127.0.0.1:19777` and the Vite frontend together. Use plain `npm run dev` when you want the browser-only fallback economy.
@@ -31,6 +32,19 @@ You can also use the one-command launcher:
 ```bash
 ./start.sh
 ```
+
+## Mobile / Foldable / PWA Preview
+
+The browser build is installable as a PWA and targets playable landscape flight on phones. Portrait mode keeps essential buttons visible and shows a landscape recommendation, while unfolded foldables use richer two-column layouts for map, station, and Captain's Log surfaces.
+
+The service worker caches the app shell plus generated art, ship models, and CC0 music under `public/assets/` for full-resource offline preview after the first online load. Mobile and foldable regression coverage is available with:
+
+```bash
+npm run test:e2e:mobile
+npm run test:e2e:mobile:screenshots
+```
+
+The screenshot command refreshes optional matrix captures in `docs/mobile-matrix/`; normal tests only assert layout and touch behavior.
 
 ## Controls
 

@@ -1,0 +1,32 @@
+{
+  "name": "GOF2 by pzy",
+  "short_name": "GOF2",
+  "description": "Browser-playable space combat and trading prototype with mobile, foldable, and offline PWA support.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#020713",
+  "theme_color": "#07182a",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    {
+      "src": "pwa/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "pwa/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "pwa/maskable-icon.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "maskable"
+    }
+  ]
+}
