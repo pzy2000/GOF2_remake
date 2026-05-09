@@ -82,6 +82,8 @@ The main story is Glass Wake Protocol, a 13-chapter chain about a Mirr probe, sp
 
 Equipment now uses a ship loadout plus inventory model. Primary, secondary, utility, defense, and engineering modules consume matching ship slots; installing draws one item from equipment inventory, unloading returns it, and the active weapons come from the installed loadout order. Blueprint Workshop fabrication consumes credits plus cargo materials and adds the result to inventory instead of auto-installing it. Career equipment routes support mining, smuggling, combat, and exploration builds.
 
+Hidden stations revealed by deep Quiet Signals now carry exclusive endgame arsenals: Obsidian Foundry, Parallax Hermitage, Moth Vault, and Crownshade Observatory each sell one overpowered artifact module in tiny stock. These items cannot be crafted or looted; they are high-price build rewards for captains who finish the exploration chains.
+
 The fleet has nine playable hulls across five generated GLB silhouettes: starter, hauler, miner, smuggler, fighter, gunship, and explorer careers now have distinct stats, slot layouts, traits, loadouts, and purchase requirements. Buying a new ship equips its stock loadout and stores the old hull with its installed equipment at the dedicated PTD Home station. Stored ships can be switched back for free only while docked at PTD Home.
 
 ## Saves, Data, And Audio

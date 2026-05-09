@@ -82,6 +82,8 @@ npm test
 
 装备系统使用飞船装载 + 库存模型。主武器、副武器、功能、防御和工程模块会占用对应槽位；安装会从装备库存消耗一个物品，卸载会返回库存，当前武器由已安装装载顺序决定。Blueprint Workshop 的制造会消耗信用点和货物材料，并把成品加入库存，而不是自动安装。职业装备路线支持采矿、走私、战斗和探索构筑。
 
+深层 Quiet Signals 揭示的隐藏空间站拥有独家终局军火库：Obsidian Foundry、Parallax Hermitage、Moth Vault 和 Crownshade Observatory 会各自少量售卖无法制造、不会掉落的超模神器装备，面向完成探索链后的高价终局构筑。
+
 舰队包含 9 个可玩船体，复用 5 套生成 GLB 外形轮廓；starter、hauler、miner、smuggler、fighter、gunship 和 explorer 职业现在拥有不同属性、槽位、特性、默认装载和购买门槛。购买新船会装备其默认装载，并把旧船体和已安装装备存放到专用的 PTD Home 空间站。已存放飞船只能在 PTD Home 免费切换。
 
 ## 存档、数据和音频

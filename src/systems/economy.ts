@@ -84,8 +84,15 @@ export function canBuyCommodityAtStation(commodityId: CommodityId, station: Stat
 }
 
 export function canBuyEquipmentAtStation(equipmentId: EquipmentId, station: StationDefinition): boolean {
+  return getEquipmentMarketBlockReason(equipmentId, station) === undefined;
+}
+
+export function getEquipmentMarketBlockReason(equipmentId: EquipmentId, station: StationDefinition): string | undefined {
   const equipment = equipmentById[equipmentId];
-  return !!equipment && station.techLevel >= equipment.techLevel;
+  if (!equipment) return "Unknown equipment.";
+  if (equipment.exclusiveStationIds?.length && !equipment.exclusiveStationIds.includes(station.id)) return "Exclusive hidden arsenal item.";
+  if (station.techLevel < equipment.techLevel) return `Requires Tech Level ${equipment.techLevel} station.`;
+  return undefined;
 }
 
 export function isCommodityVisibleInMarket(
@@ -308,9 +315,8 @@ export function buyEquipment(
   const unitPrice = getEquipmentPrice(equipmentId, station, system, reputation, "buy", entry);
   const total = unitPrice * amount;
   if (amount <= 0) return { ok: false, player, total: 0, message: "Select a positive amount." };
-  if (!canBuyEquipmentAtStation(equipmentId, station)) {
-    return { ok: false, player, total, message: `Requires Tech Level ${equipmentById[equipmentId].techLevel} station.` };
-  }
+  const blockReason = getEquipmentMarketBlockReason(equipmentId, station);
+  if (blockReason) return { ok: false, player, total, message: blockReason };
   if (entry && entry.stock < amount) return { ok: false, player, total, message: "Equipment stock is depleted." };
   if (player.credits < total) return { ok: false, player, total, message: "Not enough credits." };
   const nextMarket = marketState ? cloneMarketState(marketState) : undefined;

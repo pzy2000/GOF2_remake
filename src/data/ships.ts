@@ -121,8 +121,10 @@ export const weapons: Partial<Record<EquipmentId, WeaponDefinition>> = {
   "pulse-laser": { id: "pulse-laser", name: "Pulse Laser", damage: 16, energyCost: 5, cooldown: 0.16, range: 900, speed: 740, kind: "primary" },
   "plasma-cannon": { id: "plasma-cannon", name: "Plasma Cannon", damage: 34, energyCost: 12, cooldown: 0.42, range: 780, speed: 520, kind: "primary" },
   railgun: { id: "railgun", name: "Railgun", damage: 52, energyCost: 18, cooldown: 0.65, range: 1050, speed: 900, kind: "primary" },
+  "parallax-lance": { id: "parallax-lance", name: "Parallax Lance", damage: 96, energyCost: 30, cooldown: 0.52, range: 1500, speed: 1100, kind: "primary" },
   "homing-missile": { id: "homing-missile", name: "Homing Missile", damage: 72, energyCost: 0, cooldown: 1.15, range: 1300, speed: 360, kind: "secondary" },
   "torpedo-rack": { id: "torpedo-rack", name: "Torpedo Rack", damage: 112, energyCost: 0, cooldown: 1.8, range: 1450, speed: 300, kind: "secondary" },
+  "moth-choir-torpedo": { id: "moth-choir-torpedo", name: "Moth Choir Torpedo", damage: 240, energyCost: 0, cooldown: 2.3, range: 1800, speed: 340, kind: "secondary" },
   "mining-beam": { id: "mining-beam", name: "Mining Beam", damage: 0, energyCost: 7, cooldown: 0.2, range: 360, speed: 0, kind: "utility" },
   "industrial-mining-beam": { id: "industrial-mining-beam", name: "Industrial Mining Beam", damage: 0, energyCost: 10, cooldown: 0.16, range: 480, speed: 0, kind: "utility" }
 };

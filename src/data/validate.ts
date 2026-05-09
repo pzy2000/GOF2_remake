@@ -159,6 +159,11 @@ export function validateContentData(): ContentValidationResult {
   for (const equipment of equipmentList) {
     if (equipment.techLevel < 1 || equipment.techLevel > 5) errors.push(`Equipment ${equipment.id} has invalid tech level`);
     if (equipment.marketPrice <= 0) errors.push(`Equipment ${equipment.id} must have a positive market price`);
+    for (const stationId of equipment.exclusiveStationIds ?? []) {
+      const station = stationById[stationId];
+      if (!station) errors.push(`Equipment ${equipment.id} has unknown exclusive station ${stationId}`);
+      if (station && !station.hidden) errors.push(`Equipment ${equipment.id} exclusive station ${stationId} must be hidden`);
+    }
     for (const commodityId of Object.keys(equipment.craftCost?.cargo ?? {})) {
       if (!hasCommodity(commodityId)) errors.push(`Equipment ${equipment.id} craft cost references unknown cargo ${commodityId}`);
     }

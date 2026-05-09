@@ -158,7 +158,11 @@ export type EquipmentId =
   | "repair-drone"
   | "targeting-computer"
   | "echo-nullifier"
-  | "relic-cartographer";
+  | "relic-cartographer"
+  | "obsidian-bulwark"
+  | "parallax-lance"
+  | "moth-choir-torpedo"
+  | "crownshade-singularity-core";
 
 export type EquipmentSlotType = "primary" | "secondary" | "utility" | "defense" | "engineering";
 
@@ -301,6 +305,7 @@ export interface EquipmentDefinition {
   slotSize?: number;
   craftCost?: EquipmentCraftCost;
   installableOn?: string[];
+  exclusiveStationIds?: string[];
   modifiers?: EquipmentModifiers;
   weapon?: WeaponDefinition;
 }

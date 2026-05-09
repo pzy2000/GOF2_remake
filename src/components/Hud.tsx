@@ -14,6 +14,7 @@ import { explorationSignalById, getEffectiveSignalScanBand } from "../systems/ex
 import { getExplorationObjectiveSummaryForSystem } from "../systems/explorationObjectives";
 import { getFactionHeatLevelLabel, getFactionHeatRecord, isFactionWanted } from "../systems/factionConsequences";
 import { getOnboardingView } from "../systems/onboarding";
+import { getNextGuidanceRecommendation } from "../systems/playerGuidance";
 import { getStoryObjectiveSummary } from "../systems/story";
 import {
   formatCargoLabel,
@@ -64,6 +65,9 @@ export function Hud() {
   const activeMissions = useGameStore((state) => state.activeMissions);
   const completedMissionIds = useGameStore((state) => state.completedMissionIds);
   const failedMissionIds = useGameStore((state) => state.failedMissionIds);
+  const marketState = useGameStore((state) => state.marketState);
+  const knownSystems = useGameStore((state) => state.knownSystems);
+  const reputation = useGameStore((state) => state.reputation);
   const gameClock = useGameStore((state) => state.gameClock);
   const currentStationId = useGameStore((state) => state.currentStationId);
   const saveGame = useGameStore((state) => state.saveGame);
@@ -126,6 +130,26 @@ export function Hud() {
     autopilot,
     gameClock
   });
+  const guidance = getNextGuidanceRecommendation({
+    screen: "flight",
+    currentSystemId: currentSystem.id,
+    currentStationId,
+    player,
+    activeMissions,
+    completedMissionIds,
+    failedMissionIds,
+    marketState,
+    knownSystems,
+    knownPlanetIds,
+    explorationState,
+    onboardingState,
+    autopilot,
+    gameClock,
+    activeScanSignalId: activeScan?.signalId,
+    destroyedPirates: runtime.destroyedPirates,
+    reputation,
+    factionHeat
+  });
   const graceRemaining = Math.max(0, Math.ceil(runtime.graceUntil - runtime.clock));
   const nearestMine = runtime.asteroids
     .filter((asteroid) => asteroid.amount > 0)
@@ -171,6 +195,13 @@ export function Hud() {
         </div>
         {contrabandAmount > 0 ? <p>{contrabandLawLabel(locale)}: {translateText(getContrabandLawSummary(currentSystem.id), locale)}</p> : null}
         {scanningPatrol ? <p>{patrolScanLabel(locale)} {formatNumber(locale, Math.round((scanningPatrol.scanProgress ?? 0) * 100))}%</p> : null}
+        {guidance && guidance.category !== "first-flight" ? (
+          <div className={`guidance-tracker category-${guidance.category}`} data-testid="next-up-tracker">
+            <span>{translateText("Next Up", locale)}</span>
+            <b>{translateText(guidance.title, locale)}</b>
+            <p>{formatRuntimeText(locale, guidance.objectiveText)}</p>
+          </div>
+        ) : null}
         {storyObjective.status !== "complete" ? (
           <div className={`story-tracker focus-${storyObjective.focus}`} data-testid="story-tracker">
             <span>{translateText("Main Story", locale)}</span>

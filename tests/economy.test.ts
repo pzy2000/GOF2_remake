@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { commodityById, stationById, systemById, shipById } from "../src/data/world";
+import { commodityById, equipmentById, stationById, systemById, shipById } from "../src/data/world";
 import {
   advanceMarketState,
   buyCommodity,
@@ -131,6 +131,29 @@ describe("economy", () => {
     const system = systemById["helion-reach"];
     expect(canBuyEquipmentAtStation("quantum-reactor", station)).toBe(false);
     expect(buyEquipment({ ...player(), credits: 100000 }, station, system, "quantum-reactor", 1, 0, market).ok).toBe(false);
+  });
+
+  it("stocks endgame artifacts only at their exclusive hidden stations", () => {
+    const market = createInitialMarketState();
+    const publicTechFive = stationById["pearl-consulate"];
+    const parallax = stationById["parallax-hermitage"];
+    const moth = stationById["moth-vault"];
+    const crownshade = stationById["crownshade-observatory"];
+    const obsidian = stationById["obsidian-foundry"];
+
+    expect(canBuyEquipmentAtStation("parallax-lance", publicTechFive)).toBe(false);
+    expect(canBuyEquipmentAtStation("parallax-lance", parallax)).toBe(true);
+    expect(canBuyEquipmentAtStation("moth-choir-torpedo", moth)).toBe(true);
+    expect(canBuyEquipmentAtStation("crownshade-singularity-core", crownshade)).toBe(true);
+    expect(canBuyEquipmentAtStation("obsidian-bulwark", obsidian)).toBe(true);
+    expect(getMarketEntry(market, publicTechFive.id, "parallax-lance").stock).toBe(0);
+    expect(getMarketEntry(market, parallax.id, "parallax-lance").stock).toBe(1);
+    expect(getMarketEntry(market, obsidian.id, "obsidian-bulwark").stock).toBe(1);
+    expect(equipmentById["parallax-lance"].exclusiveStationIds).toEqual(["parallax-hermitage"]);
+
+    const rejected = buyEquipment({ ...player(), credits: 100000 }, publicTechFive, systemById["celest-gate"], "parallax-lance", 1, 0, market);
+    expect(rejected.ok).toBe(false);
+    expect(rejected.message).toBe("Exclusive hidden arsenal item.");
   });
 
   it("updates stock and prices after player buy and sell transactions", () => {

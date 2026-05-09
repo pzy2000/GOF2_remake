@@ -154,7 +154,11 @@ describe("equipment definitions and helpers", () => {
       "repair-drone",
       "targeting-computer",
       "echo-nullifier",
-      "relic-cartographer"
+      "relic-cartographer",
+      "obsidian-bulwark",
+      "parallax-lance",
+      "moth-choir-torpedo",
+      "crownshade-singularity-core"
     ];
     expect(ids.every((id) => equipmentById[id]?.displayStats.length > 0)).toBe(true);
   });
@@ -313,6 +317,23 @@ describe("equipment definitions and helpers", () => {
     expect(effects.signalScanRangeBonus).toBeGreaterThan(0);
     expect(effects.signalScanBandBonus).toBeGreaterThan(0);
     expect(effects.signalScanRateMultiplier).toBeGreaterThan(1);
+  });
+
+  it("defines hidden-station endgame artifacts with overpower combat stats", () => {
+    expect(equipmentById["obsidian-bulwark"]).toMatchObject({
+      category: "Defense",
+      slotType: "defense",
+      exclusiveStationIds: ["obsidian-foundry"]
+    });
+    expect(equipmentById["obsidian-bulwark"].modifiers?.stats?.shield).toBeGreaterThan(equipmentById["shield-matrix"].modifiers?.stats?.shield ?? 0);
+    expect(equipmentById["parallax-lance"].weapon?.damage).toBeGreaterThan(equipmentById.railgun.weapon?.damage ?? 0);
+    expect(equipmentById["moth-choir-torpedo"].weapon?.damage).toBeGreaterThan(equipmentById["torpedo-rack"].weapon?.damage ?? 0);
+
+    const effects = getEquipmentEffects(["crownshade-singularity-core", "obsidian-bulwark"]);
+    expect(effects.energyRegenPerSecond).toBeGreaterThan(getEquipmentEffects(["quantum-reactor"]).energyRegenPerSecond);
+    expect(effects.weaponCooldownMultiplier).toBeLessThan(getEquipmentEffects(["quantum-reactor"]).weaponCooldownMultiplier);
+    expect(getActivePrimaryWeapon(["parallax-lance", "pulse-laser"])?.id).toBe("parallax-lance");
+    expect(getActiveSecondaryWeapon(["moth-choir-torpedo", "homing-missile"])?.id).toBe("moth-choir-torpedo");
   });
 
   it("applies scanner utility modifiers to Quiet Signal range and band", () => {

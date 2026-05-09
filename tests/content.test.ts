@@ -247,6 +247,27 @@ describe("content data", () => {
     }
   });
 
+  it("keeps hidden arsenal equipment tied to real hidden stations", () => {
+    const exclusiveEquipment = equipmentList.filter((equipment) => (equipment.exclusiveStationIds ?? []).length > 0);
+    expect(exclusiveEquipment.map((equipment) => equipment.id).sort()).toEqual([
+      "crownshade-singularity-core",
+      "moth-choir-torpedo",
+      "obsidian-bulwark",
+      "parallax-lance"
+    ]);
+    for (const equipment of exclusiveEquipment) {
+      expect(equipment.dropWeight ?? 0).toBe(0);
+      expect(equipment.craftCost).toBeUndefined();
+      for (const stationId of equipment.exclusiveStationIds ?? []) {
+        const station = stationById[stationId];
+        const system = systems.find((item) => item.id === station.systemId);
+        expect(station.hidden).toBe(true);
+        expect(system?.hiddenStationIds).toContain(stationId);
+        expect(system?.stationIds).not.toContain(stationId);
+      }
+    }
+  });
+
   it("defines a valid blueprint progression tree for every craftable equipment item", () => {
     const blueprintIds = new Set(blueprintDefinitions.map((blueprint) => blueprint.equipmentId));
     const craftableEquipment = equipmentList.filter((equipment) => !!equipment.craftCost);

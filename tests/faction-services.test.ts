@@ -86,6 +86,8 @@ describe("faction service access", () => {
     expect(getEquipmentPurchaseAccess({ station, equipment: equipmentById["railgun"], reputation: friendly, factionHeat, now: 0 }).ok).toBe(true);
     expect(getEquipmentPurchaseAccess({ station, equipment: equipmentById["quantum-reactor"], reputation: friendly, factionHeat, now: 0 }).ok).toBe(false);
     expect(getEquipmentPurchaseAccess({ station, equipment: equipmentById["quantum-reactor"], reputation: allied, factionHeat, now: 0 }).ok).toBe(true);
+    expect(getEquipmentPurchaseAccess({ station: stationById["parallax-hermitage"], equipment: equipmentById["parallax-lance"], reputation: neutral, factionHeat, now: 0 }).ok).toBe(true);
+    expect(getEquipmentPurchaseAccess({ station, equipment: equipmentById["parallax-lance"], reputation: allied, factionHeat, now: 0 }).ok).toBe(false);
 
     expect(getShipPurchaseAccess({ station, ship: shipById["horizon-ark"], reputation: friendly, factionHeat, now: 0 }).ok).toBe(false);
     expect(getShipPurchaseAccess({ station, ship: shipById["horizon-ark"], reputation: allied, factionHeat, now: 0 }).ok).toBe(true);

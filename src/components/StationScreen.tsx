@@ -55,6 +55,7 @@ import { getStoryObjectiveSummary, getStoryProgress, storyStatusLabel } from "..
 import { CLEAN_CARRIER_MISSION_ID, getOnboardingView, HELION_START_STATION_ID, MIRR_LATTICE_STATION_ID } from "../systems/onboarding";
 import { getDialogueLogEntries } from "../systems/dialogue";
 import { getExplorationChainSummaries, getExplorationObjectiveSummaryForSystem, explorationRewardStationNames } from "../systems/explorationObjectives";
+import { getNextGuidanceRecommendation } from "../systems/playerGuidance";
 import {
   canInstallEquipment,
   canUnlockBlueprint,
@@ -336,6 +337,12 @@ export function StationScreen() {
   const factionHeat = useGameStore((state) => state.factionHeat);
   const activeMissions = useGameStore((state) => state.activeMissions);
   const completedMissionIds = useGameStore((state) => state.completedMissionIds);
+  const failedMissionIds = useGameStore((state) => state.failedMissionIds);
+  const marketState = useGameStore((state) => state.marketState);
+  const knownSystems = useGameStore((state) => state.knownSystems);
+  const knownPlanetIds = useGameStore((state) => state.knownPlanetIds);
+  const explorationState = useGameStore((state) => state.explorationState);
+  const runtime = useGameStore((state) => state.runtime);
   const onboardingState = useGameStore((state) => state.onboardingState);
   const autopilot = useGameStore((state) => state.autopilot);
   const gameClock = useGameStore((state) => state.gameClock);
@@ -359,6 +366,26 @@ export function StationScreen() {
     gameClock
   });
   const onboardingStepId = onboardingView.activeStep?.id;
+  const guidance = getNextGuidanceRecommendation({
+    screen: "station",
+    currentSystemId: station.systemId,
+    currentStationId: station.id,
+    player,
+    activeMissions,
+    completedMissionIds,
+    failedMissionIds,
+    marketState,
+    knownSystems,
+    knownPlanetIds,
+    explorationState,
+    onboardingState,
+    autopilot,
+    gameClock,
+    activeScanSignalId: runtime.explorationScan?.signalId,
+    destroyedPirates: runtime.destroyedPirates,
+    reputation,
+    factionHeat
+  });
   const stationStandingTier = getFactionStandingTier(reputation.factions[station.factionId]);
   const stationHeatRecord = getFactionHeatRecord(factionHeat, station.factionId);
   const stationHeatLabel = getFactionHeatLevelLabel(stationHeatRecord);
@@ -409,6 +436,16 @@ export function StationScreen() {
             ) : onboardingStepId === "complete-clean-carrier" && station.id === MIRR_LATTICE_STATION_ID ? (
               <button className="primary" onClick={() => setStationTab("Mission Board")}>{translateText("Open Board", locale)}</button>
             ) : null}
+          </section>
+        ) : guidance ? (
+          <section className={`station-guidance-callout category-${guidance.category}`} data-testid="station-next-up-callout">
+            <div>
+              <span>{translateText("Next Up", locale)} · {translateText("Best next step", locale)}</span>
+              <b>{translateText(guidance.title, locale)}</b>
+              <p>{formatRuntimeText(locale, guidance.objectiveText)}</p>
+              <small>{translateText("Reason", locale)}: {translateText(guidance.priorityReason, locale)}</small>
+            </div>
+            <button className="primary" onClick={() => setStationTab(guidance.stationTab)}>{translateText(guidance.actionLabel, locale)}</button>
           </section>
         ) : null}
       </div>
@@ -494,6 +531,8 @@ function MarketTab() {
             const buyPrice = getEquipmentPrice(equipment.id, station, system, reputation.factions[station.factionId], "buy", entry);
             const sellPrice = getEquipmentPrice(equipment.id, station, system, reputation.factions[station.factionId], "sell", entry);
             const inventoryCount = player.equipmentInventory?.[equipment.id] ?? 0;
+            const exclusive = equipment.exclusiveStationIds?.includes(station.id) ?? false;
+            const exclusiveLabel = equipment.exclusiveStationIds?.length ? translateText(exclusive ? "Hidden Arsenal / Exclusive" : "Hidden Arsenal exclusive", locale) : undefined;
             return (
               <div className="market-row equipment-market-row" data-testid={`market-equipment-row-${equipment.id}`} key={equipment.id}>
                 <AtlasIcon icon={getEquipmentIcon(equipment.id)} manifest={manifest} />
@@ -501,11 +540,12 @@ function MarketTab() {
                   className="equipment-row-trigger"
                   equipmentId={equipment.id}
                   getTriggerProps={equipmentPopover.getTriggerProps}
-                  status={`${translateText("Market", locale)} · ${formatTechLevel(locale, equipment.techLevel, true)}`}
+                  status={`${translateText("Market", locale)} · ${formatTechLevel(locale, equipment.techLevel, true)}${exclusiveLabel ? ` · ${exclusiveLabel}` : ""}`}
                 >
                   <span>
                     <strong>{localizeEquipmentName(equipment.id, locale, equipment.name)}</strong>
                     <small>{formatTechLevel(locale, equipment.techLevel, true)} · {translateText(equipment.category, locale)} · {translateText("Inventory", locale)} {formatNumber(locale, inventoryCount)}</small>
+                    {exclusiveLabel ? <small>{exclusiveLabel}</small> : null}
                     <small>{translateText("Stock", locale)} {formatNumber(locale, Math.floor(entry.stock))}/{formatNumber(locale, entry.maxStock)} · {translateText("Demand", locale)} {entry.demand.toFixed(2)}</small>
                   </span>
                 </EquipmentTrigger>
@@ -513,7 +553,7 @@ function MarketTab() {
                 <button
                   onClick={() => buyEquipmentAction(equipment.id, 1)}
                   disabled={!purchaseAccess.ok || !canBuy || entry.stock < 1 || player.credits < buyPrice}
-                  title={!purchaseAccess.ok ? translateText(purchaseAccess.message, locale) : !canBuy ? requiresTechStationLabel(equipment.techLevel, locale) : entry.stock < 1 ? translateText("Out of stock", locale) : undefined}
+                  title={!purchaseAccess.ok ? translateText(purchaseAccess.message, locale) : !canBuy ? translateText(exclusiveLabel ?? requiresTechStationLabel(equipment.techLevel, locale), locale) : entry.stock < 1 ? translateText("Out of stock", locale) : undefined}
                 >
                   {translateText("Buy", locale)}
                 </button>
@@ -1174,6 +1214,15 @@ function CaptainLogTab() {
   const completedMissionIds = useGameStore((state) => state.completedMissionIds);
   const failedMissionIds = useGameStore((state) => state.failedMissionIds);
   const explorationState = useGameStore((state) => state.explorationState);
+  const marketState = useGameStore((state) => state.marketState);
+  const knownSystems = useGameStore((state) => state.knownSystems);
+  const knownPlanetIds = useGameStore((state) => state.knownPlanetIds);
+  const onboardingState = useGameStore((state) => state.onboardingState);
+  const autopilot = useGameStore((state) => state.autopilot);
+  const gameClock = useGameStore((state) => state.gameClock);
+  const runtime = useGameStore((state) => state.runtime);
+  const reputation = useGameStore((state) => state.reputation);
+  const factionHeat = useGameStore((state) => state.factionHeat);
   const dialogueState = useGameStore((state) => state.dialogueState);
   const openDialogueScene = useGameStore((state) => state.openDialogueScene);
   const progress = getStoryProgress(glassWakeProtocol, missionTemplates, activeMissions, completedMissionIds, failedMissionIds);
@@ -1194,6 +1243,26 @@ function CaptainLogTab() {
   });
   const completedExplorationLogs = explorationSignals.filter((signal) => explorationState.eventLogIds.includes(signal.id));
   const chainSummaries = getExplorationChainSummaries(explorationState, { playerEquipment: player.equipment, playerUnlockedBlueprintIds: player.unlockedBlueprintIds });
+  const guidance = getNextGuidanceRecommendation({
+    screen: "station",
+    currentSystemId,
+    currentStationId,
+    player,
+    activeMissions,
+    completedMissionIds,
+    failedMissionIds,
+    marketState,
+    knownSystems,
+    knownPlanetIds,
+    explorationState,
+    onboardingState,
+    autopilot,
+    gameClock,
+    activeScanSignalId: runtime.explorationScan?.signalId,
+    destroyedPirates: runtime.destroyedPirates,
+    reputation,
+    factionHeat
+  });
   const currentFieldIntel = currentMission
     ? completedExplorationLogs.filter((signal) => signal.storyInfluence?.missionId === currentMission.id)
     : [];
@@ -1215,6 +1284,14 @@ function CaptainLogTab() {
           <span>Current Objective</span>
           <p>{translateText(storyObjective.objectiveText, locale)}</p>
         </div>
+        {guidance ? (
+          <div className={`story-guidance-objective category-${guidance.category}`} data-testid="captain-log-next-up">
+            <span>{translateText("Recommended Route", locale)}</span>
+            <b>{translateText(guidance.title, locale)}</b>
+            <p>{formatRuntimeText(locale, guidance.objectiveText)}</p>
+            <small>{translateText("Reason", locale)}: {translateText(guidance.priorityReason, locale)}</small>
+          </div>
+        ) : null}
         <FactionConsequencesPanel />
         {currentFieldIntel.length > 0 ? (
           <div className="story-field-intel">

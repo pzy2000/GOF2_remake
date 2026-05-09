@@ -11,7 +11,7 @@ import type {
   StationServiceId
 } from "../types/game";
 import { equipmentById } from "../data/equipment";
-import { canBuyEquipmentAtStation } from "./economy";
+import { getEquipmentMarketBlockReason } from "./economy";
 import {
   getFactionHeatLevel,
   getFactionHeatLevelLabel,
@@ -179,13 +179,15 @@ export function getStationServiceAccess({
 export function getEquipmentPurchaseAccess(input: EquipmentPurchaseAccessInput): StationServiceAccess {
   const service = getStationServiceAccess({ ...input, service: "equipment-buy" });
   if (!service.ok) return service;
-  if (!canBuyEquipmentAtStation(input.equipment.id, input.station)) {
+  const marketBlockReason = getEquipmentMarketBlockReason(input.equipment.id, input.station);
+  if (marketBlockReason) {
     return {
       ...service,
       ok: false,
-      message: `Requires Tech Level ${input.equipment.techLevel} station.`
+      message: marketBlockReason
     };
   }
+  if (input.equipment.exclusiveStationIds?.includes(input.station.id)) return service;
   const requiredTier = requiredTierForEquipment(input.equipment.techLevel);
   const standingTier = getFactionStandingTier(input.reputation.factions[input.station.factionId] ?? 0);
   if (requiredTier && tierRank[standingTier] < tierRank[requiredTier]) {

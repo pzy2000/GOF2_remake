@@ -69,6 +69,28 @@ export const equipmentList: EquipmentDefinition[] = [
     weapon: weapons.railgun
   },
   {
+    id: "parallax-lance",
+    name: "Parallax Lance",
+    techLevel: 5,
+    marketPrice: 36000,
+    marketStock: 1,
+    dropWeight: 0,
+    category: "Primary Weapon",
+    role: "Hidden Mirr lance for endgame standoff kills.",
+    description: "A phase-folded laser cannon that draws a hard line through mirrored target solutions before the enemy sees the shot.",
+    effect: "Exclusive to Parallax Hermitage. Preferred over lighter primary weapons when installed.",
+    displayStats: [
+      { label: "Damage", value: "96" },
+      { label: "Energy", value: "30" },
+      { label: "Cooldown", value: "0.52s" },
+      { label: "Range", value: "1500m" },
+      { label: "Speed", value: "1100" }
+    ],
+    slotType: "primary",
+    exclusiveStationIds: ["parallax-hermitage"],
+    weapon: weapons["parallax-lance"]
+  },
+  {
     id: "homing-missile",
     name: "Homing Missile",
     techLevel: 1,
@@ -109,6 +131,27 @@ export const equipmentList: EquipmentDefinition[] = [
     slotType: "secondary",
     craftCost: { credits: 2800, cargo: { "ship-components": 2, chemicals: 1, "energy-cells": 2 } },
     weapon: weapons["torpedo-rack"]
+  },
+  {
+    id: "moth-choir-torpedo",
+    name: "Moth Choir Torpedo",
+    techLevel: 5,
+    marketPrice: 34000,
+    marketStock: 1,
+    dropWeight: 0,
+    category: "Secondary Weapon",
+    role: "Black-market endgame torpedo for capital-grade burst damage.",
+    description: "A choir-keyed torpedo rack from Moth Vault that splits its guidance tone across illegal relay harmonics.",
+    effect: "Exclusive to Moth Vault. Replaces lighter secondary weapons when installed.",
+    displayStats: [
+      { label: "Damage", value: "240" },
+      { label: "Cooldown", value: "2.30s" },
+      { label: "Range", value: "1800m" },
+      { label: "Speed", value: "340" }
+    ],
+    slotType: "secondary",
+    exclusiveStationIds: ["moth-vault"],
+    weapon: weapons["moth-choir-torpedo"]
   },
   {
     id: "mining-beam",
@@ -182,6 +225,25 @@ export const equipmentList: EquipmentDefinition[] = [
     slotType: "defense",
     craftCost: { credits: 3900, cargo: { "ship-components": 2, microchips: 2, "energy-cells": 2 } },
     modifiers: { stats: { shield: 55 } }
+  },
+  {
+    id: "obsidian-bulwark",
+    name: "Obsidian Bulwark",
+    techLevel: 4,
+    marketPrice: 28000,
+    marketStock: 1,
+    dropWeight: 0,
+    category: "Defense",
+    role: "Hidden foundry shield bulwark for endgame survivability.",
+    description: "A voidglass-laced shield wall cast inside Obsidian Foundry's off-chart ore furnace.",
+    effect: "Exclusive to Obsidian Foundry. Increases maximum shield capacity by 140 and hull integrity by 45.",
+    displayStats: [
+      { label: "Max Shield", value: "+140" },
+      { label: "Max Hull", value: "+45" }
+    ],
+    slotType: "defense",
+    exclusiveStationIds: ["obsidian-foundry"],
+    modifiers: { stats: { shield: 140, hull: 45 } }
   },
   {
     id: "cargo-expansion",
@@ -389,6 +451,26 @@ export const equipmentList: EquipmentDefinition[] = [
     slotType: "engineering",
     craftCost: { credits: 6500, cargo: { "data-cores": 2, voidglass: 1, "energy-cells": 3 } },
     modifiers: { stats: { energy: 55 }, energyRegenBonus: 8, weaponCooldownMultiplier: 0.92 }
+  },
+  {
+    id: "crownshade-singularity-core",
+    name: "Crownshade Singularity Core",
+    techLevel: 5,
+    marketPrice: 38000,
+    marketStock: 1,
+    dropWeight: 0,
+    category: "Engineering",
+    role: "Crownshade endgame reactor for sustained artifact weapon fire.",
+    description: "A compact singularity cage tuned under Celest Crown's hidden observatory shadow.",
+    effect: "Exclusive to Crownshade Observatory. Increases maximum energy by 115, adds 18 energy regeneration per second, and reduces weapon cooldowns by 28%.",
+    displayStats: [
+      { label: "Max Energy", value: "+115" },
+      { label: "Regen", value: "+18/s" },
+      { label: "Cooldown", value: "-28%" }
+    ],
+    slotType: "engineering",
+    exclusiveStationIds: ["crownshade-observatory"],
+    modifiers: { stats: { energy: 115 }, energyRegenBonus: 18, weaponCooldownMultiplier: 0.72 }
   },
   {
     id: "repair-drone",

@@ -78,7 +78,11 @@ const equipmentFallbacks: Partial<Record<EquipmentId, number>> = {
   "survey-lab": 7,
   "quantum-reactor": 9,
   "echo-nullifier": 7,
-  "relic-cartographer": 7
+  "relic-cartographer": 7,
+  "obsidian-bulwark": 4,
+  "parallax-lance": 1,
+  "moth-choir-torpedo": 2,
+  "crownshade-singularity-core": 9
 };
 
 function titleize(id: string): string {

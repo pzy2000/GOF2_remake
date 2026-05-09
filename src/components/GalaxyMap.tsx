@@ -9,6 +9,7 @@ import { getExplorationObjectiveSummaryForSystem } from "../systems/explorationO
 import { getFactionHeatLevelLabel, getFactionHeatRecord, isFactionWanted } from "../systems/factionConsequences";
 import { isEconomyDispatchMissionId, isMarketSmugglingMissionId } from "../systems/marketMissions";
 import { CLEAN_CARRIER_MISSION_ID, getOnboardingView, MIRR_LATTICE_STATION_ID } from "../systems/onboarding";
+import { getNextGuidanceRecommendation } from "../systems/playerGuidance";
 import { getStoryObjectiveSummary } from "../systems/story";
 import {
   formatTechLevel,
@@ -43,9 +44,12 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
   const activeMissions = useGameStore((state) => state.activeMissions);
   const completedMissionIds = useGameStore((state) => state.completedMissionIds);
   const failedMissionIds = useGameStore((state) => state.failedMissionIds);
+  const marketState = useGameStore((state) => state.marketState);
   const onboardingState = useGameStore((state) => state.onboardingState);
   const player = useGameStore((state) => state.player);
+  const runtime = useGameStore((state) => state.runtime);
   const explorationState = useGameStore((state) => state.explorationState);
+  const reputation = useGameStore((state) => state.reputation);
   const factionHeat = useGameStore((state) => state.factionHeat);
   const gameClock = useGameStore((state) => state.gameClock);
   const galaxyMapMode = useGameStore((state) => state.galaxyMapMode);
@@ -110,6 +114,31 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
   });
   const cleanCarrierActive = activeMissions.some((mission) => mission.id === CLEAN_CARRIER_MISSION_ID);
   const onboardingRouteActive = onboardingView.visible && onboardingView.activeStep?.id === "plot-clean-carrier-route" && cleanCarrierActive;
+  const guidance = getNextGuidanceRecommendation({
+    screen: currentStationId ? "station" : "galaxyMap",
+    currentSystemId,
+    currentStationId,
+    player,
+    activeMissions,
+    completedMissionIds,
+    failedMissionIds,
+    marketState,
+    knownSystems,
+    knownPlanetIds,
+    explorationState,
+    onboardingState,
+    autopilot,
+    gameClock,
+    activeScanSignalId: runtime.explorationScan?.signalId,
+    destroyedPirates: runtime.destroyedPirates,
+    reputation,
+    factionHeat
+  });
+  const guidanceTargetSystemVisible = guidance?.targetSystemId && knownSystems.includes(guidance.targetSystemId) ? guidance.targetSystemId : undefined;
+  const guidanceTargetStation = guidance?.targetStationId ? stationById[guidance.targetStationId] : undefined;
+  const guidanceTargetStationVisible = !!guidanceTargetStation
+    && knownPlanetIds.includes(guidanceTargetStation.planetId)
+    && (!guidanceTargetStation.hidden || isHiddenStationRevealed(guidanceTargetStation.id, explorationState));
   const stars = useMemo(
     () =>
       Array.from({ length: 120 }, (_, index) => ({
@@ -248,7 +277,7 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                 return (
                   <button
                     key={system.id}
-                    className={`galaxy-system ${known ? "known" : "locked"} ${current ? "current" : ""} ${selected ? "selected" : ""} ${storyTargetSystemVisible === system.id ? "story-pin" : ""} ${dispatchTargetVisible === system.id ? "dispatch-pin" : ""} ${explorationSummary ? "exploration-pin" : ""}`}
+                    className={`galaxy-system ${known ? "known" : "locked"} ${current ? "current" : ""} ${selected ? "selected" : ""} ${storyTargetSystemVisible === system.id ? "story-pin" : ""} ${dispatchTargetVisible === system.id ? "dispatch-pin" : ""} ${guidanceTargetSystemVisible === system.id ? "next-up-pin" : ""} ${explorationSummary ? "exploration-pin" : ""}`}
                     style={{ left: point.x, top: point.y, "--system-tone": systemTone(index, system.risk) } as CSSProperties}
                     onClick={() => selectSystem(system.id)}
                     onDoubleClick={() => {
@@ -265,6 +294,7 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                     <span className="system-name">{known ? localizeSystemName(system.id, locale, system.name) : translateText("Unknown Signal", locale)}</span>
                     {storyTargetSystemVisible === system.id ? <span className="story-map-pin">{translateText("Main Story", locale)}</span> : null}
                     {dispatchTargetVisible === system.id ? <span className="dispatch-map-pin">{translateText("Dispatch", locale)}</span> : null}
+                    {guidanceTargetSystemVisible === system.id ? <span className="next-up-map-pin">{translateText("Next Up", locale)}</span> : null}
                     {explorationSummary ? (
                       <span className="exploration-map-pin">
                         {translateText("Quiet Signals", locale)} {explorationSummary.completedCount}/{explorationSummary.totalCount}
@@ -309,6 +339,17 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                   </p>
                 </div>
               ) : null}
+              {guidance && guidanceTargetSystemVisible === selectedSystem.id ? (
+                <div className={`guidance-map-brief category-${guidance.category}`} data-testid="next-up-map-brief">
+                  <span>{translateText("Next Up", locale)}</span>
+                  <b>{translateText(guidance.title, locale)}</b>
+                  <p>
+                    {guidance.targetStationId && !guidanceTargetStationVisible
+                      ? translateText("Target station is not reachable yet. Scan local beacons or advance Quiet Signals first.", locale)
+                      : formatRuntimeText(locale, guidance.objectiveText)}
+                  </p>
+                </div>
+              ) : null}
               {selectedKnown ? (
                 <div className={`law-map-brief heat-${getFactionHeatLevelLabel(getFactionHeatRecord(factionHeat, selectedSystem.factionId)).toLowerCase().replace(/[^a-z]+/g, "-")}`} data-testid="law-map-brief">
                   <span>{translateText("Legal Status", locale)}</span>
@@ -349,7 +390,7 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                       <button
                         key={planet.id}
                         type="button"
-                        className={`${selected ? "selected" : ""} ${storyDestination ? "story-destination" : ""} ${dispatchDestination ? "dispatch-destination" : ""} ${onboardingDestination ? "onboarding-destination" : ""}`}
+                        className={`${selected ? "selected" : ""} ${storyDestination ? "story-destination" : ""} ${dispatchDestination ? "dispatch-destination" : ""} ${guidanceTargetStation?.id === station.id ? "next-up-destination" : ""} ${onboardingDestination ? "onboarding-destination" : ""}`}
                         disabled={!known}
                         onClick={() => setSelectedStationId(station.id)}
                         onDoubleClick={() => executeTravel(station.id)}
@@ -359,6 +400,7 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                           {known ? `${translateText(planet.type, locale)} · ${localizeStationName(station.id, locale, station.name)} · ${formatTechLevel(locale, station.techLevel)}` : translateText("Local scan required", locale)}
                           {storyDestination ? ` · ${translateText("Main Story", locale)}` : ""}
                           {dispatchDestination ? ` · ${translateText("Dispatch", locale)}` : ""}
+                          {guidanceTargetStation?.id === station.id ? ` · ${translateText("Next Up", locale)}` : ""}
                           {onboardingDestination ? ` · ${translateText("First Flight", locale)}` : ""}
                         </small>
                       </button>
@@ -374,7 +416,7 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                       <button
                         key={station.id}
                         type="button"
-                        className={`hidden-station ${selected ? "selected" : ""} ${storyDestination ? "story-destination" : ""} ${dispatchDestination ? "dispatch-destination" : ""}`}
+                        className={`hidden-station ${selected ? "selected" : ""} ${storyDestination ? "story-destination" : ""} ${dispatchDestination ? "dispatch-destination" : ""} ${guidanceTargetStation?.id === station.id ? "next-up-destination" : ""}`}
                         disabled={!known}
                         onClick={() => setSelectedStationId(station.id)}
                         onDoubleClick={() => executeTravel(station.id)}
@@ -384,6 +426,7 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                           {known && planet ? `${localizePlanetName(planet.id, locale, planet.name)} · ${hiddenStationFoundLabel(locale)} · ${formatTechLevel(locale, station.techLevel)}` : translateText("Signal masked", locale)}
                           {storyDestination ? ` · ${translateText("Main Story", locale)}` : ""}
                           {dispatchDestination ? ` · ${translateText("Dispatch", locale)}` : ""}
+                          {guidanceTargetStation?.id === station.id ? ` · ${translateText("Next Up", locale)}` : ""}
                         </small>
                       </button>
                     );
