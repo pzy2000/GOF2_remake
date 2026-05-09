@@ -53,22 +53,34 @@ import {
 } from "../systems/combatAi";
 import {
   applyFactionHeatDecay,
+  applyFactionInterceptCooldown,
   applyFactionIncident,
   applyFriendlyFireWarning,
   bountyRewardForShip,
   createBountyNotification,
   createInitialFactionHeat,
+  getFactionHeatRecord,
   hasActiveFriendlyFireWarning,
   incidentKindForShip,
+  isFactionKillOnSight,
   isFactionWanted,
   payFactionFine as payFactionFinePure
 } from "../systems/factionConsequences";
 import {
+  applyBlackMarketAmnesty,
+  getEquipmentPurchaseAccess,
+  getFactionRewardMultiplier,
+  getMissionAcceptAccess,
+  getRepairCostMultiplier,
+  getShipPurchaseAccess,
+  getStationServiceAccess
+} from "../systems/factionServices";
+import {
   getActivePrimaryWeapon,
   getActiveSecondaryWeapon,
-  getEquipmentEffects,
+  getActiveMiningWeapon,
+  getPlayerRuntimeEffects,
   getWeaponCooldown,
-  hasMiningBeam,
   installEquipmentFromInventory as installEquipmentFromInventoryPure,
   isBlueprintUnlocked,
   createPlayerShipLoadout,
@@ -125,6 +137,7 @@ import {
   addOwnedShipId,
   addUniqueIds,
   createInitialPlayer,
+  createPatrolSupportShip,
   createRuntimeForSystem,
   currentShipStorageRecord,
   dialogueOpenPatch,
@@ -278,6 +291,44 @@ function withOnboardingProgress<T extends Partial<GameStore>>(state: GameStore, 
   return onboardingPatch ? ({ ...patch, ...onboardingPatch } as T) : patch;
 }
 
+const PATROL_INTERDICTION_COOLDOWN_SECONDS = 120;
+
+function withPatrolInterdiction<T extends Partial<GameStore>>(state: GameStore, patch: T): T {
+  const next = { ...state, ...patch } as GameStore;
+  const enteringSystem = patch.currentSystemId !== undefined && patch.currentSystemId !== state.currentSystemId;
+  const launchingFromStation = state.currentStationId !== undefined && next.currentStationId === undefined && next.screen === "flight";
+  if (!enteringSystem && !launchingFromStation) return patch;
+  if (next.currentStationId !== undefined || next.screen !== "flight") return patch;
+  const system = systemById[next.currentSystemId];
+  if (!system) return patch;
+  const factionHeat = patch.factionHeat ?? state.factionHeat;
+  const record = getFactionHeatRecord(factionHeat, system.factionId);
+  if ((record.interceptCooldownUntil ?? -Infinity) > next.gameClock) return patch;
+  const killOnSight = isFactionKillOnSight(factionHeat, system.factionId);
+  const wanted = isFactionWanted(factionHeat, system.factionId, next.gameClock);
+  if (!wanted && !killOnSight) return patch;
+  const runtime = patch.runtime ?? state.runtime;
+  const player = patch.player ?? state.player;
+  const spawnCount = killOnSight ? 2 : 1;
+  const existingSupport = runtime.enemies.filter((ship) => ship.supportWing && ship.hull > 0 && ship.deathTimer === undefined).length;
+  const supportShips = Array.from({ length: spawnCount }, (_, index) =>
+    createPatrolSupportShip(next.currentSystemId, existingSupport + index, "player", player.position, next.gameClock)
+  );
+  const message = killOnSight
+    ? "Kill-on-sight interdiction: patrol wing has your transponder."
+    : "Wanted interdiction: patrol support is moving to intercept.";
+  return {
+    ...patch,
+    factionHeat: applyFactionInterceptCooldown(factionHeat, system.factionId, next.gameClock + PATROL_INTERDICTION_COOLDOWN_SECONDS),
+    runtime: {
+      ...runtime,
+      enemies: [...runtime.enemies, ...supportShips],
+      effects: [...runtime.effects, ...supportShips.map((ship) => navEffect(ship.position, "INTERDICT"))],
+      message
+    }
+  } as T;
+}
+
 function isWatchableEconomyNpc(ship: FlightEntity | undefined): ship is FlightEntity {
   return !!ship?.economyStatus && ship.hull > 0 && ship.deathTimer === undefined;
 }
@@ -344,6 +395,10 @@ function reportRewardFaction(state: GameStore, ship: FlightEntity): FactionId {
 
 function canReportNpc(state: GameStore, ship: FlightEntity): boolean {
   return ship.role === "smuggler" || hasActiveCivilianDistress(ship, state.runtime.clock) || isHostileToPlayer(ship);
+}
+
+function stationForMissionAccess(state: GameStore, mission: MissionDefinition) {
+  return stationById[state.currentStationId ?? mission.sourceStationId ?? mission.destinationStationId] ?? stationById[mission.destinationStationId];
 }
 
 function npcRouteActionLabel(action: NpcRouteAction): string {
@@ -659,6 +714,26 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }
     });
     audioSystem.play("ui-click");
+  },
+  brokerBlackMarketAmnesty: (factionId: FactionId) => {
+    const state = get();
+    const station = state.currentStationId ? stationById[state.currentStationId] : undefined;
+    if (!station) return;
+    const result = applyBlackMarketAmnesty({
+      station,
+      targetFactionId: factionId,
+      factionHeat: state.factionHeat,
+      reputation: state.reputation,
+      player: state.player,
+      now: state.gameClock
+    });
+    if (result.ok) audioSystem.play("ui-click");
+    set({
+      player: result.player,
+      factionHeat: result.factionHeat,
+      reputation: result.reputation,
+      runtime: { ...state.runtime, message: result.message }
+    });
   },
   refreshEconomySnapshot: async () => {
     if (economyRefreshInFlight) return;
@@ -1205,14 +1280,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const result = advanceAutopilotPatch({ state, delta, now, gameClock, marketState, controlInput });
       if (result) {
         for (const event of result.audioEvents ?? []) audioSystem.play(event);
-        const stationAutoSave = result.autoSave ? writeStationAutoSave({ ...state, ...result.patch } as GameStore) : {};
-        set({ ...result.patch, ...stationAutoSave });
+        const navigatedPatch = withPatrolInterdiction(state, result.patch);
+        const stationAutoSave = result.autoSave ? writeStationAutoSave({ ...state, ...navigatedPatch } as GameStore) : {};
+        set({ ...navigatedPatch, ...stationAutoSave });
         return;
       }
     }
 
     let player = state.player;
-    const equipmentEffects = getEquipmentEffects(player.equipment);
+    const equipmentEffects = getPlayerRuntimeEffects(player);
     const primaryWeapon = getActivePrimaryWeapon(player.equipment);
     const secondaryWeapon = getActiveSecondaryWeapon(player.equipment);
     const pitch = clamp(player.rotation[0] + dy * 0.0022 * player.stats.handling, -1.15, 1.15);
@@ -1320,10 +1396,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
       .map((asteroid) => ({ asteroid, dist: distance(player.position, asteroid.position) }))
       .sort((a, b) => a.dist - b.dist)[0];
 
-    const miningRange = equipmentById["mining-beam"].weapon?.range ?? 360;
+    const miningWeapon = getActiveMiningWeapon(player.equipment);
+    const miningRange = miningWeapon?.range ?? 0;
     const miningActive = !!(
       input.firePrimary &&
-      hasMiningBeam(player.equipment) &&
+      miningWeapon &&
       nearestAsteroid &&
       nearestAsteroid.dist < miningRange &&
       player.energy > MINING_MIN_ENERGY
@@ -1354,13 +1431,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
           ...runtime,
           asteroids: runtime.asteroids.map((asteroid) => {
             if (asteroid.id !== nearestAsteroid.asteroid.id) return asteroid;
-            const progress = asteroid.miningProgress + getMiningProgressIncrement(asteroid.resource, delta);
+            const progress = asteroid.miningProgress + getMiningProgressIncrement(asteroid.resource, delta) * equipmentEffects.miningProgressMultiplier;
             if (progress < 1) {
               miningMessage = `Mining ${commodityById[asteroid.resource].name} vein · ${Math.round(progress * 100)}%`;
               return { ...asteroid, miningProgress: progress };
             }
 
-            const chunk = Math.min(MINING_YIELD_PER_CYCLE, asteroid.amount);
+            const miningYield = Math.max(1, Math.round(MINING_YIELD_PER_CYCLE + equipmentEffects.miningYieldBonus));
+            const chunk = Math.min(miningYield, asteroid.amount);
             const result = addCargoWithinCapacity(player, asteroid.resource, chunk, state.activeMissions);
             if (result.collected <= 0) {
               miningMessage = "Cargo hold full.";
@@ -1387,24 +1465,30 @@ export const useGameStore = create<GameStore>((set, get) => ({
           }),
           message: miningMessage
         };
-        player = { ...player, energy: clamp(player.energy - delta * MINING_ENERGY_DRAIN_PER_SECOND, 0, player.stats.energy) };
+        const baseMiningDrain = miningWeapon.id === "mining-beam" ? MINING_ENERGY_DRAIN_PER_SECOND : miningWeapon.energyCost;
+        player = { ...player, energy: clamp(player.energy - delta * baseMiningDrain * equipmentEffects.miningEnergyDrainMultiplier, 0, player.stats.energy) };
         primaryCooldown = Math.max(primaryCooldown, MINING_COOLDOWN_SECONDS);
       }
-    } else if (input.firePrimary && primaryWeapon && primaryCooldown <= 0 && player.energy >= primaryWeapon.energyCost) {
-      runtime.projectiles.push({
-        id: projectileId("laser"),
-        owner: "player",
-        kind: "laser",
-        position: add(player.position, scale(forward, 16)),
-        direction: target ? normalize(sub(target.position, player.position)) : forward,
-        speed: primaryWeapon.speed,
-        damage: primaryWeapon.damage,
-        life: primaryWeapon.speed > 0 ? primaryWeapon.range / primaryWeapon.speed : 1.4,
-        targetId: target?.id
-      });
-      audioSystem.play("laser");
-      player = { ...player, energy: player.energy - primaryWeapon.energyCost };
-      primaryCooldown = getWeaponCooldown(primaryWeapon, player.equipment);
+    } else if (input.firePrimary && primaryWeapon && primaryCooldown <= 0) {
+      const primaryEnergyCost = Math.ceil(primaryWeapon.energyCost * equipmentEffects.weaponEnergyCostMultiplier);
+      if (player.energy >= primaryEnergyCost) {
+        runtime.projectiles.push({
+          id: projectileId("laser"),
+          owner: "player",
+          kind: "laser",
+          position: add(player.position, scale(forward, 16)),
+          direction: target ? normalize(sub(target.position, player.position)) : forward,
+          speed: primaryWeapon.speed,
+          damage: Math.round(primaryWeapon.damage * equipmentEffects.weaponDamageMultiplier),
+          life: primaryWeapon.speed > 0 ? primaryWeapon.range / primaryWeapon.speed : 1.4,
+          targetId: target?.id
+        });
+        audioSystem.play("laser");
+        player = { ...player, energy: player.energy - primaryEnergyCost };
+        primaryCooldown = getWeaponCooldown(primaryWeapon, player.equipment);
+      } else {
+        runtime = { ...runtime, message: "Insufficient weapon energy." };
+      }
     }
 
     if (input.fireSecondary && secondaryWeapon && secondaryCooldown <= 0 && player.missiles > 0) {
@@ -1415,7 +1499,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         position: add(player.position, scale(forward, 18)),
         direction: target ? normalize(sub(target.position, player.position)) : forward,
         speed: secondaryWeapon.speed,
-        damage: secondaryWeapon.damage,
+        damage: Math.round(secondaryWeapon.damage * equipmentEffects.weaponDamageMultiplier),
         life: secondaryWeapon.speed > 0 ? secondaryWeapon.range / secondaryWeapon.speed : 3.6,
         targetId: target?.id
       });
@@ -1457,6 +1541,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         risk: systemById[state.currentSystemId].risk,
         playerPosition: player.position,
         playerHasContraband: (player.cargo["illegal-contraband"] ?? 0) > 0,
+        contrabandScanProgressMultiplier: equipmentEffects.contrabandScanProgressMultiplier,
         delta,
         now,
         graceUntil: runtime.graceUntil,
@@ -1474,7 +1559,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         const law = getContrabandLaw(state.currentSystemId);
         const contrabandAmount = player.cargo["illegal-contraband"] ?? 0;
         if (contrabandAmount > 0 && law.disposition === "fine-confiscate") {
-          const fine = contrabandAmount * CONTRABAND_FINE_PER_UNIT;
+          const fine = Math.ceil(contrabandAmount * CONTRABAND_FINE_PER_UNIT * equipmentEffects.contrabandFineMultiplier);
           const paid = Math.min(player.credits, fine);
           const cargo = { ...player.cargo };
           delete cargo["illegal-contraband"];
@@ -1575,10 +1660,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
         };
       } else {
         const scanDistance = distance(player.position, signal.position);
-        const inRange = scanDistance <= getEffectiveSignalScanRange(signal, player.equipment);
-        const inBand = inRange && isFrequencyInSignalBand(signal, runtime.explorationScan.frequency, player.equipment);
+        const inRange = scanDistance <= getEffectiveSignalScanRange(signal, equipmentEffects);
+        const inBand = inRange && isFrequencyInSignalBand(signal, runtime.explorationScan.frequency, equipmentEffects);
         const progress = clamp(
-          runtime.explorationScan.progress + (inBand ? (delta * getEffectiveSignalScanRateMultiplier(player.equipment)) / signal.scanTime : -delta * 0.22),
+          runtime.explorationScan.progress + (inBand ? (delta * getEffectiveSignalScanRateMultiplier(equipmentEffects)) / signal.scanTime : -delta * 0.22),
           0,
           1
         );
@@ -1630,8 +1715,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
             message: inRange
               ? inBand
                 ? `Frequency lock on ${signal.title}: ${Math.round(progress * 100)}%.`
-                : `Tuning ${signal.title}: align frequency inside ${getEffectiveSignalScanBand(signal, player.equipment).join("-")}.`
-              : `${signal.title} scan paused. Return within ${Math.round(getEffectiveSignalScanRange(signal, player.equipment))}m.`
+                : `Tuning ${signal.title}: align frequency inside ${getEffectiveSignalScanBand(signal, equipmentEffects).join("-")}.`
+              : `${signal.title} scan paused. Return within ${Math.round(getEffectiveSignalScanRange(signal, equipmentEffects))}m.`
           };
         }
       }
@@ -2169,7 +2254,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
   interact: () => {
     const state = get();
-    const equipmentEffects = getEquipmentEffects(state.player.equipment);
+    const equipmentEffects = getPlayerRuntimeEffects(state.player);
     const pendingNpcAction = state.npcInteraction?.pendingAction;
     if (pendingNpcAction) {
       const npc = economyNpcById(state, state.npcInteraction?.npcId);
@@ -2186,7 +2271,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
     const navigationTarget = getNearestNavigationTarget(state.currentSystemId, state.player.position, state.knownPlanetIds, {
       explorationState: state.explorationState,
-      installedEquipment: state.player.equipment
+      installedEquipment: state.player.equipment,
+      runtimeEffects: equipmentEffects
     });
     const nearSalvage = state.runtime.salvage
       .filter((salvage) => !salvage.recovered)
@@ -2283,7 +2369,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             inBand: false,
             distance: navigationTarget.distance
           },
-          message: `Signal handshake opened: ${signal.title}. Tune frequency into ${getEffectiveSignalScanBand(signal, state.player.equipment).join("-")}.`
+          message: `Signal handshake opened: ${signal.title}. Tune frequency into ${getEffectiveSignalScanBand(signal, equipmentEffects).join("-")}.`
         }
       });
       audioSystem.play("ui-click");
@@ -2370,12 +2456,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
   undock: () => {
     audioSystem.play("undock");
-    set((state) => withOnboardingProgress(state, undockPatch(state)));
+    set((state) => withOnboardingProgress(state, withPatrolInterdiction(state, undockPatch(state))));
   },
   startJumpToStation: (stationId) => {
     const state = get();
     const patch = startJumpToStationPatch(state, stationId);
-    if (patch) set(withOnboardingProgress(state, patch));
+    if (patch) set(withOnboardingProgress(state, withPatrolInterdiction(state, patch)));
   },
   startJumpToSystem: (systemId) => {
     const targetStation = getDefaultTargetStation(systemId);
@@ -2387,7 +2473,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const result = activateStargateJumpToStationPatch(state, stationId);
     if (!result) return;
     for (const event of result.audioEvents ?? []) audioSystem.play(event);
-    set(withOnboardingProgress(state, result.patch));
+    set(withOnboardingProgress(state, withPatrolInterdiction(state, result.patch)));
   },
   activateStargateJumpToSystem: (systemId) => {
     const targetStation = getDefaultTargetStation(systemId);
@@ -2406,7 +2492,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   jumpToSystem: (systemId) => {
     set((state) => {
       const patch = jumpToSystemPatch(state, systemId);
-      return patch ? withOnboardingProgress(state, patch) : {};
+      return patch ? withOnboardingProgress(state, withPatrolInterdiction(state, patch)) : {};
     });
   },
   buy: (commodityId, amount = 1) => {
@@ -2414,6 +2500,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (!state.currentStationId) return;
     const station = stationById[state.currentStationId];
     const system = systemById[state.currentSystemId];
+    const serviceAccess = getStationServiceAccess({
+      station,
+      service: "commodity-buy",
+      reputation: state.reputation,
+      factionHeat: state.factionHeat,
+      now: state.gameClock
+    });
+    if (!serviceAccess.ok) {
+      set({ runtime: { ...state.runtime, message: serviceAccess.message } });
+      return;
+    }
     const reservedCargo = getOccupiedCargo(state.player.cargo, state.activeMissions) - getCargoUsed(state.player.cargo);
     const applyLocalBuy = (latest: GameStore, reason?: string) => {
       const localStation = stationById[latest.currentStationId ?? ""];
@@ -2504,6 +2601,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (!state.currentStationId) return;
     const station = stationById[state.currentStationId];
     const system = systemById[state.currentSystemId];
+    const access = getEquipmentPurchaseAccess({
+      station,
+      equipment: equipmentById[equipmentId],
+      reputation: state.reputation,
+      factionHeat: state.factionHeat,
+      now: state.gameClock
+    });
+    if (!access.ok) {
+      set({ runtime: { ...state.runtime, message: access.message } });
+      return;
+    }
     const result = buyEquipment(state.player, station, system, equipmentId, amount, state.reputation.factions[station.factionId], state.marketState);
     set({ player: result.player, marketState: result.marketState ?? state.marketState, runtime: { ...state.runtime, message: result.message } });
   },
@@ -2531,7 +2639,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
       set({ runtime: { ...state.runtime, message: "Mission prerequisites are not complete." } });
       return;
     }
-    const result = acceptMissionPure(state.player, state.activeMissions, mission, state.gameClock);
+    const accessStation = stationForMissionAccess(state, mission);
+    const missionAccess = getMissionAcceptAccess({
+      station: accessStation,
+      mission,
+      reputation: state.reputation,
+      factionHeat: state.factionHeat,
+      now: state.gameClock
+    });
+    if (!missionAccess.ok) {
+      set({ runtime: { ...state.runtime, message: missionAccess.message } });
+      return;
+    }
+    const rewardMultiplier = mission.storyCritical ? 1 : getFactionRewardMultiplier(accessStation.factionId, state.reputation, state.factionHeat, state.gameClock);
+    const missionForAcceptance = rewardMultiplier === 1 ? mission : { ...mission, reward: Math.round(mission.reward * rewardMultiplier) };
+    const result = acceptMissionPure(state.player, state.activeMissions, missionForAcceptance, state.gameClock);
     const runtime = result.mission ? addMissionRuntimeEntity(state.runtime, result.mission, state.currentSystemId) : state.runtime;
     const dialogueScene = result.ok && !generatedDispatchMission ? getStoryMissionDialogueScene(mission.id, "accept") : undefined;
     const dialoguePatch = dialogueScene ? dialogueOpenPatch(state, dialogueScene.id) : {};
@@ -2629,9 +2751,24 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
   repairAndRefill: () => {
     const state = get();
+    const station = state.currentStationId ? stationById[state.currentStationId] : undefined;
+    if (station) {
+      const access = getStationServiceAccess({
+        station,
+        service: "repair",
+        reputation: state.reputation,
+        factionHeat: state.factionHeat,
+        now: state.gameClock
+      });
+      if (!access.ok) {
+        set({ runtime: { ...state.runtime, message: access.message } });
+        return;
+      }
+    }
     const missingHull = state.player.stats.hull - state.player.hull;
     const missileNeed = 6 - state.player.missiles;
-    const cost = Math.round(missingHull * 4 + missileNeed * 45);
+    const multiplier = station ? getRepairCostMultiplier(station.factionId, state.reputation, state.factionHeat, state.gameClock) : 1;
+    const cost = Math.round((missingHull * 4 + missileNeed * 45) * multiplier);
     if (state.player.credits < cost) {
       set({ runtime: { ...state.runtime, message: "Not enough credits for repair and missile refill." } });
       return;
@@ -2645,6 +2782,21 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const state = get();
     const ship = shipById[shipId];
     if (!ship || state.player.ownedShips.includes(shipId)) return;
+    const station = state.currentStationId ? stationById[state.currentStationId] : undefined;
+    if (station) {
+      const access = getShipPurchaseAccess({
+        station,
+        ship,
+        reputation: state.reputation,
+        factionHeat: state.factionHeat,
+        now: state.gameClock,
+        player: state.player
+      });
+      if (!access.ok) {
+        set({ runtime: { ...state.runtime, message: access.message } });
+        return;
+      }
+    }
     if (state.player.credits < ship.price) {
       set({ runtime: { ...state.runtime, message: "Not enough credits for that ship." } });
       return;
@@ -2698,6 +2850,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
   unlockBlueprint: (equipmentId) => {
     const state = get();
+    const station = state.currentStationId ? stationById[state.currentStationId] : undefined;
+    if (station) {
+      const access = getStationServiceAccess({
+        station,
+        service: "blueprint-workshop",
+        reputation: state.reputation,
+        factionHeat: state.factionHeat,
+        now: state.gameClock
+      });
+      if (!access.ok) {
+        set({ runtime: { ...state.runtime, message: access.message } });
+        return;
+      }
+    }
     const result = unlockBlueprintPure(state.player, equipmentId);
     if (result.ok) audioSystem.play("ui-click");
     set({
@@ -2707,6 +2873,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
   craftEquipment: (equipmentId) => {
     const state = get();
+    const serviceStation = state.currentStationId ? stationById[state.currentStationId] : undefined;
+    if (serviceStation) {
+      const access = getStationServiceAccess({
+        station: serviceStation,
+        service: "blueprint-workshop",
+        reputation: state.reputation,
+        factionHeat: state.factionHeat,
+        now: state.gameClock
+      });
+      if (!access.ok) {
+        set({ runtime: { ...state.runtime, message: access.message } });
+        return;
+      }
+    }
     if (!(equipmentId in equipmentById)) {
       set({ runtime: { ...state.runtime, message: "Unknown equipment blueprint." } });
       return;

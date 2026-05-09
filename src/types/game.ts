@@ -81,6 +81,17 @@ export type FactionId =
   | "independent-pirates"
   | "unknown-drones";
 
+export type FactionStandingTier = "kill-on-sight" | "hostile" | "neutral" | "friendly" | "allied";
+
+export type StationServiceId =
+  | "commodity-buy"
+  | "equipment-buy"
+  | "repair"
+  | "shipyard-buy"
+  | "mission-accept"
+  | "blueprint-workshop"
+  | "amnesty-broker";
+
 export type StationArchetype =
   | "Trade Hub"
   | "Mining Station"
@@ -129,12 +140,18 @@ export type EquipmentId =
   | "homing-missile"
   | "torpedo-rack"
   | "mining-beam"
+  | "industrial-mining-beam"
   | "shield-booster"
   | "shield-matrix"
   | "cargo-expansion"
+  | "ore-processor"
+  | "shielded-holds"
   | "afterburner"
   | "scanner"
   | "survey-array"
+  | "decoy-transponder"
+  | "weapon-amplifier"
+  | "survey-lab"
   | "armor-plating"
   | "energy-reactor"
   | "quantum-reactor"
@@ -180,6 +197,20 @@ export interface ShipStats {
   engineeringSlots: number;
 }
 
+export type ShipCareer = "starter" | "hauler" | "miner" | "smuggler" | "fighter" | "gunship" | "explorer";
+
+export interface ShipTraitDefinition {
+  name: string;
+  description: string;
+  modifiers: EquipmentModifiers;
+}
+
+export interface ShipPurchaseRequirement {
+  stationArchetypes?: StationArchetype[];
+  minTechLevel?: TechLevel;
+  requiredUnlockedBlueprintIds?: EquipmentId[];
+}
+
 export interface ShipDefinition {
   id: string;
   name: string;
@@ -187,6 +218,9 @@ export interface ShipDefinition {
   price: number;
   stats: ShipStats;
   equipment: EquipmentId[];
+  career?: ShipCareer;
+  trait?: ShipTraitDefinition;
+  purchaseRequirement?: ShipPurchaseRequirement;
 }
 
 export interface WeaponDefinition {
@@ -236,10 +270,17 @@ export interface EquipmentModifiers {
   hullRegenDelay?: number;
   scannerRangeBonus?: number;
   miningHudRangeBonus?: number;
+  miningProgressMultiplier?: number;
+  miningYieldBonus?: number;
+  miningEnergyDrainMultiplier?: number;
   signalScanRangeBonus?: number;
   signalScanBandBonus?: number;
   signalScanRateMultiplier?: number;
   weaponCooldownMultiplier?: number;
+  weaponDamageMultiplier?: number;
+  weaponEnergyCostMultiplier?: number;
+  contrabandScanProgressMultiplier?: number;
+  contrabandFineMultiplier?: number;
   echoLockRangeBonus?: number;
   echoLockRateMultiplier?: number;
 }
@@ -558,6 +599,7 @@ export interface FactionHeatRecord {
   lastIncidentAt?: number;
   warningUntil?: number;
   wantedUntil?: number;
+  interceptCooldownUntil?: number;
 }
 
 export interface FactionHeatState {

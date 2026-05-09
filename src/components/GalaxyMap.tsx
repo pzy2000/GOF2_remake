@@ -318,6 +318,9 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                     {getFactionHeatRecord(factionHeat, selectedSystem.factionId).fineCredits > 0
                       ? ` · ${translateText("Fine", locale)} ${getFactionHeatRecord(factionHeat, selectedSystem.factionId).fineCredits.toLocaleString()} cr`
                       : ""}
+                    {isFactionWanted(factionHeat, selectedSystem.factionId, gameClock)
+                      ? ` · ${translateText("Interdiction risk", locale)}`
+                      : ""}
                   </p>
                 </div>
               ) : null}

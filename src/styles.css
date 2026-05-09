@@ -1324,6 +1324,16 @@ h3 {
   line-height: 1.35;
 }
 
+.faction-consequence-actions {
+  display: flex !important;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.station-service-brief {
+  max-width: 760px;
+}
+
 .economy-panel {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
@@ -2345,6 +2355,12 @@ button.equipment-trigger {
 .current-ship-card {
   border-color: rgba(255, 193, 103, 0.66);
   box-shadow: inset 0 0 18px rgba(255, 193, 103, 0.08);
+}
+
+.service-lock-reason {
+  border-left: 2px solid rgba(255, 155, 103, 0.7);
+  padding-left: 8px;
+  color: #ffd69a !important;
 }
 
 .ship-purchase-modal {

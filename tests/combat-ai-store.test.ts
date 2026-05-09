@@ -121,6 +121,36 @@ describe("combat AI store wiring", () => {
     expect(state.runtime.message).toContain("confiscated");
   });
 
+  it("applies smuggling hull and equipment modifiers to patrol scans and fines", async () => {
+    const store = await freshStore();
+    const smugglingEquipment = ["shielded-holds", "decoy-transponder"] as const;
+    store.setState((state) => ({
+      currentSystemId: "helion-reach",
+      player: {
+        ...state.player,
+        shipId: "veil-runner",
+        equipment: [...smugglingEquipment],
+        position: [0, 0, 0],
+        credits: 1000,
+        cargo: { "illegal-contraband": 2 }
+      },
+      runtime: { ...state.runtime, enemies: [patrol()], message: "", clock: 0 }
+    }));
+
+    store.getState().tick(3.2);
+    expect(store.getState().player.cargo["illegal-contraband"]).toBe(2);
+    expect(store.getState().runtime.enemies[0].scanProgress).toBeLessThan(0.5);
+
+    store.setState((state) => ({
+      player: { ...state.player, credits: 1000, cargo: { "illegal-contraband": 2 } },
+      runtime: { ...state.runtime, enemies: [{ ...patrol(), scanProgress: 0.99 }], message: "", clock: 0 }
+    }));
+    store.getState().tick(0.1);
+
+    expect(store.getState().player.cargo["illegal-contraband"]).toBeUndefined();
+    expect(store.getState().player.credits).toBe(235);
+  });
+
   it("turns patrols hostile in hostile-pursuit systems without confiscating cargo", async () => {
     const store = await freshStore();
     store.setState((state) => ({

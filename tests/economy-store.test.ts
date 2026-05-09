@@ -1070,6 +1070,7 @@ describe("economy store integration", () => {
     store.setState((state) => ({
       currentSystemId: "ashen-drift",
       currentStationId: "black-arcade",
+      reputation: { factions: { ...state.reputation.factions, "independent-pirates": 0 } },
       knownSystems: [...new Set([...state.knownSystems, "ashen-drift", "vantara"])],
       knownPlanetIds: [...new Set([...state.knownPlanetIds, "black-arc", "vantara-command"])],
       marketState,

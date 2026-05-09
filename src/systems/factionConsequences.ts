@@ -87,7 +87,7 @@ export function normalizeFactionHeat(input?: Partial<FactionHeatState> | null): 
   const factions: FactionHeatState["factions"] = {};
   for (const [factionId, record] of Object.entries(input?.factions ?? {})) {
     const normalized = normalizeFactionHeatRecord(record);
-    if (normalized.heat > 0 || normalized.fineCredits > 0 || normalized.offenseCount > 0 || normalized.warningUntil || normalized.wantedUntil) {
+    if (normalized.heat > 0 || normalized.fineCredits > 0 || normalized.offenseCount > 0 || normalized.warningUntil || normalized.wantedUntil || normalized.interceptCooldownUntil) {
       factions[factionId as FactionId] = normalized;
     }
   }
@@ -101,7 +101,8 @@ export function normalizeFactionHeatRecord(input?: Partial<FactionHeatRecord> | 
     offenseCount: Math.max(0, Math.round(input?.offenseCount ?? 0)),
     lastIncidentAt: finiteOrUndefined(input?.lastIncidentAt),
     warningUntil: finiteOrUndefined(input?.warningUntil),
-    wantedUntil: finiteOrUndefined(input?.wantedUntil)
+    wantedUntil: finiteOrUndefined(input?.wantedUntil),
+    interceptCooldownUntil: finiteOrUndefined(input?.interceptCooldownUntil)
   };
 }
 
@@ -209,9 +210,10 @@ export function applyFactionHeatDecay(factionHeat: FactionHeatState, deltaSecond
       ...normalized,
       heat,
       warningUntil: normalized.warningUntil && normalized.warningUntil > now ? normalized.warningUntil : undefined,
-      wantedUntil: normalized.wantedUntil && normalized.wantedUntil > now ? normalized.wantedUntil : undefined
+      wantedUntil: normalized.wantedUntil && normalized.wantedUntil > now ? normalized.wantedUntil : undefined,
+      interceptCooldownUntil: normalized.interceptCooldownUntil && normalized.interceptCooldownUntil > now ? normalized.interceptCooldownUntil : undefined
     };
-    if (next.heat > 0 || next.fineCredits > 0 || next.offenseCount > 0 || next.warningUntil || next.wantedUntil) {
+    if (next.heat > 0 || next.fineCredits > 0 || next.offenseCount > 0 || next.warningUntil || next.wantedUntil || next.interceptCooldownUntil) {
       factions[factionId as FactionId] = next;
     }
   }
@@ -254,6 +256,22 @@ export function payFactionFine(
       now
     )
   };
+}
+
+export function setFactionHeatRecord(factionHeat: FactionHeatState, factionId: FactionId, record: FactionHeatRecord): FactionHeatState {
+  return withRecord(factionHeat, factionId, record);
+}
+
+export function applyFactionInterceptCooldown(
+  factionHeat: FactionHeatState,
+  factionId: FactionId,
+  cooldownUntil: number
+): FactionHeatState {
+  const record: FactionHeatRecord = {
+    ...getFactionHeatRecord(factionHeat, factionId),
+    interceptCooldownUntil: cooldownUntil
+  };
+  return withRecord(factionHeat, factionId, record);
 }
 
 export function createBountyNotification(subjectName: string, credits: number, now: number): LawNotification {

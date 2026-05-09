@@ -45,6 +45,10 @@
   "shipModels": {
     "sparrow-mk1": "/assets/generated/ships/sparrow-mk1.glb",
     "mule-lx": "/assets/generated/ships/mule-lx.glb",
+    "prospector-rig": "/assets/generated/ships/mule-lx.glb",
+    "veil-runner": "/assets/generated/ships/raptor-v.glb",
+    "talon-s": "/assets/generated/ships/raptor-v.glb",
+    "wayfarer-x": "/assets/generated/ships/horizon-ark.glb",
     "raptor-v": "/assets/generated/ships/raptor-v.glb",
     "bastion-7": "/assets/generated/ships/bastion-7.glb",
     "horizon-ark": "/assets/generated/ships/horizon-ark.glb"

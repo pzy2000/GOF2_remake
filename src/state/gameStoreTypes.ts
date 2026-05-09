@@ -117,6 +117,7 @@ export interface GameStore {
   completeMission: (missionId: string) => void;
   repairAndRefill: () => void;
   payFactionFine: (factionId: FactionId) => void;
+  brokerBlackMarketAmnesty: (factionId: FactionId) => void;
   buyShip: (shipId: string) => void;
   switchShip: (shipId: string) => void;
   unlockBlueprint: (equipmentId: EquipmentId) => void;

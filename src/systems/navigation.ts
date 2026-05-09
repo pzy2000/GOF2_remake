@@ -2,6 +2,7 @@ import { planetById, planets, stations, stationById, systemById, systems } from 
 import type { EquipmentId, ExplorationSignalDefinition, ExplorationState, PlanetDefinition, StationDefinition, Vec3 } from "../types/game";
 import { getJumpGatePosition } from "./autopilot";
 import { STATION_INTERACTION_RANGE } from "./equipment";
+import type { EquipmentRuntimeEffects } from "./equipment";
 import { getEffectiveSignalScanRange, getIncompleteExplorationSignals, getVisibleStationsForSystem, hasRequiredSignalEquipment, isExplorationSignalDiscovered, requiredSignalEquipmentLabel } from "./exploration";
 import { distance } from "./math";
 
@@ -65,6 +66,7 @@ export interface NavigationTargetCue {
 export interface NavigationOptions {
   explorationState?: ExplorationState;
   installedEquipment?: EquipmentId[];
+  runtimeEffects?: EquipmentRuntimeEffects;
 }
 
 export function getNearestNavigationTarget(
@@ -110,7 +112,7 @@ export function getNearestNavigationTarget(
             signal,
             position: signal.position,
             distance: dist,
-            inRange: dist <= getEffectiveSignalScanRange(signal, options.installedEquipment),
+            inRange: dist <= getEffectiveSignalScanRange(signal, options.runtimeEffects ?? options.installedEquipment),
             equipmentReady: hasRequiredSignalEquipment(signal, options.installedEquipment),
             requiredEquipmentLabel: requiredSignalEquipmentLabel(signal) || undefined
           };

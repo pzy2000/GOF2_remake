@@ -68,8 +68,14 @@ const commodityFallbacks: Partial<Record<CommodityId, number>> = {
 const equipmentFallbacks: Partial<Record<EquipmentId, number>> = {
   railgun: 1,
   "torpedo-rack": 2,
+  "industrial-mining-beam": 3,
   "shield-matrix": 4,
+  "ore-processor": 5,
+  "shielded-holds": 5,
   "survey-array": 7,
+  "decoy-transponder": 7,
+  "weapon-amplifier": 11,
+  "survey-lab": 7,
   "quantum-reactor": 9,
   "echo-nullifier": 7,
   "relic-cartographer": 7

@@ -36,6 +36,16 @@ import {
 } from "../systems/marketMissions";
 import { getEconomyEventSystemName, getEconomyFlightRouteSummary } from "../systems/economyRoutes";
 import { getFactionHeatLevelLabel, getFactionHeatRecord } from "../systems/factionConsequences";
+import {
+  getBlackMarketAmnestyOffer,
+  getEquipmentPurchaseAccess,
+  getFactionRewardMultiplier,
+  getFactionStandingTier,
+  getMissionAcceptAccess,
+  getRepairCostMultiplier,
+  getShipPurchaseAccess,
+  getStationServiceAccess
+} from "../systems/factionServices";
 import { reputationLabel } from "../systems/reputation";
 import { GalaxyMap } from "./GalaxyMap";
 import { AtlasIcon } from "./AtlasIcon";
@@ -50,6 +60,7 @@ import {
   canUnlockBlueprint,
   getEquipmentComparison,
   getEquipmentSlotUsage,
+  getShipCareerLabel,
   getShipSlotCapacity,
   hasCraftMaterials,
   isBlueprintUnlocked,
@@ -57,7 +68,7 @@ import {
 } from "../systems/equipment";
 import { getContrabandLawSummary } from "../systems/combatAi";
 import { hasActiveCivilianDistress } from "../state/domains/combatRuntime";
-import type { AssetManifest, BlueprintPath, CargoHold, CommodityId, EquipmentId, EquipmentSlotType, FactionId, MissionDefinition, StationTab } from "../types/game";
+import type { AssetManifest, BlueprintPath, CargoHold, CommodityId, EquipmentId, EquipmentSlotType, FactionId, MissionDefinition, ShipDefinition, StationTab } from "../types/game";
 import {
   formatCargoContents,
   formatCargoLabel,
@@ -93,6 +104,17 @@ const equipmentSlotLabels: Record<EquipmentSlotType, string> = {
 };
 const blueprintPathOrder: BlueprintPath[] = ["combat", "defense", "exploration", "engineering"];
 const EQUIPMENT_POPOVER_HOVER_DELAY_MS = 2000;
+
+function standingTierLabel(tier: ReturnType<typeof getFactionStandingTier>): string {
+  if (tier === "kill-on-sight") return "Kill-on-sight";
+  return tier.charAt(0).toUpperCase() + tier.slice(1);
+}
+
+function repairAndRefillCost(player: ReturnType<typeof useGameStore.getState>["player"], multiplier = 1): number {
+  const missingHull = player.stats.hull - player.hull;
+  const missileNeed = 6 - player.missiles;
+  return Math.round((missingHull * 4 + missileNeed * 45) * multiplier);
+}
 
 type EquipmentPopoverMode = "preview" | "pinned";
 
@@ -310,6 +332,8 @@ export function StationScreen() {
   const tab = useGameStore((state) => state.stationTab);
   const manifest = useGameStore((state) => state.assetManifest);
   const player = useGameStore((state) => state.player);
+  const reputation = useGameStore((state) => state.reputation);
+  const factionHeat = useGameStore((state) => state.factionHeat);
   const activeMissions = useGameStore((state) => state.activeMissions);
   const completedMissionIds = useGameStore((state) => state.completedMissionIds);
   const onboardingState = useGameStore((state) => state.onboardingState);
@@ -335,6 +359,11 @@ export function StationScreen() {
     gameClock
   });
   const onboardingStepId = onboardingView.activeStep?.id;
+  const stationStandingTier = getFactionStandingTier(reputation.factions[station.factionId]);
+  const stationHeatRecord = getFactionHeatRecord(factionHeat, station.factionId);
+  const stationHeatLabel = getFactionHeatLevelLabel(stationHeatRecord);
+  const marketAccess = getStationServiceAccess({ station, service: "commodity-buy", reputation, factionHeat, now: gameClock });
+  const advancedAccess = getStationServiceAccess({ station, service: "repair", reputation, factionHeat, now: gameClock });
   const stationBackground: CSSProperties = {
     backgroundImage: `linear-gradient(rgba(3, 7, 18, 0.88), rgba(3, 7, 18, 0.96)), url(${manifest.nebulaBg})`
   };
@@ -348,6 +377,10 @@ export function StationScreen() {
           <p className="eyebrow">{localizeStationArchetype(station.archetype, locale)}</p>
           <h1>{localizeStationName(station.id, locale, station.name)}</h1>
           <p>{formatTechLevel(locale, station.techLevel)} · {localizeFactionName(station.factionId, locale, factionNames[station.factionId])}</p>
+          <p className={marketAccess.ok && advancedAccess.ok ? "muted" : "warning-text"} data-testid="station-service-brief">
+            {translateText("Standing", locale)} {translateText(standingTierLabel(stationStandingTier), locale)} · {translateText("Legal Status", locale)} {translateText(stationHeatLabel, locale)}
+            {marketAccess.ok && advancedAccess.ok ? ` · ${translateText(advancedAccess.message, locale)}` : ` · ${translateText(!marketAccess.ok ? marketAccess.message : advancedAccess.message, locale)}`}
+          </p>
         </div>
         <div className="station-actions">
           <button onClick={() => saveGame()}>{translateText("Quick Save", locale)}</button>
@@ -401,7 +434,9 @@ function MarketTab() {
   const player = useGameStore((state) => state.player);
   const station = useGameStore((state) => stationById[state.currentStationId ?? "helion-prime"]);
   const system = useGameStore((state) => systemById[state.currentSystemId]);
-  const reputation = useGameStore((state) => state.reputation.factions[station.factionId]);
+  const reputation = useGameStore((state) => state.reputation);
+  const factionHeat = useGameStore((state) => state.factionHeat);
+  const gameClock = useGameStore((state) => state.gameClock);
   const marketState = useGameStore((state) => state.marketState);
   const knownSystems = useGameStore((state) => state.knownSystems);
   const knownPlanetIds = useGameStore((state) => state.knownPlanetIds);
@@ -415,6 +450,7 @@ function MarketTab() {
   const listedCommodities = commodities.filter((item) => isCommodityVisibleInMarket(item.id, station, player.cargo));
   const listedEquipment = equipmentList.filter((item) => canBuyEquipmentAtStation(item.id, station) || (player.equipmentInventory?.[item.id] ?? 0) > 0);
   const occupiedCargo = getOccupiedCargo(player.cargo, activeMissions);
+  const commodityBuyAccess = getStationServiceAccess({ station, service: "commodity-buy", reputation, factionHeat, now: gameClock });
   return (
     <>
       <div className="table-panel">
@@ -425,8 +461,8 @@ function MarketTab() {
           {listedCommodities.map((commodity) => {
             const canBuy = canBuyCommodityAtStation(commodity.id, station);
             const entry = getMarketEntry(marketState, station.id, commodity.id);
-            const buyPrice = getCommodityPrice(commodity.id, station, system, reputation, "buy", entry);
-            const sellPrice = getCommodityPrice(commodity.id, station, system, reputation, "sell", entry);
+            const buyPrice = getCommodityPrice(commodity.id, station, system, reputation.factions[station.factionId], "buy", entry);
+            const sellPrice = getCommodityPrice(commodity.id, station, system, reputation.factions[station.factionId], "sell", entry);
             const tag = getMarketTag(entry, station, system, commodity.id);
             return (
               <div className="market-row" data-testid={`market-row-${commodity.id}`} key={commodity.id}>
@@ -441,8 +477,8 @@ function MarketTab() {
                 <b>{canBuy ? formatCredits(locale, buyPrice, true) : "—"}/{formatCredits(locale, sellPrice, true)}</b>
                 <button
                   onClick={() => buy(commodity.id, 1)}
-                  disabled={!canBuy || entry.stock < 1 || occupiedCargo >= player.stats.cargoCapacity}
-                  title={!canBuy ? translateText("Not stocked at this station", locale) : entry.stock < 1 ? translateText("Out of stock", locale) : undefined}
+                  disabled={!commodityBuyAccess.ok || !canBuy || entry.stock < 1 || occupiedCargo >= player.stats.cargoCapacity}
+                  title={!commodityBuyAccess.ok ? translateText(commodityBuyAccess.message, locale) : !canBuy ? translateText("Not stocked at this station", locale) : entry.stock < 1 ? translateText("Out of stock", locale) : undefined}
                 >
                   {translateText("Buy", locale)}
                 </button>
@@ -453,9 +489,10 @@ function MarketTab() {
           <h3 className="market-section-title">{translateText("Equipment", locale)}</h3>
           {listedEquipment.map((equipment) => {
             const canBuy = canBuyEquipmentAtStation(equipment.id, station);
+            const purchaseAccess = getEquipmentPurchaseAccess({ station, equipment, reputation, factionHeat, now: gameClock });
             const entry = getMarketEntry(marketState, station.id, equipment.id);
-            const buyPrice = getEquipmentPrice(equipment.id, station, system, reputation, "buy", entry);
-            const sellPrice = getEquipmentPrice(equipment.id, station, system, reputation, "sell", entry);
+            const buyPrice = getEquipmentPrice(equipment.id, station, system, reputation.factions[station.factionId], "buy", entry);
+            const sellPrice = getEquipmentPrice(equipment.id, station, system, reputation.factions[station.factionId], "sell", entry);
             const inventoryCount = player.equipmentInventory?.[equipment.id] ?? 0;
             return (
               <div className="market-row equipment-market-row" data-testid={`market-equipment-row-${equipment.id}`} key={equipment.id}>
@@ -475,8 +512,8 @@ function MarketTab() {
                 <b>{canBuy ? formatCredits(locale, buyPrice, true) : "—"}/{formatCredits(locale, sellPrice, true)}</b>
                 <button
                   onClick={() => buyEquipmentAction(equipment.id, 1)}
-                  disabled={!canBuy || entry.stock < 1 || player.credits < buyPrice}
-                  title={!canBuy ? requiresTechStationLabel(equipment.techLevel, locale) : entry.stock < 1 ? translateText("Out of stock", locale) : undefined}
+                  disabled={!purchaseAccess.ok || !canBuy || entry.stock < 1 || player.credits < buyPrice}
+                  title={!purchaseAccess.ok ? translateText(purchaseAccess.message, locale) : !canBuy ? requiresTechStationLabel(equipment.techLevel, locale) : entry.stock < 1 ? translateText("Out of stock", locale) : undefined}
                 >
                   {translateText("Buy", locale)}
                 </button>
@@ -747,6 +784,10 @@ function HangarTab() {
   const manifest = useGameStore((state) => state.assetManifest);
   const locale = useGameStore((state) => state.locale);
   const player = useGameStore((state) => state.player);
+  const station = useGameStore((state) => stationById[state.currentStationId ?? "helion-prime"]);
+  const reputation = useGameStore((state) => state.reputation);
+  const factionHeat = useGameStore((state) => state.factionHeat);
+  const gameClock = useGameStore((state) => state.gameClock);
   const activeMissions = useGameStore((state) => state.activeMissions);
   const repairAndRefill = useGameStore((state) => state.repairAndRefill);
   const installFromInventory = useGameStore((state) => state.installEquipmentFromInventory);
@@ -759,12 +800,16 @@ function HangarTab() {
   const inventoryEntries = (Object.entries(player.equipmentInventory ?? {}) as [EquipmentId, number | undefined][])
     .filter(([, amount]) => (amount ?? 0) > 0)
     .filter(([id]) => inventoryFilter === "all" || equipmentById[id].slotType === inventoryFilter);
+  const repairAccess = getStationServiceAccess({ station, service: "repair", reputation, factionHeat, now: gameClock });
+  const repairMultiplier = getRepairCostMultiplier(station.factionId, reputation, factionHeat, gameClock);
+  const repairCost = repairAndRefillCost(player, repairMultiplier);
   return (
     <>
       <div className="hangar-build-grid">
         <section className="hangar-panel">
           <h2>{translateText("Current Ship", locale)}</h2>
-          <p>{localizeShipName(ship.id, locale, ship.name)} · {translateText(ship.role, locale)}</p>
+          <p>{localizeShipName(ship.id, locale, ship.name)} · {translateText(ship.role, locale)} · {translateText(getShipCareerLabel(ship), locale)}</p>
+          {ship.trait ? <p className="muted">{translateText("Trait", locale)}: {translateText(ship.trait.name, locale)} · {translateText(ship.trait.description, locale)}</p> : null}
           <div className="stat-grid">
             <span>{translateText("Hull", locale)} {Math.round(player.hull)}/{player.stats.hull}</span>
             <span>{translateText("Shield", locale)} {Math.round(player.shield)}/{player.stats.shield}</span>
@@ -785,7 +830,10 @@ function HangarTab() {
               );
             })}
           </div>
-          <button className="primary" onClick={repairAndRefill}>{translateText("Repair Hull and Refill Missiles", locale)}</button>
+          <button className="primary" onClick={repairAndRefill} disabled={!repairAccess.ok} title={repairAccess.ok ? undefined : translateText(repairAccess.message, locale)}>
+            {translateText("Repair Hull and Refill Missiles", locale)} · {formatCredits(locale, repairCost, true)}
+          </button>
+          {repairMultiplier < 1 ? <p className="muted">{translateText("Faction repair discount active.", locale)}</p> : null}
         </section>
         <section className="hangar-panel hangar-scroll-panel">
           <h2>{translateText("Installed Equipment", locale)}</h2>
@@ -863,6 +911,10 @@ function shipCareerText(shipId: string): string {
   const careers: Record<string, string> = {
     "sparrow-mk1": "Career: scout, starter bounties, light exploration",
     "mule-lx": "Career: trade routes, mining support, cargo contracts",
+    "prospector-rig": "Career: mining, ore processing, industrial extraction",
+    "veil-runner": "Career: smuggling, fast courier work, heat management",
+    "talon-s": "Career: bounty hunting, strike combat, escort interception",
+    "wayfarer-x": "Career: deep exploration, signal work, recovery sweeps",
     "raptor-v": "Career: bounty hunting, fast interception, light combat",
     "bastion-7": "Career: heavy combat, escort duty, hostile lanes",
     "horizon-ark": "Career: late-game exploration, hybrid trade, advanced systems"
@@ -874,6 +926,10 @@ function shipBlueprintPathText(shipId: string): string {
   const paths: Record<string, string> = {
     "sparrow-mk1": "Recommended blueprints: Exploration Systems + starter Combat",
     "mule-lx": "Recommended blueprints: Engineering & Trade + Exploration Systems",
+    "prospector-rig": "Recommended blueprints: Mining Beam -> Industrial Mining Beam -> Ore Processor",
+    "veil-runner": "Recommended blueprints: Cargo Expansion -> Shielded Holds -> Decoy Transponder",
+    "talon-s": "Recommended blueprints: Plasma Cannon + Targeting Computer -> Weapon Amplifier",
+    "wayfarer-x": "Recommended blueprints: Scanner -> Survey Array -> Survey Lab",
     "raptor-v": "Recommended blueprints: Combat Systems + Engineering fire-control",
     "bastion-7": "Recommended blueprints: Defense Systems + heavy Combat",
     "horizon-ark": "Recommended blueprints: Exploration Systems + Engineering & Trade"
@@ -881,14 +937,33 @@ function shipBlueprintPathText(shipId: string): string {
   return paths[shipId] ?? "Recommended blueprints: balanced development";
 }
 
+function formatShipPurchaseRequirement(ship: ShipDefinition, locale: Locale): string | undefined {
+  const requirement = ship.purchaseRequirement;
+  if (!requirement) return undefined;
+  const parts: string[] = [];
+  if (requirement.stationArchetypes?.length) {
+    parts.push(requirement.stationArchetypes.map((archetype) => localizeStationArchetype(archetype, locale)).join(" / "));
+  }
+  if (requirement.minTechLevel) parts.push(formatTechLevel(locale, requirement.minTechLevel, true));
+  if (requirement.requiredUnlockedBlueprintIds?.length) {
+    parts.push(`${translateText("Blueprint", locale)}: ${requirement.requiredUnlockedBlueprintIds.map((id) => localizeEquipmentName(id, locale, equipmentName(id))).join(", ")}`);
+  }
+  return parts.join(" · ");
+}
+
 function ShipyardTab() {
   const locale = useGameStore((state) => state.locale);
   const player = useGameStore((state) => state.player);
   const currentStationId = useGameStore((state) => state.currentStationId);
+  const station = useGameStore((state) => stationById[state.currentStationId ?? "ptd-home"]);
+  const reputation = useGameStore((state) => state.reputation);
+  const factionHeat = useGameStore((state) => state.factionHeat);
+  const gameClock = useGameStore((state) => state.gameClock);
   const buyShip = useGameStore((state) => state.buyShip);
   const switchShip = useGameStore((state) => state.switchShip);
   const [pendingShipId, setPendingShipId] = useState<string | null>(null);
   const pendingShip = pendingShipId ? shipById[pendingShipId] : undefined;
+  const pendingAccess = pendingShip ? getShipPurchaseAccess({ station, ship: pendingShip, reputation, factionHeat, now: gameClock, player }) : undefined;
   const currentShip = shipById[player.shipId];
   return (
     <div className="shipyard-panel">
@@ -901,12 +976,17 @@ function ShipyardTab() {
           const owned = current || player.ownedShips.includes(ship.id);
           const storedStation = storedRecord ? stationById[storedRecord.stationId] : undefined;
           const canSwitch = !!storedRecord && currentStationId === storedRecord.stationId;
+          const purchaseAccess = getShipPurchaseAccess({ station, ship, reputation, factionHeat, now: gameClock, player });
+          const purchaseRequirement = formatShipPurchaseRequirement(ship, locale);
           return (
             <article key={ship.id} className={`ship-card ${current ? "current-ship-card" : ""}`}>
               <h3>{localizeShipName(ship.id, locale, ship.name)}</h3>
-              <p>{translateText(ship.role, locale)}</p>
+              <p>{translateText(ship.role, locale)} · {translateText(getShipCareerLabel(ship), locale)}</p>
               <p>{translateText(shipCareerText(ship.id), locale)}</p>
               <p>{translateText(shipBlueprintPathText(ship.id), locale)}</p>
+              {ship.trait ? <p>{translateText("Trait", locale)}: {translateText(ship.trait.name, locale)} · {translateText(ship.trait.description, locale)}</p> : null}
+              {purchaseRequirement ? <p>{translateText("Requirement", locale)}: {purchaseRequirement}</p> : null}
+              {!purchaseAccess.ok ? <p className="service-lock-reason">{translateText(purchaseAccess.message, locale)}</p> : null}
               <p>{translateText("Hull", locale)} {ship.stats.hull} · {translateText("Shield", locale)} {ship.stats.shield} · {translateText("Speed", locale)} {ship.stats.speed} · {translateText("Cargo", locale)} {ship.stats.cargoCapacity}</p>
               <p>{translateText("Slots", locale)} {ship.stats.primarySlots}P / {ship.stats.secondarySlots}S / {ship.stats.utilitySlots}U / {ship.stats.defenseSlots}D / {ship.stats.engineeringSlots}E</p>
               <p>{stockLoadoutLabel(locale)}: {ship.equipment.map((id) => localizeEquipmentName(id, locale, equipmentName(id))).join(", ")}</p>
@@ -919,7 +999,7 @@ function ShipyardTab() {
               ) : owned ? (
                 <button disabled>{translateText("Owned", locale)}</button>
               ) : (
-                <button disabled={player.credits < ship.price} onClick={() => setPendingShipId(ship.id)}>
+                <button disabled={!purchaseAccess.ok || player.credits < ship.price} title={purchaseAccess.ok ? undefined : translateText(purchaseAccess.message, locale)} onClick={() => setPendingShipId(ship.id)}>
                   {translateText("Buy", locale)} {formatCredits(locale, ship.price, true)}
                 </button>
               )}
@@ -946,7 +1026,8 @@ function ShipyardTab() {
               <button onClick={() => setPendingShipId(null)}>{translateText("Cancel", locale)}</button>
               <button
                 className="primary"
-                disabled={player.credits < pendingShip.price}
+                disabled={player.credits < pendingShip.price || !pendingAccess?.ok}
+                title={pendingAccess?.ok ? undefined : translateText(pendingAccess?.message, locale)}
                 onClick={() => {
                   buyShip(pendingShip.id);
                   setPendingShipId(null);
@@ -983,6 +1064,7 @@ function MissionBoardTab() {
   const completeMission = useGameStore((state) => state.completeMission);
   const startJumpToStation = useGameStore((state) => state.startJumpToStation);
   const reputation = useGameStore((state) => state.reputation);
+  const factionHeat = useGameStore((state) => state.factionHeat);
   const staticAvailable = getAvailableMissionsForSystem(missionTemplates, currentSystemId, activeMissions, completedMissionIds, failedMissionIds);
   const marketGapAvailable = getAvailableMarketGapMissions({ marketState, systemId: currentSystemId, activeMissions, knownSystemIds: knownSystems, knownPlanetIds, explorationState });
   const available = [...staticAvailable, ...marketGapAvailable];
@@ -1030,6 +1112,9 @@ function MissionBoardTab() {
             const onboardingRecommended = onboardingView.visible && mission.id === CLEAN_CARRIER_MISSION_ID && (onboardingStepId === "accept-clean-carrier" || onboardingStepId === "plot-clean-carrier-route");
             const routeStation = stationById[mission.destinationStationId];
             const canSetRoute = active && !!routeStation && routeStation.id !== currentStationId && !autopilot;
+            const accessStation = stationById[currentStationId ?? mission.sourceStationId ?? mission.destinationStationId] ?? stationById[mission.destinationStationId];
+            const missionAccess = getMissionAcceptAccess({ station: accessStation, mission, reputation, factionHeat, now: gameClock });
+            const rewardMultiplier = mission.storyCritical ? 1 : getFactionRewardMultiplier(accessStation.factionId, reputation, factionHeat, gameClock);
             return (
               <article key={mission.id} className={`mission-card ${onboardingRecommended ? "onboarding-recommended" : ""}`} data-testid={`mission-card-${mission.id}`}>
                 <div className="mission-title">
@@ -1039,7 +1124,10 @@ function MissionBoardTab() {
                   {marketGap ? <span className="story-pill">{translateText("Market Gap", locale)}</span> : null}
                   {onboardingRecommended ? <span className="story-pill onboarding-pill">{translateText("Recommended first contract", locale)}</span> : null}
                 </div>
-                <p>{localizeMissionType(mission.type, locale)} · {localizeFactionName(mission.factionId, locale, factionNames[mission.factionId])} · {translateText("Reward", locale)} {formatCredits(locale, mission.reward, true)}</p>
+                <p>
+                  {localizeMissionType(mission.type, locale)} · {localizeFactionName(mission.factionId, locale, factionNames[mission.factionId])} · {translateText("Reward", locale)} {formatCredits(locale, Math.round(mission.reward * rewardMultiplier), true)}
+                  {rewardMultiplier > 1 ? ` · ${translateText("Faction bonus", locale)}` : ""}
+                </p>
                 <p>{translateText(mission.description, locale)}</p>
                 <p>
                   {remaining !== undefined ? `${translateText("Time", locale)} ${formatTime(remaining, locale)} · ` : ""}
@@ -1064,9 +1152,10 @@ function MissionBoardTab() {
                   {active ? (
                     <button onClick={() => completeMission(mission.id)} disabled={!complete}>{translateText("Complete", locale)}</button>
                   ) : (
-                    <button onClick={() => acceptMission(mission.id)}>{translateText("Accept", locale)}</button>
+                    <button onClick={() => acceptMission(mission.id)} disabled={!missionAccess.ok} title={missionAccess.ok ? undefined : translateText(missionAccess.message, locale)}>{translateText("Accept", locale)}</button>
                   )}
                 </div>
+                {!active && !missionAccess.ok ? <p className="warning-text">{translateText(missionAccess.message, locale)}</p> : null}
               </article>
             );
           })}
@@ -1255,6 +1344,9 @@ function BlueprintTab() {
   const locale = useGameStore((state) => state.locale);
   const player = useGameStore((state) => state.player);
   const station = useGameStore((state) => stationById[state.currentStationId ?? "helion-prime"]);
+  const reputation = useGameStore((state) => state.reputation);
+  const factionHeat = useGameStore((state) => state.factionHeat);
+  const gameClock = useGameStore((state) => state.gameClock);
   const unlockBlueprint = useGameStore((state) => state.unlockBlueprint);
   const craftEquipment = useGameStore((state) => state.craftEquipment);
   const [pathFilter, setPathFilter] = useState<BlueprintPath | "all">("all");
@@ -1264,6 +1356,7 @@ function BlueprintTab() {
     .filter((blueprint) => isBlueprintVisibleToPlayer(blueprint, player))
     .filter((blueprint) => pathFilter === "all" || blueprint.path === pathFilter)
     .sort((a, b) => a.path.localeCompare(b.path) || a.tier - b.tier || equipmentName(a.equipmentId).localeCompare(equipmentName(b.equipmentId)));
+  const workshopAccess = getStationServiceAccess({ station, service: "blueprint-workshop", reputation, factionHeat, now: gameClock });
   return (
     <>
       <div className="blueprint-panel">
@@ -1271,6 +1364,7 @@ function BlueprintTab() {
           <div>
             <h2>{translateText("Blueprint Workshop", locale)}</h2>
             <p>{translateText("Research unlocks fabrication rights. Markets and NPC drops still provide physical equipment without requiring blueprints.", locale)}</p>
+            {!workshopAccess.ok ? <p className="warning-text">{translateText(workshopAccess.message, locale)}</p> : null}
           </div>
           <select value={pathFilter} onChange={(event) => setPathFilter(event.target.value as BlueprintPath | "all")} aria-label={translateText("Filter blueprint path", locale)}>
             <option value="all">{translateText("All Paths", locale)}</option>
@@ -1288,9 +1382,9 @@ function BlueprintTab() {
             const installed = player.equipment.includes(id);
             const blueprintUnlocked = isBlueprintUnlocked(player, id);
             const unlockAvailability = canUnlockBlueprint(player, id);
-            const researchable = !blueprintUnlocked && unlockAvailability.ok;
+            const researchable = workshopAccess.ok && !blueprintUnlocked && unlockAvailability.ok;
             const techUnlocked = station.techLevel >= equipment.techLevel;
-            const canCraft = blueprintUnlocked && techUnlocked && !!craftCost && player.credits >= craftCost.credits && hasCraftMaterials(player.cargo, craftCost.cargo);
+            const canCraft = workshopAccess.ok && blueprintUnlocked && techUnlocked && !!craftCost && player.credits >= craftCost.credits && hasCraftMaterials(player.cargo, craftCost.cargo);
             const blueprintStatus = canCraft ? "Craftable" : blueprintUnlocked ? "Unlocked" : researchable ? "Researchable" : "Locked";
             const missing = !blueprintUnlocked
               ? translateText(unlockAvailability.message, locale)
@@ -1319,7 +1413,7 @@ function BlueprintTab() {
                   <p>{translateText("Craft", locale)}: {formatCredits(locale, craftCost.credits, true)} · {formatCargo(craftCost.cargo, locale)}</p>
                 ) : null}
                 <p>{translateText("Installed", locale)} {translateText(installed ? "yes" : "no", locale)} · {translateText("Inventory", locale)} {formatNumber(locale, inventoryCount)}</p>
-                {missing ? <p className="warning-text">{missing}</p> : <p className="muted">{translateText("Added to equipment inventory after fabrication.", locale)}</p>}
+                {!workshopAccess.ok ? <p className="warning-text">{translateText(workshopAccess.message, locale)}</p> : missing ? <p className="warning-text">{missing}</p> : <p className="muted">{translateText("Added to equipment inventory after fabrication.", locale)}</p>}
                 <button
                   disabled={!researchable}
                   onClick={(event) => {
@@ -1480,7 +1574,11 @@ function FactionConsequencesPanel() {
   const reputation = useGameStore((state) => state.reputation);
   const factionHeat = useGameStore((state) => state.factionHeat);
   const payFactionFine = useGameStore((state) => state.payFactionFine);
+  const brokerBlackMarketAmnesty = useGameStore((state) => state.brokerBlackMarketAmnesty);
+  const station = useGameStore((state) => stationById[state.currentStationId ?? "helion-prime"]);
+  const gameClock = useGameStore((state) => state.gameClock);
   const factionIds = Object.keys(factionNames) as FactionId[];
+  const showAmnesty = station.archetype === "Pirate Black Market";
   return (
     <section className="lounge-card faction-consequences" data-testid="faction-consequences">
       <h3>{translateText("Faction Consequences", locale)}</h3>
@@ -1488,6 +1586,10 @@ function FactionConsequencesPanel() {
         {factionIds.map((factionId) => {
           const record = getFactionHeatRecord(factionHeat, factionId);
           const heatLabel = getFactionHeatLevelLabel(record);
+          const standingTier = getFactionStandingTier(reputation.factions[factionId]);
+          const rewardMultiplier = getFactionRewardMultiplier(factionId, reputation, factionHeat, gameClock);
+          const repairMultiplier = getRepairCostMultiplier(factionId, reputation, factionHeat, gameClock);
+          const amnestyOffer = getBlackMarketAmnestyOffer({ station, targetFactionId: factionId, factionHeat, now: gameClock });
           return (
             <article key={factionId} className={`faction-consequence heat-${heatLabel.toLowerCase().replace(/[^a-z]+/g, "-")}`}>
               <div>
@@ -1495,14 +1597,33 @@ function FactionConsequencesPanel() {
                 <span>
                   {translateText(heatLabel, locale)} · {translateText("Heat", locale)} {formatNumber(locale, Math.round(record.heat))} · {translateText(reputationLabel(reputation.factions[factionId]), locale)}
                 </span>
+                <small>
+                  {translateText("Standing", locale)} {translateText(standingTierLabel(standingTier), locale)}
+                  {rewardMultiplier > 1 ? ` · ${translateText("Mission bonus", locale)} +${formatNumber(locale, Math.round((rewardMultiplier - 1) * 100))}%` : ""}
+                  {repairMultiplier < 1 ? ` · ${translateText("Repair discount", locale)} ${formatNumber(locale, Math.round((1 - repairMultiplier) * 100))}%` : ""}
+                </small>
                 {record.fineCredits > 0 ? <small>{translateText("Outstanding fine", locale)}: {formatCredits(locale, record.fineCredits)}</small> : null}
+                {showAmnesty ? (
+                  <small>{translateText("Amnesty", locale)}: {amnestyOffer.available ? formatCredits(locale, amnestyOffer.costCredits) : translateText(amnestyOffer.message, locale)}</small>
+                ) : null}
               </div>
-              <button
-                disabled={record.fineCredits <= 0 || player.credits < record.fineCredits}
-                onClick={() => payFactionFine(factionId)}
-              >
-                {translateText("Pay Fine", locale)}
-              </button>
+              <div className="faction-consequence-actions">
+                <button
+                  disabled={record.fineCredits <= 0 || player.credits < record.fineCredits}
+                  onClick={() => payFactionFine(factionId)}
+                >
+                  {translateText("Pay Fine", locale)}
+                </button>
+                {showAmnesty ? (
+                  <button
+                    disabled={!amnestyOffer.available || player.credits < amnestyOffer.costCredits}
+                    title={translateText(amnestyOffer.message, locale)}
+                    onClick={() => brokerBlackMarketAmnesty(factionId)}
+                  >
+                    {translateText("Broker Amnesty", locale)}
+                  </button>
+                ) : null}
+              </div>
             </article>
           );
         })}

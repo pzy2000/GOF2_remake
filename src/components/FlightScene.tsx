@@ -16,6 +16,7 @@ import { getExplorationObjectiveSummaryForSignal } from "../systems/explorationO
 import { getStoryObjectiveSummary } from "../systems/story";
 import { getEconomyFlightRouteCue } from "../systems/economyRoutes";
 import { getMarketEntry, getTradeHints } from "../systems/economy";
+import { getPlayerRuntimeEffects } from "../systems/equipment";
 import { hasActiveCivilianDistress } from "../state/domains/combatRuntime";
 import {
   formatCargoContents,
@@ -1420,9 +1421,11 @@ function WaypointMarker() {
   const explorationState = useGameStore((state) => state.explorationState);
   const autopilot = useGameStore((state) => state.autopilot);
   const clock = useGameStore((state) => state.runtime.clock);
+  const equipmentEffects = getPlayerRuntimeEffects(player);
   const target = getNearestNavigationTarget(currentSystemId, player.position, knownPlanetIds, {
     explorationState,
-    installedEquipment: player.equipment
+    installedEquipment: player.equipment,
+    runtimeEffects: equipmentEffects
   });
   const cue = getNavigationTargetCue(target);
   if (!target || !cue || autopilot?.phase === "wormhole") return null;
@@ -2008,9 +2011,11 @@ export function FlightScene() {
   const updateShipModelStatus = useCallback((status: ShipModelStatus | null) => {
     setShipModelStatus((current) => (current?.kind === status?.kind && current?.text === status?.text ? current : status));
   }, []);
+  const equipmentEffects = getPlayerRuntimeEffects(player);
   const navigationTarget = screen === "economyWatch" ? undefined : getNearestNavigationTarget(currentSystemId, player.position, knownPlanetIds, {
     explorationState,
-    installedEquipment: player.equipment
+    installedEquipment: player.equipment,
+    runtimeEffects: equipmentEffects
   });
   const navigationCue = getNavigationTargetCue(navigationTarget);
   const locale = useGameStore((state) => state.locale);

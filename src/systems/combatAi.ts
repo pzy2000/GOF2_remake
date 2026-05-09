@@ -19,6 +19,7 @@ export interface CombatAiStepInput {
   risk: number;
   playerPosition: Vec3;
   playerHasContraband: boolean;
+  contrabandScanProgressMultiplier?: number;
   delta: number;
   now: number;
   graceUntil: number;
@@ -295,7 +296,7 @@ function resolvePatrolStep(input: CombatAiStepInput, profile: CombatProfile): Co
   }
 
   if (input.playerHasContraband && law.disposition !== "legal" && playerDistance <= CONTRABAND_SCAN_RANGE) {
-    const scanProgress = Math.min(1, (input.ship.scanProgress ?? 0) + input.delta / CONTRABAND_SCAN_SECONDS);
+    const scanProgress = Math.min(1, (input.ship.scanProgress ?? 0) + (input.delta * (input.contrabandScanProgressMultiplier ?? 1)) / CONTRABAND_SCAN_SECONDS);
     const toPlayer = normalize(sub(input.playerPosition, input.ship.position));
     return {
       ship: {

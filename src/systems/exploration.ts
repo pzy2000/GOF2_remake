@@ -2,7 +2,7 @@ import { explorationSignalById, explorationSignals } from "../data/exploration";
 import { equipmentById } from "../data/equipment";
 import { stations, systemById } from "../data/systems";
 import type { EquipmentId, ExplorationSignalDefinition, ExplorationState, PlayerState } from "../types/game";
-import { getEquipmentEffects } from "./equipment";
+import { getEquipmentEffects, type EquipmentRuntimeEffects } from "./equipment";
 import { distance } from "./math";
 
 export const SCANNER_SCAN_RANGE_BONUS = 90;
@@ -78,21 +78,27 @@ export function requiredSignalEquipmentLabel(signal: ExplorationSignalDefinition
   return required.map((equipmentId) => equipmentById[equipmentId]?.name ?? equipmentId).join(" or ");
 }
 
-export function getEffectiveSignalScanRange(signal: ExplorationSignalDefinition, equipment: EquipmentId[] = []): number {
-  return signal.scanRange + getEquipmentEffects(equipment).signalScanRangeBonus;
+type SignalEffectInput = EquipmentId[] | EquipmentRuntimeEffects;
+
+function signalEffects(input: SignalEffectInput = []): EquipmentRuntimeEffects {
+  return Array.isArray(input) ? getEquipmentEffects(input) : input;
 }
 
-export function getEffectiveSignalScanBand(signal: ExplorationSignalDefinition, equipment: EquipmentId[] = []): [number, number] {
-  const bonus = getEquipmentEffects(equipment).signalScanBandBonus;
+export function getEffectiveSignalScanRange(signal: ExplorationSignalDefinition, equipmentOrEffects: SignalEffectInput = []): number {
+  return signal.scanRange + signalEffects(equipmentOrEffects).signalScanRangeBonus;
+}
+
+export function getEffectiveSignalScanBand(signal: ExplorationSignalDefinition, equipmentOrEffects: SignalEffectInput = []): [number, number] {
+  const bonus = signalEffects(equipmentOrEffects).signalScanBandBonus;
   return [Math.max(0, signal.scanBand[0] - bonus), Math.min(100, signal.scanBand[1] + bonus)];
 }
 
-export function getEffectiveSignalScanRateMultiplier(equipment: EquipmentId[] = []): number {
-  return Math.max(0.1, getEquipmentEffects(equipment).signalScanRateMultiplier);
+export function getEffectiveSignalScanRateMultiplier(equipmentOrEffects: SignalEffectInput = []): number {
+  return Math.max(0.1, signalEffects(equipmentOrEffects).signalScanRateMultiplier);
 }
 
-export function isFrequencyInSignalBand(signal: ExplorationSignalDefinition, frequency: number, equipment: EquipmentId[] = []): boolean {
-  const [min, max] = getEffectiveSignalScanBand(signal, equipment);
+export function isFrequencyInSignalBand(signal: ExplorationSignalDefinition, frequency: number, equipmentOrEffects: SignalEffectInput = []): boolean {
+  const [min, max] = getEffectiveSignalScanBand(signal, equipmentOrEffects);
   return frequency >= min && frequency <= max;
 }
 

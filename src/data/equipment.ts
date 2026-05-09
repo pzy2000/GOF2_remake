@@ -131,6 +131,27 @@ export const equipmentList: EquipmentDefinition[] = [
     weapon: weapons["mining-beam"]
   },
   {
+    id: "industrial-mining-beam",
+    name: "Industrial Mining Beam",
+    techLevel: 3,
+    marketPrice: 3900,
+    marketStock: 2,
+    dropWeight: 4,
+    category: "Utility",
+    role: "High-throughput asteroid extraction beam.",
+    description: "A reinforced cutter built for mining skiffs and cargo captains who want fewer passes per vein.",
+    effect: "Mines within 480m and increases mining progress by 15%.",
+    displayStats: [
+      { label: "Range", value: "480m" },
+      { label: "Progress", value: "+15%" },
+      { label: "Drain", value: "10/s" }
+    ],
+    slotType: "utility",
+    craftCost: { credits: 2100, cargo: { titanium: 2, iron: 4, "energy-cells": 2 } },
+    modifiers: { miningProgressMultiplier: 1.15, miningHudRangeBonus: 60 },
+    weapon: weapons["industrial-mining-beam"]
+  },
+  {
     id: "shield-booster",
     name: "Shield Booster",
     techLevel: 2,
@@ -177,6 +198,44 @@ export const equipmentList: EquipmentDefinition[] = [
     slotType: "engineering",
     craftCost: { credits: 700, cargo: { "mechanical-parts": 2, plastics: 2 } },
     modifiers: { stats: { cargoCapacity: 12 } }
+  },
+  {
+    id: "ore-processor",
+    name: "Ore Processor",
+    techLevel: 3,
+    marketPrice: 3600,
+    marketStock: 2,
+    dropWeight: 4,
+    category: "Engineering",
+    role: "Onboard refinery for miner builds.",
+    description: "Separates low-value slag during extraction so each completed mining cycle keeps more usable ore.",
+    effect: "Adds 8 cargo capacity and +1 ore yield per completed mining cycle.",
+    displayStats: [
+      { label: "Cargo", value: "+8" },
+      { label: "Mining Yield", value: "+1" }
+    ],
+    slotType: "engineering",
+    craftCost: { credits: 1900, cargo: { iron: 4, titanium: 2, "mechanical-parts": 2 } },
+    modifiers: { stats: { cargoCapacity: 8 }, miningYieldBonus: 1 }
+  },
+  {
+    id: "shielded-holds",
+    name: "Shielded Holds",
+    techLevel: 3,
+    marketPrice: 4100,
+    marketStock: 2,
+    dropWeight: 3,
+    category: "Engineering",
+    role: "Masked cargo bays for smuggling builds.",
+    description: "Layered baffles and false inventory lanes slow down routine contraband sweeps.",
+    effect: "Adds 10 cargo capacity and slows contraband scan progress to 80%.",
+    displayStats: [
+      { label: "Cargo", value: "+10" },
+      { label: "Contraband Scan", value: "x0.80" }
+    ],
+    slotType: "engineering",
+    craftCost: { credits: 2200, cargo: { "mechanical-parts": 2, plastics: 3, microchips: 1 } },
+    modifiers: { stats: { cargoCapacity: 10 }, contrabandScanProgressMultiplier: 0.8 }
   },
   {
     id: "afterburner",
@@ -236,6 +295,45 @@ export const equipmentList: EquipmentDefinition[] = [
     slotType: "utility",
     craftCost: { credits: 2100, cargo: { optics: 2, "data-cores": 1, electronics: 1 } },
     modifiers: { scannerRangeBonus: 120, miningHudRangeBonus: 150, signalScanRangeBonus: 140, signalScanBandBonus: 7, signalScanRateMultiplier: 1.1 }
+  },
+  {
+    id: "decoy-transponder",
+    name: "Decoy Transponder",
+    techLevel: 4,
+    marketPrice: 6900,
+    marketStock: 1,
+    dropWeight: 2,
+    category: "Utility",
+    role: "Spoofed registry emitter for smuggling routes.",
+    description: "Broadcasts a clean cargo identity long enough to stretch patrol scan windows.",
+    effect: "Slows contraband scan progress to 65% and reduces contraband fines by 15%.",
+    displayStats: [
+      { label: "Contraband Scan", value: "x0.65" },
+      { label: "Fine", value: "x0.85" }
+    ],
+    slotType: "utility",
+    craftCost: { credits: 3600, cargo: { "data-cores": 1, microchips: 2, optics: 1 } },
+    modifiers: { contrabandScanProgressMultiplier: 0.65, contrabandFineMultiplier: 0.85 }
+  },
+  {
+    id: "survey-lab",
+    name: "Survey Lab",
+    techLevel: 4,
+    marketPrice: 7200,
+    marketStock: 1,
+    dropWeight: 2,
+    category: "Utility",
+    role: "Deep exploration analysis suite.",
+    description: "A compact lab that resolves weak signal harmonics and expands recovery sweeps around quiet sites.",
+    effect: "Adds 90m to loot and salvage ranges, improves Quiet Signal range/band, and accelerates scans by 18%.",
+    displayStats: [
+      { label: "Interact", value: "+90m" },
+      { label: "Vein HUD", value: "+70m" },
+      { label: "Quiet Signal", value: "+170m / +/-8 / +18%" }
+    ],
+    slotType: "utility",
+    craftCost: { credits: 3800, cargo: { optics: 3, "data-cores": 2, electronics: 2 } },
+    modifiers: { scannerRangeBonus: 90, miningHudRangeBonus: 70, signalScanRangeBonus: 170, signalScanBandBonus: 8, signalScanRateMultiplier: 1.18 }
   },
   {
     id: "armor-plating",
@@ -328,6 +426,25 @@ export const equipmentList: EquipmentDefinition[] = [
     modifiers: { weaponCooldownMultiplier: 0.88 }
   },
   {
+    id: "weapon-amplifier",
+    name: "Weapon Amplifier",
+    techLevel: 4,
+    marketPrice: 7800,
+    marketStock: 1,
+    dropWeight: 2,
+    category: "Engineering",
+    role: "High-output fire-control bus for combat builds.",
+    description: "Overdrives primary and secondary weapon feeds for stronger impacts at the cost of extra energy draw.",
+    effect: "Increases weapon damage by 10% and weapon energy cost by 12%.",
+    displayStats: [
+      { label: "Weapon Damage", value: "+10%" },
+      { label: "Weapon Energy", value: "+12%" }
+    ],
+    slotType: "engineering",
+    craftCost: { credits: 4200, cargo: { "ship-components": 2, microchips: 2, "energy-cells": 3 } },
+    modifiers: { weaponDamageMultiplier: 1.1, weaponEnergyCostMultiplier: 1.12 }
+  },
+  {
     id: "echo-nullifier",
     name: "Echo Nullifier",
     techLevel: 5,
@@ -388,16 +505,22 @@ export const blueprintDefinitions: BlueprintDefinition[] = [
   { equipmentId: "plasma-cannon", path: "combat", tier: 2, prerequisiteEquipmentIds: ["pulse-laser"], unlockCost: { credits: 350 } },
   { equipmentId: "torpedo-rack", path: "combat", tier: 3, prerequisiteEquipmentIds: ["homing-missile"], unlockCost: { credits: 800 } },
   { equipmentId: "railgun", path: "combat", tier: 4, prerequisiteEquipmentIds: ["plasma-cannon"], unlockCost: { credits: 1400 } },
+  { equipmentId: "weapon-amplifier", path: "combat", tier: 4, prerequisiteEquipmentIds: ["plasma-cannon", "targeting-computer"], unlockCost: { credits: 1600 } },
   { equipmentId: "shield-booster", path: "defense", tier: 1, unlockCost: { credits: 0 }, starterUnlocked: true },
   { equipmentId: "armor-plating", path: "defense", tier: 1, unlockCost: { credits: 0 }, starterUnlocked: true },
   { equipmentId: "repair-drone", path: "defense", tier: 2, prerequisiteEquipmentIds: ["armor-plating"], unlockCost: { credits: 520 } },
   { equipmentId: "shield-matrix", path: "defense", tier: 3, prerequisiteEquipmentIds: ["shield-booster"], unlockCost: { credits: 1200 } },
   { equipmentId: "mining-beam", path: "exploration", tier: 1, unlockCost: { credits: 0 }, starterUnlocked: true },
   { equipmentId: "scanner", path: "exploration", tier: 1, unlockCost: { credits: 0 }, starterUnlocked: true },
+  { equipmentId: "industrial-mining-beam", path: "exploration", tier: 2, prerequisiteEquipmentIds: ["mining-beam"], unlockCost: { credits: 640 } },
+  { equipmentId: "ore-processor", path: "exploration", tier: 3, prerequisiteEquipmentIds: ["industrial-mining-beam"], unlockCost: { credits: 920 } },
   { equipmentId: "survey-array", path: "exploration", tier: 2, prerequisiteEquipmentIds: ["scanner"], unlockCost: { credits: 760 } },
+  { equipmentId: "survey-lab", path: "exploration", tier: 3, prerequisiteEquipmentIds: ["survey-array"], unlockCost: { credits: 1220 } },
   { equipmentId: "echo-nullifier", path: "exploration", tier: 4, prerequisiteEquipmentIds: ["survey-array"], unlockCost: { credits: 0 }, rewardOnly: true },
   { equipmentId: "relic-cartographer", path: "exploration", tier: 5, prerequisiteEquipmentIds: ["survey-array"], unlockCost: { credits: 0 }, rewardOnly: true },
   { equipmentId: "cargo-expansion", path: "engineering", tier: 1, unlockCost: { credits: 0 }, starterUnlocked: true },
+  { equipmentId: "shielded-holds", path: "engineering", tier: 2, prerequisiteEquipmentIds: ["cargo-expansion"], unlockCost: { credits: 700 } },
+  { equipmentId: "decoy-transponder", path: "engineering", tier: 3, prerequisiteEquipmentIds: ["shielded-holds"], unlockCost: { credits: 1180 } },
   { equipmentId: "afterburner", path: "engineering", tier: 2, prerequisiteEquipmentIds: ["cargo-expansion"], unlockCost: { credits: 420 } },
   { equipmentId: "energy-reactor", path: "engineering", tier: 2, prerequisiteEquipmentIds: ["cargo-expansion"], unlockCost: { credits: 620 } },
   { equipmentId: "targeting-computer", path: "engineering", tier: 3, prerequisiteEquipmentIds: ["energy-reactor"], unlockCost: { credits: 900 } },

@@ -4,13 +4,17 @@ import {
   BASE_AFTERBURNER_ENERGY_DRAIN,
   BASE_AFTERBURNER_MULTIPLIER,
   canUnlockBlueprint,
+  getActiveMiningWeapon,
   getActivePrimaryWeapon,
   getActiveSecondaryWeapon,
   getEffectiveShipStats,
   getEquipmentComparison,
   getEquipmentEffects,
   getEquipmentSlotUsage,
+  getPlayerRuntimeEffects,
+  getShipCareerLabel,
   getShipSlotCapacity,
+  getShipTraitSummary,
   isBlueprintVisibleToPlayer,
   getWeaponCooldown,
   hasMiningBeam,
@@ -132,20 +136,43 @@ describe("equipment definitions and helpers", () => {
       "homing-missile",
       "torpedo-rack",
       "mining-beam",
+      "industrial-mining-beam",
       "shield-booster",
       "shield-matrix",
       "cargo-expansion",
+      "ore-processor",
+      "shielded-holds",
       "afterburner",
       "scanner",
       "survey-array",
+      "decoy-transponder",
+      "weapon-amplifier",
+      "survey-lab",
       "armor-plating",
       "energy-reactor",
       "quantum-reactor",
       "repair-drone",
       "targeting-computer",
-      "echo-nullifier"
+      "echo-nullifier",
+      "relic-cartographer"
     ];
     expect(ids.every((id) => equipmentById[id]?.displayStats.length > 0)).toBe(true);
+  });
+
+  it("defines career ships with traits and purchase requirements", () => {
+    expect(shipById["prospector-rig"]).toMatchObject({
+      career: "miner",
+      purchaseRequirement: { stationArchetypes: ["Mining Station"], minTechLevel: 3 }
+    });
+    expect(shipById["veil-runner"]).toMatchObject({ career: "smuggler" });
+    expect(shipById["talon-s"]).toMatchObject({ career: "fighter" });
+    expect(shipById["wayfarer-x"]).toMatchObject({
+      career: "explorer",
+      purchaseRequirement: { requiredUnlockedBlueprintIds: ["survey-array"] }
+    });
+    expect(shipById["horizon-ark"].trait?.modifiers.signalScanRateMultiplier).toBeGreaterThan(1);
+    expect(getShipCareerLabel(shipById["prospector-rig"])).toBe("Miner");
+    expect(getShipTraitSummary(shipById["talon-s"])).toContain("Weapon damage");
   });
 
   it("applies passive stat and runtime modifiers", () => {
@@ -167,6 +194,14 @@ describe("equipment definitions and helpers", () => {
     expect(effects.salvageInteractionRange).toBe(170);
     expect(effects.miningHudRange).toBe(470);
     expect(effects.weaponCooldownMultiplier).toBeCloseTo(0.88);
+    const careerEffects = getEquipmentEffects(["industrial-mining-beam", "ore-processor", "shielded-holds", "decoy-transponder", "weapon-amplifier", "survey-lab"]);
+    expect(careerEffects.miningProgressMultiplier).toBeCloseTo(1.15);
+    expect(careerEffects.miningYieldBonus).toBe(1);
+    expect(careerEffects.contrabandScanProgressMultiplier).toBeCloseTo(0.52);
+    expect(careerEffects.contrabandFineMultiplier).toBeCloseTo(0.85);
+    expect(careerEffects.weaponDamageMultiplier).toBeCloseTo(1.1);
+    expect(careerEffects.weaponEnergyCostMultiplier).toBeCloseTo(1.12);
+    expect(careerEffects.signalScanRateMultiplier).toBeGreaterThan(1);
     const echoEffects = getEquipmentEffects(["echo-nullifier"]);
     expect(echoEffects.echoLockRangeBonus).toBe(120);
     expect(echoEffects.echoLockRateMultiplier).toBe(1.25);
@@ -180,7 +215,26 @@ describe("equipment definitions and helpers", () => {
     expect(getActiveSecondaryWeapon(["pulse-laser"])).toBeUndefined();
     expect(getActiveSecondaryWeapon(["homing-missile"])?.id).toBe("homing-missile");
     expect(hasMiningBeam(["mining-beam"])).toBe(true);
+    expect(hasMiningBeam(["industrial-mining-beam"])).toBe(true);
+    expect(getActiveMiningWeapon(["industrial-mining-beam"])?.range).toBe(480);
     expect(getWeaponCooldown(equipmentById["pulse-laser"].weapon!, ["pulse-laser", "targeting-computer"])).toBeCloseTo(0.1408);
+  });
+
+  it("merges hull traits with installed equipment runtime effects", () => {
+    const prospector = normalizePlayerEquipmentStats({
+      ...playerForShip("prospector-rig"),
+      equipment: ["industrial-mining-beam", "ore-processor"]
+    });
+    const effects = getPlayerRuntimeEffects(prospector);
+    expect(effects.miningProgressMultiplier).toBeCloseTo(1.38);
+    expect(effects.miningEnergyDrainMultiplier).toBeCloseTo(0.85);
+    expect(effects.miningYieldBonus).toBe(1);
+
+    const veil = normalizePlayerEquipmentStats({
+      ...playerForShip("veil-runner"),
+      equipment: ["shielded-holds", "decoy-transponder"]
+    });
+    expect(getPlayerRuntimeEffects(veil).contrabandScanProgressMultiplier).toBeCloseTo(0.364);
   });
 
   it("tracks equipment slot usage and inventory-backed installation", () => {
@@ -329,7 +383,12 @@ describe("equipment gameplay wiring", () => {
 
   it("ship purchases park the old ship at PTD Home and apply the new stock loadout", async () => {
     const store = await freshStore();
-    store.setState((state) => ({ currentStationId: "meridian-dock", player: { ...state.player, credits: 50000 } }));
+    store.setState((state) => ({
+      currentSystemId: "ptd-home",
+      currentStationId: "ptd-home",
+      reputation: { factions: { ...state.reputation.factions, "solar-directorate": 50 } },
+      player: { ...state.player, credits: 50000 }
+    }));
 
     store.getState().buyShip("horizon-ark");
 
@@ -423,6 +482,53 @@ describe("equipment gameplay wiring", () => {
     store.getState().tick(0.1);
     expect(store.getState().player.cargo.iron).toBe(2);
     expect(store.getState().runtime.asteroids[0].amount).toBe(2);
+  });
+
+  it("applies mining and combat career modifiers in flight", async () => {
+    const store = await freshStore();
+    store.setState((state) => ({
+      player: normalizePlayerEquipmentStats({
+        ...state.player,
+        shipId: "prospector-rig",
+        equipment: ["industrial-mining-beam", "ore-processor"],
+        cargo: {},
+        position: [0, 0, 0],
+        velocity: [0, 0, 0],
+        throttle: 0
+      }),
+      runtime: {
+        ...state.runtime,
+        clock: 0,
+        loot: [],
+        projectiles: [],
+        effects: [],
+        asteroids: state.runtime.asteroids.map((asteroid, index) =>
+          index === 0 ? { ...asteroid, resource: "iron", position: [0, 0, 90], amount: 6, miningProgress: 0.99, radius: 20 } : { ...asteroid, amount: 0 }
+        )
+      },
+      input: { ...state.input, firePrimary: true }
+    }));
+    store.getState().tick(0.1);
+    expect(store.getState().player.cargo.iron).toBe(3);
+
+    store.setState((state) => ({
+      player: normalizePlayerEquipmentStats({
+        ...state.player,
+        shipId: "talon-s",
+        equipment: ["pulse-laser", "weapon-amplifier"],
+        energy: shipById["talon-s"].stats.energy,
+        position: [0, 0, 0],
+        velocity: [0, 0, 0],
+        throttle: 0
+      }),
+      runtime: { ...state.runtime, projectiles: [], asteroids: state.runtime.asteroids.map((asteroid) => ({ ...asteroid, amount: 0 })) },
+      input: { ...state.input, firePrimary: true },
+      primaryCooldown: 0
+    }));
+    store.getState().tick(0.05);
+    const projectile = store.getState().runtime.projectiles.find((item) => item.owner === "player");
+    expect(projectile?.damage).toBe(19);
+    expect(store.getState().player.energy).toBe(139);
   });
 
   it("reduces cooldowns and repairs hull through installed systems", async () => {

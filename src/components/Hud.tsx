@@ -2,7 +2,7 @@ import { commodities, stationById, systemById, useGameStore } from "../state/gam
 import { commodityById, glassWakeProtocol, missionTemplates } from "../data/world";
 import type { CommodityId } from "../types/game";
 import { getOccupiedCargo } from "../systems/economy";
-import { getEquipmentEffects, hasMiningBeam } from "../systems/equipment";
+import { getPlayerRuntimeEffects, hasMiningBeam } from "../systems/equipment";
 import { getMissionDeadlineRemaining } from "../systems/missions";
 import { isEconomyDispatchMissionId, isMarketSmugglingMissionId } from "../systems/marketMissions";
 import { distance } from "../systems/math";
@@ -12,7 +12,7 @@ import { combatAiProfileLabels, getContrabandLawSummary } from "../systems/comba
 import { combatLoadoutLabels } from "../systems/combatDoctrine";
 import { explorationSignalById, getEffectiveSignalScanBand } from "../systems/exploration";
 import { getExplorationObjectiveSummaryForSystem } from "../systems/explorationObjectives";
-import { getFactionHeatLevelLabel, getFactionHeatRecord } from "../systems/factionConsequences";
+import { getFactionHeatLevelLabel, getFactionHeatRecord, isFactionWanted } from "../systems/factionConsequences";
 import { getOnboardingView } from "../systems/onboarding";
 import { getStoryObjectiveSummary } from "../systems/story";
 import {
@@ -77,14 +77,15 @@ export function Hud() {
   const skipOnboarding = useGameStore((state) => state.skipOnboarding);
   const adjustExplorationScanFrequency = useGameStore((state) => state.adjustExplorationScanFrequency);
   const cancelExplorationScan = useGameStore((state) => state.cancelExplorationScan);
-  const equipmentEffects = getEquipmentEffects(player.equipment);
+  const equipmentEffects = getPlayerRuntimeEffects(player);
   const nearestNavigation = getNearestNavigationTarget(currentSystem.id, player.position, knownPlanetIds, {
     explorationState,
-    installedEquipment: player.equipment
+    installedEquipment: player.equipment,
+    runtimeEffects: equipmentEffects
   });
   const activeScan = runtime.explorationScan;
   const activeScanSignal = activeScan ? explorationSignalById[activeScan.signalId] : undefined;
-  const activeScanBand = activeScanSignal ? getEffectiveSignalScanBand(activeScanSignal, player.equipment) : undefined;
+  const activeScanBand = activeScanSignal ? getEffectiveSignalScanBand(activeScanSignal, equipmentEffects) : undefined;
   const pirateCount = runtime.enemies.filter((ship) => ship.role === "pirate" && ship.hull > 0 && ship.deathTimer === undefined).length;
   const bossContact = runtime.enemies.find((ship) => ship.boss && ship.hull > 0 && ship.deathTimer === undefined);
   const supportCount = runtime.enemies.filter((ship) => ship.supportWing && ship.hull > 0 && ship.deathTimer === undefined).length;
@@ -93,6 +94,7 @@ export function Hud() {
   const localHeatRecord = getFactionHeatRecord(factionHeat, currentSystem.factionId);
   const localHeatLabel = getFactionHeatLevelLabel(localHeatRecord);
   const wantedRemaining = Math.max(0, (localHeatRecord.wantedUntil ?? 0) - gameClock);
+  const interdictionRisk = localHeatLabel === "Kill-on-sight" || isFactionWanted(factionHeat, currentSystem.factionId, gameClock);
   const storyObjective = getStoryObjectiveSummary({
     arc: glassWakeProtocol,
     missions: missionTemplates,
@@ -164,6 +166,7 @@ export function Hud() {
             {translateText("Wanted Heat", locale)} {formatNumber(locale, Math.round(localHeatRecord.heat))}
             {wantedRemaining > 0 ? ` · ${translateText("Wanted", locale)} ${formatHudTime(wantedRemaining, locale)}` : ""}
             {localHeatRecord.fineCredits > 0 ? ` · ${translateText("Fine", locale)} ${formatCredits(locale, localHeatRecord.fineCredits)}` : ""}
+            {interdictionRisk ? ` · ${translateText("Interdiction risk", locale)}` : ""}
           </p>
         </div>
         {contrabandAmount > 0 ? <p>{contrabandLawLabel(locale)}: {translateText(getContrabandLawSummary(currentSystem.id), locale)}</p> : null}

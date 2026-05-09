@@ -12,7 +12,7 @@ import {
   WORMHOLE_SECONDS
 } from "../../systems/autopilot";
 import { isHiddenStationRevealed } from "../../systems/exploration";
-import { getEquipmentEffects } from "../../systems/equipment";
+import { getPlayerRuntimeEffects } from "../../systems/equipment";
 import { add, clamp, distance, forwardFromRotation, normalize, scale, sub } from "../../systems/math";
 import {
   isKnownSystem,
@@ -103,7 +103,7 @@ export function advanceAutopilotPatch({
   }
 
   let player = state.player;
-  const autopilotEquipmentEffects = getEquipmentEffects(player.equipment);
+  const autopilotEquipmentEffects = getPlayerRuntimeEffects(player);
   const autopilotAfterburning = controlInput.afterburner && player.energy > 12;
   const autopilotSpeedMultiplier = autopilotAfterburning ? autopilotEquipmentEffects.afterburnerMultiplier : 1;
   const drainAutopilotAfterburner = (nextPlayer: GameStore["player"]): GameStore["player"] =>

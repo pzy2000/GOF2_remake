@@ -1,6 +1,6 @@
 import { blueprintByEquipmentId, blueprintDefinitions, equipmentById } from "../data/equipment";
 import { shipById, weapons } from "../data/ships";
-import type { BlueprintDefinition, CargoHold, EquipmentId, EquipmentInventory, EquipmentSlotType, PlayerState, ShipDefinition, ShipStats, WeaponDefinition } from "../types/game";
+import type { BlueprintDefinition, CargoHold, EquipmentId, EquipmentInventory, EquipmentModifiers, EquipmentSlotType, PlayerState, ShipDefinition, ShipStats, WeaponDefinition } from "../types/game";
 
 export const BASE_AFTERBURNER_MULTIPLIER = 1.88;
 export const BASE_AFTERBURNER_ENERGY_DRAIN = 58;
@@ -23,10 +23,17 @@ export interface EquipmentRuntimeEffects {
   lootInteractionRange: number;
   salvageInteractionRange: number;
   miningHudRange: number;
+  miningProgressMultiplier: number;
+  miningYieldBonus: number;
+  miningEnergyDrainMultiplier: number;
   signalScanRangeBonus: number;
   signalScanBandBonus: number;
   signalScanRateMultiplier: number;
   weaponCooldownMultiplier: number;
+  weaponDamageMultiplier: number;
+  weaponEnergyCostMultiplier: number;
+  contrabandScanProgressMultiplier: number;
+  contrabandFineMultiplier: number;
   echoLockRangeBonus: number;
   echoLockRateMultiplier: number;
 }
@@ -70,45 +77,90 @@ function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
 }
 
+function baseRuntimeEffects(): EquipmentRuntimeEffects {
+  return {
+    afterburnerMultiplier: BASE_AFTERBURNER_MULTIPLIER,
+    afterburnerEnergyDrain: BASE_AFTERBURNER_ENERGY_DRAIN,
+    energyRegenPerSecond: BASE_ENERGY_REGEN_PER_SECOND,
+    hullRegenPerSecond: 0,
+    hullRegenDelay: 8,
+    lootInteractionRange: BASE_LOOT_INTERACTION_RANGE,
+    salvageInteractionRange: BASE_SALVAGE_INTERACTION_RANGE,
+    miningHudRange: BASE_MINING_HUD_RANGE,
+    miningProgressMultiplier: 1,
+    miningYieldBonus: 0,
+    miningEnergyDrainMultiplier: 1,
+    signalScanRangeBonus: 0,
+    signalScanBandBonus: 0,
+    signalScanRateMultiplier: 1,
+    weaponCooldownMultiplier: 1,
+    weaponDamageMultiplier: 1,
+    weaponEnergyCostMultiplier: 1,
+    contrabandScanProgressMultiplier: 1,
+    contrabandFineMultiplier: 1,
+    echoLockRangeBonus: 0,
+    echoLockRateMultiplier: 1
+  };
+}
+
+function applyRuntimeModifiers(effects: EquipmentRuntimeEffects, modifiers?: EquipmentModifiers): EquipmentRuntimeEffects {
+  if (!modifiers) return effects;
+  return {
+    afterburnerMultiplier: modifiers.afterburnerMultiplier ?? effects.afterburnerMultiplier,
+    afterburnerEnergyDrain: modifiers.afterburnerEnergyDrain ?? effects.afterburnerEnergyDrain,
+    energyRegenPerSecond: effects.energyRegenPerSecond + (modifiers.energyRegenBonus ?? 0),
+    hullRegenPerSecond: Math.max(effects.hullRegenPerSecond, modifiers.hullRegenPerSecond ?? 0),
+    hullRegenDelay: modifiers.hullRegenDelay ?? effects.hullRegenDelay,
+    lootInteractionRange: effects.lootInteractionRange + (modifiers.scannerRangeBonus ?? 0),
+    salvageInteractionRange: effects.salvageInteractionRange + (modifiers.scannerRangeBonus ?? 0),
+    miningHudRange: effects.miningHudRange + (modifiers.miningHudRangeBonus ?? 0),
+    miningProgressMultiplier: effects.miningProgressMultiplier * (modifiers.miningProgressMultiplier ?? 1),
+    miningYieldBonus: effects.miningYieldBonus + (modifiers.miningYieldBonus ?? 0),
+    miningEnergyDrainMultiplier: effects.miningEnergyDrainMultiplier * (modifiers.miningEnergyDrainMultiplier ?? 1),
+    signalScanRangeBonus: effects.signalScanRangeBonus + (modifiers.signalScanRangeBonus ?? 0),
+    signalScanBandBonus: effects.signalScanBandBonus + (modifiers.signalScanBandBonus ?? 0),
+    signalScanRateMultiplier: effects.signalScanRateMultiplier * (modifiers.signalScanRateMultiplier ?? 1),
+    weaponCooldownMultiplier: effects.weaponCooldownMultiplier * (modifiers.weaponCooldownMultiplier ?? 1),
+    weaponDamageMultiplier: effects.weaponDamageMultiplier * (modifiers.weaponDamageMultiplier ?? 1),
+    weaponEnergyCostMultiplier: effects.weaponEnergyCostMultiplier * (modifiers.weaponEnergyCostMultiplier ?? 1),
+    contrabandScanProgressMultiplier: effects.contrabandScanProgressMultiplier * (modifiers.contrabandScanProgressMultiplier ?? 1),
+    contrabandFineMultiplier: effects.contrabandFineMultiplier * (modifiers.contrabandFineMultiplier ?? 1),
+    echoLockRangeBonus: effects.echoLockRangeBonus + (modifiers.echoLockRangeBonus ?? 0),
+    echoLockRateMultiplier: effects.echoLockRateMultiplier * (modifiers.echoLockRateMultiplier ?? 1)
+  };
+}
+
 export function getEquipmentEffects(equipment: EquipmentId[]): EquipmentRuntimeEffects {
   return equipment.reduce<EquipmentRuntimeEffects>(
-    (effects, equipmentId) => {
-      const modifiers = equipmentById[equipmentId]?.modifiers;
-      if (!modifiers) return effects;
-      return {
-        afterburnerMultiplier: modifiers.afterburnerMultiplier ?? effects.afterburnerMultiplier,
-        afterburnerEnergyDrain: modifiers.afterburnerEnergyDrain ?? effects.afterburnerEnergyDrain,
-        energyRegenPerSecond: effects.energyRegenPerSecond + (modifiers.energyRegenBonus ?? 0),
-        hullRegenPerSecond: Math.max(effects.hullRegenPerSecond, modifiers.hullRegenPerSecond ?? 0),
-        hullRegenDelay: modifiers.hullRegenDelay ?? effects.hullRegenDelay,
-        lootInteractionRange: effects.lootInteractionRange + (modifiers.scannerRangeBonus ?? 0),
-        salvageInteractionRange: effects.salvageInteractionRange + (modifiers.scannerRangeBonus ?? 0),
-        miningHudRange: effects.miningHudRange + (modifiers.miningHudRangeBonus ?? 0),
-        signalScanRangeBonus: effects.signalScanRangeBonus + (modifiers.signalScanRangeBonus ?? 0),
-        signalScanBandBonus: effects.signalScanBandBonus + (modifiers.signalScanBandBonus ?? 0),
-        signalScanRateMultiplier: effects.signalScanRateMultiplier * (modifiers.signalScanRateMultiplier ?? 1),
-        weaponCooldownMultiplier: effects.weaponCooldownMultiplier * (modifiers.weaponCooldownMultiplier ?? 1),
-        echoLockRangeBonus: effects.echoLockRangeBonus + (modifiers.echoLockRangeBonus ?? 0),
-        echoLockRateMultiplier: effects.echoLockRateMultiplier * (modifiers.echoLockRateMultiplier ?? 1)
-      };
-    },
-    {
-      afterburnerMultiplier: BASE_AFTERBURNER_MULTIPLIER,
-      afterburnerEnergyDrain: BASE_AFTERBURNER_ENERGY_DRAIN,
-      energyRegenPerSecond: BASE_ENERGY_REGEN_PER_SECOND,
-      hullRegenPerSecond: 0,
-      hullRegenDelay: 8,
-      lootInteractionRange: BASE_LOOT_INTERACTION_RANGE,
-      salvageInteractionRange: BASE_SALVAGE_INTERACTION_RANGE,
-      miningHudRange: BASE_MINING_HUD_RANGE,
-      signalScanRangeBonus: 0,
-      signalScanBandBonus: 0,
-      signalScanRateMultiplier: 1,
-      weaponCooldownMultiplier: 1,
-      echoLockRangeBonus: 0,
-      echoLockRateMultiplier: 1
-    }
+    (effects, equipmentId) => applyRuntimeModifiers(effects, equipmentById[equipmentId]?.modifiers),
+    baseRuntimeEffects()
   );
+}
+
+function getRuntimeEffectsForShip(shipId: string, equipment: EquipmentId[]): EquipmentRuntimeEffects {
+  return applyRuntimeModifiers(getEquipmentEffects(equipment), shipById[shipId]?.trait?.modifiers);
+}
+
+export function getPlayerRuntimeEffects(player: PlayerState): EquipmentRuntimeEffects {
+  return getRuntimeEffectsForShip(player.shipId, player.equipment);
+}
+
+const shipCareerLabels: Record<NonNullable<ShipDefinition["career"]>, string> = {
+  starter: "Starter",
+  hauler: "Hauler",
+  miner: "Miner",
+  smuggler: "Smuggler",
+  fighter: "Fighter",
+  gunship: "Gunship",
+  explorer: "Explorer"
+};
+
+export function getShipCareerLabel(ship: ShipDefinition): string {
+  return ship.career ? shipCareerLabels[ship.career] : "Generalist";
+}
+
+export function getShipTraitSummary(ship: ShipDefinition): string {
+  return ship.trait ? `${ship.trait.name}: ${ship.trait.description}` : "No hull trait.";
 }
 
 export function getShipSlotCapacity(stats: ShipStats): EquipmentSlotUsage {
@@ -318,8 +370,16 @@ export function getActiveSecondaryWeapon(equipment: EquipmentId[]): WeaponDefini
   return secondary ? weapons[secondary] : undefined;
 }
 
+export function getActiveMiningWeapon(equipment: EquipmentId[]): WeaponDefinition | undefined {
+  const mining = equipment.find((equipmentId) =>
+    (equipmentId === "mining-beam" || equipmentId === "industrial-mining-beam") &&
+    equipmentById[equipmentId]?.weapon?.kind === "utility"
+  );
+  return mining ? weapons[mining] : undefined;
+}
+
 export function hasMiningBeam(equipment: EquipmentId[]): boolean {
-  return equipment.some((equipmentId) => equipmentId === "mining-beam" && equipmentById[equipmentId]?.slotType === "utility");
+  return !!getActiveMiningWeapon(equipment);
 }
 
 export function getWeaponCooldown(weapon: WeaponDefinition, equipment: EquipmentId[]): number {
@@ -373,12 +433,12 @@ function getProjectedEquipmentForComparison(player: PlayerState, equipmentId: Eq
   return { equipment: player.equipment, mode: "blocked" };
 }
 
-function weaponLines(kind: "primary" | "secondary", currentEquipment: EquipmentId[], projectedEquipment: EquipmentId[]): EquipmentComparisonLine[] {
+function weaponLines(kind: "primary" | "secondary", currentEquipment: EquipmentId[], projectedEquipment: EquipmentId[], shipId: string): EquipmentComparisonLine[] {
   const currentWeapon = kind === "primary" ? getActivePrimaryWeapon(currentEquipment) : getActiveSecondaryWeapon(currentEquipment);
   const projectedWeapon = kind === "primary" ? getActivePrimaryWeapon(projectedEquipment) : getActiveSecondaryWeapon(projectedEquipment);
   if (!currentWeapon && !projectedWeapon) return [];
-  const currentEffects = getEquipmentEffects(currentEquipment);
-  const projectedEffects = getEquipmentEffects(projectedEquipment);
+  const currentEffects = getRuntimeEffectsForShip(shipId, currentEquipment);
+  const projectedEffects = getRuntimeEffectsForShip(shipId, projectedEquipment);
   const heading = kind === "primary" ? "Primary" : "Secondary";
   const lines: EquipmentComparisonLine[] = [];
   if (currentWeapon?.id !== projectedWeapon?.id) {
@@ -390,12 +450,16 @@ function weaponLines(kind: "primary" | "secondary", currentEquipment: EquipmentI
     });
   }
   if (currentWeapon && projectedWeapon) {
+    const currentDamage = currentWeapon.damage * currentEffects.weaponDamageMultiplier;
+    const projectedDamage = projectedWeapon.damage * projectedEffects.weaponDamageMultiplier;
+    const currentEnergy = currentWeapon.energyCost * currentEffects.weaponEnergyCostMultiplier;
+    const projectedEnergy = projectedWeapon.energyCost * projectedEffects.weaponEnergyCostMultiplier;
     lines.push(
       ...compactLines([
-        createComparisonLine(`${heading} damage`, currentWeapon.damage, projectedWeapon.damage),
+        createComparisonLine(`${heading} damage`, currentDamage, projectedDamage),
         createComparisonLine(`${heading} cooldown`, currentWeapon.cooldown * currentEffects.weaponCooldownMultiplier, projectedWeapon.cooldown * projectedEffects.weaponCooldownMultiplier, "s", false),
         createComparisonLine(`${heading} range`, currentWeapon.range, projectedWeapon.range, "m"),
-        createComparisonLine(`${heading} energy`, currentWeapon.energyCost, projectedWeapon.energyCost, "", false)
+        createComparisonLine(`${heading} energy`, currentEnergy, projectedEnergy, "", false)
       ])
     );
   }
@@ -412,8 +476,8 @@ export function getEquipmentComparison(player: PlayerState, equipmentId: Equipme
   const baseStats = shipById[player.shipId]?.stats ?? player.stats;
   const currentStats = getEffectiveShipStats(baseStats, player.equipment);
   const projectedStats = getEffectiveShipStats(baseStats, projected.equipment);
-  const currentEffects = getEquipmentEffects(player.equipment);
-  const projectedEffects = getEquipmentEffects(projected.equipment);
+  const currentEffects = getRuntimeEffectsForShip(player.shipId, player.equipment);
+  const projectedEffects = getRuntimeEffectsForShip(player.shipId, projected.equipment);
   const installed = player.equipment.includes(equipmentId);
   const canFit = definition ? slotUsage[slotType] + (definition.slotSize ?? 1) <= slotCapacity[slotType] : false;
   const canInstall = !!definition && !installed && !(definition.installableOn && !definition.installableOn.includes(player.shipId)) && canFit;
@@ -444,7 +508,7 @@ export function getEquipmentComparison(player: PlayerState, equipmentId: Equipme
       createComparisonLine("Energy", currentStats.energy, projectedStats.energy),
       createComparisonLine("Cargo", currentStats.cargoCapacity, projectedStats.cargoCapacity)
     ]),
-    weaponLines: [...weaponLines("primary", player.equipment, projected.equipment), ...weaponLines("secondary", player.equipment, projected.equipment)],
+    weaponLines: [...weaponLines("primary", player.equipment, projected.equipment, player.shipId), ...weaponLines("secondary", player.equipment, projected.equipment, player.shipId)],
     utilityLines: compactLines([
       createComparisonLine("Boost", currentEffects.afterburnerMultiplier, projectedEffects.afterburnerMultiplier, "x"),
       createComparisonLine("Afterburn drain", currentEffects.afterburnerEnergyDrain, projectedEffects.afterburnerEnergyDrain, "/s", false),
@@ -452,7 +516,17 @@ export function getEquipmentComparison(player: PlayerState, equipmentId: Equipme
       createComparisonLine("Hull regen", currentEffects.hullRegenPerSecond, projectedEffects.hullRegenPerSecond, "/s"),
       createComparisonLine("Loot scan", currentEffects.lootInteractionRange, projectedEffects.lootInteractionRange, "m"),
       createComparisonLine("Mining HUD", currentEffects.miningHudRange, projectedEffects.miningHudRange, "m"),
-      createComparisonLine("Weapon cooldown", currentEffects.weaponCooldownMultiplier * 100, projectedEffects.weaponCooldownMultiplier * 100, "%", false)
+      createComparisonLine("Mining progress", currentEffects.miningProgressMultiplier * 100, projectedEffects.miningProgressMultiplier * 100, "%"),
+      createComparisonLine("Mining yield", currentEffects.miningYieldBonus, projectedEffects.miningYieldBonus),
+      createComparisonLine("Mining drain", currentEffects.miningEnergyDrainMultiplier * 100, projectedEffects.miningEnergyDrainMultiplier * 100, "%", false),
+      createComparisonLine("Quiet range", currentEffects.signalScanRangeBonus, projectedEffects.signalScanRangeBonus, "m"),
+      createComparisonLine("Quiet band", currentEffects.signalScanBandBonus, projectedEffects.signalScanBandBonus),
+      createComparisonLine("Quiet rate", currentEffects.signalScanRateMultiplier * 100, projectedEffects.signalScanRateMultiplier * 100, "%"),
+      createComparisonLine("Weapon cooldown", currentEffects.weaponCooldownMultiplier * 100, projectedEffects.weaponCooldownMultiplier * 100, "%", false),
+      createComparisonLine("Weapon damage", currentEffects.weaponDamageMultiplier * 100, projectedEffects.weaponDamageMultiplier * 100, "%"),
+      createComparisonLine("Weapon energy", currentEffects.weaponEnergyCostMultiplier * 100, projectedEffects.weaponEnergyCostMultiplier * 100, "%", false),
+      createComparisonLine("Contraband scan", currentEffects.contrabandScanProgressMultiplier * 100, projectedEffects.contrabandScanProgressMultiplier * 100, "%", false),
+      createComparisonLine("Contraband fine", currentEffects.contrabandFineMultiplier * 100, projectedEffects.contrabandFineMultiplier * 100, "%", false)
     ])
   };
 }
