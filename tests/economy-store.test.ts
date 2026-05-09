@@ -622,6 +622,60 @@ describe("economy store integration", () => {
     expect(store.getState().runtime.message).toContain("Escort complete");
   });
 
+  it("routes to a distant watched NPC before confirming escort with E", async () => {
+    const store = await freshStore();
+    store.setState((state) => ({
+      screen: "economyWatch",
+      currentStationId: "helion-prime",
+      economyNpcWatch: {
+        npcId: "econ-watch-freighter",
+        returnStationId: "helion-prime",
+        cameraMode: "cockpit",
+        lookYaw: 0,
+        lookPitch: 0,
+        enteredAt: state.runtime.clock
+      },
+      player: { ...state.player, position: [0, 0, 0], velocity: [0, 0, 0] },
+      runtime: {
+        ...state.runtime,
+        graceUntil: 999,
+        enemies: [watchableEconomyFreighter({ position: [900, 0, 0], velocity: [0, 0, 0] })]
+      }
+    }));
+
+    await store.getState().executeNpcInteraction("escort", "econ-watch-freighter");
+
+    expect(store.getState()).toMatchObject({
+      screen: "flight",
+      currentStationId: undefined,
+      npcObjective: undefined,
+      autopilot: {
+        phase: "to-npc",
+        targetNpcId: "econ-watch-freighter",
+        pendingNpcAction: "escort"
+      }
+    });
+    expect(store.getState().runtime.message).not.toContain("Escort accepted");
+
+    for (let i = 0; i < 40 && store.getState().autopilot; i += 1) {
+      store.getState().tick(0.25);
+    }
+
+    expect(store.getState().autopilot).toBeUndefined();
+    expect(store.getState().npcObjective).toBeUndefined();
+    expect(store.getState().npcInteraction).toMatchObject({
+      npcId: "econ-watch-freighter",
+      openedFrom: "flight",
+      lastAction: "escort"
+    });
+    expect(store.getState().npcInteraction?.message).toContain("Press E or confirm Escort");
+
+    store.getState().interact();
+
+    expect(store.getState().npcObjective).toMatchObject({ kind: "escort", npcId: "econ-watch-freighter" });
+    expect(store.getState().runtime.message).toContain("Escort accepted");
+  });
+
   it("robs an economy NPC through the backend and applies law consequences plus dropped cargo", async () => {
     const store = await freshStore();
     const response: EconomyNpcInteractionResponse = {
@@ -670,6 +724,64 @@ describe("economy store integration", () => {
     );
     expect(getFactionHeatRecord(state.factionHeat, "free-belt-union").fineCredits).toBeGreaterThan(0);
     expect(state.npcInteraction?.message).toContain("Fine 750 cr");
+  });
+
+  it("routes to a distant NPC before rob can be confirmed", async () => {
+    const store = await freshStore();
+    const response: EconomyNpcInteractionResponse = {
+      ok: true,
+      message: "Union Bulk Freighter surrendered 2 cargo unit(s) under threat.",
+      cargoDropped: { "basic-food": 2 },
+      event: {
+        id: "npc-interaction-rob",
+        type: "npc-interaction",
+        clock: 12,
+        message: "Union Bulk Freighter surrendered 2 cargo unit(s) under threat.",
+        systemId: "helion-reach",
+        npcId: "econ-watch-freighter",
+        amount: 2,
+        snapshotId: 77
+      },
+      snapshot: snapshotWithoutVisibleNpcs(77)
+    };
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify(response), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    store.setState((state) => ({
+      player: { ...state.player, position: [0, 0, 0], velocity: [0, 0, 0] },
+      runtime: {
+        ...state.runtime,
+        enemies: [watchableEconomyFreighter({ position: [900, 0, 0], velocity: [0, 0, 0] })]
+      }
+    }));
+
+    await store.getState().executeNpcInteraction("rob", "econ-watch-freighter");
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(store.getState()).toMatchObject({
+      npcInteraction: undefined,
+      autopilot: {
+        phase: "to-npc",
+        targetNpcId: "econ-watch-freighter",
+        pendingNpcAction: "rob"
+      }
+    });
+
+    for (let i = 0; i < 40 && store.getState().autopilot; i += 1) {
+      store.getState().tick(0.25);
+    }
+    store.getState().interact();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(store.getState().runtime.loot).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ commodityId: "basic-food", amount: 2 })
+      ])
+    );
+    expect(getFactionHeatRecord(store.getState().factionHeat, "free-belt-union").fineCredits).toBeGreaterThan(0);
   });
 
   it("starts rescue objectives and rewards only after backend confirmation", async () => {

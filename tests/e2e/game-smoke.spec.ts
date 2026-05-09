@@ -7,8 +7,10 @@ type Gof2E2EState = {
   currentStationId?: string;
   autopilot?: {
     phase: string;
-    targetStationId: string;
+    targetStationId?: string;
     targetSystemId: string;
+    targetNpcId?: string;
+    pendingNpcAction?: string;
   };
   player: {
     credits: number;
@@ -85,7 +87,9 @@ async function getGameState(page: Page): Promise<Gof2E2EState> {
         ? {
             phase: state.autopilot.phase,
             targetStationId: state.autopilot.targetStationId,
-            targetSystemId: state.autopilot.targetSystemId
+            targetSystemId: state.autopilot.targetSystemId,
+            targetNpcId: state.autopilot.targetNpcId,
+            pendingNpcAction: state.autopilot.pendingNpcAction
           }
         : undefined,
       player: {
@@ -786,7 +790,7 @@ test.describe("browser smoke", () => {
       });
     });
 
-    await page.getByRole("button", { name: "Economy" }).click();
+    await page.getByRole("button", { name: "Economy", exact: true }).click();
     const economy = page.getByTestId("economy-tab");
     await expect(economy).toContainText("CONNECTED");
     await expect(economy).toContainText("Snapshot 101");
@@ -980,6 +984,97 @@ test.describe("browser smoke", () => {
 
     await page.getByRole("button", { name: "Launch" }).click();
     await expect(page.locator(".economy-route-label", { hasText: "MINING · Iron" })).toBeVisible();
+  });
+
+  test("routes from NPC watch before confirming escort with the keyboard", async ({ page }) => {
+    await resetApp(page);
+    await startNewGame(page);
+    await page.evaluate(() => {
+      const state = window.__GOF2_E2E__!.getState() as {
+        dockAt: (stationId: string) => void;
+        runtime: { enemies: unknown[] };
+      };
+      state.dockAt("helion-prime");
+      window.__GOF2_E2E__!.setState({
+        stationTab: "Economy",
+        economyService: { status: "connected", url: "http://127.0.0.1:19777", snapshotId: 303 },
+        runtime: {
+          ...state.runtime,
+          graceUntil: 999,
+          enemies: [
+            {
+              id: "econ-e2e-route-miner",
+              name: "Route Ore Cutter",
+              role: "miner",
+              factionId: "free-belt-union",
+              position: [3600, 40, -2000],
+              velocity: [0, 0, 0],
+              hull: 125,
+              shield: 58,
+              maxHull: 125,
+              maxShield: 58,
+              lastDamageAt: -999,
+              fireCooldown: 0.6,
+              aiProfileId: "miner",
+              aiState: "patrol",
+              aiTimer: 0,
+              economySerial: "HR-MN-ROUTE",
+              economyHomeStationId: "cinder-yard",
+              economyRiskPreference: "balanced",
+              economyContractId: "HR-MN-ROUTE",
+              economyLedger: { revenue: 0, expenses: 0, losses: 0, completedContracts: 0, failedContracts: 0, minedUnits: 0 },
+              economyTaskKind: "mining",
+              economyTaskProgress: 0.42,
+              economyStatus: "MINING · Iron",
+              economyCargo: {},
+              economyCommodityId: "iron",
+              economyTargetId: "helion-iron-1"
+            }
+          ]
+        }
+      });
+    });
+
+    await page.getByRole("button", { name: "Economy", exact: true }).click();
+    const economy = page.getByTestId("economy-tab");
+    await economy.locator(".economy-npc-row", { hasText: "Route Ore Cutter" }).getByRole("button", { name: "Watch" }).click();
+    const watchOverlay = page.getByTestId("economy-watch-overlay");
+    await expect(watchOverlay).toContainText("Route Ore Cutter");
+    await watchOverlay.getByRole("button", { name: "Escort" }).click();
+
+    await expect(page.locator(".flight-canvas canvas")).toBeVisible();
+    await expect(page.locator(".hud-top-right")).toContainText("Autopilot: Intercepting NPC");
+    await expect(page.locator("body")).not.toContainText("Escort accepted");
+    expect(await getGameState(page)).toMatchObject({
+      screen: "flight",
+      autopilot: {
+        phase: "to-npc",
+        targetNpcId: "econ-e2e-route-miner",
+        pendingNpcAction: "escort"
+      }
+    });
+
+    await page.evaluate(() => {
+      const state = window.__GOF2_E2E__!.getState() as {
+        player: { position: [number, number, number]; velocity: [number, number, number] };
+        runtime: { enemies: Array<{ id: string; position: [number, number, number] }> };
+        tick: (delta: number) => void;
+      };
+      const npc = state.runtime.enemies.find((ship) => ship.id === "econ-e2e-route-miner")!;
+      window.__GOF2_E2E__!.setState({
+        player: {
+          ...state.player,
+          position: [npc.position[0] - 790, npc.position[1], npc.position[2]],
+          velocity: [0, 0, 0]
+        }
+      });
+      state.tick(0.1);
+    });
+
+    const interactionOverlay = page.getByTestId("npc-interaction-overlay");
+    await expect(interactionOverlay).toContainText("Press E or confirm Escort");
+    await page.keyboard.press("KeyE");
+    await expect(interactionOverlay).toContainText("Escort accepted");
   });
 
   test("auto-advances voiced story dialogue when each line ends", async ({ page }) => {

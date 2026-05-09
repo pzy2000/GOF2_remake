@@ -788,16 +788,20 @@ export type AutoPilotPhase =
   | "gate-activation"
   | "wormhole"
   | "to-destination-station"
-  | "docking";
+  | "docking"
+  | "to-npc";
 
 export interface AutoPilotState {
   phase: AutoPilotPhase;
   originSystemId: string;
   targetSystemId: string;
-  targetStationId: string;
+  targetStationId?: string;
   targetPosition: Vec3;
   timer: number;
   cancelable: boolean;
+  targetNpcId?: string;
+  targetName?: string;
+  pendingNpcAction?: "escort" | "rob";
 }
 
 export interface EconomyNpcWatchState {
@@ -816,6 +820,7 @@ export interface NpcInteractionState {
   openedFrom: "flight" | "watch";
   openedAt: number;
   lastAction?: NpcInteractionAction;
+  pendingAction?: "escort" | "rob";
   message?: string;
   pending?: boolean;
 }

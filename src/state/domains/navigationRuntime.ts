@@ -19,6 +19,7 @@ import {
   revealNeighborSystems,
   STARGATE_INTERACTION_RANGE
 } from "../../systems/navigation";
+import { NPC_INTERACTION_RANGE } from "../../systems/npcInteraction";
 import type { GameStore, SavePayloadOverrides } from "../gameStoreTypes";
 import {
   createRuntimeForSystem,
@@ -57,6 +58,10 @@ export function emptyFlightInput(): FlightInput {
     mouseDX: 0,
     mouseDY: 0
   };
+}
+
+function npcRouteActionLabel(action: "escort" | "rob"): string {
+  return action[0].toUpperCase() + action.slice(1);
 }
 
 export function advanceAutopilotPatch({
@@ -116,12 +121,12 @@ export function advanceAutopilotPatch({
   let knownSystems = state.knownSystems;
   let knownPlanetIds = state.knownPlanetIds;
   let targetId = state.targetId;
+  let npcInteraction = state.npcInteraction;
   let enteredStationId: string | undefined;
   const audioEvents: AudioEventName[] = [];
   const targetSystem = systemById[autopilot.targetSystemId];
-  const targetStation = stationById[autopilot.targetStationId];
 
-  if (!targetSystem || !targetStation) {
+  if (!targetSystem) {
     return {
       patch: {
         autopilot: undefined,
@@ -131,129 +136,192 @@ export function advanceAutopilotPatch({
     };
   }
 
-  if (autopilot.phase === "to-origin-gate") {
-    const gatePosition = getJumpGatePosition(currentSystemId);
+  if (autopilot.phase === "to-npc") {
+    const targetNpc = runtime.enemies.find((ship) =>
+      ship.id === autopilot?.targetNpcId && ship.hull > 0 && ship.deathTimer === undefined
+    );
+    const pendingAction = autopilot.pendingNpcAction;
+    if (!targetNpc || !pendingAction || currentSystemId !== autopilot.targetSystemId) {
+      return {
+        patch: {
+          autopilot: undefined,
+          npcInteraction: undefined,
+          runtime: { ...runtime, message: "NPC signal lost." },
+          input: emptyFlightInput()
+        }
+      };
+    }
     const step = integrateAutopilotStep({
       player,
-      targetPosition: gatePosition,
-      delta,
-      maxSpeed: 680 * autopilotSpeedMultiplier,
-      arriveDistance: GATE_ARRIVAL_DISTANCE
-    });
-    player = drainAutopilotAfterburner(step.player);
-    runtime.effects.push(navEffect(gatePosition, `Gate ${Math.round(step.distanceToTarget)}m`));
-    runtime.message = `Autopilot: aligning to jump gate · ${Math.round(step.distanceToTarget)}m`;
-    autopilot = { ...autopilot, targetPosition: gatePosition };
-    if (step.distanceToTarget <= GATE_ARRIVAL_DISTANCE) {
-      audioEvents.push("jump-gate");
-      autopilot = {
-        ...autopilot,
-        phase: "gate-activation",
-        targetPosition: gatePosition,
-        timer: 0,
-        cancelable: false
-      };
-      runtime.message = "Gate approach locked. Spooling jump field.";
-    }
-  } else if (autopilot.phase === "gate-activation") {
-    const gatePosition = getJumpGatePosition(currentSystemId);
-    const progress = clamp(autopilot.timer / GATE_ACTIVATION_SECONDS, 0, 1);
-    const step = integrateAutopilotStep({
-      player,
-      targetPosition: gatePosition,
-      delta,
-      maxSpeed: 260,
-      arriveDistance: 10
-    });
-    player = step.player;
-    runtime.effects.push(gateSpoolEffect(gatePosition, progress));
-    runtime.message = `Gate spool-up ${Math.round(progress * 100)}%`;
-    if (progress >= 1) {
-      audioEvents.push("wormhole");
-      autopilot = {
-        ...autopilot,
-        phase: "wormhole",
-        targetPosition: gatePosition,
-        timer: 0,
-        cancelable: false
-      };
-      runtime.effects.push(wormholeEffect(player.position));
-      runtime.message = "Wormhole transit engaged.";
-    }
-  } else if (autopilot.phase === "wormhole") {
-    const progress = clamp(autopilot.timer / WORMHOLE_SECONDS, 0, 1);
-    const forward = forwardFromRotation(player.rotation);
-    player = {
-      ...player,
-      position: add(player.position, scale(forward, (760 + progress * 380) * delta)),
-      velocity: scale(forward, 820 + progress * 360),
-      throttle: 1,
-      energy: clamp(player.energy + delta * 42, 0, player.stats.energy)
-    };
-    runtime.effects.push(wormholeEffect(player.position));
-    runtime.message = `Wormhole transit ${Math.round(progress * 100)}%`;
-    if (progress >= 1) {
-      currentSystemId = targetSystem.id;
-      currentStationId = undefined;
-      knownSystems = revealNeighborSystems(knownSystems, targetSystem.id);
-      knownPlanetIds = mergeKnownPlanetIds(knownPlanetIds, knownSystems, targetStation.id);
-      targetId = undefined;
-      const arrivalPosition = getStationArrivalPosition(targetStation.id) ?? add(targetStation.position, [0, 36, 240]);
-      const exitDirection = normalize(sub(targetStation.position, arrivalPosition));
-      player = {
-        ...player,
-        position: arrivalPosition,
-        velocity: scale(exitDirection, 120),
-        rotation: rotationToward(exitDirection),
-        throttle: 0.25
-      };
-      runtime = {
-        ...createRuntimeForSystem(targetSystem.id, state.activeMissions),
-        message: `Arrived near ${targetStation.name}. Press E to dock.`,
-        effects: [
-          wormholeEffect(player.position),
-          navEffect(targetStation.position, "E Dock"),
-          dockCorridorEffect(player.position, targetStation.position, "ARRIVAL")
-        ]
-      };
-      autopilot = undefined;
-    }
-  } else if (autopilot.phase === "to-destination-station") {
-    const step = integrateAutopilotStep({
-      player,
-      targetPosition: targetStation.position,
+      targetPosition: targetNpc.position,
       delta,
       maxSpeed: 620 * autopilotSpeedMultiplier,
-      arriveDistance: STATION_DOCK_DISTANCE
+      arriveDistance: NPC_INTERACTION_RANGE
     });
     player = drainAutopilotAfterburner(step.player);
-    runtime.effects.push(navEffect(targetStation.position, `Dock ${Math.round(step.distanceToTarget)}m`));
-    runtime.effects.push(dockCorridorEffect(player.position, targetStation.position, "APPROACH"));
-    runtime.message = `Autopilot: approaching ${targetStation.name} · ${Math.round(step.distanceToTarget)}m`;
-    if (step.distanceToTarget <= STATION_DOCK_DISTANCE) {
+    const actionLabel = npcRouteActionLabel(pendingAction);
+    runtime.effects.push(navEffect(targetNpc.position, `${actionLabel} ${Math.round(step.distanceToTarget)}m`));
+    runtime.message = `Autopilot: intercepting ${targetNpc.name} · ${Math.round(step.distanceToTarget)}m`;
+    targetId = targetNpc.id;
+    autopilot = {
+      ...autopilot,
+      targetPosition: targetNpc.position,
+      targetName: targetNpc.name
+    };
+    if (step.distanceToTarget <= NPC_INTERACTION_RANGE) {
       autopilot = undefined;
       player = { ...player, velocity: [0, 0, 0], throttle: 0 };
-      runtime.message = `Arrived near ${targetStation.name}. Press E to dock.`;
+      const message = `Arrived near ${targetNpc.name}. Press E or confirm ${actionLabel}.`;
+      runtime.message = message;
+      runtime.effects.push(navEffect(targetNpc.position, `E ${actionLabel}`));
+      npcInteraction = {
+        npcId: targetNpc.id,
+        openedFrom: "flight",
+        openedAt: runtime.clock,
+        lastAction: pendingAction,
+        pendingAction,
+        message
+      };
+      targetId = targetNpc.id;
+      screen = "flight";
+      previousScreen = state.screen;
     }
-  } else if (autopilot.phase === "docking") {
-    const step = integrateAutopilotStep({
-      player,
-      targetPosition: targetStation.position,
-      delta,
-      maxSpeed: 170,
-      arriveDistance: 150
-    });
-    player = step.player;
-    runtime.effects.push(dockCorridorEffect(player.position, targetStation.position));
-    runtime.message = `Docking with ${targetStation.name}...`;
-    if (autopilot.timer >= 0.9 || step.distanceToTarget <= 220) {
-      screen = "station";
-      previousScreen = "flight";
-      currentStationId = targetStation.id;
-      enteredStationId = targetStation.id;
-      autopilot = undefined;
-      player = { ...player, velocity: [0, 0, 0], throttle: 0 };
-      runtime.message = `Docking complete at ${targetStation.name}.`;
+  } else {
+    const targetStation = autopilot.targetStationId ? stationById[autopilot.targetStationId] : undefined;
+    if (!targetStation) {
+      return {
+        patch: {
+          autopilot: undefined,
+          runtime: { ...runtime, message: "Autopilot route failed. Manual control restored." },
+          input: emptyFlightInput()
+        }
+      };
+    }
+
+    if (autopilot.phase === "to-origin-gate") {
+      const gatePosition = getJumpGatePosition(currentSystemId);
+      const step = integrateAutopilotStep({
+        player,
+        targetPosition: gatePosition,
+        delta,
+        maxSpeed: 680 * autopilotSpeedMultiplier,
+        arriveDistance: GATE_ARRIVAL_DISTANCE
+      });
+      player = drainAutopilotAfterburner(step.player);
+      runtime.effects.push(navEffect(gatePosition, `Gate ${Math.round(step.distanceToTarget)}m`));
+      runtime.message = `Autopilot: aligning to jump gate · ${Math.round(step.distanceToTarget)}m`;
+      autopilot = { ...autopilot, targetPosition: gatePosition };
+      if (step.distanceToTarget <= GATE_ARRIVAL_DISTANCE) {
+        audioEvents.push("jump-gate");
+        autopilot = {
+          ...autopilot,
+          phase: "gate-activation",
+          targetPosition: gatePosition,
+          timer: 0,
+          cancelable: false
+        };
+        runtime.message = "Gate approach locked. Spooling jump field.";
+      }
+    } else if (autopilot.phase === "gate-activation") {
+      const gatePosition = getJumpGatePosition(currentSystemId);
+      const progress = clamp(autopilot.timer / GATE_ACTIVATION_SECONDS, 0, 1);
+      const step = integrateAutopilotStep({
+        player,
+        targetPosition: gatePosition,
+        delta,
+        maxSpeed: 260,
+        arriveDistance: 10
+      });
+      player = step.player;
+      runtime.effects.push(gateSpoolEffect(gatePosition, progress));
+      runtime.message = `Gate spool-up ${Math.round(progress * 100)}%`;
+      if (progress >= 1) {
+        audioEvents.push("wormhole");
+        autopilot = {
+          ...autopilot,
+          phase: "wormhole",
+          targetPosition: gatePosition,
+          timer: 0,
+          cancelable: false
+        };
+        runtime.effects.push(wormholeEffect(player.position));
+        runtime.message = "Wormhole transit engaged.";
+      }
+    } else if (autopilot.phase === "wormhole") {
+      const progress = clamp(autopilot.timer / WORMHOLE_SECONDS, 0, 1);
+      const forward = forwardFromRotation(player.rotation);
+      player = {
+        ...player,
+        position: add(player.position, scale(forward, (760 + progress * 380) * delta)),
+        velocity: scale(forward, 820 + progress * 360),
+        throttle: 1,
+        energy: clamp(player.energy + delta * 42, 0, player.stats.energy)
+      };
+      runtime.effects.push(wormholeEffect(player.position));
+      runtime.message = `Wormhole transit ${Math.round(progress * 100)}%`;
+      if (progress >= 1) {
+        currentSystemId = targetSystem.id;
+        currentStationId = undefined;
+        knownSystems = revealNeighborSystems(knownSystems, targetSystem.id);
+        knownPlanetIds = mergeKnownPlanetIds(knownPlanetIds, knownSystems, targetStation.id);
+        targetId = undefined;
+        const arrivalPosition = getStationArrivalPosition(targetStation.id) ?? add(targetStation.position, [0, 36, 240]);
+        const exitDirection = normalize(sub(targetStation.position, arrivalPosition));
+        player = {
+          ...player,
+          position: arrivalPosition,
+          velocity: scale(exitDirection, 120),
+          rotation: rotationToward(exitDirection),
+          throttle: 0.25
+        };
+        runtime = {
+          ...createRuntimeForSystem(targetSystem.id, state.activeMissions),
+          message: `Arrived near ${targetStation.name}. Press E to dock.`,
+          effects: [
+            wormholeEffect(player.position),
+            navEffect(targetStation.position, "E Dock"),
+            dockCorridorEffect(player.position, targetStation.position, "ARRIVAL")
+          ]
+        };
+        autopilot = undefined;
+      }
+    } else if (autopilot.phase === "to-destination-station") {
+      const step = integrateAutopilotStep({
+        player,
+        targetPosition: targetStation.position,
+        delta,
+        maxSpeed: 620 * autopilotSpeedMultiplier,
+        arriveDistance: STATION_DOCK_DISTANCE
+      });
+      player = drainAutopilotAfterburner(step.player);
+      runtime.effects.push(navEffect(targetStation.position, `Dock ${Math.round(step.distanceToTarget)}m`));
+      runtime.effects.push(dockCorridorEffect(player.position, targetStation.position, "APPROACH"));
+      runtime.message = `Autopilot: approaching ${targetStation.name} · ${Math.round(step.distanceToTarget)}m`;
+      if (step.distanceToTarget <= STATION_DOCK_DISTANCE) {
+        autopilot = undefined;
+        player = { ...player, velocity: [0, 0, 0], throttle: 0 };
+        runtime.message = `Arrived near ${targetStation.name}. Press E to dock.`;
+      }
+    } else if (autopilot.phase === "docking") {
+      const step = integrateAutopilotStep({
+        player,
+        targetPosition: targetStation.position,
+        delta,
+        maxSpeed: 170,
+        arriveDistance: 150
+      });
+      player = step.player;
+      runtime.effects.push(dockCorridorEffect(player.position, targetStation.position));
+      runtime.message = `Docking with ${targetStation.name}...`;
+      if (autopilot.timer >= 0.9 || step.distanceToTarget <= 220) {
+        screen = "station";
+        previousScreen = "flight";
+        currentStationId = targetStation.id;
+        enteredStationId = targetStation.id;
+        autopilot = undefined;
+        player = { ...player, velocity: [0, 0, 0], throttle: 0 };
+        runtime.message = `Docking complete at ${targetStation.name}.`;
+      }
     }
   }
 
@@ -294,6 +362,7 @@ export function advanceAutopilotPatch({
       knownSystems,
       knownPlanetIds,
       targetId,
+      npcInteraction,
       gameClock,
       marketState,
       activeMissions: expiration.activeMissions,

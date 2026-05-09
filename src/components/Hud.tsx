@@ -342,7 +342,8 @@ function autopilotPhaseLabel(phase: string, locale: Locale): string {
     "gate-activation": { en: "Gate spool-up", "zh-CN": "星门预热", "zh-TW": "星門預熱", ja: "ゲート起動中", fr: "Charge du portail" },
     wormhole: { en: "Wormhole transit", "zh-CN": "虫洞航行", "zh-TW": "蟲洞航行", ja: "ワームホール通過", fr: "Transit vortex" },
     "to-destination-station": { en: "Approaching station", "zh-CN": "接近空间站", "zh-TW": "接近太空站", ja: "ステーション接近", fr: "Approche station" },
-    docking: { en: "Docking", "zh-CN": "停靠中", "zh-TW": "停靠中", ja: "ドッキング中", fr: "Amarrage" }
+    docking: { en: "Docking", "zh-CN": "停靠中", "zh-TW": "停靠中", ja: "ドッキング中", fr: "Amarrage" },
+    "to-npc": { en: "Intercepting NPC", "zh-CN": "接近 NPC", "zh-TW": "接近 NPC", ja: "NPCへ接近", fr: "Interception PNJ" }
   };
   return labels[phase]?.[locale] ?? labels[phase]?.en ?? phase;
 }

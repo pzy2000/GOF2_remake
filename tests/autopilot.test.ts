@@ -3,7 +3,7 @@ import { stationById } from "../src/data/world";
 import { GATE_ACTIVATION_SECONDS, getDefaultTargetStation, getJumpGatePosition, shouldCancelAutopilot, WORMHOLE_SECONDS } from "../src/systems/autopilot";
 import { distance } from "../src/systems/math";
 import { readSave } from "../src/systems/save";
-import type { FlightInput } from "../src/types/game";
+import type { FlightEntity, FlightInput } from "../src/types/game";
 
 class MemoryStorage implements Storage {
   private data = new Map<string, string>();
@@ -43,6 +43,37 @@ const neutralInput: FlightInput = {
   mouseDX: 0,
   mouseDY: 0
 };
+
+function economyFreighterTarget(position: [number, number, number]): FlightEntity {
+  return {
+    id: "econ-route-freighter",
+    name: "Route Freighter",
+    role: "freighter",
+    factionId: "free-belt-union",
+    position,
+    velocity: [0, 0, 0],
+    hull: 170,
+    shield: 70,
+    maxHull: 170,
+    maxShield: 70,
+    lastDamageAt: -999,
+    fireCooldown: 0.6,
+    aiProfileId: "freighter",
+    aiState: "patrol",
+    aiTimer: 0,
+    economySerial: "HR-FR-ROUTE",
+    economyHomeStationId: "helion-prime",
+    economyRiskPreference: "balanced",
+    economyContractId: "HR-FR-ROUTE",
+    economyLedger: { revenue: 0, expenses: 0, losses: 0, completedContracts: 0, failedContracts: 0, minedUnits: 0 },
+    economyTaskKind: "hauling",
+    economyTaskProgress: 0.2,
+    economyStatus: "HAULING · Basic Food",
+    economyCargo: { "basic-food": 6 },
+    economyCommodityId: "basic-food",
+    economyTargetId: "helion-prime"
+  };
+}
 
 async function freshStore(storage: Storage = new MemoryStorage()) {
   vi.resetModules();
@@ -84,6 +115,59 @@ describe("autopilot jump flow", () => {
     expect(boostedState.autopilot).toBeDefined();
     expect(Math.hypot(...boostedState.player.velocity)).toBeGreaterThan(normalSpeed);
     expect(boostedState.player.energy).toBeLessThan(boostedState.player.stats.energy);
+  });
+
+  it("uses the same boost and cancel rules while routing to an NPC", async () => {
+    const normal = await freshStore();
+    const npc = economyFreighterTarget([3800, 0, 0]);
+    normal.setState((state) => ({
+      screen: "flight",
+      player: { ...state.player, position: [0, 0, 0], velocity: [0, 0, 0] },
+      runtime: { ...state.runtime, enemies: [npc] },
+      autopilot: {
+        phase: "to-npc",
+        originSystemId: "helion-reach",
+        targetSystemId: "helion-reach",
+        targetPosition: npc.position,
+        targetNpcId: npc.id,
+        targetName: npc.name,
+        pendingNpcAction: "escort",
+        timer: 0,
+        cancelable: true
+      }
+    }));
+    normal.getState().tick(0.2);
+    const normalSpeed = Math.hypot(...normal.getState().player.velocity);
+
+    const boosted = await freshStore();
+    boosted.setState((state) => ({
+      screen: "flight",
+      player: { ...state.player, position: [0, 0, 0], velocity: [0, 0, 0] },
+      runtime: { ...state.runtime, enemies: [npc] },
+      autopilot: {
+        phase: "to-npc",
+        originSystemId: "helion-reach",
+        targetSystemId: "helion-reach",
+        targetPosition: npc.position,
+        targetNpcId: npc.id,
+        targetName: npc.name,
+        pendingNpcAction: "escort",
+        timer: 0,
+        cancelable: true
+      }
+    }));
+    boosted.getState().setInput({ afterburner: true, mouseDX: 30 });
+    boosted.getState().tick(0.2);
+
+    expect(boosted.getState().autopilot?.phase).toBe("to-npc");
+    expect(Math.hypot(...boosted.getState().player.velocity)).toBeGreaterThan(normalSpeed);
+    expect(boosted.getState().player.energy).toBeLessThan(boosted.getState().player.stats.energy);
+
+    boosted.getState().setInput({ throttleUp: true });
+    boosted.getState().tick(0.1);
+
+    expect(boosted.getState().autopilot).toBeUndefined();
+    expect(boosted.getState().runtime.message).toContain("Autopilot canceled");
   });
 
   it("auto-saves to the auto slot when docking manually", async () => {

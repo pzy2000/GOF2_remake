@@ -25,6 +25,7 @@ import {
 } from "../systems/difficulty";
 import { integrateVelocity } from "../systems/flight";
 import { getDefaultTargetStation } from "../systems/autopilot";
+import { NPC_INTERACTION_RANGE } from "../systems/npcInteraction";
 import { advanceMarketState, buyCommodity, buyEquipment, createInitialMarketState, getCargoUsed, getOccupiedCargo, sellCommodity, sellEquipment } from "../systems/economy";
 import { createInitialReputation, updateReputation } from "../systems/reputation";
 import {
@@ -129,6 +130,7 @@ import {
   dialogueOpenPatch,
   hydrateActiveMission,
   lootDropsForDestroyedShip,
+  navEffect,
   projectileId,
   upsertShipRecord
 } from "./domains/runtimeFactory";
@@ -280,12 +282,12 @@ function isWatchableEconomyNpc(ship: FlightEntity | undefined): ship is FlightEn
   return !!ship?.economyStatus && ship.hull > 0 && ship.deathTimer === undefined;
 }
 
-const NPC_INTERACTION_RANGE = 820;
 const NPC_ESCORT_RANGE = 900;
 const NPC_ESCORT_SECONDS = 90;
 const NPC_ESCORT_PROGRESS_SECONDS = 25;
 const NPC_RESCUE_SECONDS = 90;
 const NPC_RESCUE_CLEAR_RANGE = 1200;
+type NpcRouteAction = Extract<NpcInteractionAction, "escort" | "rob">;
 
 function isEconomyNpc(ship: FlightEntity | undefined): ship is FlightEntity {
   return isWatchableEconomyNpc(ship) && ["trader", "freighter", "courier", "miner", "smuggler"].includes(ship.role);
@@ -342,6 +344,56 @@ function reportRewardFaction(state: GameStore, ship: FlightEntity): FactionId {
 
 function canReportNpc(state: GameStore, ship: FlightEntity): boolean {
   return ship.role === "smuggler" || hasActiveCivilianDistress(ship, state.runtime.clock) || isHostileToPlayer(ship);
+}
+
+function npcRouteActionLabel(action: NpcRouteAction): string {
+  return action[0].toUpperCase() + action.slice(1);
+}
+
+function shouldRouteToNpc(state: GameStore, ship: FlightEntity): boolean {
+  return state.screen !== "flight" || distance(ship.position, state.player.position) > NPC_INTERACTION_RANGE;
+}
+
+function startNpcInteractionRoutePatch(state: GameStore, ship: FlightEntity, action: NpcRouteAction): Partial<GameStore> {
+  const launchPatch = state.currentStationId ? undockPatch(state) : {};
+  const player = launchPatch.player ?? state.player;
+  const runtime = launchPatch.runtime ?? state.runtime;
+  const targetPosition = [...ship.position] as Vec3;
+  const actionLabel = npcRouteActionLabel(action);
+  return {
+    ...launchPatch,
+    screen: "flight",
+    previousScreen: state.screen,
+    currentStationId: undefined,
+    economyNpcWatch: undefined,
+    npcInteraction: undefined,
+    targetId: ship.id,
+    autopilot: {
+      phase: "to-npc",
+      originSystemId: state.currentSystemId,
+      targetSystemId: state.currentSystemId,
+      targetPosition,
+      targetNpcId: ship.id,
+      targetName: ship.name,
+      pendingNpcAction: action,
+      timer: 0,
+      cancelable: true
+    },
+    player: {
+      ...player,
+      velocity: [0, 0, 0],
+      throttle: Math.max(player.throttle, 0.45)
+    },
+    runtime: {
+      ...runtime,
+      graceUntil: Math.max(runtime.graceUntil, runtime.clock + 5),
+      effects: [...runtime.effects, navEffect(targetPosition, `${actionLabel} ${ship.name}`)],
+      message: `Autopilot: routing to ${ship.name} for ${actionLabel}.`
+    },
+    input: emptyFlightInput(),
+    primaryCooldown: 0,
+    secondaryCooldown: 0
+  };
 }
 
 function lootForCargo(cargo: CargoHold | undefined, position: Vec3): LootEntity[] {
@@ -836,6 +888,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
         setInteractionMessage(`${npc.name} refuses escort terms.`);
         return;
       }
+      if (shouldRouteToNpc(state, npc)) {
+        audioSystem.play("ui-click");
+        set(startNpcInteractionRoutePatch(state, npc, "escort"));
+        return;
+      }
       const rewardCredits = escortRewardForNpc(npc, state.currentSystemId);
       audioSystem.play("ui-click");
       set({
@@ -905,6 +962,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
     if (action === "rob" && cargoUnits(npc.economyCargo) <= 0) {
       setInteractionMessage(`${npc.name} has no visible cargo to rob.`);
+      return;
+    }
+    if (action === "rob" && shouldRouteToNpc(state, npc)) {
+      audioSystem.play("ui-click");
+      set(startNpcInteractionRoutePatch(state, npc, "rob"));
       return;
     }
 
@@ -2108,6 +2170,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
   interact: () => {
     const state = get();
     const equipmentEffects = getEquipmentEffects(state.player.equipment);
+    const pendingNpcAction = state.npcInteraction?.pendingAction;
+    if (pendingNpcAction) {
+      const npc = economyNpcById(state, state.npcInteraction?.npcId);
+      if (!npc) {
+        set({ runtime: { ...state.runtime, message: "NPC signal lost." }, npcInteraction: undefined });
+        return;
+      }
+      if (distance(npc.position, state.player.position) <= NPC_INTERACTION_RANGE) {
+        void get().executeNpcInteraction(pendingNpcAction, npc.id);
+        return;
+      }
+      set({ runtime: { ...state.runtime, message: `Move within ${NPC_INTERACTION_RANGE}m of ${npc.name} to confirm ${npcRouteActionLabel(pendingNpcAction)}.` } });
+      return;
+    }
     const navigationTarget = getNearestNavigationTarget(state.currentSystemId, state.player.position, state.knownPlanetIds, {
       explorationState: state.explorationState,
       installedEquipment: state.player.equipment

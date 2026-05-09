@@ -1,0 +1,1 @@
+export const NPC_INTERACTION_RANGE = 820;
