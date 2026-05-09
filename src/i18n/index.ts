@@ -48,7 +48,7 @@ const uiMessages = {
 const exactText = {
   "zh-CN": {
     "Browser WebGL vertical slice": "浏览器 WebGL 垂直切片",
-    "Trade, mine, fight pirates, dock at stations, and push across a six-system frontier.": "贸易、采矿、迎战海盗、停靠空间站，并穿越六个星系的边境。",
+    "Trade, mine, fight pirates, dock at stations, and explore six frontier systems plus PTD Home.": "贸易、采矿、迎战海盗、停靠空间站，并探索六大前线星系 + PTD Home 专用据点。",
     "New Game": "新游戏",
     "Continue": "继续",
     "Settings": "设置",
@@ -397,8 +397,13 @@ const exactText = {
     "Exploration Systems": "探索系统",
     "Engineering & Trade": "工程与贸易"
   },
-  "zh-TW": {},
+  "zh-TW": {
+    "Browser WebGL vertical slice": "瀏覽器 WebGL 垂直切片",
+    "Trade, mine, fight pirates, dock at stations, and explore six frontier systems plus PTD Home.": "貿易、採礦、迎戰海盜、停靠太空站，並探索六大前線星系 + PTD Home 專用據點。"
+  },
   ja: {
+    "Browser WebGL vertical slice": "ブラウザ WebGL 縦切り版",
+    "Trade, mine, fight pirates, dock at stations, and explore six frontier systems plus PTD Home.": "交易、採掘、海賊戦、ステーション寄港をこなし、6つの辺境星系と専用拠点 PTD Home を探索します。",
     "New Game": "ニューゲーム",
     "Continue": "続ける",
     "Settings": "設定",
@@ -548,6 +553,8 @@ const exactText = {
     "Engineering & Trade": "工学と交易"
   },
   fr: {
+    "Browser WebGL vertical slice": "Tranche verticale WebGL navigateur",
+    "Trade, mine, fight pirates, dock at stations, and explore six frontier systems plus PTD Home.": "Commercez, minez, combattez des pirates, amarrez-vous aux stations et explorez six systèmes frontaliers plus la base dédiée PTD Home.",
     "New Game": "Nouvelle partie",
     "Continue": "Continuer",
     "Settings": "Paramètres",

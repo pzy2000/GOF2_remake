@@ -2,15 +2,17 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [日本語](README.ja.md) | [Français](README.fr.md)
 
-Browser-playable WebGL vertical slice for an original space combat/trading game. Fly a third-person ship, fight pirates, mine asteroids, collect cargo, dock at stations, trade, accept missions, jump between systems, and save/load through browser storage.
+Browser-playable WebGL vertical slice for an original space combat/trading game. Fly a third-person ship, fight pirates, mine asteroids, collect cargo, dock at stations, trade, accept missions, and explore six frontier systems plus the dedicated PTD Home base with browser save/load.
 
 ## Screenshots
 
-| Main Menu | Flight HUD |
+| View | Screenshot |
 | --- | --- |
-| ![Main menu with key art, new game, settings, credits, and save slots](docs/screenshots/main-menu.png) | ![Third-person flight HUD with ship gauges, pirate target lock, navigation hint, cargo, and comms](docs/screenshots/flight-hud.png) |
-| Station Market | Galaxy Map |
-| ![Station market interface for buying and selling commodities at Helion Prime Exchange](docs/screenshots/station-market.png) | ![Galaxy map showing discovered systems, jump routes, station destinations, and unknown signals](docs/screenshots/galaxy-map.png) |
+| Main Menu | ![Main menu presenting six frontier systems plus PTD Home, language selection, and save slots](docs/screenshots/main-menu.png) |
+| Flight HUD | ![Third-person flight HUD with ship gauges, onboarding, story, economy, legal, and signal trackers](docs/screenshots/flight-hud.png) |
+| Station Market | ![Station market and service interface for buying, selling, mission flow, and local economy status](docs/screenshots/station-market.png) |
+| Galaxy Map | ![Galaxy map showing discovered systems, station routes, dispatch targets, story objectives, and Quiet Signals](docs/screenshots/galaxy-map.png) |
+| Career Shipyard | ![Shipyard cards showing career hulls, traits, blueprint paths, and purchase requirements](docs/screenshots/shipyard-careers.png) |
 
 ## Run
 
@@ -23,6 +25,12 @@ npm test
 ```
 
 `npm run dev:full` starts the local authoritative economy server on `127.0.0.1:19777` and the Vite frontend together. Use plain `npm run dev` when you want the browser-only fallback economy.
+
+You can also use the one-command launcher:
+
+```bash
+./start.sh
+```
 
 ## Controls
 
@@ -51,7 +59,7 @@ Generated project assets:
 - `skybox-panorama.webp`
 - `skybox-*.webp` per star system
 - `planet-*.webp` per visitable planet
-- `ships/*.glb` for the five player ships
+- `ships/*.glb` for the five generated player-ship silhouettes
 - `asteroid-textures.webp`
 - `faction-emblems.webp`
 - `hud-overlay.webp`
@@ -64,17 +72,17 @@ Galaxy Map jumps now target discovered planet stations instead of only whole sys
 
 ## Trading And Contracts
 
-Station markets now track saved stock, demand, and baseline recovery. Buying reduces local stock and pushes buy prices upward; selling increases stock and cools demand. The local REST + SSE economy backend globally ticks NPC miners, couriers, freighters, traders, and smugglers, then streams market events and visible NPC traffic back into the game. The Station Economy tab shows backend status, NPC routes, market pressure, favored routes, and recent supply events.
+Station markets now track saved stock, demand, and baseline recovery. Buying reduces local stock and pushes buy prices upward; selling increases stock and cools demand. The local REST + SSE economy backend globally ticks NPC miners, couriers, freighters, traders, and smugglers, then streams market events and visible NPC traffic back into the game. The Station Economy tab is also the Dispatch Board: legal supply runs and smuggling runs can be accepted, routed, tracked on the HUD/map, and completed back into market pressure.
 
-Contracts use saved shipboard time. Courier, cargo, passenger, mining, bounty, escort, and salvage missions have deadlines and reputation penalties. Passenger contracts reserve cargo capacity, cargo transport consumes player-provided goods on delivery, escort missions spawn a convoy ship in flight, and salvage missions spawn recoverable crates.
+Contracts use saved shipboard time. Courier, cargo, passenger, mining, bounty, escort, salvage, and dispatch missions have deadlines and reputation consequences. Passenger contracts reserve cargo capacity, cargo transport consumes player-provided goods on delivery, escort missions spawn a convoy ship in flight, and salvage missions spawn recoverable crates. Visible economy NPCs can be hailed, escorted, robbed, rescued, or reported, with backend-backed consequences for robberies, rescues, and reports when the local service is online.
 
-The main story chapter is Glass Wake Protocol, an eight-step mission chain about a Mirr probe, spoofed trade beacons, Ashen relay pirates, and a quiet drone carrier near Celest Gate. Stations include a Captain's Log tab that tracks chapter progress, current objectives, retryable failures, and unlocked story logs without adding separate story save state.
+The main story is Glass Wake Protocol, a 13-chapter chain about a Mirr probe, spoofed trade beacons, Ashen relay pirates, Unknown Drones, Echo Lock targets, and the Listener Scar. Stations include a Captain's Log tab that tracks chapter progress, current objectives, retryable failures, and unlocked story logs without adding separate story save state.
 
 ## Ships And Equipment
 
-Equipment now uses a ship loadout plus inventory model. Primary, secondary, utility, defense, and engineering modules consume matching ship slots; installing draws one item from equipment inventory, unloading returns it, and the active weapons come from the installed loadout order. Blueprint Workshop fabrication consumes credits plus cargo materials and adds the result to inventory instead of auto-installing it.
+Equipment now uses a ship loadout plus inventory model. Primary, secondary, utility, defense, and engineering modules consume matching ship slots; installing draws one item from equipment inventory, unloading returns it, and the active weapons come from the installed loadout order. Blueprint Workshop fabrication consumes credits plus cargo materials and adds the result to inventory instead of auto-installing it. Career equipment routes support mining, smuggling, combat, and exploration builds.
 
-The fleet has five distinct GLB silhouettes: Sparrow MK-I scout, Mule LX hauler, Raptor V fighter, Bastion-7 gunship, and Horizon Ark explorer. Buying a new ship equips its stock loadout and stores the old hull with its installed equipment at the dedicated PTD Home station. Stored ships can be switched back for free only while docked at PTD Home.
+The fleet has nine playable hulls across five generated GLB silhouettes: starter, hauler, miner, smuggler, fighter, gunship, and explorer careers now have distinct stats, slot layouts, traits, loadouts, and purchase requirements. Buying a new ship equips its stock loadout and stores the old hull with its installed equipment at the dedicated PTD Home station. Stored ships can be switched back for free only while docked at PTD Home.
 
 ## Saves, Data, And Audio
 
@@ -86,4 +94,4 @@ Audio uses a hybrid runtime: SFX, warnings, and fallback music are synthesized w
 
 ## Known Limitations
 
-This is a vertical slice, not a full campaign. The authoritative economy backend is a local development service; if it is offline, the browser falls back to local market simulation so trading remains playable. Escort routes are currently same-system contracts so they stay independent from jump-gate autopilot. Commodity, equipment, and faction sprite sheets are sliced in the UI with CSS atlas positioning. Procedural SFX and fallback music are intentionally lightweight, while authored BGM coverage is limited to the current CC0 track set.
+This is a vertical slice, not a full campaign. The authoritative economy backend is a local development service; if it is offline, the browser falls back to local market simulation so trading remains playable, while backend-backed NPC/economy events degrade gracefully. Commodity, equipment, and faction sprite sheets are sliced in the UI with CSS atlas positioning. Procedural SFX and fallback music are intentionally lightweight, while authored BGM coverage is limited to the current CC0 track set.

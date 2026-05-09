@@ -2,15 +2,17 @@
 
 [English](README.md) | [简体中文](README.zh-CN.md) | [繁體中文](README.zh-TW.md) | [日本語](README.ja.md) | [Français](README.fr.md)
 
-Une tranche verticale WebGL jouable dans le navigateur pour un jeu original de combat et de commerce spatial. Pilotez un vaisseau en vue a la troisieme personne, combattez des pirates, minez des asteroides, recuperez du fret, amarrez-vous aux stations, commercez, acceptez des missions, sautez entre les systemes et sauvegardez/chargez via le stockage du navigateur.
+Une tranche verticale WebGL jouable dans le navigateur pour un jeu original de combat et de commerce spatial. Pilotez un vaisseau en vue a la troisieme personne, combattez des pirates, minez des asteroides, recuperez du fret, amarrez-vous aux stations, commercez, acceptez des missions et explorez six systèmes frontaliers plus la base dédiée PTD Home avec sauvegarde/chargement navigateur.
 
 ## Captures
 
-| Menu principal | HUD de vol |
+| Vue | Capture |
 | --- | --- |
-| ![Menu principal avec illustration, nouvelle partie, parametres, credits et emplacements de sauvegarde](docs/screenshots/main-menu.png) | ![HUD de vol a la troisieme personne avec jauges du vaisseau, verrouillage pirate, indice de navigation, fret et communications](docs/screenshots/flight-hud.png) |
-| Marche de station | Carte galactique |
-| ![Interface de marche de station pour acheter et vendre des marchandises a Helion Prime Exchange](docs/screenshots/station-market.png) | ![Carte galactique montrant les systemes decouverts, routes de saut, destinations de stations et signaux inconnus](docs/screenshots/galaxy-map.png) |
+| Menu principal | ![Menu principal presentant six systèmes frontaliers plus PTD Home, le choix de langue et les emplacements de sauvegarde](docs/screenshots/main-menu.png) |
+| HUD de vol | ![HUD de vol a la troisieme personne avec jauges, checklist d'accueil, histoire, economie, statut legal et suivi des signaux](docs/screenshots/flight-hud.png) |
+| Marche de station | ![Marche et services de station pour acheter, vendre, suivre les missions et lire l'etat economique local](docs/screenshots/station-market.png) |
+| Carte galactique | ![Carte galactique montrant systemes decouverts, routes de station, objectifs Dispatch, histoire et Quiet Signals](docs/screenshots/galaxy-map.png) |
+| Chantier de carrieres | ![Cartes de chantier naval montrant coques de carriere, traits, chemins de plans et conditions d'achat](docs/screenshots/shipyard-careers.png) |
 
 ## Lancer
 
@@ -57,7 +59,7 @@ Ressources generees du projet :
 - `skybox-panorama.webp`
 - `skybox-*.webp` par systeme stellaire
 - `planet-*.webp` par planete visitable
-- `ships/*.glb` pour les cinq vaisseaux joueur
+- `ships/*.glb` pour les cinq silhouettes generees de vaisseaux joueur
 - `asteroid-textures.webp`
 - `faction-emblems.webp`
 - `hud-overlay.webp`
@@ -70,17 +72,17 @@ La carte galactique cible maintenant les stations planetaires decouvertes plutot
 
 ## Commerce et contrats
 
-Les marches de station suivent le stock sauvegarde, la demande et le retour vers la baseline. Acheter reduit le stock local et fait monter les prix d'achat; vendre augmente le stock et calme la demande. Le backend economique local REST + SSE simule globalement mineurs, coursiers, cargos, marchands et contrebandiers NPC, puis renvoie dans le jeu les evenements de marche et le trafic NPC visible. L'onglet Economy de station affiche l'etat du backend, les routes NPC, la pression de marche, les routes favorables et les evenements d'approvisionnement recents.
+Les marches de station suivent le stock sauvegarde, la demande et le retour vers la baseline. Acheter reduit le stock local et fait monter les prix d'achat; vendre augmente le stock et calme la demande. Le backend economique local REST + SSE simule globalement mineurs, coursiers, cargos, marchands et contrebandiers NPC, puis renvoie dans le jeu les evenements de marche et le trafic NPC visible. L'onglet Economy de station sert aussi de Dispatch Board : les courses legales de ravitaillement et les livraisons de contrebande peuvent etre acceptees, routees, suivies sur le HUD/la carte, puis terminees avec effet sur la pression de marche.
 
-Les contrats utilisent le temps de bord sauvegarde. Les missions de courrier, fret, passagers, minage, prime, escorte et recuperation ont des delais et penalites de reputation. Les contrats passagers reservent de la capacite cargo, le transport consomme les biens fournis par le joueur a la livraison, les missions d'escorte font apparaitre un convoi en vol et les missions de recuperation font apparaitre des caisses recuperables.
+Les contrats utilisent le temps de bord sauvegarde. Les missions de courrier, fret, passagers, minage, prime, escorte, recuperation et dispatch ont des delais et consequences de reputation. Les contrats passagers reservent de la capacite cargo, le transport consomme les biens fournis par le joueur a la livraison, les missions d'escorte font apparaitre un convoi en vol et les missions de recuperation font apparaitre des caisses recuperables. Les NPC economiques visibles peuvent etre contactes, escortes, braques, secourus ou signales; quand le service local est en ligne, braquage, secours et signalement ecrivent leurs consequences backend.
 
-L'histoire principale est Glass Wake Protocol, une chaine de huit missions autour d'une sonde Mirr, de balises commerciales usurpees, de pirates relais d'Ashen et d'un porteur drone silencieux pres de Celest Gate. Les stations incluent un onglet Captain's Log qui suit la progression des chapitres, les objectifs courants, les echecs rejouables et les journaux d'histoire debloques sans ajouter d'etat de sauvegarde dedie.
+L'histoire principale est Glass Wake Protocol, une chaine de 13 chapitres autour d'une sonde Mirr, de balises commerciales usurpees, de pirates relais d'Ashen, des Unknown Drones, des cibles Echo Lock et du Listener Scar. Les stations incluent un onglet Captain's Log qui suit la progression des chapitres, les objectifs courants, les echecs rejouables et les journaux d'histoire debloques sans ajouter d'etat de sauvegarde dedie.
 
 ## Vaisseaux et equipement
 
-L'equipement utilise un modele de loadout de vaisseau plus inventaire. Les modules primaires, secondaires, utilitaires, defensifs et d'ingenierie consomment les emplacements correspondants. Installer retire un objet de l'inventaire, decharger le remet dans l'inventaire, et les armes actives viennent de l'ordre du loadout installe. La fabrication du Blueprint Workshop consomme credits et materiaux de fret puis ajoute le resultat a l'inventaire au lieu de l'installer automatiquement.
+L'equipement utilise un modele de loadout de vaisseau plus inventaire. Les modules primaires, secondaires, utilitaires, defensifs et d'ingenierie consomment les emplacements correspondants. Installer retire un objet de l'inventaire, decharger le remet dans l'inventaire, et les armes actives viennent de l'ordre du loadout installe. La fabrication du Blueprint Workshop consomme credits et materiaux de fret puis ajoute le resultat a l'inventaire au lieu de l'installer automatiquement. Les routes d'equipement de carriere soutiennent les builds minage, contrebande, combat et exploration.
 
-La flotte compte cinq silhouettes GLB distinctes : Sparrow MK-I scout, Mule LX transporteur, Raptor V chasseur, Bastion-7 canonniere et Horizon Ark explorateur. Acheter un nouveau vaisseau installe son loadout d'origine et stocke l'ancienne coque avec son equipement installe a la station dediee PTD Home. Les vaisseaux stockes ne peuvent etre repris gratuitement que lorsque vous etes amarres a PTD Home.
+La flotte compte neuf coques jouables sur cinq silhouettes GLB generees : les carrieres starter, hauler, miner, smuggler, fighter, gunship et explorer ont maintenant des stats, emplacements, traits, loadouts et conditions d'achat distincts. Acheter un nouveau vaisseau installe son loadout d'origine et stocke l'ancienne coque avec son equipement installe a la station dediee PTD Home. Les vaisseaux stockes ne peuvent etre repris gratuitement que lorsque vous etes amarres a PTD Home.
 
 ## Sauvegardes, donnees et audio
 
@@ -92,4 +94,4 @@ L'audio utilise un runtime hybride : SFX, alertes et musique fallback sont synth
 
 ## Limites connues
 
-C'est une tranche verticale, pas une campagne complete. Le backend economique faisant autorite est un service de developpement local; s'il est hors ligne, le navigateur revient a une simulation locale du marche afin que le commerce reste jouable. Les routes d'escorte sont pour l'instant des contrats dans un meme systeme afin de rester independantes de l'autopilote de porte de saut. Les spritesheets de marchandises, equipements et factions sont decoupees dans l'UI via positionnement CSS d'atlas. Les SFX proceduraux et la musique fallback restent volontairement legers, tandis que la couverture BGM creee a la main est limitee a l'ensemble actuel de pistes CC0.
+C'est une tranche verticale, pas une campagne complete. Le backend economique faisant autorite est un service de developpement local; s'il est hors ligne, le navigateur revient a une simulation locale du marche afin que le commerce reste jouable, tandis que les evenements NPC/economie dependants du backend se degradent proprement. Les spritesheets de marchandises, equipements et factions sont decoupees dans l'UI via positionnement CSS d'atlas. Les SFX proceduraux et la musique fallback restent volontairement legers, tandis que la couverture BGM creee a la main est limitee a l'ensemble actuel de pistes CC0.

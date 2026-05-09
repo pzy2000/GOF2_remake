@@ -53,7 +53,9 @@ describe("i18n", () => {
     for (const locale of ["zh-CN", "zh-TW", "ja", "fr"] as const) {
       expect(speechLangForLocale(locale)).not.toBe("en-US");
       expect(hasExactTranslation("New Game", locale)).toBe(true);
+      expect(hasExactTranslation("Trade, mine, fight pirates, dock at stations, and explore six frontier systems plus PTD Home.", locale)).toBe(true);
       expect(translateText("Game saved to auto.", locale)).not.toBe("Game saved to auto.");
+      expect(translateText("Trade, mine, fight pirates, dock at stations, and explore six frontier systems plus PTD Home.", locale)).not.toBe("Trade, mine, fight pirates, dock at stations, and explore six frontier systems plus PTD Home.");
       expect(translateText("Tech Level 3", locale)).not.toBe("Tech Level 3");
       expect(translateText("Cargo hold full.", locale)).not.toBe("Cargo hold full.");
       expect(translateText("Primary Weapon · Station Signal", locale)).not.toBe("Primary Weapon · Station Signal");
