@@ -1019,17 +1019,25 @@ function ShipyardTab() {
           const purchaseAccess = getShipPurchaseAccess({ station, ship, reputation, factionHeat, now: gameClock, player });
           const purchaseRequirement = formatShipPurchaseRequirement(ship, locale);
           return (
-            <article key={ship.id} className={`ship-card ${current ? "current-ship-card" : ""}`}>
+            <article key={ship.id} className={`ship-card ${current ? "current-ship-card" : ""}`} data-testid={`ship-card-${ship.id}`}>
               <h3>{localizeShipName(ship.id, locale, ship.name)}</h3>
               <p>{translateText(ship.role, locale)} · {translateText(getShipCareerLabel(ship), locale)}</p>
-              <p>{translateText(shipCareerText(ship.id), locale)}</p>
-              <p>{translateText(shipBlueprintPathText(ship.id), locale)}</p>
-              {ship.trait ? <p>{translateText("Trait", locale)}: {translateText(ship.trait.name, locale)} · {translateText(ship.trait.description, locale)}</p> : null}
-              {purchaseRequirement ? <p>{translateText("Requirement", locale)}: {purchaseRequirement}</p> : null}
-              {!purchaseAccess.ok ? <p className="service-lock-reason">{translateText(purchaseAccess.message, locale)}</p> : null}
-              <p>{translateText("Hull", locale)} {ship.stats.hull} · {translateText("Shield", locale)} {ship.stats.shield} · {translateText("Speed", locale)} {ship.stats.speed} · {translateText("Cargo", locale)} {ship.stats.cargoCapacity}</p>
-              <p>{translateText("Slots", locale)} {ship.stats.primarySlots}P / {ship.stats.secondarySlots}S / {ship.stats.utilitySlots}U / {ship.stats.defenseSlots}D / {ship.stats.engineeringSlots}E</p>
-              <p>{stockLoadoutLabel(locale)}: {ship.equipment.map((id) => localizeEquipmentName(id, locale, equipmentName(id))).join(", ")}</p>
+              <details className="card-details">
+                <summary>
+                  <span className="details-expand-label">{translateText("Expand", locale)}</span>
+                  <span className="details-collapse-label">{translateText("Collapse", locale)}</span>
+                </summary>
+                <div className="card-details-body">
+                  <p>{translateText(shipCareerText(ship.id), locale)}</p>
+                  <p>{translateText(shipBlueprintPathText(ship.id), locale)}</p>
+                  {ship.trait ? <p>{translateText("Trait", locale)}: {translateText(ship.trait.name, locale)} · {translateText(ship.trait.description, locale)}</p> : null}
+                  {purchaseRequirement ? <p>{translateText("Requirement", locale)}: {purchaseRequirement}</p> : null}
+                  {!purchaseAccess.ok ? <p className="service-lock-reason">{translateText(purchaseAccess.message, locale)}</p> : null}
+                  <p>{translateText("Hull", locale)} {ship.stats.hull} · {translateText("Shield", locale)} {ship.stats.shield} · {translateText("Speed", locale)} {ship.stats.speed} · {translateText("Cargo", locale)} {ship.stats.cargoCapacity}</p>
+                  <p>{translateText("Slots", locale)} {ship.stats.primarySlots}P / {ship.stats.secondarySlots}S / {ship.stats.utilitySlots}U / {ship.stats.defenseSlots}D / {ship.stats.engineeringSlots}E</p>
+                  <p>{stockLoadoutLabel(locale)}: {ship.equipment.map((id) => localizeEquipmentName(id, locale, equipmentName(id))).join(", ")}</p>
+                </div>
+              </details>
               {current ? (
                 <button disabled>{translateText("Current", locale)}</button>
               ) : canSwitch ? (
@@ -1483,14 +1491,25 @@ function BlueprintTab() {
                 <span className={`blueprint-status ${blueprintStatus.toLowerCase()}`}>{translateText(blueprintStatus, locale)}</span>
                 <h3>{localizeEquipmentName(id, locale, equipmentName(id))}</h3>
                 <p>{translateText("Tier", locale)} {blueprint.tier} · {translateText(blueprintPathLabels[blueprint.path], locale)} · {formatTechLevel(locale, equipment.techLevel, true)}</p>
-                <p>{translateText(equipment.category, locale)} · {translateText(equipmentSlotLabels[equipment.slotType], locale)} {translateText("slot", locale)}</p>
-                <p>{translateText("Requires", locale)}: {(blueprint.prerequisiteEquipmentIds ?? []).map((equipmentId) => localizeEquipmentName(equipmentId, locale, equipmentName(equipmentId))).join(", ") || translateText("Starter research", locale)}</p>
-                <p>{translateText("Unlock", locale)}: {formatBlueprintUnlockCost(blueprint.unlockCost, locale)}</p>
-                {craftCost ? (
-                  <p>{translateText("Craft", locale)}: {formatCredits(locale, craftCost.credits, true)} · {formatCargo(craftCost.cargo, locale)}</p>
-                ) : null}
-                <p>{translateText("Installed", locale)} {translateText(installed ? "yes" : "no", locale)} · {translateText("Inventory", locale)} {formatNumber(locale, inventoryCount)}</p>
-                {!workshopAccess.ok ? <p className="warning-text">{translateText(workshopAccess.message, locale)}</p> : missing ? <p className="warning-text">{missing}</p> : <p className="muted">{translateText("Added to equipment inventory after fabrication.", locale)}</p>}
+                <details
+                  className="card-details"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <summary>
+                    <span className="details-expand-label">{translateText("Expand", locale)}</span>
+                    <span className="details-collapse-label">{translateText("Collapse", locale)}</span>
+                  </summary>
+                  <div className="card-details-body">
+                    <p>{translateText(equipment.category, locale)} · {translateText(equipmentSlotLabels[equipment.slotType], locale)} {translateText("slot", locale)}</p>
+                    <p>{translateText("Requires", locale)}: {(blueprint.prerequisiteEquipmentIds ?? []).map((equipmentId) => localizeEquipmentName(equipmentId, locale, equipmentName(equipmentId))).join(", ") || translateText("Starter research", locale)}</p>
+                    <p>{translateText("Unlock", locale)}: {formatBlueprintUnlockCost(blueprint.unlockCost, locale)}</p>
+                    {craftCost ? (
+                      <p>{translateText("Craft", locale)}: {formatCredits(locale, craftCost.credits, true)} · {formatCargo(craftCost.cargo, locale)}</p>
+                    ) : null}
+                    <p>{translateText("Installed", locale)} {translateText(installed ? "yes" : "no", locale)} · {translateText("Inventory", locale)} {formatNumber(locale, inventoryCount)}</p>
+                    {!workshopAccess.ok ? <p className="warning-text">{translateText(workshopAccess.message, locale)}</p> : missing ? <p className="warning-text">{missing}</p> : <p className="muted">{translateText("Added to equipment inventory after fabrication.", locale)}</p>}
+                  </div>
+                </details>
                 <button
                   disabled={!researchable}
                   onClick={(event) => {

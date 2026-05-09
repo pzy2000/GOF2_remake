@@ -1619,7 +1619,14 @@ button.danger {
 .mission-title {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
+}
+
+.mission-title h3 {
+  flex: 1 1 220px;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .equipment-strip {
@@ -2246,7 +2253,7 @@ button.equipment-trigger {
 
 .mission-board-panel {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   gap: 12px;
   min-height: 0;
 }
@@ -2352,6 +2359,39 @@ button.equipment-trigger {
   padding: 14px;
   display: grid;
   gap: 10px;
+}
+
+.card-details {
+  border-top: 1px solid rgba(128, 214, 255, 0.12);
+  padding-top: 8px;
+}
+
+.card-details summary {
+  cursor: pointer;
+  color: #80d6ff;
+  font-size: 0.78rem;
+  font-weight: 900;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.card-details summary::marker {
+  color: #80d6ff;
+}
+
+.card-details-body {
+  display: grid;
+  gap: 8px;
+  padding-top: 8px;
+}
+
+.card-details .details-collapse-label,
+.card-details[open] .details-expand-label {
+  display: none;
+}
+
+.card-details[open] .details-collapse-label {
+  display: inline;
 }
 
 .blueprint-card {

@@ -113,6 +113,17 @@ async function getGameState(page: Page): Promise<Gof2E2EState> {
   });
 }
 
+async function expectVerticalGap(
+  upper: ReturnType<Page["locator"]>,
+  lower: ReturnType<Page["locator"]>,
+  minGap: number
+) {
+  const [upperBox, lowerBox] = await Promise.all([upper.boundingBox(), lower.boundingBox()]);
+  expect(upperBox).not.toBeNull();
+  expect(lowerBox).not.toBeNull();
+  expect(lowerBox!.y - (upperBox!.y + upperBox!.height)).toBeGreaterThanOrEqual(minGap);
+}
+
 async function getScanKeyboardState(page: Page): Promise<ScanKeyboardState> {
   return page.evaluate(() => {
     const state = window.__GOF2_E2E__!.getState() as {
@@ -1289,6 +1300,63 @@ test.describe("browser smoke", () => {
     await expect(page.locator(".hud-top-left")).toContainText("Kuro Belt");
     await expect(page.getByTestId("dialogue-overlay")).toHaveCount(0);
     expect((await getGameState(page)).currentSystemId).toBe("kuro-belt");
+  });
+
+  test("keeps the mission board onboarding note clear of the first mission card", async ({ page }) => {
+    await resetApp(page);
+    await startNewGame(page);
+
+    await page.evaluate(() => {
+      const state = window.__GOF2_E2E__!.getState() as { dockAt: (stationId: string) => void };
+      state.dockAt("helion-prime");
+    });
+    await page.getByRole("button", { name: "Mission Board" }).click();
+
+    const onboardingNote = page.getByTestId("onboarding-board-note");
+    const storyMission = page.getByTestId("mission-card-story-clean-carrier");
+    await expect(onboardingNote).toContainText("Recommended first contract");
+    await expect(storyMission).toContainText("Glass Wake 01: Clean Carrier");
+    await expectVerticalGap(onboardingNote, storyMission, 8);
+  });
+
+  test("keeps shipyard and blueprint long card details collapsed until expanded", async ({ page }) => {
+    await resetApp(page);
+    await startNewGame(page);
+
+    await page.evaluate(() => {
+      const state = window.__GOF2_E2E__!.getState() as { dockAt: (stationId: string) => void };
+      state.dockAt("helion-prime");
+    });
+
+    await page.getByRole("button", { name: "Shipyard" }).click();
+    const starterShip = page.getByTestId("ship-card-sparrow-mk1");
+    await expect(starterShip.getByText("Starter scout")).toBeVisible();
+    await expect(starterShip.getByRole("button", { name: "Current" })).toBeVisible();
+    await expect(starterShip.getByText("Hull 100", { exact: false })).toBeHidden();
+    await expect(starterShip.getByText("Stock loadout:", { exact: false })).toBeHidden();
+
+    await starterShip.locator("summary").click();
+    await expect(starterShip.getByText("Hull 100", { exact: false })).toBeVisible();
+    await expect(starterShip.getByText("Stock loadout:", { exact: false })).toBeVisible();
+
+    await page.getByRole("button", { name: "Blueprint Workshop" }).click();
+    const plasmaBlueprint = page.getByTestId("blueprint-card-plasma-cannon");
+    const plasmaDetails = plasmaBlueprint.locator(".card-details-body");
+    await expect(plasmaBlueprint.getByText("Researchable")).toBeVisible();
+    await expect(plasmaBlueprint.getByRole("button", { name: "Research" })).toBeVisible();
+    await expect(plasmaDetails.getByText("Requires: Pulse Laser")).toBeHidden();
+    await expect(plasmaDetails.getByText("Unlock: 350 cr")).toBeHidden();
+
+    await plasmaBlueprint.locator("summary").click();
+    await expect(plasmaDetails.getByText("Requires: Pulse Laser")).toBeVisible();
+    await expect(plasmaDetails.getByText("Unlock: 350 cr")).toBeVisible();
+
+    await plasmaBlueprint.getByRole("heading", { name: "Plasma Cannon" }).click();
+    await expect(page.locator("#equipment-popover")).toContainText("Plasma Cannon");
+
+    await plasmaBlueprint.getByRole("button", { name: "Research" }).click();
+    await expect(plasmaBlueprint).toContainText("Unlocked");
+    expect((await getGameState(page)).player.unlockedBlueprintIds).toContain("plasma-cannon");
   });
 
   test("keeps the station galaxy route action visible at desktop zoom", async ({ page }) => {
