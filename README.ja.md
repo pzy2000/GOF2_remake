@@ -8,11 +8,11 @@
 
 | ビュー | スクリーンショット |
 | --- | --- |
-| メインメニュー | ![6つの辺境星系と専用拠点 PTD Home、言語選択、セーブスロットを表示するメインメニュー](docs/screenshots/main-menu.png) |
-| フライト HUD | ![船体ゲージ、初回チェックリスト、メインストーリー、経済、法的状態、信号トラッカーを表示した三人称フライト HUD](docs/screenshots/flight-hud.png) |
-| ステーション市場 | ![売買、ミッション進行、ローカル経済状態を含むステーション市場とサービス画面](docs/screenshots/station-market.png) |
-| 銀河マップ | ![発見済み星系、ステーション航路、Dispatch 目標、ストーリー目標、Quiet Signals を表示する銀河マップ](docs/screenshots/galaxy-map.png) |
-| キャリア造船所 | ![キャリア船体、特性、設計図ルート、購入条件を表示する造船所カード](docs/screenshots/shipyard-careers.png) |
+| メインメニュー | ![6つの辺境星系と専用拠点 PTD Home、言語選択、セーブスロットを表示するメインメニュー](docs/screenshots/ja/main-menu.png) |
+| フライト HUD | ![船体ゲージ、初回チェックリスト、メインストーリー、経済、法的状態、信号トラッカーを表示した三人称フライト HUD](docs/screenshots/ja/flight-hud.png) |
+| ステーション市場 | ![売買、ミッション進行、ローカル経済状態を含むステーション市場とサービス画面](docs/screenshots/ja/station-market.png) |
+| 銀河マップ | ![発見済み星系、ステーション航路、Dispatch 目標、ストーリー目標、Quiet Signals を表示する銀河マップ](docs/screenshots/ja/galaxy-map.png) |
+| キャリア造船所 | ![キャリア船体、特性、設計図ルート、購入条件を表示する造船所カード](docs/screenshots/ja/shipyard-careers.png) |
 
 ## 実行
 

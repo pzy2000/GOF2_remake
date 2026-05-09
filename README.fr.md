@@ -8,11 +8,11 @@ Une tranche verticale WebGL jouable dans le navigateur pour un jeu original de c
 
 | Vue | Capture |
 | --- | --- |
-| Menu principal | ![Menu principal presentant six systèmes frontaliers plus PTD Home, le choix de langue et les emplacements de sauvegarde](docs/screenshots/main-menu.png) |
-| HUD de vol | ![HUD de vol a la troisieme personne avec jauges, checklist d'accueil, histoire, economie, statut legal et suivi des signaux](docs/screenshots/flight-hud.png) |
-| Marche de station | ![Marche et services de station pour acheter, vendre, suivre les missions et lire l'etat economique local](docs/screenshots/station-market.png) |
-| Carte galactique | ![Carte galactique montrant systemes decouverts, routes de station, objectifs Dispatch, histoire et Quiet Signals](docs/screenshots/galaxy-map.png) |
-| Chantier de carrieres | ![Cartes de chantier naval montrant coques de carriere, traits, chemins de plans et conditions d'achat](docs/screenshots/shipyard-careers.png) |
+| Menu principal | ![Menu principal presentant six systèmes frontaliers plus PTD Home, le choix de langue et les emplacements de sauvegarde](docs/screenshots/fr/main-menu.png) |
+| HUD de vol | ![HUD de vol a la troisieme personne avec jauges, checklist d'accueil, histoire, economie, statut legal et suivi des signaux](docs/screenshots/fr/flight-hud.png) |
+| Marche de station | ![Marche et services de station pour acheter, vendre, suivre les missions et lire l'etat economique local](docs/screenshots/fr/station-market.png) |
+| Carte galactique | ![Carte galactique montrant systemes decouverts, routes de station, objectifs Dispatch, histoire et Quiet Signals](docs/screenshots/fr/galaxy-map.png) |
+| Chantier de carrieres | ![Cartes de chantier naval montrant coques de carriere, traits, chemins de plans et conditions d'achat](docs/screenshots/fr/shipyard-careers.png) |
 
 ## Lancer
 

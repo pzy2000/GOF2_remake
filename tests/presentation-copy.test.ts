@@ -6,11 +6,11 @@ import { describe, expect, it } from "vitest";
 const rootDir = fileURLToPath(new URL("..", import.meta.url));
 
 const readmeExpectations = [
-  { file: "README.md", phrase: "six frontier systems plus the dedicated PTD Home base" },
-  { file: "README.zh-CN.md", phrase: "六大前线星系 + PTD Home 专用据点" },
-  { file: "README.zh-TW.md", phrase: "六大前線星系 + PTD Home 專用據點" },
-  { file: "README.ja.md", phrase: "6つの辺境星系と専用拠点 PTD Home" },
-  { file: "README.fr.md", phrase: "six systèmes frontaliers plus la base dédiée PTD Home" }
+  { file: "README.md", phrase: "six frontier systems plus the dedicated PTD Home base", screenshotDir: "docs/screenshots" },
+  { file: "README.zh-CN.md", phrase: "六大前线星系 + PTD Home 专用据点", screenshotDir: "docs/screenshots/zh-CN" },
+  { file: "README.zh-TW.md", phrase: "六大前線星系 + PTD Home 專用據點", screenshotDir: "docs/screenshots/zh-TW" },
+  { file: "README.ja.md", phrase: "6つの辺境星系と専用拠点 PTD Home", screenshotDir: "docs/screenshots/ja" },
+  { file: "README.fr.md", phrase: "six systèmes frontaliers plus la base dédiée PTD Home", screenshotDir: "docs/screenshots/fr" }
 ] as const;
 
 const staleCopyPatterns = [
@@ -28,13 +28,15 @@ const staleCopyPatterns = [
   /chaine de huit missions/
 ];
 
-const screenshotPaths = [
-  "docs/screenshots/main-menu.png",
-  "docs/screenshots/flight-hud.png",
-  "docs/screenshots/station-market.png",
-  "docs/screenshots/galaxy-map.png",
-  "docs/screenshots/shipyard-careers.png"
+const screenshotNames = [
+  "main-menu.png",
+  "flight-hud.png",
+  "station-market.png",
+  "galaxy-map.png",
+  "shipyard-careers.png"
 ] as const;
+
+const screenshotPaths = readmeExpectations.flatMap((item) => screenshotNames.map((name) => `${item.screenshotDir}/${name}`));
 
 function readProjectFile(path: string): string {
   return readFileSync(resolve(rootDir, path), "utf8");
@@ -61,8 +63,12 @@ describe("presentation copy", () => {
       expect(combined).not.toMatch(pattern);
     }
 
-    for (const { file, phrase } of readmeExpectations) {
-      expect(readProjectFile(file)).toContain(phrase);
+    for (const { file, phrase, screenshotDir } of readmeExpectations) {
+      const readme = readProjectFile(file);
+      expect(readme).toContain(phrase);
+      for (const screenshotName of screenshotNames) {
+        expect(readme).toContain(`${screenshotDir}/${screenshotName}`);
+      }
     }
     expect(readProjectFile("src/components/MainMenu.tsx")).toContain("six frontier systems plus PTD Home");
   });

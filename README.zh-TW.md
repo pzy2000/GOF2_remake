@@ -8,11 +8,11 @@
 
 | 視圖 | 截圖 |
 | --- | --- |
-| 主選單 | ![主選單展示六大前線星系 + PTD Home、語言選擇和存檔槽位](docs/screenshots/main-menu.png) |
-| 飛行 HUD | ![第三人稱飛行 HUD，包含艦船儀表、新手清單、主線、經濟、執法和信號追蹤](docs/screenshots/flight-hud.png) |
-| 太空站市場 | ![太空站市場和服務介面，包含買賣、任務流程和本機經濟狀態](docs/screenshots/station-market.png) |
-| 銀河地圖 | ![銀河地圖顯示已發現星系、太空站航線、調度目標、主線目標和 Quiet Signals](docs/screenshots/galaxy-map.png) |
-| 職業船塢 | ![船塢卡片展示職業船體、特性、藍圖路線和購買門檻](docs/screenshots/shipyard-careers.png) |
+| 主選單 | ![主選單展示六大前線星系 + PTD Home、語言選擇和存檔槽位](docs/screenshots/zh-TW/main-menu.png) |
+| 飛行 HUD | ![第三人稱飛行 HUD，包含艦船儀表、新手清單、主線、經濟、執法和信號追蹤](docs/screenshots/zh-TW/flight-hud.png) |
+| 太空站市場 | ![太空站市場和服務介面，包含買賣、任務流程和本機經濟狀態](docs/screenshots/zh-TW/station-market.png) |
+| 銀河地圖 | ![銀河地圖顯示已發現星系、太空站航線、調度目標、主線目標和 Quiet Signals](docs/screenshots/zh-TW/galaxy-map.png) |
+| 職業船塢 | ![船塢卡片展示職業船體、特性、藍圖路線和購買門檻](docs/screenshots/zh-TW/shipyard-careers.png) |
 
 ## 執行
 

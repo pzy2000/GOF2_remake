@@ -1,42 +1,52 @@
 import { expect, test, type Page } from "@playwright/test";
-import { resolve } from "node:path";
+import { mkdirSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { planets, systems } from "../../src/data/world";
+import type { Locale } from "../../src/i18n";
 
 const shouldUpdateScreenshots = process.env.GOF2_UPDATE_README_SCREENSHOTS === "1";
-const screenshotDir = resolve(process.cwd(), "docs/screenshots");
+const screenshotRoot = resolve(process.cwd(), "docs/screenshots");
 const knownSystemIds = systems.map((system) => system.id);
 const knownPlanetIds = planets.map((planet) => planet.id);
+const screenshotLocales: Array<{ locale: Locale; dir: string }> = [
+  { locale: "en", dir: "" },
+  { locale: "zh-CN", dir: "zh-CN" },
+  { locale: "zh-TW", dir: "zh-TW" },
+  { locale: "ja", dir: "ja" },
+  { locale: "fr", dir: "fr" }
+];
 
 test.describe("README screenshots", () => {
   test.skip(!shouldUpdateScreenshots, "Set GOF2_UPDATE_README_SCREENSHOTS=1 to refresh README screenshots.");
   test.use({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
 
-  test("updates the README showcase image set", async ({ page }) => {
-    await resetApp(page);
-    await expect(page.getByRole("heading", { name: "GOF2 by pzy" })).toBeVisible();
-    await capture(page, "main-menu.png");
+  for (const { locale, dir } of screenshotLocales) {
+    test(`updates the README showcase image set for ${locale}`, async ({ page }) => {
+      await resetApp(page);
+      await expect(page.getByRole("heading", { name: "GOF2 by pzy" })).toBeVisible();
+      await page.locator(".language-select select").selectOption(locale);
+      await capture(page, dir, "main-menu.png");
 
-    await page.getByRole("button", { name: "New Game" }).click();
-    await expect(page.locator(".flight-canvas canvas")).toBeVisible();
-    await expect(page.locator(".hud-top-left")).toContainText("Helion Reach");
-    await page.waitForTimeout(300);
-    await capture(page, "flight-hud.png");
+      await page.locator(".menu-actions .primary").click();
+      await expect(page.locator(".flight-canvas canvas")).toBeVisible();
+      await expect(page.locator(".hud-top-left")).toBeVisible();
+      await page.waitForTimeout(300);
+      await capture(page, dir, "flight-hud.png");
 
-    await setStation(page, "helion-reach", "helion-prime", "Market");
-    await expect(page.getByRole("heading", { name: "Helion Prime Exchange" })).toBeVisible();
-    await capture(page, "station-market.png");
+      await setStation(page, "helion-reach", "helion-prime", "Market");
+      await expect(page.locator(".table-panel")).toBeVisible();
+      await capture(page, dir, "station-market.png");
 
-    await setGalaxyMap(page);
-    await expect(page.getByRole("heading", { name: "Galaxy Map" })).toBeVisible();
-    await capture(page, "galaxy-map.png");
+      await setGalaxyMap(page);
+      await expect(page.locator(".galaxy-panel")).toBeVisible();
+      await capture(page, dir, "galaxy-map.png");
 
-    await setStation(page, "vantara", "vantara-bastion", "Shipyard", { showcaseShipyard: true });
-    await expect(page.getByRole("heading", { name: "Vantara Bastion" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Shipyard" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Prospector Rig" })).toBeVisible();
-    await expect(page.getByText("Oreline Stabilizers")).toBeVisible();
-    await capture(page, "shipyard-careers.png");
-  });
+      await setStation(page, "vantara", "vantara-bastion", "Shipyard", { showcaseShipyard: true });
+      await expect(page.locator(".shipyard-panel")).toBeVisible();
+      await expect(page.locator(".shipyard-panel .ship-card").nth(2)).toBeVisible();
+      await capture(page, dir, "shipyard-careers.png");
+    });
+  }
 });
 
 async function resetApp(page: Page) {
@@ -52,10 +62,12 @@ async function resetApp(page: Page) {
   await page.waitForFunction(() => !!window.__GOF2_E2E__);
 }
 
-async function capture(page: Page, filename: string) {
+async function capture(page: Page, dir: string, filename: string) {
   await page.evaluate(() => document.fonts.ready);
+  const path = resolve(screenshotRoot, dir, filename);
+  mkdirSync(dirname(path), { recursive: true });
   await page.screenshot({
-    path: resolve(screenshotDir, filename),
+    path,
     fullPage: false,
     animations: "disabled"
   });
