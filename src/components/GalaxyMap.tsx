@@ -3,7 +3,7 @@ import type { CSSProperties, PointerEvent, WheelEvent } from "react";
 import { commodityById, equipmentName, factionNames, glassWakeProtocol, missionTemplates } from "../data/world";
 import { planetById, stationById, systems, useGameStore } from "../state/gameStore";
 import type { GalaxyMapMode } from "../types/game";
-import { GALAXY_DISCOVERY_DISTANCE, systemDistance } from "../systems/navigation";
+import { getStargateRouteLinks } from "../systems/navigation";
 import { getExplorationSignalsForSystem, getVisibleStationsForSystem, isExplorationSignalDiscovered, isExplorationSignalUnlocked, isHiddenStationRevealed } from "../systems/exploration";
 import { getExplorationObjectiveSummaryForSystem } from "../systems/explorationObjectives";
 import { getFactionHeatLevelLabel, getFactionHeatRecord, isFactionWanted } from "../systems/factionConsequences";
@@ -151,13 +151,7 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
     []
   );
   const routes = useMemo(
-    () =>
-      systems.flatMap((origin, originIndex) =>
-        systems.slice(originIndex + 1).flatMap((target) => {
-          if (systemDistance(origin.position, target.position) > GALAXY_DISCOVERY_DISTANCE * 1.08) return [];
-          return [{ origin, target, known: knownSystems.includes(origin.id) && knownSystems.includes(target.id) }];
-        })
-      ),
+    () => getStargateRouteLinks(knownSystems),
     [knownSystems]
   );
 

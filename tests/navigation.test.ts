@@ -4,6 +4,7 @@ import { getJumpGatePosition } from "../src/systems/autopilot";
 import { createInitialExplorationState } from "../src/systems/exploration";
 import {
   discoverNearbyPlanets,
+  findKnownStargateRoute,
   getInitialKnownPlanetIds,
   getInitialKnownSystems,
   getNavigationHintText,
@@ -128,6 +129,15 @@ describe("navigation targets and discovery", () => {
 
   it("reveals nearby systems after arriving through a gate", () => {
     expect(revealNeighborSystems(["helion-reach", "kuro-belt"], "kuro-belt")).toContain("ashen-drift");
+  });
+
+  it("plans shortest known Stargate routes using galaxy map links", () => {
+    expect(findKnownStargateRoute("helion-reach", "celest-gate", ["helion-reach", "mirr-vale", "celest-gate"])).toEqual([
+      "helion-reach",
+      "mirr-vale",
+      "celest-gate"
+    ]);
+    expect(findKnownStargateRoute("helion-reach", "celest-gate", ["helion-reach", "celest-gate"])).toBeUndefined();
   });
 
   it("discovers unknown planets when the ship flies into scan range", () => {

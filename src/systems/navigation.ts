@@ -9,7 +9,14 @@ import { distance } from "./math";
 export const STARGATE_NAME = "Stargate";
 export const STARGATE_INTERACTION_RANGE = STATION_INTERACTION_RANGE;
 export const GALAXY_DISCOVERY_DISTANCE = 2.05;
+export const STARGATE_ROUTE_DISTANCE = GALAXY_DISCOVERY_DISTANCE * 1.08;
 export const PLANET_SCAN_RANGE = 320;
+
+export interface StargateRouteLink {
+  origin: (typeof systems)[number];
+  target: (typeof systems)[number];
+  known: boolean;
+}
 
 export type NavigationTarget =
   | {
@@ -197,6 +204,46 @@ export function getNavigationHintText(target: NavigationTarget | undefined): str
 
 export function isKnownSystem(knownSystems: string[], systemId: string): boolean {
   return knownSystems.includes(systemId);
+}
+
+export function areSystemsLinkedByStargate(originSystemId: string, targetSystemId: string): boolean {
+  const origin = systemById[originSystemId];
+  const target = systemById[targetSystemId];
+  if (!origin || !target || origin.id === target.id) return false;
+  return systemDistance(origin.position, target.position) <= STARGATE_ROUTE_DISTANCE;
+}
+
+export function getStargateRouteLinks(knownSystemIds: string[] = systems.map((system) => system.id)): StargateRouteLink[] {
+  const known = new Set(knownSystemIds);
+  return systems.flatMap((origin, originIndex) =>
+    systems.slice(originIndex + 1).flatMap((target) => {
+      if (!areSystemsLinkedByStargate(origin.id, target.id)) return [];
+      return [{ origin, target, known: known.has(origin.id) && known.has(target.id) }];
+    })
+  );
+}
+
+export function findKnownStargateRoute(originSystemId: string, targetSystemId: string, knownSystemIds: string[]): string[] | undefined {
+  const origin = systemById[originSystemId];
+  const target = systemById[targetSystemId];
+  const known = new Set(knownSystemIds);
+  if (!origin || !target || !known.has(origin.id) || !known.has(target.id)) return undefined;
+  if (origin.id === target.id) return [origin.id];
+
+  const visited = new Set<string>([origin.id]);
+  const queue: string[][] = [[origin.id]];
+  while (queue.length > 0) {
+    const path = queue.shift()!;
+    const currentSystemId = path[path.length - 1];
+    for (const candidate of systems) {
+      if (visited.has(candidate.id) || !known.has(candidate.id) || !areSystemsLinkedByStargate(currentSystemId, candidate.id)) continue;
+      const nextPath = [...path, candidate.id];
+      if (candidate.id === target.id) return nextPath;
+      visited.add(candidate.id);
+      queue.push(nextPath);
+    }
+  }
+  return undefined;
 }
 
 export function getInitialKnownSystems(systemId: string): string[] {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import manifest from "../public/assets/generated/manifest.json";
 import { dialogueSpeakers, ships, systems } from "../src/data/world";
@@ -10,6 +10,24 @@ const stationArchetypes = ["Trade Hub", "Mining Station", "Research Station", "M
 
 function expectProjectAssetExists(assetPath: string) {
   expect(existsSync(resolve(process.cwd(), "public", assetPath.replace(/^\//, "")))).toBe(true);
+}
+
+function readWebpDimensions(assetPath: string) {
+  const bytes = readFileSync(resolve(process.cwd(), "public", assetPath.replace(/^\//, "")));
+  const chunk = bytes.toString("ascii", 12, 16);
+  if (chunk === "VP8X") {
+    return {
+      width: 1 + bytes.readUIntLE(24, 3),
+      height: 1 + bytes.readUIntLE(27, 3)
+    };
+  }
+  if (bytes.toString("ascii", 12, 15) === "VP8") {
+    return {
+      width: bytes.readUInt16LE(26) & 0x3fff,
+      height: bytes.readUInt16LE(28) & 0x3fff
+    };
+  }
+  throw new Error(`Unsupported WebP container for ${assetPath}`);
 }
 
 describe("asset manifest", () => {
@@ -50,6 +68,24 @@ describe("asset manifest", () => {
       expect(assetPath).toMatch(/^\/assets\/generated\/.+\.webp$/);
       expectProjectAssetExists(assetPath);
     }
+  });
+
+  it("keeps flight skyboxes at the expected panorama aspect ratio", () => {
+    const assetManifest = manifest as AssetManifest;
+    for (const assetPath of [assetManifest.skyboxPanorama, ...Object.values(assetManifest.systemSkyboxes)]) {
+      const dimensions = readWebpDimensions(assetPath);
+      expect(dimensions.width / dimensions.height).toBe(2);
+    }
+  });
+
+  it("generates skyboxes through the aspect-preserving path", () => {
+    const script = readFileSync(resolve(process.cwd(), "scripts/generate-cinematic-textures.mjs"), "utf8");
+
+    expect(script).toContain("function renderSkyboxWebp");
+    expect(script).toContain("force_original_aspect_ratio=increase");
+    expect(script).toContain("force_original_aspect_ratio=decrease");
+    expect(script).toMatch(/Object\.entries\(manifest\.systemSkyboxes\)[\s\S]*await renderSkyboxWebp\(/);
+    expect(script).toMatch(/await renderSkyboxWebp\(\{\s*publicPath: manifest\.skyboxPanorama/);
   });
 
   it("points every player ship to a generated GLB model", () => {

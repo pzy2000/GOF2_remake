@@ -248,6 +248,7 @@ describe("autopilot jump flow", () => {
       phase: "to-origin-gate",
       originSystemId: "helion-reach",
       targetSystemId: "kuro-belt",
+      routeSystemIds: ["helion-reach", "kuro-belt"],
       targetStationId: "kuro-deep",
       cancelable: true
     });
@@ -264,6 +265,7 @@ describe("autopilot jump flow", () => {
       phase: "to-origin-gate",
       originSystemId: "helion-reach",
       targetSystemId: "kuro-belt",
+      routeSystemIds: ["helion-reach", "kuro-belt"],
       targetStationId: "lode-spindle",
       cancelable: true
     });
@@ -286,8 +288,45 @@ describe("autopilot jump flow", () => {
       phase: "gate-activation",
       originSystemId: "helion-reach",
       targetSystemId: "kuro-belt",
+      routeSystemIds: ["helion-reach", "kuro-belt"],
       targetStationId: "lode-spindle",
       cancelable: false
+    });
+  });
+
+  it("starts a manual multi-hop route from the active Stargate", async () => {
+    const store = await freshStore();
+    const gate = getJumpGatePosition("helion-reach");
+    store.setState((state) => ({
+      knownSystems: ["helion-reach", "mirr-vale", "celest-gate"],
+      knownPlanetIds: [...new Set([...state.knownPlanetIds, "mirr-glass", "celest-crown"])],
+      screen: "galaxyMap",
+      previousScreen: "flight",
+      galaxyMapMode: "gate",
+      player: { ...state.player, position: gate, velocity: [0, 0, 0] }
+    }));
+    store.getState().activateStargateJumpToStation("celest-vault");
+
+    expect(store.getState().autopilot).toMatchObject({
+      phase: "gate-activation",
+      originSystemId: "helion-reach",
+      targetSystemId: "celest-gate",
+      routeSystemIds: ["helion-reach", "mirr-vale", "celest-gate"],
+      targetStationId: "celest-vault",
+      cancelable: false
+    });
+
+    store.setState((state) => ({
+      autopilot: state.autopilot ? { ...state.autopilot, phase: "wormhole", timer: WORMHOLE_SECONDS - 0.01, cancelable: false } : undefined
+    }));
+    store.getState().tick(0.05);
+
+    expect(store.getState().currentSystemId).toBe("mirr-vale");
+    expect(store.getState().autopilot).toMatchObject({
+      phase: "to-origin-gate",
+      originSystemId: "mirr-vale",
+      targetSystemId: "celest-gate",
+      routeSystemIds: ["helion-reach", "mirr-vale", "celest-gate"]
     });
   });
 
@@ -308,7 +347,7 @@ describe("autopilot jump flow", () => {
     expect(store.getState().runtime.effects.some((effect) => effect.kind === "gate-spool")).toBe(true);
   });
 
-  it("switches systems after wormhole transit and exits near the target station without auto-docking", async () => {
+  it("switches systems after wormhole transit and continues to the target station without auto-docking", async () => {
     const store = await freshStore();
     store.setState((state) => ({ knownPlanetIds: [...state.knownPlanetIds, "lode-minor"] }));
     store.getState().startJumpToStation("lode-spindle");
@@ -320,11 +359,76 @@ describe("autopilot jump flow", () => {
     expect(state.currentSystemId).toBe("kuro-belt");
     expect(state.currentStationId).toBeUndefined();
     expect(state.targetId).toBeUndefined();
-    expect(state.autopilot).toBeUndefined();
-    expect(state.runtime.message).toBe("Arrived near Lode Spindle. Press E to dock.");
-    expect(distance(state.player.position, stationById["lode-spindle"].position)).toBeLessThan(360);
+    expect(state.autopilot).toMatchObject({
+      phase: "to-destination-station",
+      originSystemId: "kuro-belt",
+      targetSystemId: "kuro-belt",
+      routeSystemIds: ["helion-reach", "kuro-belt"],
+      targetStationId: "lode-spindle"
+    });
+    expect(state.runtime.message).toBe("Arrived in Kuro Belt. Autopilot continuing to Lode Spindle.");
+    expect(distance(state.player.position, getJumpGatePosition("kuro-belt"))).toBeLessThan(180);
     expect(state.knownSystems).toContain("ashen-drift");
     expect(state.knownPlanetIds).toContain("lode-minor");
+
+    store.setState((latest) => ({
+      player: { ...latest.player, position: stationById["lode-spindle"].position, velocity: [0, 0, 0] }
+    }));
+    store.getState().tick(0.05);
+    expect(store.getState().currentStationId).toBeUndefined();
+    expect(store.getState().autopilot).toBeUndefined();
+    expect(store.getState().runtime.message).toBe("Arrived near Lode Spindle. Press E to dock.");
+  });
+
+  it("continues through each known Stargate leg before approaching a distant station", async () => {
+    const store = await freshStore();
+    store.setState((state) => ({
+      knownSystems: ["helion-reach", "mirr-vale", "celest-gate"],
+      knownPlanetIds: [...new Set([...state.knownPlanetIds, "mirr-glass", "celest-crown"])]
+    }));
+    store.getState().startJumpToStation("celest-vault");
+    expect(store.getState().autopilot).toMatchObject({
+      phase: "to-origin-gate",
+      originSystemId: "helion-reach",
+      targetSystemId: "celest-gate",
+      routeSystemIds: ["helion-reach", "mirr-vale", "celest-gate"],
+      targetStationId: "celest-vault"
+    });
+
+    store.setState((state) => ({
+      autopilot: state.autopilot ? { ...state.autopilot, phase: "wormhole", timer: WORMHOLE_SECONDS - 0.01, cancelable: false } : undefined
+    }));
+    store.getState().tick(0.05);
+    expect(store.getState().currentSystemId).toBe("mirr-vale");
+    expect(store.getState().autopilot).toMatchObject({
+      phase: "to-origin-gate",
+      originSystemId: "mirr-vale",
+      targetSystemId: "celest-gate",
+      routeSystemIds: ["helion-reach", "mirr-vale", "celest-gate"]
+    });
+    expect(distance(store.getState().player.position, getJumpGatePosition("mirr-vale"))).toBeLessThan(180);
+
+    store.setState((state) => ({
+      autopilot: state.autopilot ? { ...state.autopilot, phase: "wormhole", timer: WORMHOLE_SECONDS - 0.01, cancelable: false } : undefined
+    }));
+    store.getState().tick(0.05);
+    expect(store.getState().currentSystemId).toBe("celest-gate");
+    expect(store.getState().autopilot).toMatchObject({
+      phase: "to-destination-station",
+      originSystemId: "celest-gate",
+      targetSystemId: "celest-gate",
+      routeSystemIds: ["helion-reach", "mirr-vale", "celest-gate"],
+      targetStationId: "celest-vault"
+    });
+    expect(distance(store.getState().player.position, getJumpGatePosition("celest-gate"))).toBeLessThan(180);
+
+    store.setState((state) => ({
+      player: { ...state.player, position: stationById["celest-vault"].position, velocity: [0, 0, 0] }
+    }));
+    store.getState().tick(0.05);
+    expect(store.getState().currentStationId).toBeUndefined();
+    expect(store.getState().autopilot).toBeUndefined();
+    expect(store.getState().runtime.message).toBe("Arrived near Celest Vault. Press E to dock.");
   });
 
   it("cancels only during cancelable navigation phases and ignores invalid routes", async () => {

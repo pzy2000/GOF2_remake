@@ -847,6 +847,7 @@ export interface AutoPilotState {
   phase: AutoPilotPhase;
   originSystemId: string;
   targetSystemId: string;
+  routeSystemIds?: string[];
   targetStationId?: string;
   targetPosition: Vec3;
   timer: number;

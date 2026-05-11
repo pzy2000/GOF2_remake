@@ -4,7 +4,6 @@ import {
   GATE_ACTIVATION_SECONDS,
   GATE_ARRIVAL_DISTANCE,
   getJumpGatePosition,
-  getStationArrivalPosition,
   integrateAutopilotStep,
   rotationToward,
   shouldCancelAutopilot,
@@ -15,6 +14,7 @@ import { isHiddenStationRevealed } from "../../systems/exploration";
 import { getPlayerRuntimeEffects } from "../../systems/equipment";
 import { add, clamp, distance, forwardFromRotation, normalize, scale, sub } from "../../systems/math";
 import {
+  findKnownStargateRoute,
   isKnownSystem,
   revealNeighborSystems,
   STARGATE_INTERACTION_RANGE
@@ -62,6 +62,19 @@ export function emptyFlightInput(): FlightInput {
 
 function npcRouteActionLabel(action: "escort" | "rob"): string {
   return action[0].toUpperCase() + action.slice(1);
+}
+
+function getAutopilotNextSystemId(autopilot: AutoPilotState, currentSystemId: string): string | undefined {
+  if (!autopilot.routeSystemIds || autopilot.routeSystemIds.length < 2) {
+    return autopilot.targetSystemId === currentSystemId ? undefined : autopilot.targetSystemId;
+  }
+  const currentRouteIndex = autopilot.routeSystemIds.indexOf(currentSystemId);
+  if (currentRouteIndex < 0 || currentRouteIndex >= autopilot.routeSystemIds.length - 1) return undefined;
+  return autopilot.routeSystemIds[currentRouteIndex + 1];
+}
+
+function getGateExitPosition(systemId: string): Vec3 {
+  return add(getJumpGatePosition(systemId), [0, 0, 150] as Vec3);
 }
 
 export function advanceAutopilotPatch({
@@ -124,9 +137,9 @@ export function advanceAutopilotPatch({
   let npcInteraction = state.npcInteraction;
   let enteredStationId: string | undefined;
   const audioEvents: AudioEventName[] = [];
-  const targetSystem = systemById[autopilot.targetSystemId];
+  const finalTargetSystem = systemById[autopilot.targetSystemId];
 
-  if (!targetSystem) {
+  if (!finalTargetSystem) {
     return {
       patch: {
         autopilot: undefined,
@@ -260,13 +273,27 @@ export function advanceAutopilotPatch({
       runtime.effects.push(wormholeEffect(player.position));
       runtime.message = `Wormhole transit ${Math.round(progress * 100)}%`;
       if (progress >= 1) {
-        currentSystemId = targetSystem.id;
+        const nextSystemId = getAutopilotNextSystemId(autopilot, currentSystemId);
+        const nextSystem = nextSystemId ? systemById[nextSystemId] : undefined;
+        if (!nextSystem) {
+          return {
+            patch: {
+              autopilot: undefined,
+              runtime: { ...runtime, message: "Autopilot route failed. Manual control restored." },
+              input: emptyFlightInput()
+            }
+          };
+        }
+        const finalJump = nextSystem.id === autopilot.targetSystemId;
+        currentSystemId = nextSystem.id;
         currentStationId = undefined;
-        knownSystems = revealNeighborSystems(knownSystems, targetSystem.id);
-        knownPlanetIds = mergeKnownPlanetIds(knownPlanetIds, knownSystems, targetStation.id);
+        knownSystems = revealNeighborSystems(knownSystems, nextSystem.id);
+        knownPlanetIds = mergeKnownPlanetIds(knownPlanetIds, knownSystems, finalJump ? targetStation.id : undefined);
         targetId = undefined;
-        const arrivalPosition = getStationArrivalPosition(targetStation.id) ?? add(targetStation.position, [0, 36, 240]);
-        const exitDirection = normalize(sub(targetStation.position, arrivalPosition));
+        const arrivalPosition = getGateExitPosition(nextSystem.id);
+        const nextGatePosition = getJumpGatePosition(nextSystem.id);
+        const nextTargetPosition = finalJump ? targetStation.position : nextGatePosition;
+        const exitDirection = normalize(sub(nextTargetPosition, arrivalPosition));
         player = {
           ...player,
           position: arrivalPosition,
@@ -275,15 +302,23 @@ export function advanceAutopilotPatch({
           throttle: 0.25
         };
         runtime = {
-          ...createRuntimeForSystem(targetSystem.id, state.activeMissions),
-          message: `Arrived near ${targetStation.name}. Press E to dock.`,
+          ...createRuntimeForSystem(nextSystem.id, state.activeMissions),
+          message: finalJump
+            ? `Arrived in ${nextSystem.name}. Autopilot continuing to ${targetStation.name}.`
+            : `Arrived in ${nextSystem.name}. Continuing stargate route to ${targetStation.name}.`,
           effects: [
             wormholeEffect(player.position),
-            navEffect(targetStation.position, "E Dock"),
-            dockCorridorEffect(player.position, targetStation.position, "ARRIVAL")
+            navEffect(nextTargetPosition, finalJump ? targetStation.name : "Jump Gate")
           ]
         };
-        autopilot = undefined;
+        autopilot = {
+          ...autopilot,
+          phase: finalJump ? "to-destination-station" : "to-origin-gate",
+          originSystemId: nextSystem.id,
+          targetPosition: nextTargetPosition,
+          timer: 0,
+          cancelable: true
+        };
       }
     } else if (autopilot.phase === "to-destination-station") {
       const step = integrateAutopilotStep({
@@ -441,6 +476,12 @@ export function startJumpToStationPatch(state: GameStore, stationId: string): Pa
   const originGate = getJumpGatePosition(state.currentSystemId);
   const launchPosition = state.screen === "station" ? launchPositionForStation(state.currentStationId, state.player.position) : state.player.position;
   const sameSystem = targetSystem.id === state.currentSystemId;
+  const routeSystemIds = sameSystem ? [state.currentSystemId] : findKnownStargateRoute(state.currentSystemId, targetSystem.id, state.knownSystems);
+  if (!routeSystemIds) {
+    return {
+      runtime: { ...state.runtime, message: `No known stargate route to ${targetSystem.name}.` }
+    };
+  }
   const targetPosition = sameSystem ? targetStation.position : originGate;
   const launchEffects = state.screen === "station"
     ? [launchTrailEffect(stationById[state.currentStationId ?? ""]?.position ?? state.player.position, launchPosition)]
@@ -455,6 +496,7 @@ export function startJumpToStationPatch(state: GameStore, stationId: string): Pa
       phase: sameSystem ? "to-destination-station" : "to-origin-gate",
       originSystemId: state.currentSystemId,
       targetSystemId: targetSystem.id,
+      routeSystemIds,
       targetStationId: targetStation.id,
       targetPosition,
       timer: 0,
@@ -501,6 +543,14 @@ export function activateStargateJumpToStationPatch(state: GameStore, stationId: 
       }
     };
   }
+  const routeSystemIds = targetSystem.id === state.currentSystemId ? [state.currentSystemId] : findKnownStargateRoute(state.currentSystemId, targetSystem.id, state.knownSystems);
+  if (!routeSystemIds) {
+    return {
+      patch: {
+        runtime: { ...state.runtime, message: `No known stargate route to ${targetSystem.name}.` }
+      }
+    };
+  }
   if (targetSystem.id === state.currentSystemId) {
     return {
       patch: {
@@ -514,6 +564,7 @@ export function activateStargateJumpToStationPatch(state: GameStore, stationId: 
           phase: "to-destination-station",
           originSystemId: state.currentSystemId,
           targetSystemId: targetSystem.id,
+          routeSystemIds,
           targetStationId: targetStation.id,
           targetPosition: targetStation.position,
           timer: 0,
@@ -550,6 +601,7 @@ export function activateStargateJumpToStationPatch(state: GameStore, stationId: 
         phase: "gate-activation",
         originSystemId: state.currentSystemId,
         targetSystemId: targetSystem.id,
+        routeSystemIds,
         targetStationId: targetStation.id,
         targetPosition: originGate,
         timer: 0,
