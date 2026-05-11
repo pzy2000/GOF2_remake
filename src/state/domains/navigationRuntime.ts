@@ -331,7 +331,8 @@ export function advanceAutopilotPatch({
     activeMissions: state.activeMissions,
     failedMissionIds: state.failedMissionIds,
     runtime,
-    gameClock
+    gameClock,
+    marketState
   });
   if (expiration.expiredMissionIds.length > 0) audioEvents.push("mission-fail");
 
@@ -345,7 +346,7 @@ export function advanceAutopilotPatch({
           player: expiration.player,
           activeMissions: expiration.activeMissions,
           failedMissionIds: expiration.failedMissionIds,
-          marketState,
+          marketState: expiration.marketState ?? marketState,
           reputation: expiration.reputation,
           knownSystems,
           knownPlanetIds
@@ -364,7 +365,7 @@ export function advanceAutopilotPatch({
       targetId,
       npcInteraction,
       gameClock,
-      marketState,
+      marketState: expiration.marketState ?? marketState,
       activeMissions: expiration.activeMissions,
       failedMissionIds: expiration.failedMissionIds,
       reputation: expiration.reputation,

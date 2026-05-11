@@ -3,14 +3,18 @@ import type {
   CargoHold,
   CommodityId,
   EconomyNpcLedger,
+  EconomyNpcRelationTier,
   EconomyNpcRiskPreference,
   EconomyNpcTaskKind,
   FactionId,
   FlightEntityRole,
   MarketState,
+  MissionDefinition,
   PlayerState,
   Vec3
 } from "./game";
+
+export type { EconomyNpcRelationTier } from "./game";
 
 export type EconomyConnectionStatus = "connected" | "offline" | "fallback";
 
@@ -29,6 +33,34 @@ export type EconomyEventType =
 
 export type EconomyNpcRole = Extract<FlightEntityRole, "trader" | "freighter" | "courier" | "miner" | "smuggler">;
 export type EconomyNpcInteractionAction = "rob" | "rescue" | "report";
+
+export interface EconomyNpcRelationship {
+  lineageId: string;
+  trust: number;
+  hostility: number;
+  rescuedCount: number;
+  robbedCount: number;
+  reportedCount: number;
+  lastInteractionAt?: number;
+  hostileUntil?: number;
+  offerSeq: number;
+}
+
+export interface EconomyNpcPersonalOfferSummary {
+  missionId: string;
+  lineageId: string;
+  npcId: string;
+  stationId: string;
+  sourceStationId?: string;
+  destinationStationId: string;
+  commodityId: CommodityId;
+  amount: number;
+  reward: number;
+  createdAt: number;
+  expiresAt?: number;
+  completedAt?: number;
+  relationTier: EconomyNpcRelationTier;
+}
 
 export interface NpcTask {
   kind: EconomyNpcTaskKind;
@@ -62,6 +94,10 @@ export interface EconomyNpcEntity {
   cargo: CargoHold;
   credits: number;
   ledger: EconomyNpcLedger;
+  relationship?: EconomyNpcRelationship;
+  relationTier?: EconomyNpcRelationTier;
+  relationSummary?: string;
+  personalOfferId?: string;
   task: NpcTask;
   statusLabel: string;
   lastTradeAt: number;
@@ -103,6 +139,8 @@ export interface EconomySnapshot {
   clock: number;
   marketState: MarketState;
   visibleNpcs: EconomyNpcEntity[];
+  npcRelationships?: Record<string, EconomyNpcRelationship>;
+  personalOffers?: MissionDefinition[];
   resourceBelts: EconomyResourceBelt[];
   recentEvents: EconomyEvent[];
   status: Extract<EconomyConnectionStatus, "connected">;
@@ -153,6 +191,9 @@ export interface EconomyNpcInteractionResponse {
   event?: EconomyEvent;
   snapshot?: EconomySnapshot;
   cargoDropped?: CargoHold;
+  relationship?: EconomyNpcRelationship;
+  relationshipDelta?: Partial<Pick<EconomyNpcRelationship, "trust" | "hostility" | "rescuedCount" | "robbedCount" | "reportedCount">>;
+  personalOffer?: MissionDefinition;
 }
 
 export interface EconomyDispatchDeliveryRequest {

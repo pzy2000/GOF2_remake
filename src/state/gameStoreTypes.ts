@@ -43,6 +43,7 @@ export interface GameStore {
   runtime: RuntimeState;
   economyService: EconomyServiceStatus;
   economyEvents: EconomyEvent[];
+  economyPersonalOffers: MissionDefinition[];
   economyNpcWatch?: EconomyNpcWatchState;
   npcInteraction?: NpcInteractionState;
   npcObjective?: NpcObjectiveState;

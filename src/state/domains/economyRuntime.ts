@@ -1,5 +1,5 @@
 import type { EconomyNpcEntity, EconomyServiceStatus, EconomySnapshot } from "../../types/economy";
-import type { MarketState, RuntimeState } from "../../types/game";
+import type { MarketState, MissionDefinition, RuntimeState } from "../../types/game";
 import { ECONOMY_SERVICE_URL } from "../../systems/economyClient";
 import type { GameStore } from "../gameStoreTypes";
 import { isEconomyTrafficRole, materializeEconomyNpc } from "./runtimeFactory";
@@ -9,7 +9,7 @@ export function applyEconomySnapshotPatch(
   snapshot: EconomySnapshot,
   lastEvent?: string,
   options: { watchedNpc?: EconomyNpcEntity; watchedNpcId?: string } = {}
-): Pick<GameStore, "marketState" | "runtime" | "economyService" | "economyEvents"> {
+): Pick<GameStore, "marketState" | "runtime" | "economyService" | "economyEvents" | "economyPersonalOffers"> {
   const backendNpcIds = new Set(snapshot.visibleNpcs.map((npc) => npc.id));
   const protectedNpcIds = new Set(backendNpcIds);
   if (options.watchedNpcId) protectedNpcIds.add(options.watchedNpcId);
@@ -42,7 +42,8 @@ export function applyEconomySnapshotPatch(
       lastEvent,
       lastError: undefined
     },
-    economyEvents: snapshot.recentEvents
+    economyEvents: snapshot.recentEvents,
+    economyPersonalOffers: (snapshot.personalOffers ?? []) as MissionDefinition[]
   };
 }
 

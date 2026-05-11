@@ -486,6 +486,7 @@ export type EconomyNpcTaskKind =
   | "destroyed";
 
 export type EconomyNpcRiskPreference = "cautious" | "balanced" | "bold";
+export type EconomyNpcRelationTier = "trusted" | "friendly" | "neutral" | "hostile";
 
 export interface EconomyNpcLedger {
   revenue: number;
@@ -672,6 +673,9 @@ export interface FlightEntity {
   economySerial?: string;
   economyHomeStationId?: string;
   economyRiskPreference?: EconomyNpcRiskPreference;
+  economyRelationTier?: EconomyNpcRelationTier;
+  economyRelationSummary?: string;
+  economyPersonalOfferId?: string;
   economyContractId?: string;
   economyLedger?: EconomyNpcLedger;
   economyTaskKind?: EconomyNpcTaskKind;

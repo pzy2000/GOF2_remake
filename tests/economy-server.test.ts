@@ -211,6 +211,7 @@ describe("economy HTTP server", () => {
     expect(result.ok).toBe(true);
     expect(result.event?.type).toBe("npc-interaction");
     expect(result.cargoDropped).toEqual({ "basic-food": 2 });
+    expect(result.relationship).toMatchObject({ robbedCount: 1, hostility: 3 });
     expect(result.snapshot?.visibleNpcs.some((candidate) => candidate.id === npc!.id)).toBe(true);
 
     const missing = await fetch(`${baseUrl}/api/economy/npc-interaction`, {
@@ -261,5 +262,47 @@ describe("economy HTTP server", () => {
       })
     });
     expect(invalid.status).toBe(400);
+  });
+
+  it("returns personal favor calls in snapshots and clears them on delivery", async () => {
+    const { app, baseUrl } = await startServer();
+    const npc = app.getState().npcs.find((candidate) => candidate.id === "econ-helion-reach-freighter-1");
+    expect(npc).toBeDefined();
+
+    const rescue = await fetch(`${baseUrl}/api/economy/npc-interaction`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "rescue",
+        npcId: npc!.id,
+        systemId: "helion-reach"
+      })
+    });
+    const rescueResult = await rescue.json() as EconomyNpcInteractionResponse;
+    const offer = rescueResult.personalOffer;
+
+    expect(rescue.ok).toBe(true);
+    expect(offer?.id).toMatch(/^npc-favor:/);
+
+    const snapshotResponse = await fetch(`${baseUrl}/api/economy/snapshot?systemId=helion-reach`);
+    const snapshot = await snapshotResponse.json() as EconomySnapshot;
+    expect(snapshot.personalOffers?.some((mission) => mission.id === offer!.id)).toBe(true);
+    expect(snapshot.npcRelationships?.[npc!.lineageId]).toMatchObject({ rescuedCount: 1, trust: 2 });
+
+    const delivery = await fetch(`${baseUrl}/api/economy/dispatch-delivery`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        missionId: offer!.id,
+        systemId: offer!.destinationSystemId,
+        stationId: offer!.destinationStationId,
+        cargoDelivered: offer!.cargoRequired
+      })
+    });
+    const delivered = await delivery.json() as EconomyDispatchDeliveryResponse;
+
+    expect(delivery.ok).toBe(true);
+    expect(delivered.message).toContain("Personal call completed");
+    expect(delivered.snapshot?.personalOffers).toEqual([]);
   });
 });

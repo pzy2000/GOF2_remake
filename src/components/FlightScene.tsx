@@ -1845,9 +1845,11 @@ function NpcInteractionOverlay() {
   const runtime = useGameStore((state) => state.runtime);
   const gameClock = useGameStore((state) => state.gameClock);
   const closeNpcInteraction = useGameStore((state) => state.closeNpcInteraction);
+  const startJumpToStation = useGameStore((state) => state.startJumpToStation);
   const ship = interaction ? runtime.enemies.find((item) => item.id === interaction.npcId) : undefined;
   if (!interaction || !ship) return null;
   const objectiveActive = objective?.npcId === ship.id ? objective : undefined;
+  const personalCallStation = ship.economyPersonalOfferId && ship.economyHomeStationId ? stationById[ship.economyHomeStationId] : undefined;
   return (
     <div className="npc-interaction-overlay" data-testid="npc-interaction-overlay" onMouseDown={(event) => event.stopPropagation()}>
       <header>
@@ -1860,9 +1862,15 @@ function NpcInteractionOverlay() {
       <p>
         {formatRuntimeText(locale, ship.economyStatus)}
         {ship.economySerial ? ` · ${ship.economySerial}` : ""}
+        {ship.economyRelationSummary ? ` · ${formatRuntimeText(locale, ship.economyRelationSummary)}` : ""}
         {hasActiveCivilianDistress(ship, runtime.clock) ? ` · ${translateText("DISTRESS", locale)}` : ""}
       </p>
       <NpcInteractionActions ship={ship} />
+      {personalCallStation ? (
+        <button type="button" className="primary" onClick={() => startJumpToStation(personalCallStation.id)}>
+          {translateText("Route to Personal Call", locale)}
+        </button>
+      ) : null}
       {interaction.pending ? <p className="npc-interaction-message">{translateText("Pending backend confirmation...", locale)}</p> : null}
       {interaction.message ? <p className="npc-interaction-message">{formatRuntimeText(locale, interaction.message)}</p> : null}
       {objectiveActive ? (
@@ -1884,6 +1892,7 @@ function EconomyWatchOverlay() {
   const economyEvents = useGameStore((state) => state.economyEvents);
   const watch = useGameStore((state) => state.economyNpcWatch);
   const stopEconomyNpcWatch = useGameStore((state) => state.stopEconomyNpcWatch);
+  const startJumpToStation = useGameStore((state) => state.startJumpToStation);
   const ship = watch ? runtime.enemies.find((item) => item.id === watch.npcId) : undefined;
   if (!watch || !ship) return null;
   const target = getEconomyWatchTarget(ship, runtime.asteroids, currentSystemId);
@@ -1901,6 +1910,7 @@ function EconomyWatchOverlay() {
   const cargo = ship.economyCargo && Object.keys(ship.economyCargo).length > 0
     ? formatCargoContents(locale, ship.economyCargo)
     : translateText("Empty hold", locale);
+  const personalCallStation = ship.economyPersonalOfferId && ship.economyHomeStationId ? stationById[ship.economyHomeStationId] : undefined;
   return (
     <div className={`economy-watch-overlay${distressActive ? " distress" : ""}`} data-testid="economy-watch-overlay">
       <header className="economy-watch-header">
@@ -1923,11 +1933,27 @@ function EconomyWatchOverlay() {
       <div className="economy-watch-status-row">
         <span className={`economy-watch-pill task-${ship.economyTaskKind ?? "idle"}`}>{formatRuntimeText(locale, ship.economyStatus)}</span>
         {distressActive ? <span className="economy-watch-pill danger">{translateText("DISTRESS", locale)}</span> : null}
+        {ship.economyRelationTier ? <span className={`economy-watch-pill relation-${ship.economyRelationTier}`}>{formatRuntimeText(locale, ship.economyRelationSummary ?? ship.economyRelationTier)}</span> : null}
+        {personalCallStation ? <span className="economy-watch-pill">{translateText("Personal Call", locale)}</span> : null}
       </div>
       <NpcInteractionActions ship={ship} compact />
+      {personalCallStation ? (
+        <button
+          type="button"
+          className="primary"
+          onMouseDown={(event) => event.stopPropagation()}
+          onClick={(event) => {
+            event.stopPropagation();
+            startJumpToStation(personalCallStation.id);
+          }}
+        >
+          {translateText("Route to Personal Call", locale)}
+        </button>
+      ) : null}
       <div className="economy-watch-grid">
         <p><b>{translateText("Identity", locale)}</b><span>{ship.economySerial ?? ship.id}</span></p>
         <p><b>{translateText("Home", locale)}</b><span>{homeStation ? localizeStationName(homeStation.id, locale, homeStation.name) : translateText("Unknown", locale)}</span></p>
+        <p><b>{translateText("Relation", locale)}</b><span>{formatRuntimeText(locale, ship.economyRelationSummary ?? "No history")}</span></p>
         <p><b>{translateText("Risk", locale)}</b><span>{formatWatchRiskPreference(locale, ship.economyRiskPreference)}</span></p>
         <p><b>{translateText("Contract", locale)}</b><span>{ship.economyContractId ?? translateText("None", locale)}</span></p>
         <p><b>{translateText("P/L", locale)}</b><span>{formatWatchLedgerNet(locale, ledger)}</span></p>

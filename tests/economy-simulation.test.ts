@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { stationById } from "../src/data/world";
 import { getMarketEntry } from "../src/systems/economy";
-import { getAvailableMarketGapMissions } from "../src/systems/marketMissions";
+import { applyEconomyDispatchMissionFailure, getAvailableMarketGapMissions, isNpcFavorMissionId } from "../src/systems/marketMissions";
 import {
   createEconomySnapshot,
   createInitialEconomyState,
@@ -246,6 +246,130 @@ describe("NPC economy simulation", () => {
     });
     expect(reported.ok).toBe(true);
     expect(reported.message).toContain("report filed");
+  });
+
+  it("migrates v1 backend state with default NPC relationship memory", () => {
+    const fresh = createInitialEconomyState();
+    const normalized = normalizeEconomyState({
+      ...fresh,
+      version: 1,
+      npcRelationships: undefined,
+      personalOffers: undefined
+    });
+
+    expect(normalized.version).toBe(2);
+    expect(normalized.npcRelationships).toEqual({});
+    expect(normalized.personalOffers).toEqual([]);
+  });
+
+  it("turns rescue confirmations into persistent personal favor offers", () => {
+    const state = createInitialEconomyState();
+    const npc = state.npcs.find((candidate) => candidate.id === "econ-helion-reach-freighter-1")!;
+
+    const rescued = handleEconomyNpcInteraction(state, {
+      action: "rescue",
+      npcId: npc.id,
+      systemId: "helion-reach"
+    });
+
+    expect(rescued.ok).toBe(true);
+    expect(rescued.relationship).toMatchObject({
+      lineageId: npc.lineageId,
+      trust: 2,
+      rescuedCount: 1
+    });
+    expect(rescued.personalOffer?.id).toMatch(/^npc-favor:/);
+    expect(isNpcFavorMissionId(rescued.personalOffer!.id)).toBe(true);
+    expect(state.personalOffers).toHaveLength(1);
+
+    const secondRescue = handleEconomyNpcInteraction(state, {
+      action: "rescue",
+      npcId: npc.id,
+      systemId: "helion-reach"
+    });
+
+    expect(secondRescue.personalOffer?.id).toBe(rescued.personalOffer?.id);
+    expect(state.personalOffers).toHaveLength(1);
+    expect(createEconomySnapshot(state, "helion-reach").personalOffers?.[0]?.id).toBe(rescued.personalOffer?.id);
+  });
+
+  it("records robberies as hostile relationship memory and worsens destination market pressure", () => {
+    const state = createInitialEconomyState();
+    const npc = state.npcs.find((candidate) => candidate.id === "econ-helion-reach-freighter-1")!;
+    npc.cargo = { "basic-food": 6 };
+    npc.task = {
+      kind: "hauling",
+      contractId: "HR-FR-02-FREIGHT",
+      commodityId: "basic-food",
+      originStationId: "helion-prime",
+      destinationStationId: "mirr-lattice",
+      startedAt: state.clock
+    };
+    const before = getMarketEntry(state.marketState, "mirr-lattice", "basic-food");
+
+    const robbed = handleEconomyNpcInteraction(state, {
+      action: "rob",
+      npcId: npc.id,
+      systemId: "helion-reach"
+    });
+    const after = getMarketEntry(state.marketState, "mirr-lattice", "basic-food");
+
+    expect(robbed.ok).toBe(true);
+    expect(robbed.relationship).toMatchObject({
+      lineageId: npc.lineageId,
+      hostility: 3,
+      robbedCount: 1
+    });
+    expect(robbed.relationship?.hostileUntil).toBeGreaterThan(state.clock);
+    expect(after.demand).toBeGreaterThan(before.demand);
+  });
+
+  it("completes npc-favor dispatch deliveries and clears personal offers", () => {
+    const state = createInitialEconomyState();
+    const npc = state.npcs.find((candidate) => candidate.id === "econ-helion-reach-freighter-1")!;
+    const rescued = handleEconomyNpcInteraction(state, {
+      action: "rescue",
+      npcId: npc.id,
+      systemId: "helion-reach"
+    });
+    const offer = rescued.personalOffer!;
+
+    const delivered = handleEconomyDispatchDelivery(state, {
+      missionId: offer.id,
+      systemId: offer.destinationSystemId,
+      stationId: offer.destinationStationId,
+      cargoDelivered: offer.cargoRequired!
+    });
+
+    expect(delivered.ok).toBe(true);
+    expect(delivered.message).toContain("Personal call completed");
+    expect(state.personalOffers).toHaveLength(0);
+    expect(state.npcRelationships[npc.lineageId].trust).toBe(3);
+    expect(delivered.snapshot?.personalOffers).toEqual([]);
+  });
+
+  it("worsens market pressure when economy dispatch cargo expires undelivered", () => {
+    const state = createInitialEconomyState();
+    const mission = {
+      id: "market-gap:helion-prime:basic-food:critical",
+      title: "Market Gap: Basic Food for Helion Prime Exchange",
+      type: "Cargo transport" as const,
+      originSystemId: "helion-reach",
+      destinationSystemId: "helion-reach",
+      destinationStationId: "helion-prime",
+      factionId: "solar-directorate" as const,
+      description: "Test dispatch.",
+      reward: 500,
+      cargoRequired: { "basic-food": 4 },
+      consumeCargoOnComplete: true
+    };
+    const before = getMarketEntry(state.marketState, "helion-prime", "basic-food");
+
+    const next = applyEconomyDispatchMissionFailure(state.marketState, mission);
+    const after = getMarketEntry(next, "helion-prime", "basic-food");
+
+    expect(after.demand).toBeGreaterThan(before.demand);
+    expect(after.stock).toBeLessThanOrEqual(before.stock);
   });
 
   it("records dispatch deliveries as market events", () => {

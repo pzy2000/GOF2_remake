@@ -17,6 +17,7 @@ const DEFAULT_RECORD: FactionHeatRecord = { heat: 0, fineCredits: 0, offenseCoun
 
 export type FactionIncidentKind =
   | "civilian-hit"
+  | "civilian-robbed"
   | "patrol-hit"
   | "smuggler-hit"
   | "civilian-destroyed"
@@ -70,6 +71,7 @@ export interface PayFactionFineResult {
 
 const incidentRules: Record<FactionIncidentKind, FactionIncidentRule> = {
   "civilian-hit": { heat: 12, reputationDelta: -4, fineCredits: 750, tone: "fine", title: "Civilian fire violation" },
+  "civilian-robbed": { heat: 45, reputationDelta: -10, fineCredits: 1800, forceWanted: true, tone: "wanted", title: "Civilian robbery warrant" },
   "patrol-hit": { heat: 20, reputationDelta: -8, fineCredits: 1250, tone: "wanted", title: "Security assault" },
   "smuggler-hit": { heat: 12, reputationDelta: -2, fineCredits: 0, tone: "fine", title: "Faction reprisal" },
   "civilian-destroyed": { heat: 35, reputationDelta: -12, fineCredits: 3000, forceWanted: true, tone: "wanted", title: "Civilian vessel destroyed" },
@@ -309,6 +311,7 @@ function incidentBody(kind: FactionIncidentKind, subjectName: string | undefined
   const status = wanted ? " Wanted status active." : "";
   if (kind === "contraband-fine") return `Contraband citation recorded. Heat ${Math.round(heat)}.${fine}${status}`;
   if (kind === "contraband-hostile") return `Contraband confirmed. Patrols have marked you hostile. Heat ${Math.round(heat)}.${status}`;
+  if (kind === "civilian-robbed") return `${subject} robbery reported. Heat ${Math.round(heat)}.${fine}${status}`;
   if (kind.endsWith("destroyed")) return `${subject} destroyed. Heat ${Math.round(heat)}.${fine}${status}`;
   return `${subject} hit after warning. Heat ${Math.round(heat)}.${fine}${status}`;
 }

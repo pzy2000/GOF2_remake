@@ -190,11 +190,12 @@ function economyErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Economy service offline.";
 }
 
-function dispatchVisibilityFor(state: Pick<GameStore, "knownSystems" | "knownPlanetIds" | "explorationState">) {
+function dispatchVisibilityFor(state: Pick<GameStore, "knownSystems" | "knownPlanetIds" | "explorationState" | "economyPersonalOffers">) {
   return {
     knownSystemIds: state.knownSystems,
     knownPlanetIds: state.knownPlanetIds,
-    explorationState: state.explorationState
+    explorationState: state.explorationState,
+    personalOffers: state.economyPersonalOffers
   };
 }
 
@@ -367,9 +368,11 @@ function nearestEconomyNpc(state: GameStore): FlightEntity | undefined {
 }
 
 function hailMessageForNpc(ship: FlightEntity, now: number): string {
+  if (ship.economyRelationTier === "hostile") return `${ship.name}: Channel rejected. ${ship.economyRelationSummary ?? "Hostile contact"}.`;
   if (ship.distressThreatId && ship.distressCalledAt !== undefined && now - ship.distressCalledAt <= 18) {
     return `${ship.name}: Distress traffic open. Hostile contact is on our route.`;
   }
+  if (ship.economyPersonalOfferId) return `${ship.name}: Personal call is open at home station. ${ship.economyRelationSummary ?? ""}`.trim();
   if (ship.role === "smuggler") return `${ship.name}: Private freight. Keep patrol ears off this channel.`;
   if (ship.economyTaskKind === "mining") return `${ship.name}: Cutting ore. Keep pirates off our beam line.`;
   if (ship.economyTaskKind === "hauling") return `${ship.name}: Freight run active. Cargo and margin are both exposed.`;
@@ -395,6 +398,12 @@ function reportRewardFaction(state: GameStore, ship: FlightEntity): FactionId {
 
 function canReportNpc(state: GameStore, ship: FlightEntity): boolean {
   return ship.role === "smuggler" || hasActiveCivilianDistress(ship, state.runtime.clock) || isHostileToPlayer(ship);
+}
+
+function robberyIncidentKindForShip(ship: FlightEntity) {
+  if (ship.role === "smuggler") return incidentKindForShip(ship.role, false);
+  if (ship.role === "trader" || ship.role === "freighter" || ship.role === "courier" || ship.role === "miner") return "civilian-robbed" as const;
+  return incidentKindForShip(ship.role, false);
 }
 
 function stationForMissionAccess(state: GameStore, mission: MissionDefinition) {
@@ -567,6 +576,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   runtime: createRuntimeForSystem("helion-reach"),
   economyService: { status: "offline", url: ECONOMY_SERVICE_URL },
   economyEvents: [],
+  economyPersonalOffers: [],
   economyNpcWatch: undefined,
   npcInteraction: undefined,
   npcObjective: undefined,
@@ -607,6 +617,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       runtime: createRuntimeForSystem("helion-reach"),
       economyService: { status: "offline", url: ECONOMY_SERVICE_URL },
       economyEvents: [],
+      economyPersonalOffers: [],
       economyNpcWatch: undefined,
       npcInteraction: undefined,
       npcObjective: undefined,
@@ -659,6 +670,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       runtime: createRuntimeForSystem(save.currentSystemId, activeMissions),
       economyService: { status: "offline", url: ECONOMY_SERVICE_URL, snapshotId: save.economySnapshotId },
       economyEvents: [],
+      economyPersonalOffers: [],
       economyNpcWatch: undefined,
       npcInteraction: undefined,
       npcObjective: undefined,
@@ -1066,7 +1078,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
               marketState: latest.marketState,
               runtime: latest.runtime,
               economyService: latest.economyService,
-              economyEvents: result.event ? [...latest.economyEvents, result.event].slice(-12) : latest.economyEvents
+              economyEvents: result.event ? [...latest.economyEvents, result.event].slice(-12) : latest.economyEvents,
+              economyPersonalOffers: latest.economyPersonalOffers
             };
         let player = latest.player;
         let reputation = latest.reputation;
@@ -1075,7 +1088,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         let message = result.message;
         let runtime = patch.runtime;
         if (action === "rob") {
-          const consequenceKind = incidentKindForShip(latestNpc.role, false);
+          const consequenceKind = robberyIncidentKindForShip(latestNpc);
           if (consequenceKind) {
             const incident = applyFactionIncident({
               factionHeat,
@@ -1240,7 +1253,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
         activeMissions: state.activeMissions,
         failedMissionIds: state.failedMissionIds,
         runtime,
-        gameClock
+        gameClock,
+        marketState
       });
       if (expiration.expiredMissionIds.length > 0) audioSystem.play("mission-fail");
       const expiredStoryMission = expiration.expiredMissionIds
@@ -1258,7 +1272,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       if (input.toggleCamera) audioSystem.play("ui-click");
       set({
         gameClock,
-        marketState,
+        marketState: expiration.marketState ?? marketState,
         player: expiration.player,
         reputation: expiration.reputation,
         factionHeat,
@@ -2010,7 +2024,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
                       marketState: latest.marketState,
                       runtime: latest.runtime,
                       economyService: latest.economyService,
-                      economyEvents: result.event ? [...latest.economyEvents, result.event].slice(-12) : latest.economyEvents
+                      economyEvents: result.event ? [...latest.economyEvents, result.event].slice(-12) : latest.economyEvents,
+                      economyPersonalOffers: latest.economyPersonalOffers
                     };
                 return {
                   ...patch,
@@ -2139,7 +2154,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       activeMissions,
       failedMissionIds,
       runtime,
-      gameClock
+      gameClock,
+      marketState
     });
     if (expiration.expiredMissionIds.length > 0) audioSystem.play("mission-fail");
     const missionFailedThisFrame = expiration.failedMissionIds.length > failedMissionIds.length;
@@ -2190,7 +2206,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         lawNotification
       },
       gameClock,
-      marketState,
+      marketState: expiration.marketState ?? marketState,
       knownPlanetIds,
       activeMissions: expiration.activeMissions,
       failedMissionIds: expiration.failedMissionIds,
@@ -2221,7 +2237,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       activeMissions: state.activeMissions,
       failedMissionIds: state.failedMissionIds,
       runtime: state.runtime,
-      gameClock
+      gameClock,
+      marketState: state.economyService.status === "connected" ? state.marketState : advanceMarketState(state.marketState, delta)
     });
     if (expiration.expiredMissionIds.length > 0) audioSystem.play("mission-fail");
     const expiredStoryMission = expiration.expiredMissionIds
@@ -2237,7 +2254,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       : undefined;
     set({
       gameClock,
-      marketState: state.economyService.status === "connected" ? state.marketState : advanceMarketState(state.marketState, delta),
+      marketState: expiration.marketState ?? (state.economyService.status === "connected" ? state.marketState : advanceMarketState(state.marketState, delta)),
       player: expiration.player,
       reputation: expiration.reputation,
       factionHeat,
@@ -2546,6 +2563,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             player: result.player,
             marketState: patch?.marketState ?? result.marketState,
             economyService: patch?.economyService ?? latest.economyService,
+            economyPersonalOffers: patch?.economyPersonalOffers ?? latest.economyPersonalOffers,
             runtime: { ...(patch?.runtime ?? latest.runtime), message: result.message }
           };
         });
@@ -2590,6 +2608,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             player: result.player,
             marketState: patch?.marketState ?? result.marketState,
             economyService: patch?.economyService ?? latest.economyService,
+            economyPersonalOffers: patch?.economyPersonalOffers ?? latest.economyPersonalOffers,
             runtime: { ...(patch?.runtime ?? latest.runtime), mined: { ...latest.runtime.mined }, message: result.message }
           };
         });
@@ -2730,7 +2749,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
               marketState: patch?.marketState ?? latest.marketState,
               runtime: { ...(patch?.runtime ?? latest.runtime), message: delivery.message },
               economyService: patch?.economyService ?? latest.economyService,
-              economyEvents: patch?.economyEvents ?? (delivery.event ? [...latest.economyEvents, delivery.event].slice(-12) : latest.economyEvents)
+              economyEvents: patch?.economyEvents ?? (delivery.event ? [...latest.economyEvents, delivery.event].slice(-12) : latest.economyEvents),
+              economyPersonalOffers: patch?.economyPersonalOffers ?? latest.economyPersonalOffers
             };
           });
         })

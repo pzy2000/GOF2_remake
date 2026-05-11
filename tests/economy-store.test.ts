@@ -204,6 +204,9 @@ describe("economy store integration", () => {
           cargo: { iron: 1 },
           credits: 5000,
           ledger: { revenue: 0, expenses: 0, losses: 0, completedContracts: 0, failedContracts: 0, minedUnits: 1 },
+          relationTier: "friendly",
+          relationSummary: "Friendly - rescued 1",
+          personalOfferId: "npc-favor:econ-helion-reach-miner-test:1",
           lastTradeAt: 0,
           statusLabel: "MINING · Iron",
           task: {
@@ -232,7 +235,10 @@ describe("economy store integration", () => {
       loadoutId: "union-miner",
       economyStatus: "MINING · Iron",
       economyTaskKind: "mining",
-      economyTargetId: asteroids[0].id
+      economyTargetId: asteroids[0].id,
+      economyRelationTier: "friendly",
+      economyRelationSummary: "Friendly - rescued 1",
+      economyPersonalOfferId: "npc-favor:econ-helion-reach-miner-test:1"
     });
     expect(state.runtime.enemies.some((ship) => ship.id === "helion-reach-trader-0")).toBe(false);
     expect(state.runtime.asteroids[0].id).toBe(asteroids[0].id);
@@ -722,8 +728,10 @@ describe("economy store integration", () => {
         expect.objectContaining({ commodityId: "basic-food", amount: 2 })
       ])
     );
-    expect(getFactionHeatRecord(state.factionHeat, "free-belt-union").fineCredits).toBeGreaterThan(0);
-    expect(state.npcInteraction?.message).toContain("Fine 750 cr");
+    const heatRecord = getFactionHeatRecord(state.factionHeat, "free-belt-union");
+    expect(heatRecord.fineCredits).toBeGreaterThan(0);
+    expect(heatRecord.wantedUntil).toBeGreaterThan(state.gameClock);
+    expect(state.npcInteraction?.message).toContain("Fine 1,800 cr");
   });
 
   it("routes to a distant NPC before rob can be confirmed", async () => {
@@ -999,6 +1007,52 @@ describe("economy store integration", () => {
 
     expect(store.getState().activeMissions.some((active) => active.id === mission.id)).toBe(true);
     expect(store.getState().economyEvents[0]?.message).toContain("Basic Food");
+  });
+
+  it("stores backend personal calls and accepts them without mutating save schema", async () => {
+    const store = await freshStore();
+    const offer = {
+      id: "npc-favor:econ-helion-reach-freighter-1:1",
+      title: "Personal Call: HR-FR-02 needs Basic Food",
+      type: "Cargo transport" as const,
+      originSystemId: "helion-reach",
+      destinationSystemId: "helion-reach",
+      destinationStationId: "helion-prime",
+      factionId: "free-belt-union" as const,
+      sourceStationId: "mirr-lattice",
+      description: "A rescued freighter is calling in a favor.",
+      reward: 1200,
+      deadlineSeconds: 1200,
+      cargoRequired: { "basic-food": 3 },
+      consumeCargoOnComplete: true
+    };
+    const snapshot: EconomySnapshot = {
+      ...snapshotWithoutVisibleNpcs(81),
+      personalOffers: [offer],
+      npcRelationships: {
+        "econ-helion-reach-freighter-1": {
+          lineageId: "econ-helion-reach-freighter-1",
+          trust: 2,
+          hostility: 0,
+          rescuedCount: 1,
+          robbedCount: 0,
+          reportedCount: 0,
+          offerSeq: 1
+        }
+      }
+    };
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(snapshot), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    })));
+
+    await store.getState().refreshEconomySnapshot();
+    expect(store.getState().economyPersonalOffers[0]?.id).toBe(offer.id);
+
+    store.getState().acceptMission(offer.id);
+
+    expect(store.getState().activeMissions[0]).toMatchObject({ id: offer.id, accepted: true });
+    expect(store.getState().runtime.message).toContain("Personal Call");
   });
 
   it("posts completed dispatch deliveries to the economy backend", async () => {

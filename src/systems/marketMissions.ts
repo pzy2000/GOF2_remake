@@ -35,11 +35,13 @@ export interface MarketSupplyBrief {
 
 export const MARKET_GAP_MISSION_PREFIX = "market-gap:";
 export const MARKET_SMUGGLE_MISSION_PREFIX = "market-smuggle:";
+export const NPC_FAVOR_MISSION_PREFIX = "npc-favor:";
 
 export interface DispatchVisibilityOptions {
   knownSystemIds?: string[];
   knownPlanetIds?: string[];
   explorationState?: ExplorationState;
+  personalOffers?: MissionDefinition[];
 }
 
 export interface EconomyDispatchMissionOptions extends DispatchVisibilityOptions {
@@ -77,8 +79,12 @@ export function isMarketSmugglingMissionId(id: string): boolean {
   return id.startsWith(MARKET_SMUGGLE_MISSION_PREFIX);
 }
 
+export function isNpcFavorMissionId(id: string): boolean {
+  return id.startsWith(NPC_FAVOR_MISSION_PREFIX);
+}
+
 export function isEconomyDispatchMissionId(id: string): boolean {
-  return isMarketGapMissionId(id) || isMarketSmugglingMissionId(id);
+  return isMarketGapMissionId(id) || isMarketSmugglingMissionId(id) || isNpcFavorMissionId(id);
 }
 
 function isStationVisible(station: StationDefinition, options: DispatchVisibilityOptions = {}): boolean {
@@ -291,12 +297,14 @@ export function getAvailableEconomyDispatchMissions(options: EconomyDispatchMiss
   const legalLimit = Math.max(0, Math.ceil((options.limit ?? 6) * 0.67));
   const smugglingLimit = Math.max(0, (options.limit ?? 6) - legalLimit);
   return [
+    ...getAvailableNpcFavorMissions(options),
     ...getAvailableMarketGapMissions({ ...options, limit: legalLimit }),
     ...getAvailableSmugglingMissions({ ...options, limit: smugglingLimit })
   ].slice(0, options.limit ?? 6);
 }
 
 export function getEconomyDispatchMissionById(marketState: MarketState, missionId: string, options: DispatchVisibilityOptions = {}): MissionDefinition | undefined {
+  if (isNpcFavorMissionId(missionId)) return options.personalOffers?.find((mission) => mission.id === missionId);
   if (isMarketGapMissionId(missionId)) return getMarketGapMissionById(marketState, missionId, options);
   if (!isMarketSmugglingMissionId(missionId)) return undefined;
   const [, sourceId, destinationId] = missionId.match(/^market-smuggle:([^:]+):([^:]+):illegal-contraband$/) ?? [];
@@ -312,6 +320,19 @@ export function getDispatchMissionSourceStationId(mission: MissionDefinition): s
   return undefined;
 }
 
+export function getAvailableNpcFavorMissions({
+  systemId,
+  activeMissions,
+  personalOffers = [],
+  limit = 3
+}: EconomyDispatchMissionOptions): MissionDefinition[] {
+  const activeIds = new Set(activeMissions.map((mission) => mission.id));
+  return personalOffers
+    .filter((mission) => !activeIds.has(mission.id))
+    .filter((mission) => mission.destinationSystemId === systemId || mission.originSystemId === systemId)
+    .slice(0, limit);
+}
+
 export function applyCargoDeliveryToMarket(marketState: MarketState, stationId: string, cargoDelivered: Partial<Record<CommodityId, number | undefined>>): MarketState {
   const next = cloneMarketState(marketState);
   for (const [commodityId, amount] of Object.entries(cargoDelivered) as [CommodityId, number | undefined][]) {
@@ -325,9 +346,28 @@ export function applyCargoDeliveryToMarket(marketState: MarketState, stationId: 
   return next;
 }
 
+export function applyCargoLossToMarket(marketState: MarketState, stationId: string, cargoLost: Partial<Record<CommodityId, number | undefined>>, severity = 1): MarketState {
+  const next = cloneMarketState(marketState);
+  for (const [commodityId, amount] of Object.entries(cargoLost) as [CommodityId, number | undefined][]) {
+    const lost = Math.max(0, amount ?? 0);
+    if (lost <= 0) continue;
+    const entry = getMarketEntry(next, stationId, commodityId);
+    const stockPenalty = Math.min(entry.stock, lost * 0.35 * severity);
+    entry.stock = Math.max(0, entry.stock - stockPenalty);
+    entry.demand = Math.min(entry.baselineDemand + 1.2, entry.demand + lost / Math.max(8, entry.maxStock) * 0.85 * severity + 0.05);
+    next[stationId] = { ...next[stationId], [commodityId]: entry };
+  }
+  return next;
+}
+
 export function applyEconomyDispatchMissionDelivery(marketState: MarketState, mission: MissionDefinition): MarketState {
   if (!isEconomyDispatchMissionId(mission.id) || !mission.cargoRequired) return marketState;
   return applyCargoDeliveryToMarket(marketState, mission.destinationStationId, mission.cargoRequired);
+}
+
+export function applyEconomyDispatchMissionFailure(marketState: MarketState, mission: MissionDefinition): MarketState {
+  if (!isEconomyDispatchMissionId(mission.id) || !mission.cargoRequired) return marketState;
+  return applyCargoLossToMarket(marketState, mission.destinationStationId, mission.cargoRequired, isNpcFavorMissionId(mission.id) ? 0.6 : 0.45);
 }
 
 export function applyMarketGapMissionDelivery(marketState: MarketState, mission: MissionDefinition): MarketState {
