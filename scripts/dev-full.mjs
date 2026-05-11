@@ -1,11 +1,34 @@
 #!/usr/bin/env node
 import { spawn } from "node:child_process";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(__dirname, "..");
+const manifestPath = path.join(repoRoot, "public/assets/generated/manifest.json");
 
 const npmBin = process.platform === "win32" ? "npm.cmd" : "npm";
 const children = new Set();
 const economyHost = process.env.GOF2_ECONOMY_HOST ?? "127.0.0.1";
 const economyPort = process.env.GOF2_ECONOMY_PORT ?? "19777";
 const frontendHost = process.env.GOF2_FRONTEND_HOST;
+
+async function checkVoiceClipCoverage() {
+  try {
+    const raw = await readFile(manifestPath, "utf8");
+    const manifest = JSON.parse(raw);
+    const clipCount = Object.keys(manifest.voiceClips ?? {}).length;
+    if (clipCount === 0) {
+      console.log("[voices] no pre-rendered voice clips found in manifest.json.");
+      console.log("[voices] Run `npm run generate:voices` to enable distinct character voices; the game still runs with the browser TTS fallback in the meantime.");
+    } else {
+      console.log(`[voices] ${clipCount} pre-rendered voice clips registered.`);
+    }
+  } catch {
+    // Missing manifest is handled elsewhere; this hint is best-effort only.
+  }
+}
 
 function spawnChild(label, command, args, options = {}) {
   const child = spawn(command, args, {
@@ -61,6 +84,7 @@ process.on("SIGINT", () => shutdown(0));
 process.on("SIGTERM", () => shutdown(0));
 
 try {
+  await checkVoiceClipCoverage();
   await runOnce("server:build", npmBin, ["run", "server:build"]);
   const server = spawnChild("economy", process.execPath, ["dist-server/economy-server.mjs"], {
     env: {

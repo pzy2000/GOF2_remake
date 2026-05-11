@@ -183,6 +183,7 @@ export interface AssetManifest {
     freighter: string;
   };
   speakerPortraits: Record<string, string>;
+  voiceClips: Record<string, string>;
   asteroidTextures: string;
   factionEmblems: string;
   hudOverlay: string;

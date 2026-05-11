@@ -76,6 +76,7 @@
     "celest-archivist": "/assets/generated/portraits/celest-archivist.webp",
     "union-witness": "/assets/generated/portraits/union-witness.webp"
   },
+  "voiceClips": {},
   "asteroidTextures": "/assets/generated/asteroid-textures.webp",
   "factionEmblems": "/assets/generated/faction-emblems.webp",
   "hudOverlay": "/assets/generated/hud-overlay.webp",

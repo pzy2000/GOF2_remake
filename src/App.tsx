@@ -10,6 +10,7 @@ import { I18nRuntime } from "./components/I18nRuntime";
 import { LanguageSelect } from "./components/LanguageSelect";
 import { StoryNotificationOverlay } from "./components/StoryNotificationOverlay";
 import { audioSystem, getAudioSettings, saveAudioSettings } from "./systems/audio";
+import { voiceSystem } from "./systems/voice";
 import { loadAssetManifest } from "./systems/assets";
 import { resolveMusicCue } from "./systems/music";
 import { stationById, useGameStore } from "./state/gameStore";
@@ -184,7 +185,12 @@ export default function App() {
   const screen = useGameStore((state) => state.screen);
   const setAssetManifest = useGameStore((state) => state.setAssetManifest);
   useEffect(() => {
-    loadAssetManifest().then(setAssetManifest).catch(() => undefined);
+    loadAssetManifest()
+      .then((manifest) => {
+        setAssetManifest(manifest);
+        voiceSystem.setVoiceClipManifest(manifest.voiceClips);
+      })
+      .catch(() => undefined);
   }, [setAssetManifest]);
 
   if (screen === "menu") return <><I18nRuntime /><AudioRuntime /><EconomyBackendRuntime /><MainMenu /><StoryNotificationOverlay /><DialogueOverlay /></>;
