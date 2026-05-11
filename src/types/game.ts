@@ -176,6 +176,7 @@ export interface AssetManifest {
   nebulaBg: string;
   skyboxPanorama: string;
   systemSkyboxes: Record<string, string>;
+  starSprites: Record<string, string>;
   planetTextures: Record<string, string>;
   shipModels: Record<string, string>;
   npcShipTextures: {
@@ -365,6 +366,15 @@ export interface PlanetDefinition {
   atmosphereColor: string;
 }
 
+export interface SystemStarDefinition {
+  type: string;
+  assetKey: string;
+  color: string;
+  lightIntensity: number;
+  visualSize: number;
+  direction: Vec3;
+}
+
 export interface StarSystemDefinition {
   id: string;
   name: string;
@@ -373,6 +383,7 @@ export interface StarSystemDefinition {
   risk: number;
   position: [number, number];
   skyboxKey: string;
+  star: SystemStarDefinition;
   jumpGatePosition: Vec3;
   planetIds: string[];
   stationIds: string[];

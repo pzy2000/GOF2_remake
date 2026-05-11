@@ -2628,13 +2628,19 @@ button.equipment-trigger {
 }
 
 .galaxy-system .star-core {
-  width: 28px;
-  height: 28px;
+  width: var(--star-map-size, 28px);
+  height: var(--star-map-size, 28px);
   border-radius: 999px;
-  background: var(--system-tone);
+  background-image:
+    var(--star-sprite),
+    radial-gradient(circle, #ffffff 0 14%, var(--system-tone) 44%, transparent 72%);
+  background-position: center;
+  background-size: cover;
+  background-repeat: no-repeat;
   box-shadow:
     0 0 18px var(--system-tone),
     0 0 46px color-mix(in srgb, var(--system-tone), transparent 26%);
+  mix-blend-mode: screen;
 }
 
 .galaxy-system .moon {
@@ -2673,8 +2679,11 @@ button.equipment-trigger {
 }
 
 .galaxy-system.current .star-core {
-  background: #ffd780;
-  box-shadow: 0 0 20px #ffd780, 0 0 54px rgba(255, 193, 103, 0.75);
+  outline: 2px solid rgba(255, 224, 145, 0.86);
+  outline-offset: 2px;
+  box-shadow:
+    0 0 20px var(--system-tone),
+    0 0 54px color-mix(in srgb, var(--system-tone), transparent 18%);
 }
 
 .galaxy-system.story-pin .orbit-one {
@@ -2711,7 +2720,9 @@ button.equipment-trigger {
 }
 
 .galaxy-system.next-up-pin .star-core {
-  box-shadow: 0 0 22px rgba(128, 214, 255, 0.38);
+  box-shadow:
+    0 0 22px rgba(128, 214, 255, 0.5),
+    0 0 52px color-mix(in srgb, var(--system-tone), transparent 22%);
 }
 
 .story-map-pin {

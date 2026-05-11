@@ -155,7 +155,16 @@ describe("content data", () => {
   it("has generated skybox and planet texture manifest entries for the expanded catalog", () => {
     for (const system of systems) {
       expect(fallbackAssetManifest.systemSkyboxes[system.skyboxKey]).toMatch(/\.webp$/);
+      expect(system.star.type).toBeTruthy();
+      expect(system.star.assetKey).toBe(system.id);
+      expect(system.star.color).toMatch(/^#[0-9a-f]{6}$/i);
+      expect(system.star.lightIntensity).toBeGreaterThan(0);
+      expect(system.star.visualSize).toBeGreaterThan(0);
+      expect(system.star.direction).toHaveLength(3);
+      expect(Math.hypot(...system.star.direction)).toBeGreaterThan(0);
+      expect(fallbackAssetManifest.starSprites[system.star.assetKey]).toMatch(/^\/assets\/generated\/stars\/star-.+\.png$/);
     }
+    expect(new Set(systems.map((system) => system.star.type)).size).toBe(systems.length);
     for (const planet of planets) {
       expect(fallbackAssetManifest.planetTextures[planet.textureKey]).toMatch(/\.webp$/);
     }

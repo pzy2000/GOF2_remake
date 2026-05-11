@@ -48,9 +48,11 @@ describe("asset manifest", () => {
     expect(pagesManifest.shipModels["sparrow-mk1"]).toBe("/GOF2_remake/assets/generated/ships/sparrow-mk1.glb");
     expect(pagesManifest.npcShipTextures.freighter).toBe("/GOF2_remake/assets/generated/npc-freighter-hull.webp");
     expect(pagesManifest.speakerPortraits["helion-handler"]).toBe("/GOF2_remake/assets/generated/portraits/helion-handler.webp");
+    expect(pagesManifest.starSprites["helion-reach"]).toBe("/GOF2_remake/assets/generated/stars/star-helion-reach.png");
     expect(pagesManifest.musicTracks.systems["helion-reach"]).toBe("/GOF2_remake/assets/music/magic-space.mp3");
     expect(pagesManifest.musicTracks.combat).toBe("/GOF2_remake/assets/music/infestation-control-room.mp3");
     expect(Object.values(pagesManifest.planetTextures).every((assetPath) => assetPath.startsWith("/GOF2_remake/assets/generated/"))).toBe(true);
+    expect(Object.values(pagesManifest.starSprites).every((assetPath) => assetPath.startsWith("/GOF2_remake/assets/generated/stars/"))).toBe(true);
   });
 
   it("maps the generated manifest to the skybox asset", () => {
@@ -58,15 +60,26 @@ describe("asset manifest", () => {
     expect(assetManifest.skyboxPanorama).toBe(fallbackAssetManifest.skyboxPanorama);
   });
 
-  it("points generated system and planet assets at WebP files", () => {
+  it("points generated system, star, and planet assets at local image files", () => {
     const assetManifest = manifest as AssetManifest;
     const projectAssetPaths = [
       ...Object.values(assetManifest.systemSkyboxes),
+      ...Object.values(assetManifest.starSprites),
       ...Object.values(assetManifest.planetTextures)
     ];
     for (const assetPath of projectAssetPaths) {
-      expect(assetPath).toMatch(/^\/assets\/generated\/.+\.webp$/);
+      expect(assetPath).toMatch(/^\/assets\/generated\/.+\.(webp|png)$/);
       expectProjectAssetExists(assetPath);
+    }
+  });
+
+  it("maps every system to a generated local star sprite", () => {
+    const assetManifest = manifest as AssetManifest;
+    for (const system of systems) {
+      expect(system.star.assetKey).toBe(system.id);
+      expect(assetManifest.starSprites[system.star.assetKey]).toMatch(/^\/assets\/generated\/stars\/star-.+\.png$/);
+      expect(fallbackAssetManifest.starSprites[system.star.assetKey]).toBe(assetManifest.starSprites[system.star.assetKey]);
+      expectProjectAssetExists(assetManifest.starSprites[system.star.assetKey]);
     }
   });
 

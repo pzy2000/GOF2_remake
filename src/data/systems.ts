@@ -1,4 +1,4 @@
-import type { PlanetDefinition, StarSystemDefinition, StationDefinition, Vec3 } from "../types/game";
+import type { PlanetDefinition, StarSystemDefinition, StationDefinition, SystemStarDefinition, Vec3 } from "../types/game";
 
 const CELESTIAL_XY_SCALE = 3.4;
 const JUMP_GATE_XY_SCALE = 2;
@@ -464,6 +464,65 @@ export const stationById = Object.fromEntries(stations.map((station) => [station
   StationDefinition
 >;
 
+const systemStarById = {
+  "helion-reach": {
+    type: "yellow main sequence",
+    assetKey: "helion-reach",
+    color: "#ffd56e",
+    lightIntensity: 1.85,
+    visualSize: 270,
+    direction: [0.34, 0.28, -1]
+  },
+  "kuro-belt": {
+    type: "white dwarf",
+    assetKey: "kuro-belt",
+    color: "#d8fbff",
+    lightIntensity: 1.55,
+    visualSize: 180,
+    direction: [-0.44, 0.36, -1]
+  },
+  vantara: {
+    type: "blue supergiant",
+    assetKey: "vantara",
+    color: "#7fd4ff",
+    lightIntensity: 2.25,
+    visualSize: 340,
+    direction: [0.55, 0.24, -1]
+  },
+  "mirr-vale": {
+    type: "violet-white neutron star",
+    assetKey: "mirr-vale",
+    color: "#d8c2ff",
+    lightIntensity: 1.85,
+    visualSize: 210,
+    direction: [0.18, 0.48, -1]
+  },
+  "ashen-drift": {
+    type: "red supergiant",
+    assetKey: "ashen-drift",
+    color: "#ff7658",
+    lightIntensity: 2.05,
+    visualSize: 380,
+    direction: [-0.5, 0.18, -1]
+  },
+  "celest-gate": {
+    type: "white-gold giant",
+    assetKey: "celest-gate",
+    color: "#fff0b8",
+    lightIntensity: 2,
+    visualSize: 320,
+    direction: [0.38, 0.52, -1]
+  },
+  "ptd-home": {
+    type: "red dwarf",
+    assetKey: "ptd-home",
+    color: "#ff8a62",
+    lightIntensity: 1.25,
+    visualSize: 170,
+    direction: [-0.18, 0.32, -1]
+  }
+} satisfies Record<string, SystemStarDefinition>;
+
 const rawSystems: StarSystemDefinition[] = [
   {
     id: "helion-reach",
@@ -473,6 +532,7 @@ const rawSystems: StarSystemDefinition[] = [
     risk: 0.18,
     position: [0, 0],
     skyboxKey: "helion-reach",
+    star: systemStarById["helion-reach"],
     jumpGatePosition: [640, 70, -1240],
     planetIds: ["helion-prime-world", "aurora-shepherd", "vale-cinder", "meridian-lumen"],
     stationIds: ["helion-prime", "aurora-ring", "cinder-yard", "meridian-dock"],
@@ -486,6 +546,7 @@ const rawSystems: StarSystemDefinition[] = [
     risk: 0.32,
     position: [-1.2, 0.8],
     skyboxKey: "kuro-belt",
+    star: systemStarById["kuro-belt"],
     jumpGatePosition: [-640, 90, -1180],
     planetIds: ["kuro-anvil", "lode-minor", "niobe-ice", "bracken-dust"],
     stationIds: ["kuro-deep", "lode-spindle", "niobe-refinery", "bracken-claim"],
@@ -500,6 +561,7 @@ const rawSystems: StarSystemDefinition[] = [
     risk: 0.28,
     position: [1.4, 0.7],
     skyboxKey: "vantara",
+    star: systemStarById.vantara,
     jumpGatePosition: [720, 45, -1220],
     planetIds: ["vantara-command", "redoubt-moon", "gryphon-reef", "sentry-ash"],
     stationIds: ["vantara-bastion", "redoubt-arsenal", "gryphon-carrier", "sentry-listening-post"],
@@ -513,6 +575,7 @@ const rawSystems: StarSystemDefinition[] = [
     risk: 0.22,
     position: [0.8, -1.1],
     skyboxKey: "mirr-vale",
+    star: systemStarById["mirr-vale"],
     jumpGatePosition: [460, -100, -1280],
     planetIds: ["mirr-glass", "optic-tide", "hush-orbit", "viridian-ruins"],
     stationIds: ["mirr-lattice", "optic-garden", "hush-array", "viridian-lab"],
@@ -527,6 +590,7 @@ const rawSystems: StarSystemDefinition[] = [
     risk: 0.68,
     position: [-2.1, -0.9],
     skyboxKey: "ashen-drift",
+    star: systemStarById["ashen-drift"],
     jumpGatePosition: [-780, -70, -1320],
     planetIds: ["ashen-harbor", "black-arc", "emberfall", "grave-moon", "voss-kel"],
     stationIds: ["ashen-freeport", "black-arcade", "emberfall-relay", "graveyard-spindle", "voss-kel-market"],
@@ -541,6 +605,7 @@ const rawSystems: StarSystemDefinition[] = [
     risk: 0.36,
     position: [2.2, -0.6],
     skyboxKey: "celest-gate",
+    star: systemStarById["celest-gate"],
     jumpGatePosition: [800, 120, -1380],
     planetIds: ["celest-crown", "aurelia", "opal-minor", "zenith-gas", "pearl-night"],
     stationIds: ["celest-vault", "aurelia-exchange", "opal-drydock", "zenith-skydock", "pearl-consulate"],
@@ -555,6 +620,7 @@ const rawSystems: StarSystemDefinition[] = [
     risk: 0.05,
     position: [0.45, 0.35],
     skyboxKey: "ptd-home",
+    star: systemStarById["ptd-home"],
     jumpGatePosition: [520, 40, -980],
     planetIds: ["ptd-home-world"],
     stationIds: ["ptd-home"],

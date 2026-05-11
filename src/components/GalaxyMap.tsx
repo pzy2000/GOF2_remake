@@ -41,6 +41,7 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
   const locale = useGameStore((state) => state.locale);
   const knownSystems = useGameStore((state) => state.knownSystems);
   const knownPlanetIds = useGameStore((state) => state.knownPlanetIds);
+  const assetManifest = useGameStore((state) => state.assetManifest);
   const activeMissions = useGameStore((state) => state.activeMissions);
   const completedMissionIds = useGameStore((state) => state.completedMissionIds);
   const failedMissionIds = useGameStore((state) => state.failedMissionIds);
@@ -257,7 +258,7 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                   return <line key={`${origin.id}-${target.id}`} className={known ? "known" : ""} x1={start.x} y1={start.y} x2={end.x} y2={end.y} />;
                 })}
               </svg>
-              {systems.map((system, index) => {
+              {systems.map((system) => {
                 const point = pointForSystem(system.position);
                 const known = knownSystems.includes(system.id);
                 const current = system.id === currentSystemId;
@@ -272,7 +273,15 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                   <button
                     key={system.id}
                     className={`galaxy-system ${known ? "known" : "locked"} ${current ? "current" : ""} ${selected ? "selected" : ""} ${storyTargetSystemVisible === system.id ? "story-pin" : ""} ${dispatchTargetVisible === system.id ? "dispatch-pin" : ""} ${guidanceTargetSystemVisible === system.id ? "next-up-pin" : ""} ${explorationSummary ? "exploration-pin" : ""}`}
-                    style={{ left: point.x, top: point.y, "--system-tone": systemTone(index, system.risk) } as CSSProperties}
+                    data-system-id={system.id}
+                    data-star-type={system.star.type}
+                    style={{
+                      left: point.x,
+                      top: point.y,
+                      "--system-tone": system.star.color,
+                      "--star-map-size": `${systemMapStarSize(system.star.visualSize)}px`,
+                      "--star-sprite": `url("${assetManifest.starSprites[system.star.assetKey]}")`
+                    } as CSSProperties}
                     onClick={() => selectSystem(system.id)}
                     onDoubleClick={() => {
                       const firstKnown = system.planetIds.map((id) => planetById[id]).find((planet) => planet && knownPlanetIds.includes(planet.id));
@@ -282,7 +291,7 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                   >
                     <span className="orbit orbit-one" />
                     <span className="orbit orbit-two" />
-                    <span className="star-core" />
+                    <span className="star-core" aria-hidden="true" />
                     <span className="moon moon-one" />
                     <span className="moon moon-two" />
                     <span className="system-name">{known ? localizeSystemName(system.id, locale, system.name) : translateText("Unknown Signal", locale)}</span>
@@ -521,7 +530,6 @@ function hiddenStationFoundLabel(locale: Locale): string {
   return "Hidden Station Found";
 }
 
-function systemTone(index: number, risk: number): string {
-  const tones = ["#6ee7ff", "#ffcf7a", "#9ff28b", "#ff7c93", "#b99cff", "#f3f7ff"];
-  return risk > 0.55 ? "#ff8f6e" : tones[index % tones.length];
+function systemMapStarSize(visualSize: number): number {
+  return Math.round(clamp(visualSize / 8.8, 20, 44));
 }

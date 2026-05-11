@@ -15,6 +15,15 @@ const rawFallbackAssetManifest: AssetManifest = {
     "celest-gate": "/assets/generated/skybox-celest-gate.webp",
     "ptd-home": "/assets/generated/skybox-ptd-home.webp"
   },
+  starSprites: {
+    "helion-reach": "/assets/generated/stars/star-helion-reach.png",
+    "kuro-belt": "/assets/generated/stars/star-kuro-belt.png",
+    vantara: "/assets/generated/stars/star-vantara.png",
+    "mirr-vale": "/assets/generated/stars/star-mirr-vale.png",
+    "ashen-drift": "/assets/generated/stars/star-ashen-drift.png",
+    "celest-gate": "/assets/generated/stars/star-celest-gate.png",
+    "ptd-home": "/assets/generated/stars/star-ptd-home.png"
+  },
   planetTextures: {
     "helion-prime-world": "/assets/generated/planet-helion-prime-world.webp",
     "aurora-shepherd": "/assets/generated/planet-aurora-shepherd.webp",
@@ -127,6 +136,7 @@ export function resolveAssetManifest(manifest: AssetManifest, baseUrl?: string):
     nebulaBg: resolvePublicAssetPath(manifest.nebulaBg, baseUrl),
     skyboxPanorama: resolvePublicAssetPath(manifest.skyboxPanorama, baseUrl),
     systemSkyboxes: resolveAssetRecord(manifest.systemSkyboxes, baseUrl),
+    starSprites: resolveAssetRecord(manifest.starSprites, baseUrl),
     planetTextures: resolveAssetRecord(manifest.planetTextures, baseUrl),
     shipModels: resolveAssetRecord(manifest.shipModels, baseUrl),
     npcShipTextures: {
@@ -150,6 +160,7 @@ export async function loadAssetManifest(): Promise<AssetManifest> {
     ...rawFallbackAssetManifest,
     ...loaded,
     systemSkyboxes: { ...rawFallbackAssetManifest.systemSkyboxes, ...loaded.systemSkyboxes },
+    starSprites: { ...rawFallbackAssetManifest.starSprites, ...loaded.starSprites },
     planetTextures: { ...rawFallbackAssetManifest.planetTextures, ...loaded.planetTextures },
     shipModels: { ...rawFallbackAssetManifest.shipModels, ...loaded.shipModels },
     npcShipTextures: { ...rawFallbackAssetManifest.npcShipTextures, ...loaded.npcShipTextures },

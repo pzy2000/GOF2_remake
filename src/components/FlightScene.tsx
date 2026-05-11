@@ -398,6 +398,36 @@ function InfiniteSkybox() {
   );
 }
 
+function SystemStarBackdrop() {
+  const currentSystemId = useGameStore((state) => state.currentSystemId);
+  const star = systemById[currentSystemId].star;
+  const textureUrl = useGameStore((state) => state.assetManifest.starSprites[star.assetKey] || state.assetManifest.nebulaBg);
+  const texture = useLoader(THREE.TextureLoader, textureUrl);
+  const { camera } = useThree();
+  const spriteRef = useRef<THREE.Sprite | null>(null);
+  const direction = useMemo(() => new THREE.Vector3(...normalize(star.direction)).normalize(), [star.direction]);
+  const starPosition = useMemo(() => new THREE.Vector3(), []);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  useFrame(() => {
+    spriteRef.current?.position.copy(starPosition.copy(camera.position).addScaledVector(direction, 1450));
+  });
+  return (
+    <sprite ref={spriteRef} scale={[star.visualSize, star.visualSize, 1]} renderOrder={-900}>
+      <spriteMaterial
+        map={texture}
+        color={star.color}
+        transparent
+        opacity={0.94}
+        blending={THREE.AdditiveBlending}
+        depthWrite={false}
+        depthTest={false}
+        toneMapped={false}
+      />
+    </sprite>
+  );
+}
+
 const playerShipVisuals: Record<string, { scale: number; engines: Vec3[]; flameColor: string; afterburnerColor: string }> = {
   "sparrow-mk1": { scale: 1, engines: [[-5.5, -1.6, 17], [5.5, -1.6, 17]], flameColor: "#ff8b3d", afterburnerColor: "#66e4ff" },
   "mule-lx": { scale: 0.95, engines: [[-12, -3, 20], [12, -3, 20]], flameColor: "#ffb657", afterburnerColor: "#7ee7ff" },
@@ -1726,16 +1756,20 @@ function SceneContent({ onShipModelStatus }: { onShipModelStatus: (status: ShipM
   const economyNpcWatch = useGameStore((state) => state.economyNpcWatch);
   const currentSystemId = useGameStore((state) => state.currentSystemId);
   const explorationState = useGameStore((state) => state.explorationState);
-  const ambient = 0.18 + systemById[currentSystemId].risk * 0.06;
+  const system = systemById[currentSystemId];
+  const ambient = 0.18 + system.risk * 0.06;
+  const starLightPosition = scale(system.star.direction, 480);
+  const fillLightPosition: Vec3 = [-system.star.direction[0] * 260, 90, -system.star.direction[2] * 260];
   const explorationSignals = getIncompleteExplorationSignals(currentSystemId, explorationState);
   return (
     <>
       <color attach="background" args={["#030712"]} />
       <ambientLight intensity={ambient} />
-      <directionalLight position={[260, 180, 110]} intensity={1.85} color="#f2f6ff" />
+      <directionalLight position={toThree(starLightPosition)} intensity={system.star.lightIntensity} color={system.star.color} />
       <directionalLight position={[-220, 90, -320]} intensity={0.42} color="#5fc3ff" />
-      <pointLight position={[0, 0, 120]} color="#60c8ff" intensity={0.34} distance={640} />
+      <pointLight position={toThree(fillLightPosition)} color={system.star.color} intensity={0.32} distance={720} />
       <InfiniteSkybox />
+      <SystemStarBackdrop />
       <PlanetBackdrops />
       <JumpGateModel />
       <StationModel />

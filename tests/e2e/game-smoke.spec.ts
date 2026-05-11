@@ -1,7 +1,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
-import { explorationSignalById } from "../../src/data/world";
+import { inflateSync } from "node:zlib";
+import { explorationSignalById, systems } from "../../src/data/world";
 
 const updateMobileMatrix = process.env.GOF2_UPDATE_MOBILE_MATRIX === "1";
 const mobileMatrixDir = resolve(process.cwd(), "docs/mobile-matrix");
@@ -285,6 +286,111 @@ async function expectWebGlCanvasHasPixels(page: Page) {
   expect(uniqueBytes).toBeGreaterThan(80);
 }
 
+async function expectStarSpriteResourceLoaded(page: Page, assetPath: string) {
+  await page.waitForFunction(
+    (path) => performance.getEntriesByType("resource").some((entry) => entry.name.includes(path)),
+    assetPath
+  );
+}
+
+function paeth(left: number, up: number, upperLeft: number): number {
+  const estimate = left + up - upperLeft;
+  const leftDistance = Math.abs(estimate - left);
+  const upDistance = Math.abs(estimate - up);
+  const upperLeftDistance = Math.abs(estimate - upperLeft);
+  if (leftDistance <= upDistance && leftDistance <= upperLeftDistance) return left;
+  return upDistance <= upperLeftDistance ? up : upperLeft;
+}
+
+function decodePngPixels(bytes: Buffer) {
+  const signature = "89504e470d0a1a0a";
+  expect(bytes.subarray(0, 8).toString("hex")).toBe(signature);
+  let width = 0;
+  let height = 0;
+  let bitDepth = 0;
+  let colorType = 0;
+  const idat: Buffer[] = [];
+  for (let offset = 8; offset < bytes.length;) {
+    const length = bytes.readUInt32BE(offset);
+    const type = bytes.toString("ascii", offset + 4, offset + 8);
+    const dataStart = offset + 8;
+    if (type === "IHDR") {
+      width = bytes.readUInt32BE(dataStart);
+      height = bytes.readUInt32BE(dataStart + 4);
+      bitDepth = bytes[dataStart + 8];
+      colorType = bytes[dataStart + 9];
+    } else if (type === "IDAT") {
+      idat.push(bytes.subarray(dataStart, dataStart + length));
+    } else if (type === "IEND") {
+      break;
+    }
+    offset = dataStart + length + 4;
+  }
+  expect(bitDepth).toBe(8);
+  expect([2, 6]).toContain(colorType);
+  const channels = colorType === 6 ? 4 : 3;
+  const rowBytes = width * channels;
+  const inflated = inflateSync(Buffer.concat(idat));
+  const pixels = new Uint8Array(width * height * 4);
+  let inputOffset = 0;
+  let previous = new Uint8Array(rowBytes);
+  for (let y = 0; y < height; y += 1) {
+    const filter = inflated[inputOffset++];
+    const row = new Uint8Array(rowBytes);
+    for (let x = 0; x < rowBytes; x += 1) {
+      const raw = inflated[inputOffset++];
+      const left = x >= channels ? row[x - channels] : 0;
+      const up = previous[x] ?? 0;
+      const upperLeft = x >= channels ? previous[x - channels] : 0;
+      const predictor =
+        filter === 0 ? 0
+          : filter === 1 ? left
+            : filter === 2 ? up
+              : filter === 3 ? Math.floor((left + up) / 2)
+                : paeth(left, up, upperLeft);
+      row[x] = (raw + predictor) & 0xff;
+    }
+    for (let x = 0; x < width; x += 1) {
+      const source = x * channels;
+      const target = (y * width + x) * 4;
+      pixels[target] = row[source];
+      pixels[target + 1] = row[source + 1];
+      pixels[target + 2] = row[source + 2];
+      pixels[target + 3] = channels === 4 ? row[source + 3] : 255;
+    }
+    previous = row;
+  }
+  return { width, height, pixels };
+}
+
+function getPngPixelMetrics(bytes: Buffer) {
+  const { width, height, pixels } = decodePngPixels(bytes);
+  const stride = Math.max(1, Math.floor((width * height) / 6000));
+  const colors = new Set<string>();
+  let brightPixels = 0;
+  let litPixels = 0;
+  for (let pixel = 0; pixel < width * height; pixel += stride) {
+    const offset = pixel * 4;
+    const red = pixels[offset];
+    const green = pixels[offset + 1];
+    const blue = pixels[offset + 2];
+    const luma = red * 0.2126 + green * 0.7152 + blue * 0.0722;
+    if (luma > 4) litPixels += 1;
+    if (luma > 30) brightPixels += 1;
+    colors.add(`${red >> 4},${green >> 4},${blue >> 4}`);
+  }
+  return { brightPixels, litPixels, uniqueColors: colors.size };
+}
+
+async function expectWebGlCanvasHasBrightPixels(page: Page) {
+  const canvas = page.locator(".flight-canvas canvas");
+  await expect(canvas).toBeVisible();
+  const metrics = getPngPixelMetrics(await canvas.screenshot());
+  expect(metrics!.litPixels).toBeGreaterThan(160);
+  expect(metrics!.brightPixels).toBeGreaterThan(12);
+  expect(metrics!.uniqueColors).toBeGreaterThan(20);
+}
+
 async function dockAtStation(page: Page, stationId: string) {
   await page.evaluate((targetStationId) => {
     const state = window.__GOF2_E2E__!.getState() as { dockAt: (stationId: string) => void };
@@ -381,6 +487,82 @@ test.describe("browser smoke", () => {
 
     await expectWebGlCanvasHasPixels(page);
     await expect(page.locator(".ship-model-status")).toHaveCount(0);
+  });
+
+  test("renders generated system star sprites in flight and galaxy map", async ({ page }) => {
+    await resetApp(page);
+    await startNewGame(page);
+
+    for (const system of systems) {
+      const assetPath = `/assets/generated/stars/star-${system.id}.png`;
+      await page.evaluate(({ systemId, planetIds }) => {
+        const e2e = window.__GOF2_E2E__!;
+        const state = e2e.getState() as {
+          knownPlanetIds: string[];
+          knownSystems: string[];
+          player: Record<string, unknown>;
+          runtime: Record<string, unknown>;
+        };
+        e2e.setState({
+          currentSystemId: systemId,
+          currentStationId: undefined,
+          knownSystems: Array.from(new Set([...state.knownSystems, systemId])),
+          knownPlanetIds: Array.from(new Set([...state.knownPlanetIds, ...planetIds])),
+          player: {
+            ...state.player,
+            position: [0, 0, 0],
+            velocity: [0, 0, 0],
+            throttle: 0
+          },
+          runtime: {
+            ...state.runtime,
+            enemies: [],
+            projectiles: [],
+            effects: []
+          }
+        });
+      }, { systemId: system.id, planetIds: system.planetIds });
+      await expectStarSpriteResourceLoaded(page, assetPath);
+      await expectWebGlCanvasHasBrightPixels(page);
+    }
+
+    const systemIds = systems.map((system) => system.id);
+    const planetIds = systems.flatMap((system) => system.planetIds);
+    await page.evaluate(({ systemIds, planetIds }) => {
+      window.__GOF2_E2E__!.setState({
+        screen: "galaxyMap",
+        previousScreen: "flight",
+        galaxyMapMode: "station-route",
+        knownSystems: systemIds,
+        knownPlanetIds: planetIds
+      });
+    }, { systemIds, planetIds });
+    await expect(page.locator(".galaxy-panel")).toBeVisible();
+
+    const galaxyStars = await page.evaluate(() =>
+      Array.from(document.querySelectorAll<HTMLButtonElement>(".galaxy-system")).map((button) => {
+        const core = button.querySelector<HTMLElement>(".star-core");
+        const rect = core?.getBoundingClientRect();
+        const style = core ? getComputedStyle(core) : undefined;
+        return {
+          backgroundImage: style?.backgroundImage ?? "",
+          height: rect?.height ?? 0,
+          starType: button.dataset.starType,
+          systemId: button.dataset.systemId,
+          width: rect?.width ?? 0
+        };
+      })
+    );
+
+    expect(galaxyStars).toHaveLength(systems.length);
+    for (const system of systems) {
+      const star = galaxyStars.find((item) => item.systemId === system.id);
+      expect(star).toBeDefined();
+      expect(star!.starType).toBe(system.star.type);
+      expect(star!.backgroundImage).toContain(`star-${system.id}.png`);
+      expect(star!.width).toBeGreaterThan(18);
+      expect(star!.height).toBeGreaterThan(18);
+    }
   });
 
   test("persists Simplified Chinese language selection across menu, HUD, station, and settings", async ({ page }) => {

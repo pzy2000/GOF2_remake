@@ -13,6 +13,15 @@
     "celest-gate": "/assets/generated/skybox-celest-gate.webp",
     "ptd-home": "/assets/generated/skybox-ptd-home.webp"
   },
+  "starSprites": {
+    "helion-reach": "/assets/generated/stars/star-helion-reach.png",
+    "kuro-belt": "/assets/generated/stars/star-kuro-belt.png",
+    "vantara": "/assets/generated/stars/star-vantara.png",
+    "mirr-vale": "/assets/generated/stars/star-mirr-vale.png",
+    "ashen-drift": "/assets/generated/stars/star-ashen-drift.png",
+    "celest-gate": "/assets/generated/stars/star-celest-gate.png",
+    "ptd-home": "/assets/generated/stars/star-ptd-home.png"
+  },
   "planetTextures": {
     "helion-prime-world": "/assets/generated/planet-helion-prime-world.webp",
     "aurora-shepherd": "/assets/generated/planet-aurora-shepherd.webp",
