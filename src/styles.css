@@ -757,6 +757,8 @@ h3 {
 .hud-top-right {
   top: 18px;
   right: 18px;
+  max-height: calc(50vh - 144px);
+  overflow: hidden;
 }
 
 .story-tracker,
@@ -4132,6 +4134,46 @@ button.equipment-trigger {
   }
 }
 
+@media (max-width: 720px) and (orientation: portrait) {
+  .touch-pad {
+    display: none;
+  }
+
+  .touch-action-cluster {
+    max-width: none;
+    width: calc(100vw - var(--mobile-edge) * 2 - 24px);
+    justify-content: center;
+  }
+
+  .touch-action-cluster-left {
+    left: calc(var(--mobile-edge) + 12px);
+    right: auto;
+    bottom: calc(var(--mobile-bottom) + 68px);
+  }
+
+  .touch-action-cluster-right {
+    left: calc(var(--mobile-edge) + 12px);
+    right: auto;
+    bottom: calc(var(--mobile-bottom) + 12px);
+  }
+
+  .touch-action-cluster button {
+    flex: 1 1 58px;
+  }
+
+  .hud-bottom-right {
+    display: none;
+  }
+
+  .dock-hint {
+    bottom: calc(var(--mobile-bottom) + 186px);
+  }
+
+  .scan-panel {
+    bottom: calc(var(--mobile-bottom) + 184px);
+  }
+}
+
 @media (pointer: coarse) and (orientation: portrait) and (max-width: 720px) {
   .touch-pad {
     display: none;
@@ -4174,11 +4216,7 @@ button.equipment-trigger {
   }
 
   .hud-bottom-right {
-    left: calc(var(--mobile-edge) + 12px);
-    right: auto;
-    bottom: calc(var(--mobile-bottom) + 124px);
-    width: calc(100vw - var(--mobile-edge) * 2 - 24px);
-    transform: none;
+    display: none;
   }
 
   .dock-hint {
