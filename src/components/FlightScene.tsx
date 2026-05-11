@@ -390,10 +390,11 @@ function InfiniteSkybox() {
   return (
     <group ref={skyGroupRef} renderOrder={-1000}>
       <mesh frustumCulled={false} renderOrder={-1000}>
-        <sphereGeometry args={[1800, 64, 32]} />
+        <sphereGeometry args={[2600, 96, 48]} />
         <meshBasicMaterial map={texture} side={THREE.BackSide} depthWrite={false} depthTest={false} toneMapped={false} />
       </mesh>
-      <Stars radius={920} depth={95} count={2400} factor={4.5} saturation={0.36} fade speed={0.1} />
+      <Stars radius={1200} depth={180} count={1350} factor={2.6} saturation={0.18} fade speed={0.025} />
+      <Stars radius={1900} depth={260} count={520} factor={1.2} saturation={0.05} fade speed={0.012} />
     </group>
   );
 }
@@ -401,6 +402,10 @@ function InfiniteSkybox() {
 const playerShipVisuals: Record<string, { scale: number; engines: Vec3[]; flameColor: string; afterburnerColor: string }> = {
   "sparrow-mk1": { scale: 1, engines: [[-5.5, -1.6, 17], [5.5, -1.6, 17]], flameColor: "#ff8b3d", afterburnerColor: "#66e4ff" },
   "mule-lx": { scale: 0.95, engines: [[-12, -3, 20], [12, -3, 20]], flameColor: "#ffb657", afterburnerColor: "#7ee7ff" },
+  "prospector-rig": { scale: 0.94, engines: [[-8, -5, 27], [8, -5, 27]], flameColor: "#ffd166", afterburnerColor: "#fff1a8" },
+  "veil-runner": { scale: 0.92, engines: [[-5.2, -2.4, 24], [5.2, -2.4, 24]], flameColor: "#7dd3fc", afterburnerColor: "#e0f7ff" },
+  "talon-s": { scale: 0.94, engines: [[-7.5, -2.2, 20], [7.5, -2.2, 20]], flameColor: "#ff5f6d", afterburnerColor: "#ffd3d8" },
+  "wayfarer-x": { scale: 0.92, engines: [[-15, -2.6, 27], [15, -2.6, 27]], flameColor: "#a7f3ff", afterburnerColor: "#ffffff" },
   "raptor-v": { scale: 0.96, engines: [[-8, -1.8, 18], [0, -1.2, 20], [8, -1.8, 18]], flameColor: "#ff5f6d", afterburnerColor: "#70f0ff" },
   "bastion-7": { scale: 0.9, engines: [[-14, -4, 22], [0, -3, 24], [14, -4, 22]], flameColor: "#ff7a45", afterburnerColor: "#ffd166" },
   "horizon-ark": { scale: 0.92, engines: [[-16, -2.4, 24], [-5, -2, 26], [5, -2, 26], [16, -2.4, 24]], flameColor: "#8ff7ff", afterburnerColor: "#ffffff" }
@@ -568,6 +573,7 @@ function FreighterNpcShip({ ship }: { ship: FlightEntity }) {
   const locale = useGameStore((state) => state.locale);
   const textureUrl = useGameStore((state) => state.assetManifest.npcShipTextures.freighter);
   const texture = useLoader(THREE.TextureLoader, textureUrl);
+  texture.colorSpace = THREE.SRGBColorSpace;
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
   texture.repeat.set(2.2, 1.2);
@@ -585,6 +591,10 @@ function FreighterNpcShip({ ship }: { ship: FlightEntity }) {
         <boxGeometry args={[30, 15, 58]} />
         <meshStandardMaterial map={texture} color={flashing ? "#ffffff" : "#c9a86a"} metalness={0.44} roughness={0.5} emissive="#1b2b34" emissiveIntensity={flashing ? 0.7 : 0.12} transparent opacity={opacity} />
       </mesh>
+      <mesh position={[0, 8.8, 5]} castShadow>
+        <boxGeometry args={[18, 1.8, 42]} />
+        <meshStandardMaterial map={texture} color="#5f6b73" metalness={0.5} roughness={0.46} transparent opacity={opacity} />
+      </mesh>
       <mesh position={[0, 9, -18]} castShadow>
         <boxGeometry args={[17, 8, 16]} />
         <meshStandardMaterial color="#8fb6c8" metalness={0.35} roughness={0.34} emissive="#12384d" emissiveIntensity={0.2} transparent opacity={opacity} />
@@ -598,6 +608,10 @@ function FreighterNpcShip({ ship }: { ship: FlightEntity }) {
           <mesh position={[side * 38, 3, -22]} rotation={[0, 0, side * 0.16]} castShadow>
             <boxGeometry args={[22, 3.2, 15]} />
             <meshStandardMaterial color="#d9a442" metalness={0.34} roughness={0.42} emissive="#3a2507" emissiveIntensity={0.16} transparent opacity={opacity} />
+          </mesh>
+          <mesh position={[side * 28, 7, 14]} rotation={[0.08, 0, side * 0.12]} castShadow>
+            <boxGeometry args={[16, 1.4, 26]} />
+            <meshStandardMaterial color="#44515b" metalness={0.6} roughness={0.38} transparent opacity={opacity} />
           </mesh>
           <mesh position={[side * 13, -5, 31]} rotation={[Math.PI / 2, 0, 0]}>
             <cylinderGeometry args={[4.4, 5.8, 7, 18]} />
@@ -685,6 +699,108 @@ function RelayNpcCore({ ship }: { ship: FlightEntity }) {
   );
 }
 
+function NpcRoleHull({
+  body,
+  clock,
+  color,
+  flashing,
+  opacity,
+  role,
+  ship
+}: {
+  body: { cone: [number, number, number]; wing: [number, number, number]; offset: number; tail: string };
+  clock: number;
+  color: string;
+  flashing: boolean;
+  opacity: number;
+  role: FlightEntity["role"];
+  ship: FlightEntity;
+}) {
+  const hullColor = flashing ? "#ffffff" : color;
+  const roleGlow = role === "pirate" ? "#ff5f6d" : role === "smuggler" ? "#ff9b52" : role === "miner" ? "#ffd166" : role === "patrol" ? "#64d7ff" : "#8ff7ff";
+  return (
+    <>
+      <mesh castShadow position={[0, 0, -7]}>
+        <coneGeometry args={body.cone} />
+        <meshStandardMaterial color={hullColor} metalness={0.48} roughness={0.36} emissive={color} emissiveIntensity={flashing ? 0.85 : ship.boss ? 0.32 : 0.12} transparent opacity={opacity} />
+      </mesh>
+      <mesh castShadow position={[0, 0.4, body.offset + 1]} scale={role === "miner" || role === "trader" ? [1.18, 1.08, 1.18] : [1, 1, 1]}>
+        <boxGeometry args={[body.wing[0] * 0.42, Math.max(6, body.wing[1] * 2.2), 30]} />
+        <meshStandardMaterial color={body.tail} metalness={0.5} roughness={0.42} transparent opacity={opacity} />
+      </mesh>
+      <mesh position={[0, 4.3, -8]} scale={role === "pirate" ? [0.9, 0.32, 0.9] : [1, 0.38, 1.1]}>
+        <sphereGeometry args={[3.8, 18, 10]} />
+        <meshStandardMaterial color="#86ddff" metalness={0.16} roughness={0.1} emissive="#226b8f" emissiveIntensity={0.28} transparent opacity={opacity} />
+      </mesh>
+      {[-1, 1].map((side) => (
+        <group key={side}>
+          <mesh position={[side * body.wing[0] * 0.38, -0.4, body.offset]} rotation={[0, side * (role === "pirate" ? 0.36 : -0.16), side * (role === "courier" ? 0.22 : 0.12)]} castShadow>
+            <boxGeometry args={body.wing} />
+            <meshStandardMaterial color={body.tail} metalness={0.42} roughness={0.44} transparent opacity={opacity} />
+          </mesh>
+          <mesh position={[side * 8.4, -2.1, 15]} rotation={[Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[2.2, 3.2, 5, 16]} />
+            <meshStandardMaterial color="#1b222a" metalness={0.84} roughness={0.2} transparent opacity={opacity} />
+          </mesh>
+          <mesh position={[side * 5.8, 1.4, -16]} rotation={[Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[0.8, 1, 18, 10]} />
+            <meshStandardMaterial color="#202833" metalness={0.78} roughness={0.24} transparent opacity={opacity} />
+          </mesh>
+          <pointLight position={[side * 9, 1.2, 4]} color={roleGlow} intensity={0.18} distance={80} />
+        </group>
+      ))}
+      {role === "pirate" || role === "smuggler" ? (
+        <>
+          <mesh position={[-8, 1.2, -5]} rotation={[0, 0, 0.72]}>
+            <boxGeometry args={[3, 1.4, 20]} />
+            <meshStandardMaterial color={role === "pirate" ? "#711f2d" : "#3a263f"} metalness={0.42} roughness={0.4} emissive="#23050a" />
+          </mesh>
+          <mesh position={[8, 1.2, -5]} rotation={[0, 0, -0.72]}>
+            <boxGeometry args={[3, 1.4, 20]} />
+            <meshStandardMaterial color={role === "pirate" ? "#711f2d" : "#3a263f"} metalness={0.42} roughness={0.4} emissive="#23050a" />
+          </mesh>
+        </>
+      ) : null}
+      {role === "patrol" ? (
+        <>
+          <mesh position={[0, 5.3, -7]}>
+            <boxGeometry args={[4.2, 7.4, 2.2]} />
+            <meshStandardMaterial color="#84d8ff" metalness={0.4} roughness={0.35} emissive="#1b719d" emissiveIntensity={0.28} />
+          </mesh>
+          <mesh rotation={[Math.PI / 2, 0, clock * 0.8]}>
+            <torusGeometry args={[23, 1.1, 8, 42]} />
+            <meshBasicMaterial color="#64e4ff" transparent opacity={0.22} toneMapped={false} />
+          </mesh>
+        </>
+      ) : null}
+      {role === "miner" ? (
+        <>
+          <mesh position={[0, -1.5, -23]} rotation={[Math.PI / 2, 0, 0]}>
+            <cylinderGeometry args={[2.6, 3.4, 16, 10]} />
+            <meshStandardMaterial color="#d8a23b" metalness={0.56} roughness={0.38} emissive="#53360b" emissiveIntensity={0.22} />
+          </mesh>
+          <mesh rotation={[Math.PI / 2, 0, clock * 0.4]}>
+            <torusGeometry args={[19, 1.3, 8, 36]} />
+            <meshBasicMaterial color="#ffd166" transparent opacity={0.18} toneMapped={false} />
+          </mesh>
+        </>
+      ) : null}
+      {role === "trader" ? (
+        <>
+          <mesh position={[-13, -1, -1]}>
+            <boxGeometry args={[6, 6, 15]} />
+            <meshStandardMaterial color="#6b522c" metalness={0.32} roughness={0.58} />
+          </mesh>
+          <mesh position={[13, -1, -1]}>
+            <boxGeometry args={[6, 6, 15]} />
+            <meshStandardMaterial color="#6b522c" metalness={0.32} roughness={0.58} />
+          </mesh>
+        </>
+      ) : null}
+    </>
+  );
+}
+
 function NpcShip({ ship }: { ship: FlightEntity }) {
   const clock = useGameStore((state) => state.runtime.clock);
   const locale = useGameStore((state) => state.locale);
@@ -722,32 +838,7 @@ function NpcShip({ ship }: { ship: FlightEntity }) {
         <Line points={[ship.position, miningTarget.position]} color={ship.economyCommodityId ? getOreColor(ship.economyCommodityId) : "#ffd166"} lineWidth={2.4} transparent opacity={0.72} />
       ) : null}
       <group position={toThree(ship.position)} rotation={[0, yaw, 0]} scale={ship.deathTimer !== undefined ? 0.82 : ship.boss ? 1.28 : 1}>
-        <mesh castShadow>
-          <coneGeometry args={body.cone} />
-          <meshStandardMaterial color={flashing ? "#ffffff" : color} metalness={0.35} roughness={0.44} emissive={color} emissiveIntensity={flashing ? 0.85 : ship.boss ? 0.32 : 0.16} transparent opacity={ship.deathTimer !== undefined ? 0.45 : 1} />
-        </mesh>
-        <mesh position={[0, 0, body.offset]} castShadow>
-          <boxGeometry args={body.wing} />
-          <meshStandardMaterial color={body.tail} metalness={0.28} roughness={0.5} transparent opacity={ship.deathTimer !== undefined ? 0.45 : 1} />
-        </mesh>
-        {ship.role === "pirate" ? (
-          <>
-            <mesh position={[-8, 1, -3]} rotation={[0, 0, 0.7]}>
-              <boxGeometry args={[3, 1.4, 18]} />
-              <meshStandardMaterial color="#711f2d" metalness={0.32} roughness={0.44} emissive="#23050a" />
-            </mesh>
-            <mesh position={[8, 1, -3]} rotation={[0, 0, -0.7]}>
-              <boxGeometry args={[3, 1.4, 18]} />
-              <meshStandardMaterial color="#711f2d" metalness={0.32} roughness={0.44} emissive="#23050a" />
-            </mesh>
-          </>
-        ) : null}
-        {ship.role === "patrol" ? (
-          <mesh position={[0, 4.5, -6]}>
-            <boxGeometry args={[4, 7, 2]} />
-            <meshStandardMaterial color="#84d8ff" metalness={0.4} roughness={0.35} emissive="#1b719d" emissiveIntensity={0.25} />
-          </mesh>
-        ) : null}
+        <NpcRoleHull body={body} clock={clock} color={color} flashing={flashing} opacity={ship.deathTimer !== undefined ? 0.45 : 1} role={ship.role} ship={ship} />
         {ship.boss ? (
           <>
             <mesh rotation={[Math.PI / 2, 0, clock * 0.65]}>
@@ -761,18 +852,6 @@ function NpcShip({ ship }: { ship: FlightEntity }) {
             <torusGeometry args={[24 + combatPulse * 3, 1.2, 8, 42]} />
             <meshBasicMaterial color="#64e4ff" transparent opacity={0.3 + combatPulse * 0.22} toneMapped={false} />
           </mesh>
-        ) : null}
-        {ship.role === "trader" ? (
-          <>
-            <mesh position={[-12, -1, -1]}>
-              <boxGeometry args={[6, 6, 13]} />
-              <meshStandardMaterial color="#6b522c" metalness={0.25} roughness={0.58} />
-            </mesh>
-            <mesh position={[12, -1, -1]}>
-              <boxGeometry args={[6, 6, 13]} />
-              <meshStandardMaterial color="#6b522c" metalness={0.25} roughness={0.58} />
-            </mesh>
-          </>
         ) : null}
         <mesh position={[0, -1.4, 13]} rotation={[Math.PI / 2, 0, 0]} scale={[1, 1, flameScale]}>
           <coneGeometry args={[ship.role === "trader" ? 4.2 : 3, 13, 12]} />
@@ -935,30 +1014,57 @@ function PlanetBackdrops() {
   );
 }
 
+function getPlanetVisualProfile(planet: PlanetDefinition) {
+  const text = `${planet.type} ${planet.description}`.toLowerCase();
+  const rocky = /moon|dwarf|rubble|crater|ash|dust|iron|bunker|refinery/.test(text);
+  const volatile = /ocean|storm|temperate|capital|gas|ice|pearl|crystal/.test(text);
+  const ringed = /gas|storm|capital|crown|pearl|reef|shepherd/.test(text);
+  return {
+    cloudOpacity: volatile ? 0.1 : rocky ? 0.025 : 0.06,
+    hazeOpacity: rocky ? 0.07 : 0.13,
+    ringed,
+    rotationSpeed: rocky ? 0.009 : 0.014,
+    rimDistance: planet.radius * (rocky ? 1.9 : 2.55)
+  };
+}
+
 function PlanetModel({ planet }: { planet: PlanetDefinition }) {
   const textureUrl = useGameStore((state) => state.assetManifest.planetTextures[planet.textureKey] || state.assetManifest.nebulaBg);
   const clock = useGameStore((state) => state.runtime.clock);
   const locale = useGameStore((state) => state.locale);
   const texture = useLoader(THREE.TextureLoader, textureUrl);
+  const profile = getPlanetVisualProfile(planet);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
   texture.anisotropy = 4;
   return (
     <group position={toThree(planet.position)}>
-      <mesh rotation={[0, clock * 0.015 + planet.radius * 0.0007, 0]}>
-        <sphereGeometry args={[planet.radius, 64, 32]} />
-        <meshStandardMaterial map={texture} roughness={0.82} metalness={0.03} emissive="#05070d" emissiveIntensity={0.05} />
+      <mesh rotation={[0, clock * profile.rotationSpeed + planet.radius * 0.0007, 0]}>
+        <sphereGeometry args={[planet.radius, 96, 48]} />
+        <meshStandardMaterial map={texture} roughness={0.94} metalness={0.02} emissive="#01030a" emissiveIntensity={0.018} />
+      </mesh>
+      <mesh rotation={[0, -clock * 0.007, 0]}>
+        <sphereGeometry args={[planet.radius * 1.012, 72, 36]} />
+        <meshStandardMaterial color="#f5fbff" transparent opacity={profile.cloudOpacity} roughness={1} depthWrite={false} />
       </mesh>
       <mesh>
-        <sphereGeometry args={[planet.radius * 1.018, 48, 24]} />
-        <meshBasicMaterial color={planet.atmosphereColor} transparent opacity={0.11} side={THREE.DoubleSide} depthWrite={false} toneMapped={false} />
+        <sphereGeometry args={[planet.radius * 1.028, 64, 32]} />
+        <meshBasicMaterial color={planet.atmosphereColor} transparent opacity={profile.hazeOpacity} side={THREE.DoubleSide} depthWrite={false} toneMapped={false} />
       </mesh>
-      <mesh rotation={[Math.PI / 2, 0, clock * 0.01]}>
-        <torusGeometry args={[planet.radius * 1.16, Math.max(1.4, planet.radius * 0.004), 8, 96]} />
-        <meshBasicMaterial color={planet.atmosphereColor} transparent opacity={0.12} toneMapped={false} />
-      </mesh>
-      <pointLight color={planet.atmosphereColor} intensity={0.65} distance={planet.radius * 2.3} />
+      {profile.ringed ? (
+        <group rotation={[Math.PI / 2.35, 0.18, clock * 0.002]}>
+          <mesh>
+            <torusGeometry args={[planet.radius * 1.38, Math.max(1.8, planet.radius * 0.01), 10, 128]} />
+            <meshBasicMaterial color="#dbe8f0" transparent opacity={0.18} depthWrite={false} toneMapped={false} />
+          </mesh>
+          <mesh>
+            <torusGeometry args={[planet.radius * 1.58, Math.max(1.2, planet.radius * 0.006), 8, 128]} />
+            <meshBasicMaterial color={planet.atmosphereColor} transparent opacity={0.1} depthWrite={false} toneMapped={false} />
+          </mesh>
+        </group>
+      ) : null}
+      <pointLight color={planet.atmosphereColor} intensity={0.42} distance={profile.rimDistance} />
       <Html center distanceFactor={22} className="planet-label" position={[0, planet.radius * 0.72, 0]}>
         {localizePlanetName(planet.id, locale, planet.name)}
       </Html>
@@ -1003,25 +1109,35 @@ function JumpGateModel() {
     <group position={toThree(gatePosition)}>
       <group rotation={[0, 0, clock * (active ? 0.9 + spool : 0.18)]}>
         <mesh rotation={[Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[88, 5.4, 12, 64]} />
-          <meshStandardMaterial color="#7ddcff" emissive="#1f9aff" emissiveIntensity={0.55 + spool * 1.2} metalness={0.55} roughness={0.28} />
+          <torusGeometry args={[90, 5.8, 14, 96]} />
+          <meshStandardMaterial color="#4f6776" emissive="#1f9aff" emissiveIntensity={0.18 + spool * 0.7} metalness={0.76} roughness={0.22} />
         </mesh>
         <mesh rotation={[Math.PI / 2, 0, 0]}>
-          <torusGeometry args={[124, 3.2, 8, 64]} />
-          <meshBasicMaterial color="#8f7bff" transparent opacity={0.35 + spool * 0.35} toneMapped={false} />
+          <torusGeometry args={[128, 3.4, 8, 96]} />
+          <meshStandardMaterial color="#273645" emissive="#8f7bff" emissiveIntensity={0.24 + spool * 0.55} metalness={0.78} roughness={0.26} />
         </mesh>
-        {[0, 1, 2, 3].map((index) => {
-          const angle = index * (Math.PI / 2);
+        {[0, 1, 2, 3, 4, 5, 6, 7].map((index) => {
+          const angle = index * (Math.PI / 4);
           return (
-            <mesh key={index} position={[Math.cos(angle) * 112, Math.sin(angle) * 112, 0]} rotation={[0, 0, angle]}>
-              <boxGeometry args={[56, 12, 16]} />
-              <meshStandardMaterial color="#52677a" metalness={0.68} roughness={0.26} emissive="#10243b" />
-            </mesh>
+            <group key={index} position={[Math.cos(angle) * 112, Math.sin(angle) * 112, 0]} rotation={[0, 0, angle]}>
+              <mesh>
+                <boxGeometry args={[52, 10, 15]} />
+                <meshStandardMaterial color="#52677a" metalness={0.72} roughness={0.24} emissive="#10243b" emissiveIntensity={0.16} />
+              </mesh>
+              <mesh position={[22, 0, 0]}>
+                <boxGeometry args={[8, 18, 20]} />
+                <meshStandardMaterial color="#26313d" metalness={0.82} roughness={0.24} emissive="#0b1624" />
+              </mesh>
+            </group>
           );
         })}
       </group>
+      <mesh rotation={[Math.PI / 2, 0, -clock * 0.22]}>
+        <torusGeometry args={[55 + spool * 16, 1.4, 8, 96]} />
+        <meshBasicMaterial color="#73f0ff" transparent opacity={0.22 + spool * 0.28} toneMapped={false} depthWrite={false} />
+      </mesh>
       <mesh>
-        <sphereGeometry args={[18 + pulse * 6 + spool * 16, 20, 12]} />
+        <sphereGeometry args={[18 + pulse * 6 + spool * 16, 28, 16]} />
         <meshBasicMaterial color={spool > 0.82 ? "#ffffff" : "#73f0ff"} transparent opacity={0.32 + spool * 0.42} toneMapped={false} />
       </mesh>
       <Line points={[[-170, 0, 160], [0, 0, 0], [170, 0, 160]]} color="#62d9ff" lineWidth={1.4 + spool * 2.2} transparent opacity={0.18 + spool * 0.42} />
@@ -1035,6 +1151,7 @@ function JumpGateModel() {
 
 function StationGeometry({ station }: { station: StationDefinition }) {
   const locale = useGameStore((state) => state.locale);
+  const clock = useGameStore((state) => state.runtime.clock);
   const accent =
     station.archetype === "Military Outpost"
       ? "#ff6b6b"
@@ -1046,31 +1163,51 @@ function StationGeometry({ station }: { station: StationDefinition }) {
             ? "#ff4e5f"
             : "#3bb4ff";
   const ringScale = station.archetype === "Trade Hub" ? 1.2 : station.archetype === "Pirate Black Market" ? 0.82 : 1;
+  const solarColor = station.archetype === "Research Station" ? "#9dbbff" : station.archetype === "Mining Station" ? "#d8a23b" : "#5f7180";
   return (
     <group position={toThree(station.position)}>
       <mesh>
-        <cylinderGeometry args={[44, 62, 34, 8]} />
-        <meshStandardMaterial color="#94a9b8" metalness={0.55} roughness={0.35} emissive="#172436" />
+        <cylinderGeometry args={[38, 54, 42, 12]} />
+        <meshStandardMaterial color="#7e919e" metalness={0.66} roughness={0.34} emissive="#0e1b29" emissiveIntensity={0.16} />
       </mesh>
       <mesh rotation={[Math.PI / 2, 0, 0]} scale={[ringScale, ringScale, ringScale]}>
-        <torusGeometry args={[78, 4, 8, 32]} />
-        <meshStandardMaterial color={accent} emissive={accent} emissiveIntensity={0.55} />
+        <torusGeometry args={[84, 4.2, 10, 72]} />
+        <meshStandardMaterial color="#536a7b" metalness={0.72} roughness={0.28} emissive={accent} emissiveIntensity={0.16} />
       </mesh>
-      <mesh position={[0, 0, 52]}>
-        <boxGeometry args={[82, 8, 18]} />
-        <meshStandardMaterial color="#d4c17d" emissive="#5b4617" emissiveIntensity={0.2} />
+      {[0, 1, 2, 3].map((index) => {
+        const angle = index * (Math.PI / 2);
+        return (
+          <group key={index} rotation={[0, 0, angle]}>
+            <mesh position={[90, 0, 0]}>
+              <boxGeometry args={[52, 7, 12]} />
+              <meshStandardMaterial color="#5f7180" metalness={0.62} roughness={0.42} emissive="#111d2a" />
+            </mesh>
+            <mesh position={[125, 0, 0]} rotation={[0, 0, 0.02]}>
+              <boxGeometry args={[28, 18, 3]} />
+              <meshStandardMaterial color={solarColor} metalness={0.34} roughness={0.5} emissive={accent} emissiveIntensity={0.1} />
+            </mesh>
+          </group>
+        );
+      })}
+      <mesh position={[0, 0, 58]}>
+        <boxGeometry args={[88, 7, 18]} />
+        <meshStandardMaterial color="#c0aa6e" metalness={0.58} roughness={0.36} emissive="#3a2c0b" emissiveIntensity={0.18} />
+      </mesh>
+      <mesh position={[0, 0, -58]}>
+        <boxGeometry args={[72, 6, 14]} />
+        <meshStandardMaterial color="#4e6372" metalness={0.6} roughness={0.4} emissive="#0d1b28" />
       </mesh>
       {station.archetype === "Mining Station" ? (
         <>
           {[-1, 1].map((side) => (
-            <group key={side} position={[side * 88, -8, 0]} rotation={[0, 0, side * 0.25]}>
+            <group key={side} position={[side * 92, -10, 0]} rotation={[0, 0, side * 0.25]}>
               <mesh>
-                <boxGeometry args={[72, 8, 10]} />
-                <meshStandardMaterial color="#6b7280" metalness={0.58} roughness={0.5} />
+                <boxGeometry args={[78, 7, 10]} />
+                <meshStandardMaterial color="#6b7280" metalness={0.64} roughness={0.48} />
               </mesh>
-              <mesh position={[side * 46, 0, -28]} rotation={[0, 0, Math.PI / 2]}>
-                <cylinderGeometry args={[10, 16, 26, 8]} />
-                <meshStandardMaterial color="#d8a23b" metalness={0.45} roughness={0.42} emissive="#53360b" />
+              <mesh position={[side * 46, 0, -30]} rotation={[0, 0, Math.PI / 2]}>
+                <cylinderGeometry args={[10, 17, 28, 10]} />
+                <meshStandardMaterial color="#d8a23b" metalness={0.5} roughness={0.4} emissive="#53360b" emissiveIntensity={0.18} />
               </mesh>
             </group>
           ))}
@@ -1079,10 +1216,16 @@ function StationGeometry({ station }: { station: StationDefinition }) {
       {station.archetype === "Research Station" ? (
         <>
           {[0, 1, 2].map((index) => (
-            <mesh key={index} position={[Math.cos(index * 2.1) * 84, Math.sin(index * 2.1) * 42, Math.sin(index) * 34]} rotation={[0.3, index, 0.2]}>
-              <boxGeometry args={[9, 70, 2.4]} />
-              <meshStandardMaterial color="#b8ccff" metalness={0.32} roughness={0.25} emissive="#372a77" emissiveIntensity={0.28} />
-            </mesh>
+            <group key={index} position={[Math.cos(index * 2.1) * 88, Math.sin(index * 2.1) * 44, Math.sin(index) * 34]} rotation={[0.3, index + clock * 0.04, 0.2]}>
+              <mesh>
+                <boxGeometry args={[9, 76, 2.4]} />
+                <meshStandardMaterial color="#b8ccff" metalness={0.32} roughness={0.25} emissive="#372a77" emissiveIntensity={0.22} />
+              </mesh>
+              <mesh position={[0, 42, 0]}>
+                <sphereGeometry args={[4, 12, 8]} />
+                <meshBasicMaterial color="#dff8ff" transparent opacity={0.55} toneMapped={false} />
+              </mesh>
+            </group>
           ))}
         </>
       ) : null}
@@ -1091,11 +1234,11 @@ function StationGeometry({ station }: { station: StationDefinition }) {
           {[-1, 1].map((side) => (
             <group key={side} position={[side * 54, 42, -22]}>
               <mesh>
-                <boxGeometry args={[20, 18, 20]} />
-                <meshStandardMaterial color="#4b5563" metalness={0.55} roughness={0.36} />
+                <boxGeometry args={[24, 20, 22]} />
+                <meshStandardMaterial color="#4b5563" metalness={0.62} roughness={0.34} />
               </mesh>
               <mesh position={[0, 0, -18]} rotation={[Math.PI / 2, 0, 0]}>
-                <cylinderGeometry args={[3, 4, 34, 8]} />
+                <cylinderGeometry args={[3, 4, 38, 10]} />
                 <meshStandardMaterial color="#ff7b7b" emissive="#842d2d" emissiveIntensity={0.35} />
               </mesh>
             </group>
@@ -1117,14 +1260,24 @@ function StationGeometry({ station }: { station: StationDefinition }) {
       {station.archetype === "Trade Hub" || station.archetype === "Frontier Port" ? (
         <>
           {[-1, 1].map((side) => (
-            <mesh key={side} position={[side * 96, 0, 0]}>
-              <boxGeometry args={[26, 18, 80]} />
-              <meshStandardMaterial color="#788896" metalness={0.44} roughness={0.4} emissive="#172436" />
-            </mesh>
+            <group key={side} position={[side * 98, 0, 0]}>
+              <mesh>
+                <boxGeometry args={[28, 18, 86]} />
+                <meshStandardMaterial color="#788896" metalness={0.5} roughness={0.38} emissive="#172436" />
+              </mesh>
+              <mesh position={[0, 20, 0]}>
+                <boxGeometry args={[20, 3, 62]} />
+                <meshStandardMaterial color="#41576b" metalness={0.58} roughness={0.4} emissive="#0d1b28" />
+              </mesh>
+            </group>
           ))}
         </>
       ) : null}
-      <pointLight color={accent} intensity={0.75} distance={240} />
+      <mesh rotation={[Math.PI / 2, 0, clock * 0.08]}>
+        <torusGeometry args={[106 * ringScale, 1.2, 8, 96]} />
+        <meshBasicMaterial color={accent} transparent opacity={0.24} toneMapped={false} />
+      </mesh>
+      <pointLight color={accent} intensity={0.95} distance={280} />
       <Html center distanceFactor={13} className="target-label station-tech-label" position={[0, 92, 0]}>
         {stationTechLabel(station.techLevel, locale)} · {localizeStationName(station.id, locale, station.name)}
       </Html>
@@ -1135,6 +1288,7 @@ function StationGeometry({ station }: { station: StationDefinition }) {
 function Asteroid({ asteroid }: { asteroid: AsteroidEntity }) {
   const textureUrl = useGameStore((state) => state.assetManifest.asteroidTextures);
   const texture = useLoader(THREE.TextureLoader, textureUrl);
+  texture.colorSpace = THREE.SRGBColorSpace;
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
   const geometry = useMemo(() => {
@@ -1573,14 +1727,15 @@ function SceneContent({ onShipModelStatus }: { onShipModelStatus: (status: ShipM
   const economyNpcWatch = useGameStore((state) => state.economyNpcWatch);
   const currentSystemId = useGameStore((state) => state.currentSystemId);
   const explorationState = useGameStore((state) => state.explorationState);
-  const ambient = 0.55 + systemById[currentSystemId].risk * 0.2;
+  const ambient = 0.18 + systemById[currentSystemId].risk * 0.06;
   const explorationSignals = getIncompleteExplorationSignals(currentSystemId, explorationState);
   return (
     <>
       <color attach="background" args={["#030712"]} />
       <ambientLight intensity={ambient} />
-      <directionalLight position={[180, 220, 120]} intensity={1.4} />
-      <pointLight position={[0, 0, 120]} color="#60c8ff" intensity={0.6} distance={500} />
+      <directionalLight position={[260, 180, 110]} intensity={1.85} color="#f2f6ff" />
+      <directionalLight position={[-220, 90, -320]} intensity={0.42} color="#5fc3ff" />
+      <pointLight position={[0, 0, 120]} color="#60c8ff" intensity={0.34} distance={640} />
       <InfiniteSkybox />
       <PlanetBackdrops />
       <JumpGateModel />
@@ -2056,7 +2211,17 @@ export function FlightScene() {
     >
       <FlightControls />
       <TouchFlightControls />
-      <Canvas camera={{ position: [0, 36, 210], fov: 68, near: 0.1, far: 5200 }} dpr={[1, 1.7]} shadows>
+      <Canvas
+        camera={{ position: [0, 36, 210], fov: 68, near: 0.1, far: 5200 }}
+        dpr={[1, 1.7]}
+        gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
+        onCreated={({ gl, scene }) => {
+          gl.toneMapping = THREE.ACESFilmicToneMapping;
+          gl.toneMappingExposure = 0.76;
+          scene.fog = new THREE.FogExp2("#030712", 0.00013);
+        }}
+        shadows
+      >
         <Suspense fallback={null}>
           <SimulationTicker />
           <CameraRig />

@@ -11,7 +11,7 @@
     "mirr-vale": "/assets/generated/skybox-mirr-vale.webp",
     "ashen-drift": "/assets/generated/skybox-ashen-drift.webp",
     "celest-gate": "/assets/generated/skybox-celest-gate.webp",
-    "ptd-home": "/assets/generated/skybox-panorama.webp"
+    "ptd-home": "/assets/generated/skybox-ptd-home.webp"
   },
   "planetTextures": {
     "helion-prime-world": "/assets/generated/planet-helion-prime-world.webp",
@@ -45,16 +45,16 @@
   "shipModels": {
     "sparrow-mk1": "/assets/generated/ships/sparrow-mk1.glb",
     "mule-lx": "/assets/generated/ships/mule-lx.glb",
-    "prospector-rig": "/assets/generated/ships/mule-lx.glb",
-    "veil-runner": "/assets/generated/ships/raptor-v.glb",
-    "talon-s": "/assets/generated/ships/raptor-v.glb",
-    "wayfarer-x": "/assets/generated/ships/horizon-ark.glb",
+    "prospector-rig": "/assets/generated/ships/prospector-rig.glb",
+    "veil-runner": "/assets/generated/ships/veil-runner.glb",
+    "talon-s": "/assets/generated/ships/talon-s.glb",
+    "wayfarer-x": "/assets/generated/ships/wayfarer-x.glb",
     "raptor-v": "/assets/generated/ships/raptor-v.glb",
     "bastion-7": "/assets/generated/ships/bastion-7.glb",
     "horizon-ark": "/assets/generated/ships/horizon-ark.glb"
   },
   "npcShipTextures": {
-    "freighter": "/assets/generated/npc-freighter-hull.svg"
+    "freighter": "/assets/generated/npc-freighter-hull.webp"
   },
   "speakerPortraits": {
     "captain": "/assets/generated/portraits/captain.webp",

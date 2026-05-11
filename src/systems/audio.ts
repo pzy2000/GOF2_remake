@@ -139,7 +139,7 @@ class ProceduralAudioSystem {
     if (event === "mission-fail") this.arpeggio([330, 247, 196], 0.6, 0.2);
     if (event === "low-hull") this.zap(220, 145, 0.38, "#warning", 0.26);
     if (event === "shield-break") this.noiseSweep(720, 120, 0.42, 0.25);
-    if (event === "comms-open") this.arpeggio([760, 1080], 0.09, 0.045);
+    if (event === "comms-open") this.arpeggio([760, 1080], 0.08, 0.028);
     if (event === "ui-click") this.zap(540, 660, 0.035, "#ui", 0.06);
   }
 

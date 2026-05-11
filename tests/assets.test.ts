@@ -1,10 +1,16 @@
 import { describe, expect, it } from "vitest";
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import manifest from "../public/assets/generated/manifest.json";
 import { dialogueSpeakers, ships, systems } from "../src/data/world";
 import { fallbackAssetManifest, resolveAssetManifest, resolvePublicAssetPath } from "../src/systems/assets";
 import type { AssetManifest } from "../src/types/game";
 
 const stationArchetypes = ["Trade Hub", "Mining Station", "Research Station", "Military Outpost", "Frontier Port", "Pirate Black Market"] as const;
+
+function expectProjectAssetExists(assetPath: string) {
+  expect(existsSync(resolve(process.cwd(), "public", assetPath.replace(/^\//, "")))).toBe(true);
+}
 
 describe("asset manifest", () => {
   it("provides a project-local skybox panorama fallback", () => {
@@ -22,7 +28,7 @@ describe("asset manifest", () => {
     expect(pagesManifest.keyArt).toBe("/GOF2_remake/assets/generated/key-art.webp");
     expect(pagesManifest.skyboxPanorama).toBe("/GOF2_remake/assets/generated/skybox-panorama.webp");
     expect(pagesManifest.shipModels["sparrow-mk1"]).toBe("/GOF2_remake/assets/generated/ships/sparrow-mk1.glb");
-    expect(pagesManifest.npcShipTextures.freighter).toBe("/GOF2_remake/assets/generated/npc-freighter-hull.svg");
+    expect(pagesManifest.npcShipTextures.freighter).toBe("/GOF2_remake/assets/generated/npc-freighter-hull.webp");
     expect(pagesManifest.speakerPortraits["helion-handler"]).toBe("/GOF2_remake/assets/generated/portraits/helion-handler.webp");
     expect(pagesManifest.musicTracks.systems["helion-reach"]).toBe("/GOF2_remake/assets/music/magic-space.mp3");
     expect(pagesManifest.musicTracks.combat).toBe("/GOF2_remake/assets/music/infestation-control-room.mp3");
@@ -42,21 +48,26 @@ describe("asset manifest", () => {
     ];
     for (const assetPath of projectAssetPaths) {
       expect(assetPath).toMatch(/^\/assets\/generated\/.+\.webp$/);
+      expectProjectAssetExists(assetPath);
     }
   });
 
   it("points every player ship to a generated GLB model", () => {
     const assetManifest = manifest as AssetManifest;
+    const modelPaths = ships.map((ship) => assetManifest.shipModels[ship.id]);
     for (const ship of ships) {
       expect(assetManifest.shipModels[ship.id]).toMatch(/^\/assets\/generated\/ships\/.+\.glb$/);
       expect(fallbackAssetManifest.shipModels[ship.id]).toBe(assetManifest.shipModels[ship.id]);
+      expectProjectAssetExists(assetManifest.shipModels[ship.id]);
     }
+    expect(new Set(modelPaths).size).toBe(ships.length);
   });
 
   it("points NPC ship textures to generated local assets", () => {
     const assetManifest = manifest as AssetManifest;
-    expect(assetManifest.npcShipTextures.freighter).toBe("/assets/generated/npc-freighter-hull.svg");
+    expect(assetManifest.npcShipTextures.freighter).toBe("/assets/generated/npc-freighter-hull.webp");
     expect(fallbackAssetManifest.npcShipTextures.freighter).toBe(assetManifest.npcShipTextures.freighter);
+    expectProjectAssetExists(assetManifest.npcShipTextures.freighter);
   });
 
   it("points every dialogue speaker to a generated WebP portrait", () => {
