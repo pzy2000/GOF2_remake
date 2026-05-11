@@ -62,7 +62,7 @@ const planetStyles = {
 function run(command, args) {
   const result = spawnSync(command, args, { cwd: rootDir, encoding: "utf8" });
   if (result.status !== 0) {
-    throw new Error(`${command} ${args.join(" ")}\n${result.error?.message || result.stderr || result.stdout || `exit code ${result.status ?? "unknown"}`}`);
+    throw new Error(`${command} ${args.join(" ")}\n${result.stderr || result.stdout}`);
   }
 }
 
@@ -74,15 +74,6 @@ function eq(style) {
   return `eq=saturation=${style.saturation}:contrast=${style.contrast}:brightness=${style.brightness}`;
 }
 
-function toneFilters(style, extra = "") {
-  return [
-    `hue=h=${style.hue}:s=${style.saturation}`,
-    eq(style),
-    extra,
-    "unsharp=5:5:0.55:3:3:0.25"
-  ].filter(Boolean).join(",");
-}
-
 async function renderWebp({ publicPath, band, width, height, style, flip = false, quality = 82, extra = "" }) {
   const outPath = projectPath(publicPath);
   const tempPng = path.join(tempDir, `${path.basename(publicPath, path.extname(publicPath))}.png`);
@@ -91,27 +82,12 @@ async function renderWebp({ publicPath, band, width, height, style, flip = false
     `crop=iw:ih/4:0:ih*${band}/4`,
     flip ? "hflip" : "",
     `scale=${width}:${height}:flags=lanczos`,
-    toneFilters(style, extra)
+    `hue=h=${style.hue}:s=${style.saturation}`,
+    eq(style),
+    extra,
+    "unsharp=5:5:0.55:3:3:0.25"
   ].filter(Boolean).join(",");
   run(ffmpeg, ["-y", "-loglevel", "error", "-i", sourcePath, "-vf", filters, tempPng]);
-  run(cwebp, ["-quiet", "-q", String(quality), tempPng, "-o", outPath]);
-}
-
-async function renderSkyboxWebp({ publicPath, band, width, height, style, flip = false, quality = 82, extra = "" }) {
-  const outPath = projectPath(publicPath);
-  const tempPng = path.join(tempDir, `${path.basename(publicPath, path.extname(publicPath))}.png`);
-  await mkdir(path.dirname(outPath), { recursive: true });
-  const sourceFilters = [
-    `crop=iw:ih/4:0:ih*${band}/4`,
-    flip ? "hflip" : ""
-  ].filter(Boolean).join(",");
-  const filters = [
-    `[0:v]${sourceFilters},split=2[sky_bg_src][sky_fg_src]`,
-    `[sky_bg_src]scale=${width}:${height}:force_original_aspect_ratio=increase:flags=lanczos,crop=${width}:${height},gblur=sigma=18,${toneFilters(style, extra)}[sky_bg]`,
-    `[sky_fg_src]scale=${width}:${height}:force_original_aspect_ratio=decrease:flags=lanczos,${toneFilters(style, extra)}[sky_fg]`,
-    "[sky_bg][sky_fg]overlay=(W-w)/2:(H-h)/2"
-  ].join(";");
-  run(ffmpeg, ["-y", "-loglevel", "error", "-i", sourcePath, "-filter_complex", filters, tempPng]);
   run(cwebp, ["-quiet", "-q", String(quality), tempPng, "-o", outPath]);
 }
 
@@ -120,7 +96,7 @@ await mkdir(tempDir, { recursive: true });
 
 for (const [systemId, publicPath] of Object.entries(manifest.systemSkyboxes)) {
   const style = skyboxStyles[systemId] ?? skyboxStyles["helion-reach"];
-  await renderSkyboxWebp({
+  await renderWebp({
     publicPath,
     band: 0,
     width: 2048,
@@ -132,7 +108,7 @@ for (const [systemId, publicPath] of Object.entries(manifest.systemSkyboxes)) {
   });
 }
 
-await renderSkyboxWebp({
+await renderWebp({
   publicPath: manifest.skyboxPanorama,
   band: 0,
   width: 2048,

@@ -78,16 +78,6 @@ describe("asset manifest", () => {
     }
   });
 
-  it("generates skyboxes through the aspect-preserving path", () => {
-    const script = readFileSync(resolve(process.cwd(), "scripts/generate-cinematic-textures.mjs"), "utf8");
-
-    expect(script).toContain("function renderSkyboxWebp");
-    expect(script).toContain("force_original_aspect_ratio=increase");
-    expect(script).toContain("force_original_aspect_ratio=decrease");
-    expect(script).toMatch(/Object\.entries\(manifest\.systemSkyboxes\)[\s\S]*await renderSkyboxWebp\(/);
-    expect(script).toMatch(/await renderSkyboxWebp\(\{\s*publicPath: manifest\.skyboxPanorama/);
-  });
-
   it("points every player ship to a generated GLB model", () => {
     const assetManifest = manifest as AssetManifest;
     const modelPaths = ships.map((ship) => assetManifest.shipModels[ship.id]);

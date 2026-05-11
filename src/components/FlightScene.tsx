@@ -390,11 +390,10 @@ function InfiniteSkybox() {
   return (
     <group ref={skyGroupRef} renderOrder={-1000}>
       <mesh frustumCulled={false} renderOrder={-1000}>
-        <sphereGeometry args={[2600, 96, 48]} />
+        <sphereGeometry args={[1800, 64, 32]} />
         <meshBasicMaterial map={texture} side={THREE.BackSide} depthWrite={false} depthTest={false} toneMapped={false} />
       </mesh>
-      <Stars radius={1200} depth={180} count={1350} factor={2.6} saturation={0.18} fade speed={0.025} />
-      <Stars radius={1900} depth={260} count={520} factor={1.2} saturation={0.05} fade speed={0.012} />
+      <Stars radius={920} depth={95} count={2400} factor={4.5} saturation={0.36} fade speed={0.1} />
     </group>
   );
 }
