@@ -37,7 +37,8 @@ export type AudioEventName =
   | "mission-complete"
   | "mission-fail"
   | "low-hull"
-  | "shield-break";
+  | "shield-break"
+  | "comms-open";
 
 export type MusicMode = "safe" | "combat" | "station" | "silent";
 

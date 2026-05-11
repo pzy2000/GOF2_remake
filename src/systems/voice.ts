@@ -26,62 +26,62 @@ const DEFAULT_VOICE_PROFILE_ID = "helion-handler";
 
 export const voiceProfiles = {
   captain: {
-    pitch: 1.24,
-    rate: 1.04,
-    preferredVoiceNames: ["Aria", "Jenny", "Samantha", "Tessa", "Victoria", "Zira", "Karen", "Moira"],
-    preferredVoiceKeywords: ["female"]
+    pitch: 1.08,
+    rate: 0.92,
+    preferredVoiceNames: ["Aria", "Jenny", "Samantha", "Tessa", "Victoria", "Ava", "Karen", "Moira"],
+    preferredVoiceKeywords: ["female", "natural", "enhanced", "neural"]
   },
   "ship-ai": {
-    pitch: 0.76,
-    rate: 0.84,
-    volumeScale: 0.92,
-    preferredVoiceNames: ["Google US English", "Microsoft David", "Daniel", "Alex", "Fred"],
-    preferredVoiceKeywords: ["male", "standard", "enhanced"]
+    pitch: 0.9,
+    rate: 0.86,
+    volumeScale: 0.9,
+    preferredVoiceNames: ["Google US English", "Microsoft Guy", "Microsoft David", "Daniel", "Alex"],
+    preferredVoiceKeywords: ["male", "natural", "enhanced", "neural", "standard"]
   },
   "helion-handler": {
-    pitch: 0.98,
-    rate: 0.94,
-    preferredVoiceNames: ["Samantha", "Karen", "Moira", "Google UK English Female"],
-    preferredVoiceKeywords: ["female"]
+    pitch: 1.02,
+    rate: 0.88,
+    preferredVoiceNames: ["Samantha", "Karen", "Moira", "Google UK English Female", "Serena"],
+    preferredVoiceKeywords: ["female", "natural", "enhanced", "neural"]
   },
   "mirr-analyst": {
-    pitch: 0.92,
-    rate: 0.9,
-    preferredVoiceNames: ["Serena", "Tessa", "Google UK English Female", "Moira"],
-    preferredVoiceKeywords: ["female"]
+    pitch: 0.96,
+    rate: 0.86,
+    preferredVoiceNames: ["Serena", "Tessa", "Google UK English Female", "Moira", "Samantha"],
+    preferredVoiceKeywords: ["female", "natural", "enhanced", "neural"]
   },
   "kuro-foreman": {
-    pitch: 0.78,
-    rate: 0.91,
-    volumeScale: 1.04,
-    preferredVoiceNames: ["Daniel", "Google UK English Male", "Microsoft David", "Alex"],
-    preferredVoiceKeywords: ["male"]
+    pitch: 0.88,
+    rate: 0.87,
+    volumeScale: 1.02,
+    preferredVoiceNames: ["Daniel", "Google UK English Male", "Microsoft Guy", "Microsoft David", "Alex"],
+    preferredVoiceKeywords: ["male", "natural", "enhanced", "neural"]
   },
   "vantara-officer": {
-    pitch: 0.88,
-    rate: 0.96,
-    preferredVoiceNames: ["Microsoft David", "Daniel", "Google UK English Male", "Alex"],
-    preferredVoiceKeywords: ["male"]
+    pitch: 0.92,
+    rate: 0.9,
+    preferredVoiceNames: ["Microsoft Guy", "Microsoft David", "Daniel", "Google UK English Male", "Alex"],
+    preferredVoiceKeywords: ["male", "natural", "enhanced", "neural"]
   },
   "ashen-broker": {
-    pitch: 0.84,
-    rate: 0.88,
+    pitch: 0.9,
+    rate: 0.84,
     volumeScale: 0.96,
-    preferredVoiceNames: ["Fred", "Ralph", "Daniel", "Microsoft David"],
-    preferredVoiceKeywords: ["male"]
+    preferredVoiceNames: ["Daniel", "Microsoft Guy", "Microsoft David", "Alex", "Fred"],
+    preferredVoiceKeywords: ["male", "natural", "enhanced", "neural"]
   },
   "celest-archivist": {
-    pitch: 1.14,
-    rate: 0.95,
-    preferredVoiceNames: ["Victoria", "Tessa", "Serena", "Google UK English Female"],
-    preferredVoiceKeywords: ["female"]
+    pitch: 1.06,
+    rate: 0.88,
+    preferredVoiceNames: ["Victoria", "Tessa", "Serena", "Google UK English Female", "Samantha"],
+    preferredVoiceKeywords: ["female", "natural", "enhanced", "neural"]
   },
   "union-witness": {
-    pitch: 0.86,
-    rate: 0.92,
+    pitch: 0.94,
+    rate: 0.86,
     volumeScale: 1.02,
-    preferredVoiceNames: ["Moira", "Karen", "Samantha", "Google UK English Female"],
-    preferredVoiceKeywords: ["female"]
+    preferredVoiceNames: ["Moira", "Karen", "Samantha", "Google UK English Female", "Serena"],
+    preferredVoiceKeywords: ["female", "natural", "enhanced", "neural"]
   }
 } as const satisfies Record<string, VoiceProfileDefinition>;
 
@@ -95,19 +95,50 @@ function hasSpeechApi(): boolean {
   return typeof window !== "undefined" && "speechSynthesis" in window && typeof SpeechSynthesisUtterance !== "undefined";
 }
 
+function searchableVoiceName(voice: SpeechSynthesisVoice): string {
+  return `${voice.name} ${voice.voiceURI}`.toLowerCase();
+}
+
+function voiceScore(voice: SpeechSynthesisVoice, profile: VoiceProfileDefinition, locale: Locale): number {
+  const searchable = searchableVoiceName(voice);
+  const targetLang = speechLangForLocale(locale).toLowerCase();
+  let score = voice.lang.toLowerCase() === targetLang ? 12 : 0;
+  if (!voice.default) score += 2;
+  profile.preferredVoiceNames?.forEach((name, index) => {
+    if (searchable.includes(name.toLowerCase())) score += 80 - index * 3;
+  });
+  profile.preferredVoiceKeywords?.forEach((keyword) => {
+    if (searchable.includes(keyword.toLowerCase())) score += 18;
+  });
+  if (/\b(enhanced|premium|neural|natural|wavenet|online)\b/.test(searchable)) score += 30;
+  if (/\b(compact|basic|default)\b/.test(searchable)) score -= 28;
+  if (/\b(siri|novelty|whisper|trinoids|zarvox|bells|boing|bad news|good news)\b/.test(searchable)) score -= 70;
+  return score;
+}
+
+function bestVoice(voices: SpeechSynthesisVoice[], profile: VoiceProfileDefinition, locale: Locale): SpeechSynthesisVoice | null {
+  return voices
+    .map((voice, index) => ({ voice, index, score: voiceScore(voice, profile, locale) }))
+    .sort((left, right) => right.score - left.score || left.index - right.index)[0]?.voice ?? null;
+}
+
 function selectVoice(profile: VoiceProfileDefinition, locale: Locale): SpeechSynthesisVoice | null {
   const langPrefix = speechLangForLocale(locale).split("-")[0].toLowerCase();
   const voices = window.speechSynthesis.getVoices();
   const localeVoices = voices.filter((voice) => voice.lang.toLowerCase().startsWith(langPrefix));
   const englishVoices = voices.filter((voice) => voice.lang.toLowerCase().startsWith("en"));
-  const matchesProfile = (voice: SpeechSynthesisVoice) => {
-    const searchable = `${voice.name} ${voice.voiceURI}`.toLowerCase();
-    return (
-      profile.preferredVoiceNames?.some((name) => searchable.includes(name.toLowerCase())) ||
-      profile.preferredVoiceKeywords?.some((keyword) => searchable.includes(keyword.toLowerCase()))
-    );
-  };
-  return localeVoices.find(matchesProfile) ?? localeVoices[0] ?? englishVoices.find(matchesProfile) ?? englishVoices[0] ?? null;
+  return bestVoice(localeVoices, profile, locale) ?? bestVoice(englishVoices, profile, locale) ?? null;
+}
+
+export function prepareCommsSpeechText(text: string): string {
+  return text
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\s*([,;:])\s*/g, "$1 ")
+    .replace(/\s*([.!?。！？])\s*/g, "$1  ")
+    .replace(/\s*[-–—]\s*/g, ", ")
+    .replace(/\bAI\b/g, "A I")
+    .replace(/\s+$/g, "");
 }
 
 class BrowserVoiceSystem {
@@ -140,7 +171,7 @@ class BrowserVoiceSystem {
     const volume = effectiveVolume(this.settings, profile.volumeScale);
     if (!hasSpeechApi() || !text.trim() || this.settings.muted || volume <= 0) return false;
     this.cancel();
-    const utterance = new SpeechSynthesisUtterance(text);
+    const utterance = new SpeechSynthesisUtterance(prepareCommsSpeechText(text));
     const locale = options.locale ?? DEFAULT_LOCALE;
     utterance.lang = speechLangForLocale(locale);
     utterance.pitch = profile.pitch;

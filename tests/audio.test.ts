@@ -49,6 +49,34 @@ class RejectingAudio extends FakeAudio {
   override play = vi.fn(() => Promise.reject(new Error("blocked")));
 }
 
+class FakeAudioParam {
+  value = 0;
+  setTargetAtTime = vi.fn();
+  setValueAtTime = vi.fn();
+  exponentialRampToValueAtTime = vi.fn();
+}
+
+class FakeAudioNode {
+  gain = new FakeAudioParam();
+  frequency = new FakeAudioParam();
+  type: string = "sine";
+  connect = vi.fn();
+  start = vi.fn(() => {
+    FakeAudioContext.startedOscillators += 1;
+  });
+  stop = vi.fn();
+}
+
+class FakeAudioContext {
+  static startedOscillators = 0;
+  currentTime = 1;
+  destination = new FakeAudioNode();
+  resume = vi.fn();
+  createGain = vi.fn(() => new FakeAudioNode());
+  createOscillator = vi.fn(() => new FakeAudioNode());
+  createBiquadFilter = vi.fn(() => new FakeAudioNode());
+}
+
 async function freshAudio(AudioClass?: typeof FakeAudio) {
   vi.resetModules();
   vi.stubGlobal("localStorage", new MemoryStorage());
@@ -67,7 +95,22 @@ describe("procedural audio system", () => {
     const { audioSystem } = await freshAudio();
     expect(() => audioSystem.unlock()).not.toThrow();
     expect(() => audioSystem.play("laser")).not.toThrow();
+    expect(() => audioSystem.play("comms-open")).not.toThrow();
     expect(() => audioSystem.setMusicMode("combat")).not.toThrow();
+  });
+
+  it("keeps comms-open safe while locked or muted", async () => {
+    FakeAudioContext.startedOscillators = 0;
+    vi.stubGlobal("window", { AudioContext: FakeAudioContext });
+    const { audioSystem, saveAudioSettings } = await freshAudio();
+
+    expect(() => audioSystem.play("comms-open")).not.toThrow();
+    expect(FakeAudioContext.startedOscillators).toBe(0);
+
+    saveAudioSettings({ masterVolume: 1, sfxVolume: 1, musicVolume: 0.5, voiceVolume: 1, muted: true });
+    expect(audioSystem.unlock()).toBe(true);
+    expect(() => audioSystem.play("comms-open")).not.toThrow();
+    expect(FakeAudioContext.startedOscillators).toBe(9);
   });
 
   it("persists clamped audio settings", async () => {

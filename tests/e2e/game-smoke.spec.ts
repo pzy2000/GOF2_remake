@@ -1379,12 +1379,34 @@ test.describe("browser smoke", () => {
   });
 
   test("opens the flight galaxy map as a route planner from HUD and keyboard", async ({ page }) => {
+    await page.setViewportSize({ width: 2048, height: 930 });
     await resetApp(page);
     await startNewGame(page);
 
     await page.keyboard.press("KeyM");
     await expect(page.getByText("Route Planning")).toBeVisible();
+    await page.getByRole("button", { name: "Mirr Vale known" }).click();
     await expect(page.getByRole("button", { name: "Set Route" })).toBeVisible();
+    const flightModalMetrics = await page.evaluate(() => {
+      const routeButton = [...document.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Set Route");
+      const actions = document.querySelector(".galaxy-actions");
+      const panel = document.querySelector(".galaxy-panel");
+      if (!routeButton || !actions || !panel) return null;
+      const routeRect = routeButton.getBoundingClientRect();
+      const actionsRect = actions.getBoundingClientRect();
+      const panelRect = panel.getBoundingClientRect();
+      return {
+        actionsBottom: actionsRect.bottom,
+        panelBottom: panelRect.bottom,
+        routeBottom: routeRect.bottom,
+        routeTop: routeRect.top,
+        viewportHeight: window.innerHeight
+      };
+    });
+    expect(flightModalMetrics).not.toBeNull();
+    expect(flightModalMetrics!.routeTop).toBeGreaterThanOrEqual(0);
+    expect(flightModalMetrics!.routeBottom).toBeLessThanOrEqual(flightModalMetrics!.viewportHeight);
+    expect(flightModalMetrics!.actionsBottom).toBeLessThanOrEqual(flightModalMetrics!.panelBottom);
     await page.getByRole("button", { name: "Return" }).click();
     await expect(page.locator(".flight-canvas canvas")).toBeVisible();
 

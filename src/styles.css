@@ -2479,7 +2479,9 @@ button.equipment-trigger {
 }
 
 .galaxy-panel {
+  height: min(860px, calc(100dvh - 60px));
   max-height: 92vh;
+  grid-template-rows: auto minmax(0, 1fr);
   overflow: hidden;
   background:
     radial-gradient(circle at 18% 20%, rgba(61, 150, 154, 0.18), transparent 28%),
@@ -2509,13 +2511,13 @@ button.equipment-trigger {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(300px, 320px);
   gap: 16px;
-  height: 100%;
+  height: auto;
   min-height: 0;
 }
 
 .galaxy-chart {
   position: relative;
-  min-height: 560px;
+  min-height: min(560px, 100%);
   overflow: hidden;
   border: 1px solid rgba(128, 214, 255, 0.24);
   border-radius: 8px;

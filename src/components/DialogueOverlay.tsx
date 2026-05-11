@@ -9,6 +9,7 @@ import {
   localizeDialogueSpeakerName,
   localizeDialogueSpeakerRole
 } from "../systems/dialogueLocalization";
+import { audioSystem } from "../systems/audio";
 import { voiceSystem } from "../systems/voice";
 import { AtlasIcon } from "./AtlasIcon";
 import type { AssetManifest } from "../types/game";
@@ -64,6 +65,7 @@ export function DialogueOverlay() {
 
   useEffect(() => {
     if (!line || !speaker) return undefined;
+    audioSystem.play("comms-open");
     voiceSystem.speak(localizeDialogueLineText(line, locale), speaker.voiceProfile, {
       locale,
       onEnd: () => {
@@ -94,12 +96,16 @@ export function DialogueOverlay() {
 
   function playPause() {
     const state = voiceSystem.pauseOrResume();
-    if (state === "idle" && line && speaker) voiceSystem.speak(localizeDialogueLineText(line, locale), speaker.voiceProfile, { locale });
+    if (state === "idle" && line && speaker) {
+      audioSystem.play("comms-open");
+      voiceSystem.speak(localizeDialogueLineText(line, locale), speaker.voiceProfile, { locale });
+    }
     setVoiceStatus(voiceSystem.debugState);
   }
 
   function replayVoice() {
     if (!line || !speaker) return;
+    audioSystem.play("comms-open");
     voiceSystem.speak(localizeDialogueLineText(line, locale), speaker.voiceProfile, { locale });
     setVoiceStatus(voiceSystem.debugState);
   }

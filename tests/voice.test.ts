@@ -15,9 +15,9 @@ class FakeUtterance {
   }
 }
 
-function fakeVoice(name: string, lang = "en-US"): SpeechSynthesisVoice {
+function fakeVoice(name: string, lang = "en-US", isDefault = false): SpeechSynthesisVoice {
   return {
-    default: false,
+    default: isDefault,
     lang,
     localService: true,
     name,
@@ -169,6 +169,85 @@ describe("browser voice system", () => {
     expect(spoken.map((utterance) => utterance.lang)).toEqual(["zh-CN", "ja-JP", "fr-FR"]);
   });
 
+  it("scores natural enhanced voices above Siri, compact, and generic voices", async () => {
+    const spoken: FakeUtterance[] = [];
+    const synthesis = {
+      speaking: false,
+      paused: false,
+      getVoices: vi.fn(() => [
+        fakeVoice("Siri Female", "en-US", true),
+        fakeVoice("Samantha Compact"),
+        fakeVoice("Generic English"),
+        fakeVoice("Samantha Enhanced")
+      ]),
+      speak: vi.fn((utterance: FakeUtterance) => {
+        spoken.push(utterance);
+      }),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      cancel: vi.fn()
+    };
+    vi.stubGlobal("SpeechSynthesisUtterance", FakeUtterance);
+    vi.stubGlobal("window", { speechSynthesis: synthesis });
+
+    const { voiceSystem } = await freshVoice();
+
+    expect(voiceSystem.speak("Helion traffic clear.", "helion-handler")).toBe(true);
+    expect(spoken[0].voice?.name).toBe("Samantha Enhanced");
+  });
+
+  it("keeps locale voices ahead of English fallback while still scoring them", async () => {
+    const spoken: FakeUtterance[] = [];
+    const synthesis = {
+      speaking: false,
+      paused: false,
+      getVoices: vi.fn(() => [
+        fakeVoice("Samantha Enhanced", "en-US"),
+        fakeVoice("Tingting Natural", "zh-CN"),
+        fakeVoice("Tingting Compact", "zh-CN")
+      ]),
+      speak: vi.fn((utterance: FakeUtterance) => {
+        spoken.push(utterance);
+      }),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      cancel: vi.fn()
+    };
+    vi.stubGlobal("SpeechSynthesisUtterance", FakeUtterance);
+    vi.stubGlobal("window", { speechSynthesis: synthesis });
+
+    const { voiceSystem } = await freshVoice();
+
+    expect(voiceSystem.speak("通信确认。", "helion-handler", { locale: "zh-CN" })).toBe(true);
+    expect(spoken[0].lang).toBe("zh-CN");
+    expect(spoken[0].voice?.name).toBe("Tingting Natural");
+  });
+
+  it("prepares comms speech pacing without mutating the source text", async () => {
+    const spoken: FakeUtterance[] = [];
+    const source = "  Helion traffic   clear. Echo Lock ready — confirm AI.  ";
+    const synthesis = {
+      speaking: false,
+      paused: false,
+      getVoices: vi.fn(() => [fakeVoice("Samantha Enhanced")]),
+      speak: vi.fn((utterance: FakeUtterance) => {
+        spoken.push(utterance);
+      }),
+      pause: vi.fn(),
+      resume: vi.fn(),
+      cancel: vi.fn()
+    };
+    vi.stubGlobal("SpeechSynthesisUtterance", FakeUtterance);
+    vi.stubGlobal("window", { speechSynthesis: synthesis });
+
+    const { prepareCommsSpeechText, voiceSystem } = await freshVoice();
+
+    expect(prepareCommsSpeechText(source)).toBe("Helion traffic clear.  Echo Lock ready, confirm A I.");
+    expect(source).toBe("  Helion traffic   clear. Echo Lock ready — confirm AI.  ");
+    expect(voiceSystem.speak(source, "helion-handler")).toBe(true);
+    expect(spoken[0].text).toBe("Helion traffic clear.  Echo Lock ready, confirm A I.");
+  });
+
   it("uses a young female voice profile for the captain when available", async () => {
     const spoken: FakeUtterance[] = [];
     const synthesis = {
@@ -189,8 +268,8 @@ describe("browser voice system", () => {
 
     expect(voiceSystem.speak("Captain on channel.", "captain")).toBe(true);
     expect(spoken[0].voice?.name).toBe("Samantha");
-    expect(spoken[0].pitch).toBeCloseTo(1.24);
-    expect(spoken[0].rate).toBeCloseTo(1.04);
+    expect(spoken[0].pitch).toBeCloseTo(1.08);
+    expect(spoken[0].rate).toBeCloseTo(0.92);
   });
 
   it("applies distinct profile parameters and voice preferences per role", async () => {
@@ -240,11 +319,11 @@ describe("browser voice system", () => {
 
     expect(voiceSystem.speak("No preferred voice.", "captain")).toBe(true);
     expect(spoken[0].voice?.name).toBe("Generic English");
-    expect(spoken[0].pitch).toBeCloseTo(1.24);
+    expect(spoken[0].pitch).toBeCloseTo(1.08);
 
     synthesis.getVoices.mockReturnValueOnce([fakeVoice("Mónica", "es-ES")]);
     expect(voiceSystem.speak("No English voice.", "captain")).toBe(true);
     expect(spoken[1].voice).toBeNull();
-    expect(spoken[1].rate).toBeCloseTo(1.04);
+    expect(spoken[1].rate).toBeCloseTo(0.92);
   });
 });

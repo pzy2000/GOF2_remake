@@ -121,7 +121,7 @@ class ProceduralAudioSystem {
     const context = this.ensureContext();
     if (!context || this.settings.muted) return;
     const now = context.currentTime;
-    const minimumGap = event === "mining" ? 0.11 : event === "low-hull" ? 1.6 : event === "shield-break" ? 0.7 : 0.025;
+    const minimumGap = event === "mining" ? 0.11 : event === "low-hull" ? 1.6 : event === "shield-break" ? 0.7 : event === "comms-open" ? 0.18 : 0.025;
     if (now - (this.lastEventAt.get(event) ?? -999) < minimumGap) return;
     this.lastEventAt.set(event, now);
     if (!this.unlocked) return;
@@ -139,6 +139,7 @@ class ProceduralAudioSystem {
     if (event === "mission-fail") this.arpeggio([330, 247, 196], 0.6, 0.2);
     if (event === "low-hull") this.zap(220, 145, 0.38, "#warning", 0.26);
     if (event === "shield-break") this.noiseSweep(720, 120, 0.42, 0.25);
+    if (event === "comms-open") this.arpeggio([760, 1080], 0.09, 0.045);
     if (event === "ui-click") this.zap(540, 660, 0.035, "#ui", 0.06);
   }
 
