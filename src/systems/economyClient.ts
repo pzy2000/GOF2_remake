@@ -5,21 +5,77 @@ import type {
   EconomyNpcInteractionRequest,
   EconomyNpcInteractionResponse,
   EconomyNpcResponse,
+  EconomyServiceStatus,
   EconomySnapshot,
   NpcDestroyedRequest,
   PlayerTradeRequest,
   PlayerTradeResponse
 } from "../types/economy";
 
-function getDefaultEconomyServiceUrl(): string {
-  if (typeof window !== "undefined" && window.location.hostname) {
-    return `http://${window.location.hostname}:19777`;
-  }
-  return "http://127.0.0.1:19777";
+const STATIC_FALLBACK_URL = "static economy fallback";
+const STATIC_FALLBACK_REASON = "Economy backend disabled for static build.";
+const HTTPS_HTTP_BLOCK_REASON = "Economy backend disabled: HTTPS pages cannot call an HTTP economy service.";
+
+export interface EconomyServiceConfigInput {
+  envUrl?: string;
+  production: boolean;
+  pageProtocol?: string;
 }
 
-export const ECONOMY_SERVICE_URL =
-  ((import.meta.env.VITE_ECONOMY_API_URL as string | undefined) ?? getDefaultEconomyServiceUrl()).replace(/\/$/, "");
+export interface EconomyServiceConfig {
+  enabled: boolean;
+  requestBaseUrl: string;
+  displayUrl: string;
+  disabledReason?: string;
+}
+
+function normalizeConfiguredUrl(url: string): string {
+  return url.trim().replace(/\/$/, "");
+}
+
+export function resolveEconomyServiceConfig({
+  envUrl,
+  production,
+  pageProtocol
+}: EconomyServiceConfigInput): EconomyServiceConfig {
+  const configuredUrl = envUrl?.trim() ? normalizeConfiguredUrl(envUrl) : undefined;
+  if (configuredUrl) {
+    if (pageProtocol === "https:" && configuredUrl.startsWith("http:")) {
+      return {
+        enabled: false,
+        requestBaseUrl: "",
+        displayUrl: STATIC_FALLBACK_URL,
+        disabledReason: HTTPS_HTTP_BLOCK_REASON
+      };
+    }
+    return {
+      enabled: true,
+      requestBaseUrl: configuredUrl,
+      displayUrl: configuredUrl
+    };
+  }
+  if (production) {
+    return {
+      enabled: false,
+      requestBaseUrl: "",
+      displayUrl: STATIC_FALLBACK_URL,
+      disabledReason: STATIC_FALLBACK_REASON
+    };
+  }
+  return {
+    enabled: true,
+    requestBaseUrl: "",
+    displayUrl: "/api/economy"
+  };
+}
+
+export const ECONOMY_SERVICE_CONFIG = resolveEconomyServiceConfig({
+  envUrl: import.meta.env.VITE_ECONOMY_API_URL as string | undefined,
+  production: import.meta.env.PROD,
+  pageProtocol: typeof window === "undefined" ? undefined : window.location.protocol
+});
+
+export const ECONOMY_SERVICE_URL = ECONOMY_SERVICE_CONFIG.displayUrl;
 
 const REQUEST_TIMEOUT_MS = 1_400;
 
@@ -33,11 +89,32 @@ export class EconomyRequestError extends Error {
   }
 }
 
+export function isEconomyServiceEnabled(): boolean {
+  return ECONOMY_SERVICE_CONFIG.enabled;
+}
+
+export function createEconomyServiceStatus(): EconomyServiceStatus {
+  return {
+    status: ECONOMY_SERVICE_CONFIG.enabled ? "offline" : "fallback",
+    url: ECONOMY_SERVICE_CONFIG.displayUrl,
+    lastError: ECONOMY_SERVICE_CONFIG.disabledReason
+  };
+}
+
+function economyServiceDisabledError(): EconomyRequestError {
+  return new EconomyRequestError(ECONOMY_SERVICE_CONFIG.disabledReason ?? "Economy service offline.", 0);
+}
+
+function economyRequestUrl(path: string): string {
+  return `${ECONOMY_SERVICE_CONFIG.requestBaseUrl}${path}`;
+}
+
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  if (!ECONOMY_SERVICE_CONFIG.enabled) throw economyServiceDisabledError();
   const controller = new AbortController();
   const timeout = globalThis.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
   try {
-    const response = await fetch(`${ECONOMY_SERVICE_URL}${path}`, {
+    const response = await fetch(economyRequestUrl(path), {
       ...init,
       signal: controller.signal,
       headers: {
@@ -75,10 +152,11 @@ export function postEconomyReset(systemId: string): Promise<EconomySnapshot> {
 }
 
 export function postPlayerTrade(request: PlayerTradeRequest): Promise<PlayerTradeResponse> {
+  if (!ECONOMY_SERVICE_CONFIG.enabled) return Promise.reject(economyServiceDisabledError());
   return new Promise((resolve, reject) => {
     const controller = new AbortController();
     const timeout = globalThis.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-    fetch(`${ECONOMY_SERVICE_URL}/api/economy/player-trade`, {
+    fetch(economyRequestUrl("/api/economy/player-trade"), {
       method: "POST",
       signal: controller.signal,
       headers: { "Content-Type": "application/json" },
@@ -123,8 +201,9 @@ export function connectEconomyEvents(
   onEvent: (event: EconomyEvent) => void,
   onError: (message: string) => void
 ): (() => void) | undefined {
+  if (!ECONOMY_SERVICE_CONFIG.enabled) return undefined;
   if (typeof EventSource === "undefined") return undefined;
-  const source = new EventSource(`${ECONOMY_SERVICE_URL}/api/economy/events`);
+  const source = new EventSource(economyRequestUrl("/api/economy/events"));
   const handleEvent = (event: MessageEvent<string>) => {
     try {
       onEvent(JSON.parse(event.data) as EconomyEvent);

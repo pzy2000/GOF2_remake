@@ -25,7 +25,9 @@ npm test
 npm run test:e2e:mobile
 ```
 
-`npm run dev:full` starts the local authoritative economy server on `127.0.0.1:19777` and the Vite frontend together. Use plain `npm run dev` when you want the browser-only fallback economy.
+`npm run dev:full` starts the local authoritative economy server on `127.0.0.1:19777` and the Vite frontend together. The frontend calls same-origin `/api/economy` in development, and Vite proxies those REST/SSE requests to the local backend. Use plain `npm run dev` when you want the browser-only fallback economy.
+
+The GitHub Pages build is a static preview and does not start the economy backend, so it defaults to browser-local fallback simulation. To connect a hosted authoritative economy service, build with `VITE_ECONOMY_API_URL` set to an HTTPS service origin/base URL; HTTPS pages intentionally refuse insecure `http://` economy endpoints.
 
 You can also use the one-command launcher:
 
@@ -110,4 +112,4 @@ Audio uses a hybrid runtime: SFX, warnings, and fallback music are synthesized w
 
 ## Known Limitations
 
-This is a vertical slice, not a full campaign. The authoritative economy backend is a local development service; if it is offline, the browser falls back to local market simulation so trading remains playable, while backend-backed NPC/economy events degrade gracefully. Commodity, equipment, and faction sprite sheets are sliced in the UI with CSS atlas positioning. Procedural SFX and fallback music are intentionally lightweight, while authored BGM coverage is limited to the current CC0 track set.
+This is a vertical slice, not a full campaign. The authoritative economy backend is a local development service; GitHub Pages uses local market simulation by default, and any hosted backend must be served over HTTPS. If the backend is offline or disabled, trading remains playable through browser-local fallback, while backend-backed NPC/economy events degrade gracefully. Commodity, equipment, and faction sprite sheets are sliced in the UI with CSS atlas positioning. Procedural SFX and fallback music are intentionally lightweight, while authored BGM coverage is limited to the current CC0 track set.

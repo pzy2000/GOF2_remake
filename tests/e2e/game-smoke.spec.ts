@@ -80,11 +80,12 @@ async function startNewGame(page: Page, options: { keepIntro?: boolean } = {}) {
   await expect(page.locator(".dock-hint")).toBeVisible();
   await expect(page.locator(".station-tech-label").first()).toContainText("TECH");
   if (!options.keepIntro) {
-    const dialogue = page.getByTestId("dialogue-overlay");
-    if (await dialogue.count()) {
-      await dialogue.getByRole("button", { name: "Skip" }).click();
-      await expect(dialogue).toHaveCount(0);
-    }
+    await page.evaluate(() => {
+      const state = window.__GOF2_E2E__!.getState() as { activeDialogue?: unknown; closeDialogue: () => void };
+      if (state.activeDialogue) state.closeDialogue();
+    });
+    await expect(page.getByTestId("dialogue-overlay")).toHaveCount(0);
+    await expect(page.getByTestId("space-dialogue-overlay")).toHaveCount(0);
   }
   await page.evaluate(() => {
     const state = window.__GOF2_E2E__!.getState() as { stopEconomyStream: () => void };
@@ -723,12 +724,18 @@ test.describe("browser smoke", () => {
     await page.getByRole("button", { name: "新游戏" }).click();
     await expect(page.locator(".hud-top-left")).toContainText("船体");
     await expect(page.locator(".hud-bottom-right")).toContainText("通讯");
+    const flightDialogue = page.getByTestId("space-dialogue-overlay");
+    await expect(flightDialogue).toBeVisible();
+    await expect(page.getByTestId("dialogue-overlay")).toHaveCount(0);
     const englishResidue = /Credits|Cargo|Missiles|Throttle|Speed|Patrol support active|Nearest station|Target Hull|Target Shield|Law Patrol|Directorate precision kit|Economy offline|local fallback|Basic Food|TECH/;
     await expect(page.locator(".hud")).not.toContainText(englishResidue);
     await expect(page.locator(".dock-hint")).not.toContainText(/E Dock|Waypoint|TECH|Helion Prime Exchange/);
     await expect(page.locator(".station-tech-label").first()).toContainText("科技");
-    await page.getByTestId("dialogue-overlay").getByRole("button", { name: "跳过" }).click();
-    await expect(page.getByTestId("dialogue-overlay")).toHaveCount(0);
+    await page.evaluate(() => {
+      const state = window.__GOF2_E2E__!.getState() as { closeDialogue: () => void };
+      state.closeDialogue();
+    });
+    await expect(flightDialogue).toHaveCount(0);
 
     await dockAtStation(page, "helion-prime", { keepDialogue: true });
     const dialogue = page.getByTestId("dialogue-overlay");
@@ -1465,6 +1472,37 @@ test.describe("browser smoke", () => {
     await expect(dialogue).toHaveCount(0);
   });
 
+  test("renders flight space dialogue as non-blocking comms HUD", async ({ page }) => {
+    await installSpeechSynthesisStub(page);
+    await resetApp(page);
+    await startNewGame(page, { keepIntro: true });
+
+    const spaceDialogue = page.getByTestId("space-dialogue-overlay");
+    await expect(spaceDialogue).toContainText("Launch clearance is green.");
+    await expect(page.getByTestId("dialogue-overlay")).toHaveCount(0);
+    await expect(spaceDialogue.getByRole("button")).toHaveCount(0);
+    await expect(spaceDialogue).not.toContainText("Voice needs manual play");
+    await expect(spaceDialogue).toHaveCSS("pointer-events", "none");
+
+    await page.mouse.move(420, 320);
+    await expect(spaceDialogue).toContainText("Launch clearance is green.");
+    await endCurrentVoice(page);
+    await expect(spaceDialogue).toContainText("Sparrow, keep the sync key sealed");
+  });
+
+  test("space dialogue falls back to timed autoplay when voice is blocked", async ({ page }) => {
+    await installSpeechSynthesisStub(page);
+    await resetApp(page);
+    await blockNextVoiceStart(page, 3);
+    await startNewGame(page, { keepIntro: true });
+
+    const spaceDialogue = page.getByTestId("space-dialogue-overlay");
+    await expect(spaceDialogue).toContainText("Launch clearance is green.");
+    await expect(spaceDialogue).not.toContainText("Voice needs manual play");
+    await expect(spaceDialogue.getByRole("button")).toHaveCount(0);
+    await expect(spaceDialogue).toContainText("Sparrow, keep the sync key sealed", { timeout: 8_000 });
+  });
+
   test("keeps a blocked first voiced story line until manual play", async ({ page }) => {
     await installSpeechSynthesisStub(page);
     await resetApp(page);
@@ -1485,15 +1523,36 @@ test.describe("browser smoke", () => {
     await expect(dialogue).toContainText("That is a lot of purity for one missing probe.");
   });
 
+  test("keeps Comms Archive replay in modal dialogue with controls", async ({ page }) => {
+    await installSpeechSynthesisStub(page);
+    await resetApp(page);
+    await startNewGame(page);
+    await acceptCleanCarrierMission(page);
+
+    const dialogue = page.getByTestId("dialogue-overlay");
+    await dialogue.getByRole("button", { name: "Skip" }).click();
+    await expect(dialogue).toHaveCount(0);
+    await page.getByRole("button", { name: "Captain's Log" }).click();
+    await expect(page.getByText("Comms Archive")).toBeVisible();
+
+    const cleanCarrierReplay = page.locator(".dialogue-replay-entry", { hasText: "Clean Carrier Briefing" });
+    await cleanCarrierReplay.getByRole("button", { name: "Replay" }).click();
+    await expect(dialogue).toContainText("Clean Carrier Briefing");
+    await expect(dialogue.getByRole("button", { name: "Replay Voice" })).toBeVisible();
+    await expect(dialogue.getByRole("button", { name: "Skip" })).toBeVisible();
+    await expect(page.getByTestId("space-dialogue-overlay")).toHaveCount(0);
+  });
+
   test("recovers first voiced story line when clip output starts with a suspended audio context", async ({ page }) => {
     await installSuspendedVoiceAudioStub(page);
     await resetApp(page);
-    await startNewGame(page, { keepIntro: true });
+    await startNewGame(page);
+    await acceptCleanCarrierMission(page);
 
     const dialogue = page.getByTestId("dialogue-overlay");
-    await expect(dialogue).toContainText("Launch clearance is green.");
+    await expect(dialogue).toContainText("Captain, Helion traffic is handing you a clean sync key.");
     await expect(dialogue).toContainText("Voice needs manual play");
-    await expect(dialogue).not.toContainText("Sparrow, keep the sync key sealed");
+    await expect(dialogue).not.toContainText("That is a lot of purity for one missing probe.");
 
     await page.evaluate(() => {
       (window as unknown as { __GOF2_TEST_VOICE_AUDIO__: TestVoiceAudioHarness }).__GOF2_TEST_VOICE_AUDIO__.allowResume = true;
@@ -1585,13 +1644,16 @@ test.describe("browser smoke", () => {
     await startNewGame(page, { keepIntro: true });
 
     const dialogue = page.getByTestId("dialogue-overlay");
-    await expect(dialogue).toContainText("Glass Wake Opening");
-    await expect(page.getByTestId("dialogue-cinematic-glass-wake-intro")).toBeVisible();
+    const spaceDialogue = page.getByTestId("space-dialogue-overlay");
+    await expect(spaceDialogue).toContainText("Launch clearance is green.");
+    await expect(spaceDialogue).toHaveCSS("pointer-events", "none");
+    await expect(page.getByTestId("dialogue-cinematic-glass-wake-intro")).toHaveCount(0);
+    await expect(dialogue).toHaveCount(0);
     await page.evaluate(() => {
       const store = window.__GOF2_E2E__!.getState() as { closeDialogue: () => void };
       store.closeDialogue();
     });
-    await expect(dialogue).toHaveCount(0);
+    await expect(spaceDialogue).toHaveCount(0);
 
     await acceptCleanCarrierMission(page);
     await expect(page.getByTestId("dialogue-cinematic-glass-wake-intro")).toBeVisible();

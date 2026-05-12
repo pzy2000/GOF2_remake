@@ -5,12 +5,27 @@ function hasPath(id: string, path: string): boolean {
   return id.indexOf(path) !== -1;
 }
 
+function economyProxyTarget(): string {
+  const host = process.env.GOF2_ECONOMY_HOST ?? "127.0.0.1";
+  const proxyHost = host === "0.0.0.0" || host === "::" ? "127.0.0.1" : host;
+  const port = process.env.GOF2_ECONOMY_PORT ?? "19777";
+  return `http://${proxyHost}:${port}`;
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, ".", "VITE_");
 
   return {
     base: env.VITE_BASE_PATH ?? "/",
     plugins: [react()],
+    server: {
+      proxy: {
+        "/api/economy": {
+          target: economyProxyTarget(),
+          changeOrigin: true
+        }
+      }
+    },
     build: {
       chunkSizeWarningLimit: 750,
       rollupOptions: {

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { dialogueSceneById } from "../src/data/world";
 
 class MemoryStorage implements Storage {
   private data = new Map<string, string>();
@@ -153,6 +154,30 @@ describe("story mission store flow", () => {
       replay: false,
       queuedSceneIds: ["dialogue-story-probe-in-glass-accept"]
     });
+  });
+
+  it("advances into queued dialogue when the current scene ends", async () => {
+    const store = await freshStore();
+    const currentScene = dialogueSceneById["dialogue-story-clean-carrier-complete"];
+    store.setState({
+      dialogueState: { seenSceneIds: ["dialogue-story-clean-carrier-complete"] },
+      activeDialogue: {
+        sceneId: "dialogue-story-clean-carrier-complete",
+        lineIndex: currentScene.lines.length - 1,
+        replay: false,
+        queuedSceneIds: ["dialogue-story-probe-in-glass-accept"]
+      }
+    });
+
+    store.getState().advanceDialogue();
+
+    expect(store.getState().activeDialogue).toMatchObject({
+      sceneId: "dialogue-story-probe-in-glass-accept",
+      lineIndex: 0,
+      replay: false,
+      queuedSceneIds: []
+    });
+    expect(store.getState().dialogueState.seenSceneIds).toContain("dialogue-story-probe-in-glass-accept");
   });
 
   it("auto-retries a failed retryable story mission at its origin station", async () => {

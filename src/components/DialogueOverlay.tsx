@@ -12,10 +12,21 @@ import {
 import { audioSystem } from "../systems/audio";
 import { voiceSystem } from "../systems/voice";
 import { AtlasIcon } from "./AtlasIcon";
-import type { AssetManifest } from "../types/game";
-import { translateText } from "../i18n";
+import type { ActiveDialogueState, AssetManifest, Screen } from "../types/game";
+import { formatNumber, translateText } from "../i18n";
 
 const AUTOPLAY_WATCHDOG_MS = 900;
+const DIALOGUE_FALLBACK_MIN_MS = 2200;
+const DIALOGUE_FALLBACK_MAX_MS = 6800;
+
+export function isFlightCommsDialogue(screen: Screen, activeDialogue?: ActiveDialogueState): boolean {
+  return screen === "flight" && !!activeDialogue && !activeDialogue.replay;
+}
+
+export function getDialogueFallbackDurationMs(text: string): number {
+  const characterCount = Array.from(text.trim()).length;
+  return Math.min(DIALOGUE_FALLBACK_MAX_MS, Math.max(DIALOGUE_FALLBACK_MIN_MS, 1400 + characterCount * 34));
+}
 
 function SpeakerBadge({ manifest, speakerId }: { manifest: AssetManifest; speakerId: string }) {
   const badgeSpeaker = dialogueSpeakerById[speakerId];
@@ -54,6 +65,7 @@ function SpeakerBadge({ manifest, speakerId }: { manifest: AssetManifest; speake
 
 export function DialogueOverlay() {
   const activeDialogue = useGameStore((state) => state.activeDialogue);
+  const screen = useGameStore((state) => state.screen);
   const manifest = useGameStore((state) => state.assetManifest);
   const locale = useGameStore((state) => state.locale);
   const advanceDialogue = useGameStore((state) => state.advanceDialogue);
@@ -63,11 +75,13 @@ export function DialogueOverlay() {
   const [manualPlayRequired, setManualPlayRequired] = useState(false);
   const playbackTokenRef = useRef(0);
   const manualWatchdogRef = useRef<number | undefined>(undefined);
+  const fallbackAdvanceRef = useRef<number | undefined>(undefined);
   const scene = activeDialogue ? dialogueSceneById[activeDialogue.sceneId] : undefined;
   const line = scene ? scene.lines[activeDialogue?.lineIndex ?? 0] : undefined;
   const speaker = line ? dialogueSpeakerById[line.speakerId] : undefined;
   const transcript = useMemo(() => scene?.lines.slice(0, (activeDialogue?.lineIndex ?? 0) + 1) ?? [], [activeDialogue?.lineIndex, scene]);
   const localizedLineText = line ? localizeDialogueLineText(line, locale) : "";
+  const useSpaceComms = isFlightCommsDialogue(screen, activeDialogue);
 
   const clearManualWatchdog = useCallback(() => {
     if (manualWatchdogRef.current === undefined) return;
@@ -75,15 +89,34 @@ export function DialogueOverlay() {
     manualWatchdogRef.current = undefined;
   }, []);
 
+  const clearFallbackAdvance = useCallback(() => {
+    if (fallbackAdvanceRef.current === undefined) return;
+    window.clearTimeout(fallbackAdvanceRef.current);
+    fallbackAdvanceRef.current = undefined;
+  }, []);
+
   const invalidateVoice = useCallback(() => {
     clearManualWatchdog();
+    clearFallbackAdvance();
     playbackTokenRef.current += 1;
     voiceSystem.cancel();
-  }, [clearManualWatchdog]);
+  }, [clearFallbackAdvance, clearManualWatchdog]);
 
-  const startLineVoice = useCallback((options: { advanceOnEnd: boolean; showManualOnFailure: boolean }) => {
+  const scheduleFallbackAdvance = useCallback((token: number) => {
+    clearFallbackAdvance();
+    fallbackAdvanceRef.current = window.setTimeout(() => {
+      if (playbackTokenRef.current !== token) return;
+      clearFallbackAdvance();
+      setManualPlayRequired(false);
+      setVoiceStatus(voiceSystem.debugState);
+      advanceDialogue();
+    }, getDialogueFallbackDurationMs(localizedLineText));
+  }, [advanceDialogue, clearFallbackAdvance, localizedLineText]);
+
+  const startLineVoice = useCallback((options: { advanceOnEnd: boolean; showManualOnFailure: boolean; fallbackOnFailure?: boolean }) => {
     if (!line || !speaker) return false;
     clearManualWatchdog();
+    clearFallbackAdvance();
     const token = playbackTokenRef.current + 1;
     playbackTokenRef.current = token;
     setManualPlayRequired(false);
@@ -92,6 +125,7 @@ export function DialogueOverlay() {
     const markStarted = () => {
       if (playbackTokenRef.current !== token) return;
       clearManualWatchdog();
+      clearFallbackAdvance();
       setManualPlayRequired(false);
       setVoiceStatus(voiceSystem.debugState);
     };
@@ -100,6 +134,11 @@ export function DialogueOverlay() {
       clearManualWatchdog();
       const status = voiceSystem.debugState;
       setVoiceStatus(status);
+      if (options.fallbackOnFailure) {
+        setManualPlayRequired(false);
+        scheduleFallbackAdvance(token);
+        return;
+      }
       if (options.showManualOnFailure && status.supported && !status.muted && status.voiceVolume > 0) {
         setManualPlayRequired(true);
       }
@@ -112,6 +151,7 @@ export function DialogueOverlay() {
         ? () => {
             if (playbackTokenRef.current !== token) return;
             clearManualWatchdog();
+            clearFallbackAdvance();
             setManualPlayRequired(false);
             setVoiceStatus(voiceSystem.debugState);
             advanceDialogue();
@@ -125,7 +165,7 @@ export function DialogueOverlay() {
       return false;
     }
 
-    if (options.showManualOnFailure) {
+    if (options.showManualOnFailure || options.fallbackOnFailure) {
       manualWatchdogRef.current = window.setTimeout(() => {
         const status = voiceSystem.debugState;
         if (playbackTokenRef.current === token && !status.speaking && !status.paused) {
@@ -134,17 +174,18 @@ export function DialogueOverlay() {
       }, AUTOPLAY_WATCHDOG_MS);
     }
     return true;
-  }, [advanceDialogue, clearManualWatchdog, line, locale, localizedLineText, speaker]);
+  }, [advanceDialogue, clearFallbackAdvance, clearManualWatchdog, line, locale, localizedLineText, scheduleFallbackAdvance, speaker]);
 
   useEffect(() => {
     if (!line || !speaker) return undefined;
-    startLineVoice({ advanceOnEnd: true, showManualOnFailure: true });
+    startLineVoice({ advanceOnEnd: true, showManualOnFailure: !useSpaceComms, fallbackOnFailure: useSpaceComms });
     return () => {
       clearManualWatchdog();
+      clearFallbackAdvance();
       playbackTokenRef.current += 1;
       voiceSystem.cancel();
     };
-  }, [clearManualWatchdog, line, speaker, startLineVoice]);
+  }, [clearFallbackAdvance, clearManualWatchdog, line, speaker, startLineVoice, useSpaceComms]);
 
   if (!activeDialogue || !scene || !line || !speaker) return null;
 
@@ -208,6 +249,36 @@ export function DialogueOverlay() {
           : "Voice ready"
       : "Voice unavailable";
   const dialogueBackLabel = locale === "en" ? "Back" : translateText("Dialogue Back", locale);
+  if (useSpaceComms) {
+    const progress = scene.lines.length > 0 ? ((currentIndex + 1) / scene.lines.length) * 100 : 0;
+    return (
+      <section
+        className={`space-dialogue-overlay ${isPlayer ? "player-line" : ""}`}
+        role="status"
+        aria-live="polite"
+        aria-label={`${translateText("Comms", locale)}: ${sceneTitle}`}
+        data-testid="space-dialogue-overlay"
+      >
+        <div className="space-dialogue-card" style={{ borderColor: speaker.color }}>
+          <SpeakerBadge manifest={manifest} speakerId={speaker.id} />
+          <div className="space-dialogue-body">
+            <div className="space-dialogue-meta">
+              <span>{groupLabel}</span>
+              <span>{formatNumber(locale, currentIndex + 1)}/{formatNumber(locale, scene.lines.length)}</span>
+            </div>
+            <div className="space-dialogue-speaker">
+              <b>{speakerName}</b>
+              <span>{speakerRole}</span>
+            </div>
+            <p>{localizedLineText}</p>
+            <div className="space-dialogue-progress" aria-hidden="true">
+              <i style={{ width: `${progress}%` }} />
+            </div>
+          </div>
+        </div>
+      </section>
+    );
+  }
   return (
     <section className="dialogue-backdrop" role="dialog" aria-modal="true" aria-label={`${translateText("Comms", locale)}: ${sceneTitle}`} data-testid="dialogue-overlay">
       <div className="dialogue-panel">

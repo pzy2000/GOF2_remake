@@ -1,4 +1,4 @@
-const CACHE_VERSION = "gof2-pwa-v1";
+const CACHE_VERSION = "gof2-pwa-v2";
 const APP_CACHE = `${CACHE_VERSION}:app`;
 const ASSET_CACHE = `${CACHE_VERSION}:assets`;
 
@@ -64,6 +64,7 @@ const PRECACHE_URLS = [
   "assets/generated/skybox-kuro-belt.webp",
   "assets/generated/skybox-mirr-vale.webp",
   "assets/generated/skybox-panorama.webp",
+  "assets/generated/skybox-ptd-home.webp",
   "assets/generated/skybox-vantara.webp",
   "assets/music/credits.json",
   "assets/music/galactic-temple.ogg",
@@ -86,9 +87,14 @@ function sameOrigin(request) {
   return new URL(request.url).origin === self.location.origin;
 }
 
+function isVoiceAssetRequest(request) {
+  return new URL(request.url).pathname.includes("/assets/voice/");
+}
+
 function shouldCacheAsAsset(request) {
   const url = new URL(request.url);
   if (!sameOrigin(request)) return false;
+  if (isVoiceAssetRequest(request)) return false;
   return (
     url.pathname.includes("/assets/") ||
     url.pathname.includes("/pwa/") ||
@@ -98,9 +104,16 @@ function shouldCacheAsAsset(request) {
 }
 
 async function cacheRequest(cacheName, request) {
+  if (request.headers.has("range")) return fetch(request);
   const cache = await caches.open(cacheName);
   const response = await fetch(request);
-  if (response.ok) await cache.put(request, response.clone());
+  if (response.status === 200) {
+    try {
+      await cache.put(request, response.clone());
+    } catch {
+      // Media and browser-specific partial responses must never break fetch.
+    }
+  }
   return response;
 }
 
@@ -152,7 +165,12 @@ self.addEventListener("message", (event) => {
           return undefined;
         }
       })
-      .filter((url) => url && url.origin === self.location.origin && url.href.startsWith(self.registration.scope));
+      .filter((url) =>
+        url &&
+        url.origin === self.location.origin &&
+        url.href.startsWith(self.registration.scope) &&
+        !url.pathname.includes("/assets/voice/")
+      );
     await Promise.allSettled(urls.map((url) => cache.add(url.href)));
   })());
 });
@@ -160,6 +178,8 @@ self.addEventListener("message", (event) => {
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   if (request.method !== "GET" || !sameOrigin(request)) return;
+  if (isVoiceAssetRequest(request)) return;
+  if (request.headers.has("range")) return;
   if (request.mode === "navigate") {
     event.respondWith(navigationFirst(request));
     return;

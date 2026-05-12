@@ -167,9 +167,66 @@ function watchedTransitNpcResponse(snapshotId = 52): EconomyNpcResponse {
 beforeEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  vi.doUnmock("../src/systems/economyClient");
 });
 
 describe("economy store integration", () => {
+  it("does not touch network endpoints when the economy backend is disabled", async () => {
+    const fetchEconomySnapshot = vi.fn(async () => {
+      throw new Error("disabled snapshot should not be requested");
+    });
+    const connectEconomyEvents = vi.fn(() => {
+      throw new Error("disabled stream should not be opened");
+    });
+    vi.doMock("../src/systems/economyClient", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("../src/systems/economyClient")>();
+      return {
+        ...actual,
+        ECONOMY_SERVICE_CONFIG: {
+          enabled: false,
+          requestBaseUrl: "",
+          displayUrl: "static economy fallback",
+          disabledReason: "Economy backend disabled for static build."
+        },
+        ECONOMY_SERVICE_URL: "static economy fallback",
+        createEconomyServiceStatus: () => ({
+          status: "fallback",
+          url: "static economy fallback",
+          lastError: "Economy backend disabled for static build."
+        }),
+        isEconomyServiceEnabled: () => false,
+        fetchEconomySnapshot,
+        connectEconomyEvents
+      };
+    });
+    const fetch = vi.fn();
+    const eventSource = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    vi.stubGlobal("EventSource", eventSource);
+    vi.resetModules();
+    vi.stubGlobal("localStorage", new MemoryStorage());
+    const module = await import("../src/state/gameStore");
+    module.useGameStore.getState().newGame();
+    const store = module.useGameStore;
+
+    await store.getState().refreshEconomySnapshot();
+    store.getState().startEconomyStream();
+    store.getState().dockAt("helion-prime");
+    store.getState().buy("basic-food", 1);
+
+    const state = store.getState();
+    expect(fetchEconomySnapshot).not.toHaveBeenCalled();
+    expect(connectEconomyEvents).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+    expect(eventSource).not.toHaveBeenCalled();
+    expect(state.economyService).toMatchObject({
+      status: "fallback",
+      url: "static economy fallback",
+      lastError: "Economy backend disabled for static build."
+    });
+    expect(state.player.cargo["basic-food"]).toBe(4);
+  });
+
   it("applies backend snapshots as market and visible economy NPC authority", async () => {
     const store = await freshStore();
     const marketState = createInitialMarketState();

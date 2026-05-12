@@ -123,9 +123,10 @@ import {
 } from "../systems/navigation";
 import {
   connectEconomyEvents,
-  ECONOMY_SERVICE_URL,
+  createEconomyServiceStatus,
   fetchEconomyNpc,
   fetchEconomySnapshot,
+  isEconomyServiceEnabled,
   isEconomyNotFoundError,
   postEconomyDispatchDelivery,
   postEconomyNpcInteraction,
@@ -790,7 +791,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   assetManifest: fallbackAssetManifest,
   player: createInitialPlayer(),
   runtime: createRuntimeForSystem("helion-reach"),
-  economyService: { status: "offline", url: ECONOMY_SERVICE_URL },
+  economyService: createEconomyServiceStatus(),
   economyEvents: [],
   economyPersonalOffers: [],
   economyNpcWatch: undefined,
@@ -838,7 +839,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       cameraMode: "chase",
       player: createInitialPlayer(),
       runtime: createRuntimeForSystem("helion-reach"),
-      economyService: { status: "offline", url: ECONOMY_SERVICE_URL },
+      economyService: createEconomyServiceStatus(),
       economyEvents: [],
       economyPersonalOffers: [],
       economyNpcWatch: undefined,
@@ -893,7 +894,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }),
       activeDialogue: undefined,
       runtime: createRuntimeForSystem(save.currentSystemId, activeMissions),
-      economyService: { status: "offline", url: ECONOMY_SERVICE_URL, snapshotId: save.economySnapshotId },
+      economyService: { ...createEconomyServiceStatus(), snapshotId: save.economySnapshotId },
       economyEvents: [],
       economyPersonalOffers: [],
       economyNpcWatch: undefined,
@@ -973,6 +974,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
     });
   },
   refreshEconomySnapshot: async () => {
+    if (!isEconomyServiceEnabled()) {
+      set({ economyService: createEconomyServiceStatus() });
+      return;
+    }
     if (economyRefreshInFlight) return;
     economyRefreshInFlight = true;
     const requestedState = get();
@@ -1031,6 +1036,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
   },
   startEconomyStream: () => {
+    if (!isEconomyServiceEnabled()) {
+      set({ economyService: createEconomyServiceStatus() });
+      return;
+    }
     if (closeEconomyStream) return;
     const close = connectEconomyEvents(
       (event: EconomyEvent) => {
@@ -1058,6 +1067,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
     closeEconomyStream = undefined;
   },
   resetEconomyBackend: async () => {
+    if (!isEconomyServiceEnabled()) {
+      const economyService = createEconomyServiceStatus();
+      set((state) => ({
+        economyService,
+        runtime: {
+          ...state.runtime,
+          message: economyService.lastError ?? "Economy backend disabled."
+        }
+      }));
+      return;
+    }
     const requestedSystemId = get().currentSystemId;
     try {
       const snapshot = await postEconomyReset(requestedSystemId);

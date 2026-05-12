@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { collectSameOriginResourceUrls, shouldEnablePwa } from "../src/systems/pwa";
 
 describe("PWA helpers", () => {
@@ -21,5 +23,17 @@ describe("PWA helpers", () => {
       "http://127.0.0.1:4173/src/main.tsx",
       "http://127.0.0.1:4173/assets/generated/key-art.webp"
     ]);
+  });
+
+  it("keeps range responses out of Cache.put", () => {
+    const serviceWorker = readFileSync(resolve(process.cwd(), "public/service-worker.js"), "utf8");
+
+    expect(serviceWorker).toContain('const CACHE_VERSION = "gof2-pwa-v2"');
+    expect(serviceWorker).toContain("isVoiceAssetRequest");
+    expect(serviceWorker).toContain('/assets/voice/');
+    expect(serviceWorker).toContain('request.headers.has("range")');
+    expect(serviceWorker).toContain("response.status === 200");
+    expect(serviceWorker).toContain("cache.put(request, response.clone())");
+    expect(serviceWorker).toContain("must never break fetch");
   });
 });
