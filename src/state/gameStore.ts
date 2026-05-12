@@ -182,6 +182,7 @@ import {
 import { readLocalePreference, saveLocalePreference } from "../i18n";
 
 const emptyInput: FlightInput = emptyFlightInput();
+const GLASS_WAKE_INTRO_SCENE_ID = "dialogue-story-glass-wake-intro";
 
 let closeEconomyStream: (() => void) | undefined;
 let economyRefreshInFlight = false;
@@ -239,6 +240,13 @@ function createStoryNotification(tone: StoryNotificationTone, title: string, bod
   };
 }
 
+function eventDialogueOpenPatch(state: GameStore, sceneId: string) {
+  const dialogueState = state.activeDialogue?.sceneId === GLASS_WAKE_INTRO_SCENE_ID
+    ? { ...state, activeDialogue: undefined }
+    : state;
+  return dialogueOpenPatch(dialogueState, sceneId);
+}
+
 function createOnboardingStorePatch(state: GameStore): Pick<GameStore, "onboardingState" | "player" | "runtime"> | undefined {
   const progress = resolveOnboardingProgress({
     onboardingState: state.onboardingState,
@@ -264,7 +272,7 @@ function createOnboardingStorePatch(state: GameStore): Pick<GameStore, "onboardi
   const lastStep = lastCompletedStep ? getOnboardingStepDefinition(lastCompletedStep) : undefined;
   const rewardMessage = rewardCredits > 0 ? ` +${rewardCredits.toLocaleString()} cr.` : "";
   const onboardingMessage = progress.finishedNow
-    ? "Flight checklist complete. Next: follow Glass Wake 02, check Economy, or chase Quiet Signals."
+    ? "Flight checklist complete. Glass Wake 02 is debriefed; next: Kuro Resonance, Economy, or Quiet Signals."
     : lastStep
       ? `Onboarding: ${lastStep.title} complete.${rewardMessage}`
       : state.runtime.message;
@@ -280,7 +288,7 @@ function createOnboardingStorePatch(state: GameStore): Pick<GameStore, "onboardi
       ...state.runtime,
       message: preserveRuntimeMessage ? state.runtime.message : onboardingMessage,
       storyNotification: progress.finishedNow
-        ? state.runtime.storyNotification ?? createStoryNotification("complete", "Flight Checklist Complete", "First run complete. Next: follow Glass Wake 02, Economy, or Quiet Signals.", state.gameClock)
+        ? state.runtime.storyNotification ?? createStoryNotification("complete", "Flight Checklist Complete", "First reversal complete. Next: Kuro Resonance, Economy, or Quiet Signals.", state.gameClock)
         : state.runtime.storyNotification
     }
   };
@@ -603,7 +611,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
   locale: readLocalePreference(),
   setAssetManifest: (assetManifest) => set({ assetManifest }),
   setLocale: (locale) => set({ locale: saveLocalePreference(locale) }),
-  newGame: () =>
+  newGame: () => {
+    const introAlreadySeen = get().dialogueState.seenSceneIds.includes(GLASS_WAKE_INTRO_SCENE_ID);
+    const dialogueState = introAlreadySeen
+      ? { ...createInitialDialogueState(), seenSceneIds: [GLASS_WAKE_INTRO_SCENE_ID] }
+      : createInitialDialogueState();
+    const introPatch = introAlreadySeen
+      ? {}
+      : dialogueOpenPatch({ dialogueState, activeDialogue: undefined }, GLASS_WAKE_INTRO_SCENE_ID);
     set({
       screen: "flight",
       previousScreen: "menu",
@@ -632,13 +647,15 @@ export const useGameStore = create<GameStore>((set, get) => ({
       knownSystems: getInitialKnownSystems("helion-reach"),
       knownPlanetIds: getInitialKnownPlanetIds(getInitialKnownSystems("helion-reach")),
       explorationState: createInitialExplorationState(),
-      dialogueState: createInitialDialogueState(),
+      dialogueState,
       onboardingState: createInitialOnboardingState(0),
       activeDialogue: undefined,
       primaryCooldown: 0,
       secondaryCooldown: 0,
-      activeSaveSlotId: undefined
-    }),
+      activeSaveSlotId: undefined,
+      ...introPatch
+    });
+  },
   loadGame: (slotId) => {
     const resolvedSlotId = slotId ?? getLatestSaveSlotId();
     const save = readSave(undefined, resolvedSlotId);
@@ -2069,8 +2086,33 @@ export const useGameStore = create<GameStore>((set, get) => ({
           return targetKills.reduce((nextMission, target) => markStoryTargetDestroyed(nextMission, target.targetId), mission);
         })
       : activeMissions;
+    let spawnedStoryTarget: FlightEntity | undefined;
+    if (destroyedStoryTargets.length > 0) {
+      const previousEnemyIds = new Set(runtime.enemies.map((ship) => ship.id));
+      activeMissions.forEach((mission) => {
+        runtime = addMissionRuntimeEntity(runtime, mission, state.currentSystemId);
+      });
+      spawnedStoryTarget = runtime.enemies.find((ship) => ship.storyTarget && !previousEnemyIds.has(ship.id));
+      if (spawnedStoryTarget) {
+        const effect = navEffect(spawnedStoryTarget.position, spawnedStoryTarget.boss ? "BOSS WAKE" : "STORY TARGET");
+        runtime = {
+          ...runtime,
+          effects: [
+            ...runtime.effects,
+            {
+              ...effect,
+              color: spawnedStoryTarget.boss ? "#ff4e5f" : "#ff9bd5",
+              secondaryColor: spawnedStoryTarget.boss ? "#ffd166" : "#9bffe8",
+              size: spawnedStoryTarget.boss ? 92 : 62,
+              life: spawnedStoryTarget.boss ? 0.9 : 0.45,
+              maxLife: spawnedStoryTarget.boss ? 0.9 : 0.45
+            }
+          ]
+        };
+      }
+    }
     const storyTargetMessage = destroyedStoryTargets.length > 0
-      ? `${destroyedStoryTargets[destroyedStoryTargets.length - 1].name} destroyed. Story objective updated.`
+      ? `${destroyedStoryTargets[destroyedStoryTargets.length - 1].name} destroyed. Story objective updated.${spawnedStoryTarget ? ` ${spawnedStoryTarget.name} emerged from the wake.` : ""}`
       : undefined;
     let storyNotification = state.runtime.storyNotification && state.runtime.storyNotification.expiresAt > gameClock
       ? state.runtime.storyNotification
@@ -2166,7 +2208,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       storyNotification = createStoryNotification("failed", expiredStoryMission.title, expiration.runtime.message, gameClock);
     }
     const explorationMessageActive = !!state.runtime.explorationScan || !!runtime.explorationScan || explorationState !== state.explorationState;
-    const dialoguePatch = pendingDialogueSceneId ? dialogueOpenPatch(state, pendingDialogueSceneId) : {};
+    const dialoguePatch = pendingDialogueSceneId ? eventDialogueOpenPatch(state, pendingDialogueSceneId) : {};
 
     set({
       player: expiration.player,
@@ -2675,7 +2717,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const result = acceptMissionPure(state.player, state.activeMissions, missionForAcceptance, state.gameClock);
     const runtime = result.mission ? addMissionRuntimeEntity(state.runtime, result.mission, state.currentSystemId) : state.runtime;
     const dialogueScene = result.ok && !generatedDispatchMission ? getStoryMissionDialogueScene(mission.id, "accept") : undefined;
-    const dialoguePatch = dialogueScene ? dialogueOpenPatch(state, dialogueScene.id) : {};
+    const dialoguePatch = dialogueScene ? eventDialogueOpenPatch(state, dialogueScene.id) : {};
     const storyNotification = result.ok && mission.storyCritical
       ? createStoryNotification("start", mission.title, result.message, state.gameClock)
       : runtime.storyNotification;
@@ -2700,7 +2742,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const generatedDispatchMission = isEconomyDispatchMissionId(mission.id);
     const marketState = generatedDispatchMission ? applyEconomyDispatchMissionDelivery(state.marketState, mission) : state.marketState;
     const dialogueScene = generatedDispatchMission ? undefined : getStoryMissionDialogueScene(mission.id, "complete");
-    const dialoguePatch = dialogueScene ? dialogueOpenPatch(state, dialogueScene.id) : {};
+    const dialoguePatch = dialogueScene ? eventDialogueOpenPatch(state, dialogueScene.id) : {};
     const newlyUnlockedBlueprints = (mission.blueprintRewardIds ?? [])
       .filter((equipmentId) => !state.player.unlockedBlueprintIds?.includes(equipmentId))
       .map((equipmentId) => equipmentById[equipmentId]?.name ?? equipmentId);

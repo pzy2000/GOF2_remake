@@ -183,6 +183,7 @@ export interface AssetManifest {
     freighter: string;
   };
   speakerPortraits: Record<string, string>;
+  storyCinematics: Record<string, string>;
   voiceClips: Record<string, string>;
   asteroidTextures: string;
   factionEmblems: string;
@@ -524,6 +525,8 @@ export interface StoryEncounterTargetDefinition {
   factionId: FactionId;
   aiProfileId?: FlightAiProfileId;
   elite?: boolean;
+  boss?: boolean;
+  prerequisiteTargetIds?: string[];
   objective: string;
   echoLock?: {
     rangeMeters: number;
@@ -808,7 +811,12 @@ export type OnboardingStepId =
   | "plot-clean-carrier-route"
   | "launch-for-mirr"
   | "dock-mirr-lattice"
-  | "complete-clean-carrier";
+  | "complete-clean-carrier"
+  | "accept-probe-in-glass"
+  | "destroy-glass-echo-drone"
+  | "defeat-glass-echo-prime"
+  | "recover-probe-core"
+  | "complete-probe-in-glass";
 
 export interface OnboardingState {
   enabled: boolean;

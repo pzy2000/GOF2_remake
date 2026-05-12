@@ -78,6 +78,10 @@ const rawFallbackAssetManifest: AssetManifest = {
     "celest-archivist": "/assets/generated/portraits/celest-archivist.webp",
     "union-witness": "/assets/generated/portraits/union-witness.webp"
   },
+  storyCinematics: {
+    "glass-wake-intro": "/assets/generated/story-glass-wake-intro.webp",
+    "glass-echo-reversal": "/assets/generated/story-glass-echo-reversal.webp"
+  },
   voiceClips: {},
   asteroidTextures: "/assets/generated/asteroid-textures.webp",
   factionEmblems: "/assets/generated/faction-emblems.webp",
@@ -144,6 +148,7 @@ export function resolveAssetManifest(manifest: AssetManifest, baseUrl?: string):
       freighter: resolvePublicAssetPath(manifest.npcShipTextures.freighter, baseUrl)
     },
     speakerPortraits: resolveAssetRecord(manifest.speakerPortraits, baseUrl),
+    storyCinematics: resolveAssetRecord(manifest.storyCinematics ?? {}, baseUrl),
     voiceClips: resolveAssetRecord(manifest.voiceClips ?? {}, baseUrl),
     asteroidTextures: resolvePublicAssetPath(manifest.asteroidTextures, baseUrl),
     factionEmblems: resolvePublicAssetPath(manifest.factionEmblems, baseUrl),
@@ -167,6 +172,7 @@ export async function loadAssetManifest(): Promise<AssetManifest> {
     shipModels: { ...rawFallbackAssetManifest.shipModels, ...loaded.shipModels },
     npcShipTextures: { ...rawFallbackAssetManifest.npcShipTextures, ...loaded.npcShipTextures },
     speakerPortraits: { ...rawFallbackAssetManifest.speakerPortraits, ...loaded.speakerPortraits },
+    storyCinematics: { ...rawFallbackAssetManifest.storyCinematics, ...loaded.storyCinematics },
     voiceClips: { ...rawFallbackAssetManifest.voiceClips, ...loaded.voiceClips },
     musicTracks: {
       systems: { ...rawFallbackAssetManifest.musicTracks.systems, ...loaded.musicTracks?.systems },

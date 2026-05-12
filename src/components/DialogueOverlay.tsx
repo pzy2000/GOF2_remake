@@ -117,6 +117,7 @@ export function DialogueOverlay() {
   const groupLabel = localizeDialogueGroupLabel(scene.group, locale);
   const speakerName = localizeDialogueSpeakerName(speaker, locale);
   const speakerRole = localizeDialogueSpeakerRole(speaker, locale);
+  const cinematicUrl = scene.cinematicAssetKey ? manifest.storyCinematics[scene.cinematicAssetKey] : undefined;
   return (
     <section className="dialogue-backdrop" role="dialog" aria-modal="true" aria-label={`${translateText("Comms", locale)}: ${sceneTitle}`} data-testid="dialogue-overlay">
       <div className="dialogue-panel">
@@ -127,6 +128,11 @@ export function DialogueOverlay() {
           </div>
           <button className="dialogue-close" onClick={close} aria-label={translateText("Close dialogue", locale)}>X</button>
         </header>
+        {cinematicUrl ? (
+          <div className="dialogue-cinematic">
+            <img src={cinematicUrl} alt="" data-testid={`dialogue-cinematic-${scene.cinematicAssetKey}`} />
+          </div>
+        ) : null}
         <div className={`dialogue-current ${isPlayer ? "player-line" : ""}`}>
           <SpeakerBadge manifest={manifest} speakerId={speaker.id} />
           <div>

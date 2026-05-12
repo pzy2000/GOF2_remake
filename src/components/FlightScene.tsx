@@ -671,16 +671,23 @@ function DroneNpcShip({ ship }: { ship: FlightEntity }) {
   const pulse = 0.5 + Math.sin(clock * 7.2 + ship.position[0] * 0.02) * 0.5;
   const flashing = clock - ship.lastDamageAt < 0.18 || ship.deathTimer !== undefined;
   const opacity = ship.deathTimer !== undefined ? 0.42 : 1;
+  const scale = ship.deathTimer !== undefined ? 0.78 : ship.boss ? 1.34 : 1;
   return (
-    <group position={toThree(ship.position)} rotation={[0, yaw, 0]} scale={ship.deathTimer !== undefined ? 0.78 : 1}>
+    <group position={toThree(ship.position)} rotation={[0, yaw, 0]} scale={scale}>
       <mesh castShadow rotation={[clock * 1.2, clock * 0.4, 0]}>
-        <octahedronGeometry args={[14 + pulse * 2.8, 1]} />
-        <meshStandardMaterial color={flashing ? "#ffffff" : "#8ff7ff"} metalness={0.48} roughness={0.24} emissive="#2de4ff" emissiveIntensity={flashing ? 1.2 : 0.45 + pulse * 0.3} transparent opacity={opacity} />
+        <octahedronGeometry args={[ship.boss ? 19 + pulse * 4.2 : 14 + pulse * 2.8, 1]} />
+        <meshStandardMaterial color={flashing ? "#ffffff" : ship.boss ? "#ff7db5" : "#8ff7ff"} metalness={0.48} roughness={0.24} emissive={ship.boss ? "#ff2f5f" : "#2de4ff"} emissiveIntensity={flashing ? 1.2 : ship.boss ? 0.74 + pulse * 0.42 : 0.45 + pulse * 0.3} transparent opacity={opacity} />
       </mesh>
       <mesh rotation={[Math.PI / 2, 0, clock * 1.6]}>
-        <torusGeometry args={[25 + pulse * 4, 1.6, 8, 42]} />
-        <meshBasicMaterial color="#ff9bd5" transparent opacity={(0.28 + pulse * 0.3) * opacity} toneMapped={false} />
+        <torusGeometry args={[ship.boss ? 36 + pulse * 8 : 25 + pulse * 4, ship.boss ? 2.2 : 1.6, 8, 42]} />
+        <meshBasicMaterial color={ship.boss ? "#ffd166" : "#ff9bd5"} transparent opacity={(0.28 + pulse * 0.3) * opacity} toneMapped={false} />
       </mesh>
+      {ship.boss ? (
+        <mesh rotation={[Math.PI / 2, 0, -clock * 0.9]}>
+          <torusGeometry args={[52 + pulse * 10, 1.4, 8, 56]} />
+          <meshBasicMaterial color="#ff4e5f" transparent opacity={(0.22 + pulse * 0.22) * opacity} toneMapped={false} />
+        </mesh>
+      ) : null}
       {[0, 1, 2].map((index) => {
         const angle = index * ((Math.PI * 2) / 3) + clock * 0.8;
         return (
@@ -690,8 +697,12 @@ function DroneNpcShip({ ship }: { ship: FlightEntity }) {
           </mesh>
         );
       })}
-      <pointLight color="#9bffe8" intensity={1.1 + pulse * 1.1} distance={180} />
-      {ship.storyTarget ? (
+      <pointLight color={ship.boss ? "#ff9bd5" : "#9bffe8"} intensity={ship.boss ? 1.8 + pulse * 1.8 : 1.1 + pulse * 1.1} distance={ship.boss ? 260 : 180} />
+      {ship.boss ? (
+        <Html center distanceFactor={12} className="target-label boss-label">
+          {localizeGenericName("BOSS", locale)} · {translateDisplayName(ship.name, locale).toUpperCase()}
+        </Html>
+      ) : ship.storyTarget ? (
         <Html center distanceFactor={12} className="target-label story-target-label">
           {translateDisplayName(ship.name, locale).toUpperCase()}
         </Html>

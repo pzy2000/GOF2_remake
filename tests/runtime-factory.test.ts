@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { missionTemplates } from "../src/data/world";
 import type { EconomyNpcEntity } from "../src/types/economy";
-import { cloneMission } from "../src/systems/missions";
+import { cloneMission, markStoryTargetDestroyed } from "../src/systems/missions";
 import {
   addMissionRuntimeEntity,
   createRuntimeForSystem,
@@ -97,13 +97,28 @@ describe("runtime factory domain helpers", () => {
       storyTargetKind: "drone",
       loadoutId: "unknown-drone"
     });
-    expect(withMission.salvage.find((salvage) => salvage.id === "glass-wake-probe-core")).toMatchObject({
+    expect(withMission.enemies.find((ship) => ship.id === "glass-echo-prime")).toBeUndefined();
+    expect(withMission.salvage.find((salvage) => salvage.id === "glass-wake-probe-core")).toBeUndefined();
+
+    const withDroneDestroyed = addMissionRuntimeEntity(withMission, markStoryTargetDestroyed(mission, "glass-echo-drone"), "mirr-vale");
+    expect(withDroneDestroyed.enemies.find((ship) => ship.id === "glass-echo-prime")).toMatchObject({
+      role: "drone",
+      storyTarget: true,
+      boss: true,
+      missionId: "story-probe-in-glass"
+    });
+    expect(withDroneDestroyed.salvage.find((salvage) => salvage.id === "glass-wake-probe-core")).toBeUndefined();
+
+    const clearedMission = markStoryTargetDestroyed(markStoryTargetDestroyed(mission, "glass-echo-drone"), "glass-echo-prime");
+    const withSalvage = addMissionRuntimeEntity(withDroneDestroyed, clearedMission, "mirr-vale");
+    expect(withSalvage.salvage.find((salvage) => salvage.id === "glass-wake-probe-core")).toMatchObject({
       missionId: "story-probe-in-glass",
       commodityId: "data-cores"
     });
 
-    const repeated = addMissionRuntimeEntity(withMission, mission, "mirr-vale");
+    const repeated = addMissionRuntimeEntity(withSalvage, clearedMission, "mirr-vale");
     expect(repeated.enemies.filter((ship) => ship.id === "glass-echo-drone")).toHaveLength(1);
+    expect(repeated.enemies.filter((ship) => ship.id === "glass-echo-prime")).toHaveLength(1);
     expect(repeated.salvage.filter((salvage) => salvage.id === "glass-wake-probe-core")).toHaveLength(1);
   });
 });

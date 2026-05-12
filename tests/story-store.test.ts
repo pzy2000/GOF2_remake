@@ -130,6 +130,54 @@ describe("story mission store flow", () => {
       tone: "updated",
       title: "Glass Wake 02: Probe in the Glass"
     });
+
+    const boss = store.getState().runtime.enemies.find((ship) => ship.id === "glass-echo-prime");
+    expect(boss).toMatchObject({
+      storyTarget: true,
+      missionId: "story-probe-in-glass",
+      role: "drone",
+      boss: true
+    });
+
+    store.setState((state) => ({
+      targetId: "glass-echo-prime",
+      runtime: {
+        ...state.runtime,
+        enemies: state.runtime.enemies.map((ship) => (ship.id === "glass-echo-prime" ? { ...ship, position: [0, 0, 0] } : { ...ship, position: [900, 0, 900] })),
+        projectiles: [
+          {
+            id: "story-boss-shot",
+            owner: "player",
+            kind: "laser",
+            position: [0, 0, 0],
+            direction: [0, 0, 0],
+            speed: 0,
+            damage: 999,
+            life: 1,
+            targetId: "glass-echo-prime"
+          }
+        ]
+      }
+    }));
+    store.getState().tick(0.05);
+
+    expect(store.getState().activeMissions[0].storyTargetDestroyedIds).toEqual(["glass-echo-drone", "glass-echo-prime"]);
+    expect(store.getState().runtime.storyNotification).toMatchObject({
+      tone: "updated",
+      title: "Glass Wake 02: Probe in the Glass"
+    });
+  });
+
+  it("opens the first-run intro dialogue once when a new game starts", async () => {
+    const store = await freshStore();
+
+    expect(store.getState().activeDialogue?.sceneId).toBe("dialogue-story-glass-wake-intro");
+    expect(store.getState().dialogueState.seenSceneIds).toContain("dialogue-story-glass-wake-intro");
+
+    store.getState().closeDialogue();
+    store.getState().newGame();
+
+    expect(store.getState().activeDialogue).toBeUndefined();
   });
 
   it("shows a failed story notification when a story deadline expires", async () => {

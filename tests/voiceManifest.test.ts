@@ -1,10 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { existsSync, statSync } from "node:fs";
+import { resolve } from "node:path";
 import manifest from "../public/assets/generated/manifest.json";
 import { dialogueScenes, dialogueSpeakerById } from "../src/data/world";
 import type { AssetManifest } from "../src/types/game";
 import { prepareCommsSpeechText, voiceClipKey, voiceProfiles, type VoiceProfileId } from "../src/systems/voice";
 
 const supportedLocales = ["en", "zh-CN", "ja", "fr"] as const;
+const minValidVoiceClipBytes = 1500;
 
 type DialogueLine = (typeof dialogueScenes)[number]["lines"][number];
 
@@ -27,6 +30,23 @@ function* iterateClipJobs() {
         if (!normalized) continue;
         yield { profileId, locale, normalized, key: voiceClipKey(profileId, locale, normalized) };
       }
+    }
+  }
+}
+
+function* iterateSceneClipJobs(sceneId: string) {
+  const scene = dialogueScenes.find((item) => item.id === sceneId);
+  if (!scene) throw new Error(`Missing dialogue scene ${sceneId}`);
+  for (const line of scene.lines) {
+    const speaker = dialogueSpeakerById[line.speakerId];
+    if (!speaker) throw new Error(`Missing dialogue speaker ${line.speakerId}`);
+    const profileId = speaker.voiceProfile as VoiceProfileId;
+    for (const locale of supportedLocales) {
+      const localized = localizedFor(line, locale);
+      if (!localized) throw new Error(`Missing ${locale} text for ${sceneId}`);
+      const normalized = prepareCommsSpeechText(localized);
+      const key = voiceClipKey(profileId, locale, normalized);
+      yield { profileId, locale, key };
     }
   }
 }
@@ -68,6 +88,19 @@ describe("voice clip manifest", () => {
     }
     if (missing.length > 0 && registered.size > 0 && missing.length === expected.size) {
       throw new Error("Voice manifest is registered but covers zero expected clips; regenerate voices.");
+    }
+  });
+
+  it("ships pre-rendered clips for the Glass Wake opening", () => {
+    const assetManifest = manifest as AssetManifest;
+    const jobs = [...iterateSceneClipJobs("dialogue-story-glass-wake-intro")];
+    expect(jobs).toHaveLength(16);
+    for (const job of jobs) {
+      const url = assetManifest.voiceClips[job.key];
+      expect(url, `${job.profileId}/${job.locale}/${job.key} should be registered`).toBe(`/assets/voice/${job.profileId}/${job.key}.mp3`);
+      const filePath = resolve(process.cwd(), "public", url.replace(/^\//, ""));
+      expect(existsSync(filePath), `${url} should exist`).toBe(true);
+      expect(statSync(filePath).size, `${url} should contain valid MP3 audio`).toBeGreaterThanOrEqual(minValidVoiceClipBytes);
     }
   });
 

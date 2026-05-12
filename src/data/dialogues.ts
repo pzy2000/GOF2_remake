@@ -6,6 +6,7 @@ import { glassWakeProtocol } from "./story";
 
 export type DialogueSceneGroup = "story" | "exploration";
 export type DialogueTrigger =
+  | { kind: "intro"; id: string }
   | { kind: "story-accept"; missionId: string; chapterId: string }
   | { kind: "story-complete"; missionId: string; chapterId: string }
   | { kind: "exploration-complete"; signalId: string };
@@ -38,6 +39,7 @@ export interface DialogueSceneDefinition {
   titleI18n: DialogueLocalizedText;
   maskedTitle: string;
   maskedTitleI18n?: DialogueLocalizedText;
+  cinematicAssetKey?: string;
   trigger: DialogueTrigger;
   lines: DialogueLineDefinition[];
 }
@@ -60,12 +62,29 @@ export const dialogueSpeakers: DialogueSpeakerDefinition[] = [
 
 const storyScenes: DialogueSceneDefinition[] = [
   {
+    id: "dialogue-story-glass-wake-intro",
+    group: "story",
+    title: "Glass Wake Opening",
+    titleI18n: l("Glass Wake 开场", "Glass Wake オープニング", "Ouverture Glass Wake"),
+    maskedTitle: "Signal Masked",
+    maskedTitleI18n: l("信号已遮蔽", "信号マスク中", "Signal masque"),
+    cinematicAssetKey: "glass-wake-intro",
+    trigger: { kind: "intro", id: "glass-wake-intro" },
+    lines: [
+      { speakerId: "ship-ai", text: "Launch clearance is green. Helion traffic is clean, but one ghost ping is riding behind the queue.", textI18n: l("发射许可为绿色。Helion 交通很干净，但队列后方搭着一个幽灵脉冲。", "発進許可はグリーン。Helion 交通はクリーンですが、キューの背後にゴースト ping が乗っています。", "Autorisation de lancement verte. Le trafic Helion est propre, mais un ping fantome glisse derriere la file.") },
+      { speakerId: "helion-handler", text: "Sparrow, keep the sync key sealed until Mirr Lattice reads it. Do not answer any carrier that is not on my board.", textI18n: l("Sparrow，保持同步钥封存，直到 Mirr Lattice 读取它。不要回应任何不在我面板上的载波。", "Sparrow、Mirr Lattice が読むまで同期キーを封印したままに。私の盤面にない搬送波には応答しないでください。", "Sparrow, gardez la cle de synchro scellee jusqu'a lecture par Mirr Lattice. Ne repondez a aucun porteur absent de mon tableau.") },
+      { speakerId: "captain", text: "Copy. Clean courier job, open receiver, no stray answers.", textI18n: l("收到。洁净信使任务，接收器开启，不随便回应。", "了解。クリーンな急使任務、受信機は開放、余計な応答なし。", "Recu. Course propre, recepteur ouvert, aucune reponse parasite.") },
+      { speakerId: "ship-ai", text: "Advisory: the ghost ping just repeated our hull name without querying the registry.", textI18n: l("提示：幽灵脉冲刚刚在未查询注册表的情况下重复了我们的船体名。", "勧告: ゴースト ping が登録簿を照会せずに本艦名を繰り返しました。", "Avis: le ping fantome vient de repeter le nom de notre coque sans interroger le registre.") }
+    ]
+  },
+  {
     id: "dialogue-story-clean-carrier-accept",
     group: "story",
     title: "Clean Carrier Briefing",
     titleI18n: l("洁净航载简报", "クリーン・キャリア ブリーフィング", "Briefing du transport propre"),
     maskedTitle: "Signal Masked",
     maskedTitleI18n: l("信号已遮蔽", "信号マスク中", "Signal masque"),
+    cinematicAssetKey: "glass-wake-intro",
     trigger: { kind: "story-accept", missionId: "story-clean-carrier", chapterId: "glass-wake-01" },
     lines: [
       { speakerId: "helion-handler", text: "Captain, Helion traffic is handing you a clean sync key. It has never touched a pirate repeater, a private courier, or a Mirr filter.", textI18n: l("舰长，赫利昂交通管制正交给你一把洁净同步钥。它从未经过海盗中继、私人信使，也没有碰过米尔过滤器。", "船長、ヘリオン管制からクリーンな同期キーを渡します。海賊中継、民間急使、ミルのフィルターには一度も触れていません。", "Capitaine, le trafic Helion vous remet une cle de synchro propre. Elle n'a jamais touche un relais pirate, un coursier prive ni un filtre Mirr.") },
@@ -113,10 +132,11 @@ const storyScenes: DialogueSceneDefinition[] = [
     titleI18n: l("玻璃中的探针复盘", "ガラス内の探査機 デブリーフ", "Debriefing de la sonde dans le verre"),
     maskedTitle: "Signal Masked",
     maskedTitleI18n: l("信号已遮蔽", "信号マスク中", "Signal masque"),
+    cinematicAssetKey: "glass-echo-reversal",
     trigger: { kind: "story-complete", missionId: "story-probe-in-glass", chapterId: "glass-wake-02" },
     lines: [
-      { speakerId: "ship-ai", text: "Glass Echo destroyed. Recovered core contains a wake pattern behind legal traffic intervals.", textI18n: l("Glass Echo 已摧毁。回收核心在合法通信间隔之后含有尾迹模式。", "Glass Echo を破壊。回収コアには合法通信間隔の背後に航跡パターンがあります。", "Glass Echo detruit. Le noyau recupere contient un motif de sillage derriere les intervalles legaux.") },
-      { speakerId: "captain", text: "It knew my ship before I touched the wreck.", textI18n: l("我还没碰到残骸，它就知道我的船。", "残骸に触れる前から、あれは私の船を知っていた。", "Il connaissait mon vaisseau avant que je touche l'epave.") },
+      { speakerId: "ship-ai", text: "Glass Echo Prime destroyed. Recovered core contains a wake pattern behind legal traffic intervals.", textI18n: l("Glass Echo Prime 已摧毁。回收核心在合法通信间隔之后含有尾迹模式。", "Glass Echo Prime を破壊。回収コアには合法通信間隔の背後に航跡パターンがあります。", "Glass Echo Prime detruit. Le noyau recupere contient un motif de sillage derriere les intervalles legaux.") },
+      { speakerId: "captain", text: "It knew my ship before I touched the wreck, then split into something bigger.", textI18n: l("我还没碰到残骸，它就知道我的船，然后分裂成了更大的东西。", "残骸に触れる前から、あれは私の船を知っていて、それからもっと大きなものに分裂した。", "Il connaissait mon vaisseau avant que je touche l'epave, puis s'est scinde en quelque chose de plus grand.") },
       { speakerId: "mirr-analyst", text: "That means it is not a trap waiting for any ship. It is choosing who trusts the lane.", textI18n: l("这说明它不是等任何船上钩的陷阱。它在选择谁会信任这条航道。", "つまり、どの船でも待つ罠ではありません。航路を信じる相手を選んでいます。", "Cela signifie que ce n'est pas un piege pour n'importe quel vaisseau. Il choisit ceux qui font confiance a la voie.") },
       { speakerId: "captain", text: "Can we separate the carrier from the noise?", textI18n: l("能把载波从噪声里分离出来吗？", "搬送波をノイズから分離できるか？", "Peut-on separer le porteur du bruit ?") },
       { speakerId: "mirr-analyst", text: "Not with station filters. Kuro voidglass can split frequencies that software cannot.", textI18n: l("靠空间站过滤器不行。黑带的虚空玻璃能拆开软件拆不开的频率。", "ステーションのフィルターでは無理です。クロの虚空ガラスなら、ソフトでは分けられない周波数を割れます。", "Pas avec les filtres de station. Le verre du vide de Kuro peut separer des frequences que le logiciel ne peut pas.") }

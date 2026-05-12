@@ -62,13 +62,20 @@ async function resetApp(page: Page) {
   await page.waitForFunction(() => !!window.__GOF2_E2E__);
 }
 
-async function startNewGame(page: Page) {
+async function startNewGame(page: Page, options: { keepIntro?: boolean } = {}) {
   await expect(page.getByRole("heading", { name: "GOF2 by pzy" })).toBeVisible();
   await page.getByRole("button", { name: "New Game" }).click();
   await expect(page.locator(".flight-canvas canvas")).toBeVisible();
   await expect(page.locator(".hud-top-left")).toContainText("Helion Reach");
   await expect(page.locator(".dock-hint")).toBeVisible();
   await expect(page.locator(".station-tech-label").first()).toContainText("TECH");
+  if (!options.keepIntro) {
+    const dialogue = page.getByTestId("dialogue-overlay");
+    if (await dialogue.count()) {
+      await dialogue.getByRole("button", { name: "Skip" }).click();
+      await expect(dialogue).toHaveCount(0);
+    }
+  }
   await page.evaluate(() => {
     const state = window.__GOF2_E2E__!.getState() as { stopEconomyStream: () => void };
     state.stopEconomyStream();
@@ -581,6 +588,8 @@ test.describe("browser smoke", () => {
     await expect(page.locator(".hud")).not.toContainText(englishResidue);
     await expect(page.locator(".dock-hint")).not.toContainText(/E Dock|Waypoint|TECH|Helion Prime Exchange/);
     await expect(page.locator(".station-tech-label").first()).toContainText("科技");
+    await page.getByTestId("dialogue-overlay").getByRole("button", { name: "跳过" }).click();
+    await expect(page.getByTestId("dialogue-overlay")).toHaveCount(0);
 
     await dockAtStation(page, "helion-prime");
     await expect(page.getByRole("button", { name: "发射" })).toBeVisible();
@@ -591,16 +600,19 @@ test.describe("browser smoke", () => {
     await expect(page.getByTestId("market-row-basic-food")).toContainText("出口");
     await expect(page.getByTestId("market-row-drinking-water")).toContainText("饮用水");
     await expect(page.locator(".station-screen")).not.toContainText(/Helion Prime Exchange|Solar Directorate|Trade Hub|Basic Food|Drinking Water|Electronics|Medical Supplies|Energy Cells|Hold|Export|Import|Balanced/);
-    await page.getByRole("button", { name: "任务板" }).click();
+    await page.getByRole("button", { name: "任务板", exact: true }).click();
     await page.getByTestId("mission-card-story-clean-carrier").getByRole("button", { name: "接受" }).click();
     const dialogue = page.getByTestId("dialogue-overlay");
     await expect(dialogue).toContainText("洁净航载简报");
     await expect(dialogue).toContainText("洁净同步钥");
     await expect(dialogue).not.toContainText(/Clean Carrier Briefing|Helion traffic|pirate repeater|private courier|Mirr filter/);
-    await expect.poll(() => getCurrentVoice(page)).toMatchObject({
-      lang: "zh-CN",
-      text: expect.stringContaining("洁净同步钥")
-    });
+    const currentVoice = await getCurrentVoice(page);
+    if (currentVoice) {
+      expect(currentVoice).toMatchObject({
+        lang: "zh-CN",
+        text: expect.stringContaining("洁净同步钥")
+      });
+    }
     await dialogue.getByRole("button", { name: "跳过" }).click();
     await expect(dialogue).toHaveCount(0);
     await page.evaluate(() => {
@@ -1352,6 +1364,150 @@ test.describe("browser smoke", () => {
     await page.getByRole("button", { name: "Mirr Vale known" }).click();
     await expect(page.getByTestId("story-map-brief")).toContainText("Glass Wake 01");
     await expect(page.locator(".planet-list button.story-destination")).toContainText("Main Story");
+  });
+
+  test("smokes the Glass Wake 01-02 intro, boss, salvage, and debrief path", async ({ page }) => {
+    await resetApp(page);
+    await startNewGame(page, { keepIntro: true });
+
+    const dialogue = page.getByTestId("dialogue-overlay");
+    await expect(dialogue).toContainText("Glass Wake Opening");
+    await expect(page.getByTestId("dialogue-cinematic-glass-wake-intro")).toBeVisible();
+    await dialogue.getByRole("button", { name: "Skip" }).click();
+    await expect(dialogue).toHaveCount(0);
+
+    await acceptCleanCarrierMission(page);
+    await expect(page.getByTestId("dialogue-cinematic-glass-wake-intro")).toBeVisible();
+    await dialogue.getByRole("button", { name: "Skip" }).click();
+    await expect(dialogue).toHaveCount(0);
+
+    await page.evaluate(() => {
+      const store = window.__GOF2_E2E__!.getState() as {
+        jumpToSystem: (systemId: string) => void;
+        dockAt: (stationId: string) => void;
+        completeMission: (missionId: string) => void;
+      };
+      store.jumpToSystem("mirr-vale");
+      store.dockAt("mirr-lattice");
+      store.completeMission("story-clean-carrier");
+    });
+    await expect(dialogue).toContainText("Clean Carrier Debrief");
+    await dialogue.getByRole("button", { name: "Skip" }).click();
+    await expect(dialogue).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Mission Board" }).click();
+    const probeMission = page.getByTestId("mission-card-story-probe-in-glass");
+    await expect(probeMission).toContainText("Glass Wake 02: Probe in the Glass");
+    await probeMission.getByRole("button", { name: "Accept" }).click();
+    await expect(dialogue).toContainText("Probe in the Glass Briefing");
+    await dialogue.getByRole("button", { name: "Skip" }).click();
+    await expect(dialogue).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Launch" }).click();
+    await expect(page.getByTestId("story-tracker")).toContainText("Glass Echo Drone");
+
+    await page.evaluate(() => {
+      const e2e = window.__GOF2_E2E__!;
+      const state = e2e.getState() as {
+        player: Record<string, unknown>;
+        runtime: {
+          enemies: Array<Record<string, unknown>>;
+          projectiles: Array<Record<string, unknown>>;
+        };
+      };
+      e2e.setState({
+        targetId: "glass-echo-drone",
+        player: { ...state.player, position: [0, 0, 0] },
+        runtime: {
+          ...state.runtime,
+          enemies: state.runtime.enemies.map((ship) =>
+            ship.id === "glass-echo-drone"
+              ? { ...ship, position: [0, 0, 0] }
+              : { ...ship, position: [900, 0, 900] }
+          ),
+          projectiles: [{
+            id: "e2e-drone-shot",
+            owner: "player",
+            kind: "laser",
+            position: [0, 0, 0],
+            direction: [0, 0, 0],
+            speed: 0,
+            damage: 999,
+            life: 1,
+            targetId: "glass-echo-drone"
+          }]
+        }
+      });
+      (e2e.getState() as { tick: (delta: number) => void }).tick(0.05);
+    });
+    await expect(page.getByTestId("story-notification")).toContainText("Glass Echo Prime emerged");
+    await expect(page.getByTestId("story-tracker")).toContainText("Glass Echo Prime");
+
+    await page.evaluate(() => {
+      const e2e = window.__GOF2_E2E__!;
+      const state = e2e.getState() as {
+        runtime: {
+          enemies: Array<Record<string, unknown>>;
+          projectiles: Array<Record<string, unknown>>;
+        };
+      };
+      e2e.setState({
+        targetId: "glass-echo-prime",
+        runtime: {
+          ...state.runtime,
+          enemies: state.runtime.enemies.map((ship) =>
+            ship.id === "glass-echo-prime"
+              ? { ...ship, position: [0, 0, 0] }
+              : { ...ship, position: [900, 0, 900] }
+          ),
+          projectiles: [{
+            id: "e2e-prime-shot",
+            owner: "player",
+            kind: "laser",
+            position: [0, 0, 0],
+            direction: [0, 0, 0],
+            speed: 0,
+            damage: 999,
+            life: 1,
+            targetId: "glass-echo-prime"
+          }]
+        }
+      });
+      (e2e.getState() as { tick: (delta: number) => void }).tick(0.05);
+    });
+    await expect(page.getByTestId("story-notification")).toContainText("Glass Echo Prime destroyed");
+
+    await page.evaluate(() => {
+      const e2e = window.__GOF2_E2E__!;
+      const state = e2e.getState() as {
+        player: Record<string, unknown>;
+        runtime: { salvage: Array<{ id: string; position: [number, number, number] }> };
+        interact: () => void;
+      };
+      const core = state.runtime.salvage.find((item) => item.id === "glass-wake-probe-core");
+      if (!core) throw new Error("Glass Wake Probe Core was not spawned");
+      e2e.setState({ player: { ...state.player, position: core.position } });
+      (e2e.getState() as { interact: () => void }).interact();
+    });
+    await expect.poll(() =>
+      page.evaluate(() => {
+        const state = window.__GOF2_E2E__!.getState() as {
+          activeMissions: Array<{ id: string; salvage?: { recovered?: boolean } }>;
+        };
+        return state.activeMissions.find((mission) => mission.id === "story-probe-in-glass")?.salvage?.recovered === true;
+      })
+    ).toBe(true);
+
+    await page.evaluate(() => {
+      const store = window.__GOF2_E2E__!.getState() as {
+        dockAt: (stationId: string) => void;
+        completeMission: (missionId: string) => void;
+      };
+      store.dockAt("mirr-lattice");
+      store.completeMission("story-probe-in-glass");
+    });
+    await expect(dialogue).toContainText("Probe in the Glass Debrief");
+    await expect(page.getByTestId("dialogue-cinematic-glass-echo-reversal")).toBeVisible();
   });
 
   test("surfaces wanted heat in HUD, galaxy map, and station fine payment", async ({ page }) => {

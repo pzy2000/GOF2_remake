@@ -59,10 +59,17 @@ export function getCombatLoadout(input: CombatDoctrineInput): CombatLoadout {
 
   const id = loadoutIdFor(input);
   const base = doctrineBaseFor(input);
+  const bossBoost = input.boss ? 1.38 : 1;
+  const eliteBoost = input.elite && !input.boss ? 1.12 : 1;
   return {
     id,
     label: combatLoadoutLabels[id],
-    ...base
+    damage: Math.round(base.damage * bossBoost * eliteBoost),
+    fireCooldownMin: input.boss ? Math.max(0.42, base.fireCooldownMin * 0.72) : input.elite ? Math.max(0.48, base.fireCooldownMin * 0.88) : base.fireCooldownMin,
+    fireCooldownMax: input.boss ? Math.max(0.68, base.fireCooldownMax * 0.76) : input.elite ? Math.max(base.fireCooldownMin, base.fireCooldownMax * 0.9) : base.fireCooldownMax,
+    speed: base.speed + (input.boss ? 14 : input.elite ? 7 : 0),
+    attackRange: base.attackRange + (input.boss ? 110 : input.elite ? 48 : 0),
+    retreatHullRatio: input.boss ? Math.min(base.retreatHullRatio, 0.06) : base.retreatHullRatio
   };
 }
 

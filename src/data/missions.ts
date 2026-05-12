@@ -50,9 +50,9 @@ export const missionTemplates: MissionDefinition[] = [
     prerequisiteMissionIds: ["story-clean-carrier"],
     retryOnFailure: true,
     storyEncounter: {
-      fieldObjective: "Destroy the Glass Echo Drone guarding the wreck, then recover the probe core.",
-      twist: "The wreck repeats the captain's transponder before the probe core is touched.",
-      completionText: "Glass Echo destroyed and probe core recovered for Mirr analysis.",
+      fieldObjective: "Destroy the Glass Echo Drone, break the Glass Echo Prime waking behind it, then recover the probe core.",
+      twist: "The first drone splits the signal, and the Prime answers with the captain's ship name before the probe core is touched.",
+      completionText: "Glass Echo Prime destroyed and probe core recovered for Mirr analysis.",
       targets: [
         {
           id: "glass-echo-drone",
@@ -66,9 +66,25 @@ export const missionTemplates: MissionDefinition[] = [
           factionId: "unknown-drones",
           aiProfileId: "drone-hunter",
           objective: "Destroy the drone echoing your ship name near the probe wreck."
+        },
+        {
+          id: "glass-echo-prime",
+          name: "Glass Echo Prime",
+          kind: "drone",
+          role: "drone",
+          systemId: "mirr-vale",
+          position: [420, 20, -610],
+          hull: 170,
+          shield: 155,
+          factionId: "unknown-drones",
+          aiProfileId: "drone-hunter",
+          elite: true,
+          boss: true,
+          prerequisiteTargetIds: ["glass-echo-drone"],
+          objective: "Break the prime echo waking behind the probe core."
         }
       ],
-      requiredTargetIds: ["glass-echo-drone"]
+      requiredTargetIds: ["glass-echo-drone", "glass-echo-prime"]
     },
     salvage: {
       salvageId: "glass-wake-probe-core",

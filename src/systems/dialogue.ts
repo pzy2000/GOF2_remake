@@ -40,6 +40,7 @@ export function isDialogueSceneUnlocked(
   }
 ): boolean {
   if (isDialogueSceneSeen(options.dialogueState, scene.id)) return true;
+  if (scene.trigger.kind === "intro") return true;
   if (scene.trigger.kind === "story-accept") {
     const trigger = scene.trigger;
     return options.activeMissions.some((mission) => mission.id === trigger.missionId) || options.completedMissionIds.includes(trigger.missionId);

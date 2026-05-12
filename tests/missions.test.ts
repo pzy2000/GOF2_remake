@@ -135,7 +135,10 @@ describe("missions", () => {
 
     expect(canCompleteMission(recovered, player(), "mirr-vale", "mirr-lattice", 0, 10)).toBe(false);
 
-    const cleared = markStoryTargetDestroyed(recovered, "glass-echo-drone");
+    const droneCleared = markStoryTargetDestroyed(recovered, "glass-echo-drone");
+    expect(canCompleteMission(droneCleared, player(), "mirr-vale", "mirr-lattice", 0, 10)).toBe(false);
+
+    const cleared = markStoryTargetDestroyed(droneCleared, "glass-echo-prime");
     expect(canCompleteMission(cleared, player(), "mirr-vale", "mirr-lattice", 0, 10)).toBe(true);
   });
 

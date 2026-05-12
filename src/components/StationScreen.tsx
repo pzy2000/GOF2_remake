@@ -435,7 +435,7 @@ export function StationScreen() {
               <button className="primary" onClick={() => setStationTab("Mission Board")}>{translateText("Open Board", locale)}</button>
             ) : onboardingStepId === "plot-clean-carrier-route" ? (
               <button className="primary" onClick={() => setStationTab("Galaxy Map")}>{translateText("Open Map", locale)}</button>
-            ) : onboardingStepId === "complete-clean-carrier" && station.id === MIRR_LATTICE_STATION_ID ? (
+            ) : (onboardingStepId === "complete-clean-carrier" || onboardingStepId === "accept-probe-in-glass" || onboardingStepId === "complete-probe-in-glass") && station.id === MIRR_LATTICE_STATION_ID ? (
               <button className="primary" onClick={() => setStationTab("Mission Board")}>{translateText("Open Board", locale)}</button>
             ) : null}
           </section>

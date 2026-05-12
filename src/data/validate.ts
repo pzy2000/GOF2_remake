@@ -292,6 +292,8 @@ export function validateContentData(): ContentValidationResult {
       const chapter = storyArcs.flatMap((arc) => arc.chapters).find((item) => item.id === trigger.chapterId);
       if (!chapter) errors.push(`Dialogue scene ${scene.id} references unknown story chapter ${trigger.chapterId}`);
       if (chapter && chapter.missionId !== trigger.missionId) errors.push(`Dialogue scene ${scene.id} chapter ${chapter.id} does not match mission ${trigger.missionId}`);
+    } else if (scene.trigger.kind === "intro") {
+      if (!scene.trigger.id.trim()) errors.push(`Dialogue scene ${scene.id} has an empty intro trigger id`);
     } else if (!explorationSignalIds.has(scene.trigger.signalId)) {
       errors.push(`Dialogue scene ${scene.id} references unknown exploration signal ${scene.trigger.signalId}`);
     }

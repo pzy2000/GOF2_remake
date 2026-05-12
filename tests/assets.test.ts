@@ -117,6 +117,19 @@ describe("asset manifest", () => {
     }
   });
 
+  it("points story cinematics to generated local WebP assets", () => {
+    const assetManifest = manifest as AssetManifest;
+    expect(assetManifest.storyCinematics["glass-wake-intro"]).toBe("/assets/generated/story-glass-wake-intro.webp");
+    expect(assetManifest.storyCinematics["glass-echo-reversal"]).toBe("/assets/generated/story-glass-echo-reversal.webp");
+    for (const assetPath of Object.values(assetManifest.storyCinematics)) {
+      expect(assetPath).toMatch(/^\/assets\/generated\/story-.+\.webp$/);
+      expect(fallbackAssetManifest.storyCinematics).toHaveProperty(
+        Object.entries(assetManifest.storyCinematics).find(([, value]) => value === assetPath)?.[0] ?? ""
+      );
+      expectProjectAssetExists(assetPath);
+    }
+  });
+
   it("maps every system and station archetype to a local music track", () => {
     const assetManifest = manifest as AssetManifest;
     for (const system of systems) {

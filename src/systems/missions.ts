@@ -232,6 +232,11 @@ export function markSalvageRecovered(mission: MissionDefinition): MissionDefinit
   return mission.salvage ? { ...cloneMission(mission), salvage: { ...mission.salvage, recovered: true } } : mission;
 }
 
+export function isStoryTargetUnlocked(mission: MissionDefinition, target: StoryEncounterTargetDefinition): boolean {
+  const destroyed = new Set(mission.storyTargetDestroyedIds ?? []);
+  return (target.prerequisiteTargetIds ?? []).every((targetId) => destroyed.has(targetId));
+}
+
 export function areStoryEncounterTargetsComplete(mission: MissionDefinition): boolean {
   const required = mission.storyEncounter?.requiredTargetIds ?? [];
   if (required.length === 0) return true;
@@ -246,7 +251,11 @@ export function areStoryEncounterTargetsComplete(mission: MissionDefinition): bo
 export function getStoryEncounterRemainingTargets(mission: MissionDefinition | undefined): StoryEncounterTargetDefinition[] {
   if (!mission?.storyEncounter) return [];
   const destroyed = new Set(mission.storyTargetDestroyedIds ?? []);
-  return mission.storyEncounter.targets.filter((target) => mission.storyEncounter?.requiredTargetIds.includes(target.id) && !destroyed.has(target.id));
+  return mission.storyEncounter.targets.filter((target) =>
+    mission.storyEncounter?.requiredTargetIds.includes(target.id) &&
+    !destroyed.has(target.id) &&
+    isStoryTargetUnlocked(mission, target)
+  );
 }
 
 export function markStoryTargetDestroyed(mission: MissionDefinition, targetId: string): MissionDefinition {

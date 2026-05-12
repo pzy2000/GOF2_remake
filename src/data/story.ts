@@ -49,10 +49,10 @@ export const glassWakeProtocol: StoryArcDefinition = {
       title: "02: Probe in the Glass",
       lockedTitle: "02: Signal Masked",
       briefing: "Recover the Mirr probe core before its carrier logs decay. Sera warns that the debris field has started returning ship names it should not know.",
-      fieldObjective: "Destroy the Glass Echo Drone guarding the wreck, recover the probe core, then report to Mirr Lattice.",
-      reveal: "The probe core replayed the captain's own transponder through a legal traffic cadence.",
+      fieldObjective: "Destroy the Glass Echo Drone, defeat the Glass Echo Prime that wakes behind it, recover the probe core, then report to Mirr Lattice.",
+      reveal: "The Glass Echo signal split after the first drone died, and the Prime answered with the captain's own transponder through a legal traffic cadence.",
       log:
-        "The Glass Echo Drone broke apart beside the wreck. The core carried a new signature: Glass Wake, a carrier that wakes only when a ship trusts the signal enough to answer."
+        "The Glass Echo Drone broke apart beside the wreck, but the signal split into Glass Echo Prime before the probe core could be touched. The core carried a new signature: Glass Wake, a carrier that wakes only when a ship trusts the signal enough to answer."
     },
     {
       id: "glass-wake-03",

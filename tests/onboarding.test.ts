@@ -32,6 +32,7 @@ function player(patch: Partial<PlayerState> = {}): PlayerState {
 }
 
 const cleanCarrier = missionTemplates.find((mission) => mission.id === CLEAN_CARRIER_MISSION_ID)!;
+const probeInGlass = missionTemplates.find((mission) => mission.id === "story-probe-in-glass")!;
 
 describe("onboarding checklist", () => {
   it("derives first-flight progress from movement", () => {
@@ -75,11 +76,90 @@ describe("onboarding checklist", () => {
     expect(progress.completedNow).toEqual(["plot-clean-carrier-route", "launch-for-mirr"]);
   });
 
-  it("marks old clean-carrier completion as hidden and complete in the view", () => {
+  it("keeps the expanded checklist visible after Clean Carrier until GW02 is complete", () => {
+    const state = createInitialOnboardingState(0);
+    const progress = resolveOnboardingProgress({
+      onboardingState: state,
+      screen: "station",
+      currentSystemId: "mirr-vale",
+      currentStationId: MIRR_LATTICE_STATION_ID,
+      player: player(),
+      activeMissions: [],
+      completedMissionIds: [CLEAN_CARRIER_MISSION_ID],
+      gameClock: 10
+    });
+
+    expect(progress.finishedNow).toBe(false);
+    expect(progress.onboardingState).toMatchObject({
+      enabled: true,
+      completedStepIds: [
+        "first-flight",
+        "dock-helion",
+        "accept-clean-carrier",
+        "plot-clean-carrier-route",
+        "launch-for-mirr",
+        "dock-mirr-lattice",
+        "complete-clean-carrier"
+      ]
+    });
+  });
+
+  it("finishes the checklist after Probe in the Glass is completed", () => {
+    const state = createInitialOnboardingState(0);
+    const progress = resolveOnboardingProgress({
+      onboardingState: state,
+      screen: "station",
+      currentSystemId: "mirr-vale",
+      currentStationId: MIRR_LATTICE_STATION_ID,
+      player: player(),
+      activeMissions: [],
+      completedMissionIds: [CLEAN_CARRIER_MISSION_ID, "story-probe-in-glass"],
+      gameClock: 30
+    });
+
+    expect(progress.finishedNow).toBe(true);
+    expect(progress.onboardingState).toMatchObject({ enabled: false, collapsed: true });
+    expect(progress.onboardingState?.completedStepIds).toContain("complete-probe-in-glass");
+  });
+
+  it("tracks GW02 target and salvage progress before completion", () => {
+    const activeProbe = {
+      ...probeInGlass,
+      accepted: true,
+      acceptedAt: 12,
+      storyTargetDestroyedIds: ["glass-echo-drone"],
+      storyEchoLockedTargetIds: [],
+      salvage: { ...probeInGlass.salvage!, recovered: false }
+    };
+    const state = createInitialOnboardingState(0);
+
+    expect(resolveOnboardingProgress({
+      onboardingState: state,
+      screen: "flight",
+      currentSystemId: "mirr-vale",
+      player: player(),
+      activeMissions: [activeProbe],
+      completedMissionIds: [CLEAN_CARRIER_MISSION_ID],
+      gameClock: 20
+    }).onboardingState?.completedStepIds).toContain("destroy-glass-echo-drone");
+
+    const recovered = { ...activeProbe, storyTargetDestroyedIds: ["glass-echo-drone", "glass-echo-prime"], salvage: { ...activeProbe.salvage!, recovered: true } };
+    expect(resolveOnboardingProgress({
+      onboardingState: state,
+      screen: "flight",
+      currentSystemId: "mirr-vale",
+      player: player(),
+      activeMissions: [recovered],
+      completedMissionIds: [CLEAN_CARRIER_MISSION_ID],
+      gameClock: 25
+    }).onboardingState?.completedStepIds).toEqual(expect.arrayContaining(["defeat-glass-echo-prime", "recover-probe-core"]));
+  });
+
+  it("marks old clean-carrier completion as visible and incomplete in the view", () => {
     const view = getOnboardingView({
       onboardingState: {
-        enabled: false,
-        collapsed: true,
+        enabled: true,
+        collapsed: false,
         completedStepIds: [
           "first-flight",
           "dock-helion",
@@ -102,7 +182,8 @@ describe("onboarding checklist", () => {
       gameClock: 10
     });
 
-    expect(view.visible).toBe(false);
+    expect(view.visible).toBe(true);
     expect(view.completedCount).toBe(7);
+    expect(view.totalCount).toBeGreaterThan(7);
   });
 });

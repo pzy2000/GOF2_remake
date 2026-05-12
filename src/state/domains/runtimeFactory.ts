@@ -25,7 +25,7 @@ import { getOccupiedCargo } from "../../systems/economy";
 import { getEffectiveShipStats, getStarterBlueprintIds } from "../../systems/equipment";
 import { isHiddenStationRevealed } from "../../systems/exploration";
 import { isDialogueSceneSeen, markDialogueSceneSeen } from "../../systems/dialogue";
-import { cloneMission } from "../../systems/missions";
+import { areStoryEncounterTargetsComplete, cloneMission, isStoryTargetUnlocked } from "../../systems/missions";
 import { getInitialKnownPlanetIds } from "../../systems/navigation";
 import { add, normalize, scale, sub } from "../../systems/math";
 
@@ -299,6 +299,7 @@ function createConvoyEntity(mission: MissionDefinition): ConvoyEntity | undefine
 
 function createSalvageEntity(mission: MissionDefinition): SalvageEntity | undefined {
   if (!mission.salvage || mission.salvage.recovered || mission.failed || mission.completed) return undefined;
+  if (mission.storyEncounter && !areStoryEncounterTargetsComplete(mission)) return undefined;
   return {
     id: mission.salvage.salvageId,
     missionId: mission.id,
@@ -313,6 +314,7 @@ function createSalvageEntity(mission: MissionDefinition): SalvageEntity | undefi
 function createStoryTargetEntity(mission: MissionDefinition, targetId: string): FlightEntity | undefined {
   const target = mission.storyEncounter?.targets.find((item) => item.id === targetId);
   if (!target || mission.failed || mission.completed || mission.storyTargetDestroyedIds?.includes(target.id)) return undefined;
+  if (!isStoryTargetUnlocked(mission, target)) return undefined;
   const aiProfileId = target.aiProfileId ?? (target.role === "relay" ? "relay-core" : target.role === "drone" ? "drone-hunter" : target.role === "smuggler" ? "smuggler" : target.elite ? "elite-ace" : "raider");
   const loadout = getCombatLoadout({
     role: target.role,
@@ -320,7 +322,8 @@ function createStoryTargetEntity(mission: MissionDefinition, targetId: string): 
     aiProfileId,
     systemId: target.systemId,
     risk: systemById[target.systemId]?.risk ?? 0,
-    elite: target.elite
+    elite: target.elite || target.boss,
+    boss: target.boss
   });
   return {
     id: target.id,
@@ -340,6 +343,7 @@ function createStoryTargetEntity(mission: MissionDefinition, targetId: string): 
     aiState: "patrol",
     aiTimer: 0,
     elite: target.elite,
+    boss: target.boss,
     missionId: mission.id,
     storyTarget: true,
     storyTargetKind: target.kind

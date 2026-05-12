@@ -2,6 +2,7 @@ import type { AutoPilotState, MissionDefinition, OnboardingState, OnboardingStep
 import { distance } from "./math";
 
 export const CLEAN_CARRIER_MISSION_ID = "story-clean-carrier";
+export const PROBE_IN_GLASS_MISSION_ID = "story-probe-in-glass";
 export const HELION_START_STATION_ID = "helion-prime";
 export const MIRR_LATTICE_STATION_ID = "mirr-lattice";
 export const MIRR_VALE_SYSTEM_ID = "mirr-vale";
@@ -56,8 +57,38 @@ export const onboardingSteps: OnboardingStepDefinition[] = [
   {
     id: "complete-clean-carrier",
     title: "Complete the Delivery",
-    objective: "Complete Clean Carrier at Mirr Lattice to finish the first flight loop.",
+    objective: "Complete Clean Carrier at Mirr Lattice to unlock the probe recovery lead.",
     rewardCredits: 125
+  },
+  {
+    id: "accept-probe-in-glass",
+    title: "Accept Probe in the Glass",
+    objective: "Accept Glass Wake 02 from Mirr Lattice and launch toward the debris field.",
+    rewardCredits: 100
+  },
+  {
+    id: "destroy-glass-echo-drone",
+    title: "Clear the Glass Echo",
+    objective: "Destroy the Glass Echo Drone guarding the probe wreck.",
+    rewardCredits: 125
+  },
+  {
+    id: "defeat-glass-echo-prime",
+    title: "Defeat Glass Echo Prime",
+    objective: "Break the Prime signal after it wakes behind the first drone.",
+    rewardCredits: 175
+  },
+  {
+    id: "recover-probe-core",
+    title: "Recover the Probe Core",
+    objective: "Collect the Glass Wake Probe Core from the debris field.",
+    rewardCredits: 100
+  },
+  {
+    id: "complete-probe-in-glass",
+    title: "Debrief at Mirr Lattice",
+    objective: "Return to Mirr Lattice and complete Glass Wake 02 for the first story reversal.",
+    rewardCredits: 150
   }
 ];
 
@@ -117,6 +148,7 @@ export function normalizeOnboardingState(
 ): OnboardingState | undefined {
   const gameClock = options.gameClock ?? 0;
   const cleanCarrierComplete = options.completedMissionIds?.includes(CLEAN_CARRIER_MISSION_ID) ?? false;
+  const probeInGlassComplete = options.completedMissionIds?.includes(PROBE_IN_GLASS_MISSION_ID) ?? false;
   if (!value) {
     if (!cleanCarrierComplete) return createInitialOnboardingState(gameClock);
     return {
@@ -129,7 +161,7 @@ export function normalizeOnboardingState(
     };
   }
   return {
-    enabled: value.enabled ?? !cleanCarrierComplete,
+    enabled: value.enabled ?? !probeInGlassComplete,
     collapsed: value.collapsed ?? false,
     completedStepIds: uniqueStepIds(value.completedStepIds),
     claimedRewardStepIds: uniqueStepIds(value.claimedRewardStepIds),
@@ -147,23 +179,6 @@ export function resolveOnboardingProgress(input: OnboardingProgressInput): Onboa
       rewardStepIds: [],
       finishedNow: false,
       changed: false
-    };
-  }
-  const cleanCarrierAlreadyComplete = input.completedMissionIds.includes(CLEAN_CARRIER_MISSION_ID);
-  if (cleanCarrierAlreadyComplete && state.completedStepIds.length === 0 && state.claimedRewardStepIds.length === 0) {
-    return {
-      onboardingState: {
-        ...state,
-        enabled: false,
-        collapsed: true,
-        completedStepIds: [...onboardingStepIds],
-        claimedRewardStepIds: [...onboardingStepIds],
-        completedAtGameTime: state.completedAtGameTime ?? input.gameClock
-      },
-      completedNow: [],
-      rewardStepIds: [],
-      finishedNow: false,
-      changed: true
     };
   }
   const derived = deriveCompletedStepIds(input);
@@ -216,8 +231,12 @@ export function getOnboardingView(input: OnboardingProgressInput): OnboardingVie
 function deriveCompletedStepIds(input: OnboardingProgressInput): OnboardingStepId[] {
   const completed: OnboardingStepId[] = [];
   const cleanCarrierComplete = input.completedMissionIds.includes(CLEAN_CARRIER_MISSION_ID);
+  const probeInGlassComplete = input.completedMissionIds.includes(PROBE_IN_GLASS_MISSION_ID);
   const cleanCarrierActive = input.activeMissions.some((mission) => mission.id === CLEAN_CARRIER_MISSION_ID);
+  const probeInGlassMission = input.activeMissions.find((mission) => mission.id === PROBE_IN_GLASS_MISSION_ID);
+  const probeInGlassActive = !!probeInGlassMission;
   const hasCleanCarrier = cleanCarrierActive || cleanCarrierComplete;
+  const hasProbeInGlass = probeInGlassActive || probeInGlassComplete;
   const dockedHelion = input.currentStationId === HELION_START_STATION_ID || hasCleanCarrier;
   const plottedMirrRoute =
     cleanCarrierComplete ||
@@ -226,6 +245,9 @@ function deriveCompletedStepIds(input: OnboardingProgressInput): OnboardingStepI
     input.autopilot?.targetStationId === MIRR_LATTICE_STATION_ID;
   const launchedForMirr = cleanCarrierComplete || (hasCleanCarrier && input.screen === "flight" && !input.currentStationId);
   const dockedMirr = cleanCarrierComplete || input.currentStationId === MIRR_LATTICE_STATION_ID;
+  const destroyedProbeDrone = probeInGlassComplete || probeInGlassMission?.storyTargetDestroyedIds?.includes("glass-echo-drone") === true;
+  const defeatedProbePrime = probeInGlassComplete || probeInGlassMission?.storyTargetDestroyedIds?.includes("glass-echo-prime") === true;
+  const recoveredProbeCore = probeInGlassComplete || probeInGlassMission?.salvage?.recovered === true;
   const movedFromStart =
     dockedHelion ||
     hasCleanCarrier ||
@@ -239,6 +261,11 @@ function deriveCompletedStepIds(input: OnboardingProgressInput): OnboardingStepI
   if (launchedForMirr) completed.push("launch-for-mirr");
   if (dockedMirr) completed.push("dock-mirr-lattice");
   if (cleanCarrierComplete) completed.push("complete-clean-carrier");
+  if (hasProbeInGlass) completed.push("accept-probe-in-glass");
+  if (destroyedProbeDrone) completed.push("destroy-glass-echo-drone");
+  if (defeatedProbePrime) completed.push("defeat-glass-echo-prime");
+  if (recoveredProbeCore) completed.push("recover-probe-core");
+  if (probeInGlassComplete) completed.push("complete-probe-in-glass");
   return completed;
 }
 

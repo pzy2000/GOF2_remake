@@ -81,6 +81,13 @@ describe("story objective summary", () => {
 
     const cleared = markStoryTargetDestroyed(mission, "glass-echo-drone");
     expect(summary({ activeMissions: [cleared], completedMissionIds: ["story-clean-carrier"], currentSystemId: "mirr-vale" })).toMatchObject({
+      focus: "clear-targets",
+      targetSystemId: "mirr-vale",
+      remainingTargetNames: ["Glass Echo Prime"]
+    });
+
+    const bossCleared = markStoryTargetDestroyed(cleared, "glass-echo-prime");
+    expect(summary({ activeMissions: [bossCleared], completedMissionIds: ["story-clean-carrier"], currentSystemId: "mirr-vale" })).toMatchObject({
       focus: "recover-salvage",
       targetSystemId: "mirr-vale"
     });
