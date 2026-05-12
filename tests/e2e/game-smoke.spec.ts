@@ -1393,6 +1393,13 @@ test.describe("browser smoke", () => {
         stationTab: "Lounge"
       });
     });
+    const loungeScrollMetrics = await page.locator(".station-body--lounge").evaluate((element) => ({
+      clientHeight: element.clientHeight,
+      overflowY: window.getComputedStyle(element).overflowY,
+      scrollHeight: element.scrollHeight
+    }));
+    expect(loungeScrollMetrics.overflowY).toBe("auto");
+    expect(loungeScrollMetrics.scrollHeight).toBeGreaterThan(loungeScrollMetrics.clientHeight);
     const solarRow = page.locator(".faction-consequence").filter({ hasText: "Solar Directorate" });
     await expect(solarRow).toContainText("Wanted");
     await expect(solarRow).toContainText("3,000");

@@ -1260,6 +1260,11 @@ h3 {
   overflow: hidden;
 }
 
+.station-body--lounge {
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
 .station-body--hangar {
   align-content: start;
   gap: 14px;

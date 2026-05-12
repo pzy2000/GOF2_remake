@@ -354,6 +354,7 @@ export function StationScreen() {
   const autoSaveTime = autoSaveSlot?.savedAt ? formatDateTime(locale, autoSaveSlot.savedAt, { hour: "2-digit", minute: "2-digit" }) : undefined;
   const isHangarTab = tab === "Hangar";
   const isGalaxyMapTab = tab === "Galaxy Map";
+  const isLoungeTab = tab === "Lounge";
   if (!station) return null;
   const onboardingView = getOnboardingView({
     onboardingState,
@@ -450,7 +451,7 @@ export function StationScreen() {
           </section>
         ) : null}
       </div>
-      <section className={`station-body ${isHangarTab ? "station-body--hangar" : ""} ${isGalaxyMapTab ? "station-body--galaxy" : ""}`}>
+      <section className={`station-body ${isHangarTab ? "station-body--hangar" : ""} ${isGalaxyMapTab ? "station-body--galaxy" : ""} ${isLoungeTab ? "station-body--lounge" : ""}`}>
         {tab === "Market" ? <MarketTab /> : null}
         {tab === "Economy" ? <EconomyTab /> : null}
         {tab === "Hangar" ? <HangarTab /> : null}
