@@ -1225,7 +1225,7 @@ function MissionBoardTab() {
         {onboardingView.visible && onboardingStepId === "accept-clean-carrier" ? (
           <div className="onboarding-board-note" data-testid="onboarding-board-note">
             <span>{translateText("Recommended first contract", locale)}</span>
-            <p>{translateText("Accept Clean Carrier to learn delivery, routing, and station completion.", locale)}</p>
+            <p>{translateText("Clean Carrier auto-accepts when you dock here; use this board as a fallback.", locale)}</p>
           </div>
         ) : null}
         <div className="mission-list">

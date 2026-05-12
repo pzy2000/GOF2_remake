@@ -33,7 +33,7 @@ export const onboardingSteps: OnboardingStepDefinition[] = [
   {
     id: "accept-clean-carrier",
     title: "Accept Clean Carrier",
-    objective: "Open the Mission Board and accept Glass Wake 01: Clean Carrier.",
+    objective: "Dock at Helion Prime Exchange; the board will auto-accept Glass Wake 01: Clean Carrier.",
     rewardCredits: 100
   },
   {
@@ -57,13 +57,13 @@ export const onboardingSteps: OnboardingStepDefinition[] = [
   {
     id: "complete-clean-carrier",
     title: "Complete the Delivery",
-    objective: "Complete Clean Carrier at Mirr Lattice to unlock the probe recovery lead.",
+    objective: "Dock at Mirr Lattice; the delivery will auto-complete and unlock the probe recovery lead.",
     rewardCredits: 125
   },
   {
     id: "accept-probe-in-glass",
     title: "Accept Probe in the Glass",
-    objective: "Accept Glass Wake 02 from Mirr Lattice and launch toward the debris field.",
+    objective: "Stay at Mirr Lattice while Glass Wake 02 auto-accepts, then launch toward the debris field.",
     rewardCredits: 100
   },
   {
@@ -87,7 +87,7 @@ export const onboardingSteps: OnboardingStepDefinition[] = [
   {
     id: "complete-probe-in-glass",
     title: "Debrief at Mirr Lattice",
-    objective: "Return to Mirr Lattice and complete Glass Wake 02 for the first story reversal.",
+    objective: "Return to Mirr Lattice; Glass Wake 02 will auto-complete for the first story reversal.",
     rewardCredits: 150
   }
 ];

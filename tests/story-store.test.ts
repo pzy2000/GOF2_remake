@@ -91,6 +91,58 @@ describe("story mission store flow", () => {
     expect(store.getState().activeDialogue).toBeUndefined();
   });
 
+  it("auto-accepts the next available story mission when docking at its origin", async () => {
+    const store = await freshStore();
+
+    store.getState().dockAt("helion-prime");
+
+    expect(store.getState().activeMissions.map((mission) => mission.id)).toContain("story-clean-carrier");
+    expect(store.getState().activeDialogue?.sceneId).toBe("dialogue-story-clean-carrier-accept");
+    expect(store.getState().dialogueState.seenSceneIds).toContain("dialogue-story-clean-carrier-accept");
+    expect(store.getState().runtime.storyNotification).toMatchObject({
+      tone: "start",
+      title: "Glass Wake 01: Clean Carrier"
+    });
+  });
+
+  it("auto-completes a ready active story mission and queues the next accept dialogue", async () => {
+    const store = await freshStore();
+
+    store.getState().dockAt("helion-prime");
+    store.getState().closeDialogue();
+    store.getState().dockAt("mirr-lattice");
+
+    expect(store.getState().completedMissionIds).toContain("story-clean-carrier");
+    expect(store.getState().activeMissions.map((mission) => mission.id)).toContain("story-probe-in-glass");
+    expect(store.getState().activeDialogue?.sceneId).toBe("dialogue-story-clean-carrier-complete");
+    expect(store.getState().activeDialogue?.queuedSceneIds).toContain("dialogue-story-probe-in-glass-accept");
+    expect(store.getState().dialogueState.seenSceneIds).toContain("dialogue-story-clean-carrier-complete");
+
+    store.getState().closeDialogue();
+
+    expect(store.getState().activeDialogue?.sceneId).toBe("dialogue-story-probe-in-glass-accept");
+    expect(store.getState().dialogueState.seenSceneIds).toContain("dialogue-story-probe-in-glass-accept");
+  });
+
+  it("auto-retries a failed retryable story mission at its origin station", async () => {
+    const store = await freshStore();
+    store.setState({
+      screen: "flight",
+      currentSystemId: "mirr-vale",
+      currentStationId: undefined,
+      activeDialogue: undefined,
+      activeMissions: [],
+      completedMissionIds: ["story-clean-carrier"],
+      failedMissionIds: ["story-probe-in-glass"]
+    });
+
+    store.getState().dockAt("mirr-lattice");
+
+    expect(store.getState().activeMissions.map((mission) => mission.id)).toContain("story-probe-in-glass");
+    expect(store.getState().failedMissionIds).not.toContain("story-probe-in-glass");
+    expect(store.getState().activeDialogue?.sceneId).toBe("dialogue-story-probe-in-glass-accept");
+  });
+
   it("spawns and records story encounter targets", async () => {
     const store = await freshStore();
     store.getState().jumpToSystem("mirr-vale");

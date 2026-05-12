@@ -11,6 +11,7 @@ import type {
   NpcInteractionAction,
   ProjectileEntity,
   RuntimeState,
+  AudioEventName,
   StoryNotificationTone,
   Vec3
 } from "../types/game";
@@ -111,6 +112,7 @@ import {
   createInitialDialogueState,
   getExplorationDialogueScene,
   getStoryMissionDialogueScene,
+  isDialogueSceneSeen,
   normalizeDialogueState
 } from "../systems/dialogue";
 import {
@@ -245,6 +247,38 @@ function eventDialogueOpenPatch(state: GameStore, sceneId: string) {
     ? { ...state, activeDialogue: undefined }
     : state;
   return dialogueOpenPatch(dialogueState, sceneId);
+}
+
+function eventDialogueQueuePatch(state: GameStore, sceneId: string) {
+  if (!dialogueSceneById[sceneId] || isDialogueSceneSeen(state.dialogueState, sceneId)) return {};
+  if (!state.activeDialogue || state.activeDialogue.sceneId === GLASS_WAKE_INTRO_SCENE_ID) {
+    return eventDialogueOpenPatch(state, sceneId);
+  }
+  const queuedSceneIds = state.activeDialogue.queuedSceneIds ?? [];
+  if (state.activeDialogue.sceneId === sceneId || queuedSceneIds.includes(sceneId)) return {};
+  return {
+    activeDialogue: {
+      ...state.activeDialogue,
+      queuedSceneIds: [...queuedSceneIds, sceneId]
+    }
+  };
+}
+
+function closeOrAdvanceDialoguePatch(state: GameStore) {
+  const queuedSceneIds = state.activeDialogue?.queuedSceneIds ?? [];
+  for (const sceneId of queuedSceneIds) {
+    const patch = dialogueOpenPatch({ dialogueState: state.dialogueState, activeDialogue: undefined }, sceneId);
+    if (patch.activeDialogue) {
+      return {
+        ...patch,
+        activeDialogue: {
+          ...patch.activeDialogue,
+          queuedSceneIds: queuedSceneIds.filter((id) => id !== sceneId)
+        }
+      };
+    }
+  }
+  return { activeDialogue: undefined };
 }
 
 function createOnboardingStorePatch(state: GameStore): Pick<GameStore, "onboardingState" | "player" | "runtime"> | undefined {
@@ -416,6 +450,180 @@ function robberyIncidentKindForShip(ship: FlightEntity) {
 
 function stationForMissionAccess(state: GameStore, mission: MissionDefinition) {
   return stationById[state.currentStationId ?? mission.sourceStationId ?? mission.destinationStationId] ?? stationById[mission.destinationStationId];
+}
+
+type MissionDialogueMode = "open" | "queue";
+
+interface MissionPatchResult {
+  ok: boolean;
+  patch: Partial<GameStore>;
+  audioEvent?: AudioEventName;
+  dispatchDeliveryRequest?: {
+    missionId: string;
+    systemId: string;
+    stationId: string;
+    cargoDelivered: CargoHold;
+  };
+  shouldPostDispatchDelivery?: boolean;
+  completeMessage?: string;
+}
+
+function storyMissionOrder(missionId: string): number {
+  const index = missionTemplates.findIndex((mission) => mission.id === missionId);
+  return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+}
+
+function dialoguePatchForMode(state: GameStore, sceneId: string, mode: MissionDialogueMode) {
+  return mode === "queue" ? eventDialogueQueuePatch(state, sceneId) : eventDialogueOpenPatch(state, sceneId);
+}
+
+function buildAcceptMissionPatch(state: GameStore, missionId: string, dialogueMode: MissionDialogueMode = "open"): MissionPatchResult {
+  const mission = missionTemplates.find((candidate) => candidate.id === missionId) ?? getEconomyDispatchMissionById(state.marketState, missionId, dispatchVisibilityFor(state));
+  const generatedDispatchMission = isEconomyDispatchMissionId(missionId);
+  if (!mission) {
+    return { ok: false, patch: { runtime: { ...state.runtime, message: "That market contract is no longer available." } } };
+  }
+  if (!generatedDispatchMission && (state.completedMissionIds.includes(missionId) || (state.failedMissionIds.includes(missionId) && !mission.retryOnFailure))) {
+    return { ok: false, patch: { runtime: { ...state.runtime, message: "That contract is no longer available." } } };
+  }
+  if (!generatedDispatchMission && !areMissionPrerequisitesMet(mission, state.completedMissionIds)) {
+    return { ok: false, patch: { runtime: { ...state.runtime, message: "Mission prerequisites are not complete." } } };
+  }
+  const accessStation = stationForMissionAccess(state, mission);
+  const missionAccess = getMissionAcceptAccess({
+    station: accessStation,
+    mission,
+    reputation: state.reputation,
+    factionHeat: state.factionHeat,
+    now: state.gameClock
+  });
+  if (!missionAccess.ok) {
+    return { ok: false, patch: { runtime: { ...state.runtime, message: missionAccess.message } } };
+  }
+  const rewardMultiplier = mission.storyCritical ? 1 : getFactionRewardMultiplier(accessStation.factionId, state.reputation, state.factionHeat, state.gameClock);
+  const missionForAcceptance = rewardMultiplier === 1 ? mission : { ...mission, reward: Math.round(mission.reward * rewardMultiplier) };
+  const result = acceptMissionPure(state.player, state.activeMissions, missionForAcceptance, state.gameClock);
+  const runtime = result.mission ? addMissionRuntimeEntity(state.runtime, result.mission, state.currentSystemId) : state.runtime;
+  const dialogueScene = result.ok && !generatedDispatchMission ? getStoryMissionDialogueScene(mission.id, "accept") : undefined;
+  const dialoguePatch = dialogueScene ? dialoguePatchForMode(state, dialogueScene.id, dialogueMode) : {};
+  const queuedBehindActiveDialogue = dialogueMode === "queue";
+  const storyNotification = result.ok && mission.storyCritical && !queuedBehindActiveDialogue
+    ? createStoryNotification("start", mission.title, result.message, state.gameClock)
+    : runtime.storyNotification;
+  const patch = withOnboardingProgress(state, {
+    player: result.player,
+    activeMissions: result.activeMissions,
+    failedMissionIds: result.ok && (mission.retryOnFailure || generatedDispatchMission) ? state.failedMissionIds.filter((id) => id !== missionId) : state.failedMissionIds,
+    runtime: { ...runtime, message: queuedBehindActiveDialogue ? runtime.message : result.message, storyNotification },
+    ...dialoguePatch
+  });
+  return { ok: result.ok, patch, audioEvent: result.ok ? "ui-click" : undefined };
+}
+
+function buildCompleteMissionPatch(state: GameStore, missionId: string, dialogueMode: MissionDialogueMode = "open"): MissionPatchResult {
+  if (!state.currentStationId) return { ok: false, patch: {} };
+  const mission = state.activeMissions.find((candidate) => candidate.id === missionId);
+  if (!mission || !canCompleteMission(mission, state.player, state.currentSystemId, state.currentStationId, state.runtime.destroyedPirates, state.gameClock)) {
+    return { ok: false, patch: { runtime: { ...state.runtime, message: "Mission requirements are not complete." } } };
+  }
+  const result = completeMissionPure(mission, state.player, state.reputation);
+  const generatedDispatchMission = isEconomyDispatchMissionId(mission.id);
+  const marketState = generatedDispatchMission ? applyEconomyDispatchMissionDelivery(state.marketState, mission) : state.marketState;
+  const dialogueScene = generatedDispatchMission ? undefined : getStoryMissionDialogueScene(mission.id, "complete");
+  const dialoguePatch = dialogueScene ? dialoguePatchForMode(state, dialogueScene.id, dialogueMode) : {};
+  const newlyUnlockedBlueprints = (mission.blueprintRewardIds ?? [])
+    .filter((equipmentId) => !state.player.unlockedBlueprintIds?.includes(equipmentId))
+    .map((equipmentId) => equipmentById[equipmentId]?.name ?? equipmentId);
+  const blueprintRewardMessage = newlyUnlockedBlueprints.length > 0
+    ? ` ${newlyUnlockedBlueprints.join(", ")} blueprint unlocked.`
+    : "";
+  const completeMessage = generatedDispatchMission
+    ? `${mission.title} delivered. ${isMarketSmugglingMissionId(mission.id) ? "Black-market pressure shifted" : "Market pressure eased"}. +${mission.reward} credits.`
+    : `${mission.title} complete. +${mission.reward} credits.${blueprintRewardMessage}`;
+  const dispatchDeliveryRequest = generatedDispatchMission && mission.cargoRequired
+    ? {
+        missionId: mission.id,
+        systemId: state.currentSystemId,
+        stationId: state.currentStationId,
+        cargoDelivered: mission.cargoRequired
+      }
+    : undefined;
+  const economyService = generatedDispatchMission && state.economyService.status !== "connected"
+    ? { ...state.economyService, status: "fallback" as const, lastError: "Dispatch delivery recorded locally." }
+    : state.economyService;
+  const patch = withOnboardingProgress(state, {
+    player: result.player,
+    reputation: result.reputation,
+    activeMissions: state.activeMissions.filter((active) => active.id !== missionId),
+    completedMissionIds: generatedDispatchMission ? state.completedMissionIds : [...state.completedMissionIds, missionId],
+    marketState,
+    economyService,
+    runtime: {
+      ...state.runtime,
+      convoys: state.runtime.convoys.filter((convoy) => convoy.missionId !== missionId),
+      salvage: state.runtime.salvage.filter((salvage) => salvage.missionId !== missionId),
+      message: completeMessage,
+      storyNotification: mission.storyCritical
+        ? createStoryNotification("complete", mission.title, completeMessage, state.gameClock)
+        : state.runtime.storyNotification
+    },
+    ...dialoguePatch
+  });
+  return {
+    ok: true,
+    patch,
+    audioEvent: "mission-complete",
+    dispatchDeliveryRequest,
+    shouldPostDispatchDelivery: !!dispatchDeliveryRequest && state.economyService.status === "connected",
+    completeMessage
+  };
+}
+
+function getAutoCompletableStoryMission(state: GameStore): MissionDefinition | undefined {
+  if (!state.currentStationId) return undefined;
+  return state.activeMissions
+    .filter((mission) => mission.storyCritical)
+    .filter((mission) => canCompleteMission(mission, state.player, state.currentSystemId, state.currentStationId!, state.runtime.destroyedPirates, state.gameClock))
+    .sort((a, b) => storyMissionOrder(a.id) - storyMissionOrder(b.id))[0];
+}
+
+function getAutoAcceptableStoryMission(state: GameStore): MissionDefinition | undefined {
+  const station = state.currentStationId ? stationById[state.currentStationId] : undefined;
+  if (!station || state.activeMissions.some((mission) => mission.storyCritical)) return undefined;
+  return missionTemplates
+    .filter((mission) => mission.storyCritical)
+    .filter((mission) => !state.activeMissions.some((active) => active.id === mission.id))
+    .filter((mission) => !state.completedMissionIds.includes(mission.id))
+    .filter((mission) => !state.failedMissionIds.includes(mission.id) || mission.retryOnFailure)
+    .filter((mission) => areMissionPrerequisitesMet(mission, state.completedMissionIds))
+    .filter((mission) => (mission.sourceStationId ? mission.sourceStationId === station.id : mission.originSystemId === station.systemId))
+    .sort((a, b) => storyMissionOrder(a.id) - storyMissionOrder(b.id))[0];
+}
+
+function applyStoryStationAutomation(state: GameStore): { patch: Partial<GameStore>; audioEvents: AudioEventName[] } {
+  let next = state;
+  let patch: Partial<GameStore> = {};
+  const audioEvents: AudioEventName[] = [];
+  const completeMission = getAutoCompletableStoryMission(next);
+  if (completeMission) {
+    const result = buildCompleteMissionPatch(next, completeMission.id, "open");
+    if (result.ok) {
+      patch = { ...patch, ...result.patch };
+      next = { ...next, ...result.patch } as GameStore;
+      if (result.audioEvent) audioEvents.push(result.audioEvent);
+    }
+  }
+  const acceptMission = getAutoAcceptableStoryMission(next);
+  if (acceptMission) {
+    const dialogueMode = next.activeDialogue && next.activeDialogue.sceneId !== GLASS_WAKE_INTRO_SCENE_ID ? "queue" : "open";
+    const result = buildAcceptMissionPatch(next, acceptMission.id, dialogueMode);
+    if (result.ok) {
+      patch = { ...patch, ...result.patch };
+      next = { ...next, ...result.patch } as GameStore;
+      if (result.audioEvent) audioEvents.push(result.audioEvent);
+    }
+  }
+  return { patch, audioEvents };
 }
 
 function npcRouteActionLabel(action: NpcRouteAction): string {
@@ -2498,19 +2706,23 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (!activeDialogue) return;
     const scene = dialogueSceneById[activeDialogue.sceneId];
     if (!scene || activeDialogue.lineIndex >= scene.lines.length - 1) {
-      set({ activeDialogue: undefined });
+      set(closeOrAdvanceDialoguePatch(state));
       return;
     }
     set({ activeDialogue: { ...activeDialogue, lineIndex: activeDialogue.lineIndex + 1 } });
   },
-  closeDialogue: () => set({ activeDialogue: undefined }),
+  closeDialogue: () => set((state) => closeOrAdvanceDialoguePatch(state)),
   dockAt: (stationId) => {
     const state = get();
     const result = dockAtPatch(state, stationId);
     if (!result) return;
-    const patch = withOnboardingProgress(state, result.patch);
-    const stationAutoSave = result.autoSave ? writeStationAutoSave({ ...state, ...patch } as GameStore) : {};
-    for (const event of result.audioEvents ?? []) audioSystem.play(event);
+    let patch = withOnboardingProgress(state, result.patch);
+    let next = { ...state, ...patch } as GameStore;
+    const automation = applyStoryStationAutomation(next);
+    patch = { ...patch, ...automation.patch };
+    next = { ...next, ...automation.patch } as GameStore;
+    const stationAutoSave = result.autoSave ? writeStationAutoSave(next) : {};
+    for (const event of [...(result.audioEvents ?? []), ...automation.audioEvents]) audioSystem.play(event);
     set({ ...patch, ...stationAutoSave });
   },
   undock: () => {
@@ -2686,103 +2898,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
   },
   acceptMission: (missionId) => {
     const state = get();
-    const mission = missionTemplates.find((candidate) => candidate.id === missionId) ?? getEconomyDispatchMissionById(state.marketState, missionId, dispatchVisibilityFor(state));
-    const generatedDispatchMission = isEconomyDispatchMissionId(missionId);
-    if (!mission) {
-      set({ runtime: { ...state.runtime, message: "That market contract is no longer available." } });
-      return;
-    }
-    if (!generatedDispatchMission && (state.completedMissionIds.includes(missionId) || (state.failedMissionIds.includes(missionId) && !mission.retryOnFailure))) {
-      set({ runtime: { ...state.runtime, message: "That contract is no longer available." } });
-      return;
-    }
-    if (!generatedDispatchMission && !areMissionPrerequisitesMet(mission, state.completedMissionIds)) {
-      set({ runtime: { ...state.runtime, message: "Mission prerequisites are not complete." } });
-      return;
-    }
-    const accessStation = stationForMissionAccess(state, mission);
-    const missionAccess = getMissionAcceptAccess({
-      station: accessStation,
-      mission,
-      reputation: state.reputation,
-      factionHeat: state.factionHeat,
-      now: state.gameClock
-    });
-    if (!missionAccess.ok) {
-      set({ runtime: { ...state.runtime, message: missionAccess.message } });
-      return;
-    }
-    const rewardMultiplier = mission.storyCritical ? 1 : getFactionRewardMultiplier(accessStation.factionId, state.reputation, state.factionHeat, state.gameClock);
-    const missionForAcceptance = rewardMultiplier === 1 ? mission : { ...mission, reward: Math.round(mission.reward * rewardMultiplier) };
-    const result = acceptMissionPure(state.player, state.activeMissions, missionForAcceptance, state.gameClock);
-    const runtime = result.mission ? addMissionRuntimeEntity(state.runtime, result.mission, state.currentSystemId) : state.runtime;
-    const dialogueScene = result.ok && !generatedDispatchMission ? getStoryMissionDialogueScene(mission.id, "accept") : undefined;
-    const dialoguePatch = dialogueScene ? eventDialogueOpenPatch(state, dialogueScene.id) : {};
-    const storyNotification = result.ok && mission.storyCritical
-      ? createStoryNotification("start", mission.title, result.message, state.gameClock)
-      : runtime.storyNotification;
-    if (result.ok) audioSystem.play("ui-click");
-    set(withOnboardingProgress(state, {
-      player: result.player,
-      activeMissions: result.activeMissions,
-      failedMissionIds: result.ok && (mission.retryOnFailure || generatedDispatchMission) ? state.failedMissionIds.filter((id) => id !== missionId) : state.failedMissionIds,
-      runtime: { ...runtime, message: result.message, storyNotification },
-      ...dialoguePatch
-    }));
+    const result = buildAcceptMissionPatch(state, missionId);
+    if (result.audioEvent) audioSystem.play(result.audioEvent);
+    set(result.patch);
   },
   completeMission: (missionId) => {
     const state = get();
-    if (!state.currentStationId) return;
-    const mission = state.activeMissions.find((candidate) => candidate.id === missionId);
-    if (!mission || !canCompleteMission(mission, state.player, state.currentSystemId, state.currentStationId, state.runtime.destroyedPirates, state.gameClock)) {
-      set({ runtime: { ...state.runtime, message: "Mission requirements are not complete." } });
-      return;
-    }
-    const result = completeMissionPure(mission, state.player, state.reputation);
-    const generatedDispatchMission = isEconomyDispatchMissionId(mission.id);
-    const marketState = generatedDispatchMission ? applyEconomyDispatchMissionDelivery(state.marketState, mission) : state.marketState;
-    const dialogueScene = generatedDispatchMission ? undefined : getStoryMissionDialogueScene(mission.id, "complete");
-    const dialoguePatch = dialogueScene ? eventDialogueOpenPatch(state, dialogueScene.id) : {};
-    const newlyUnlockedBlueprints = (mission.blueprintRewardIds ?? [])
-      .filter((equipmentId) => !state.player.unlockedBlueprintIds?.includes(equipmentId))
-      .map((equipmentId) => equipmentById[equipmentId]?.name ?? equipmentId);
-    const blueprintRewardMessage = newlyUnlockedBlueprints.length > 0
-      ? ` ${newlyUnlockedBlueprints.join(", ")} blueprint unlocked.`
-      : "";
-    const completeMessage = generatedDispatchMission
-      ? `${mission.title} delivered. ${isMarketSmugglingMissionId(mission.id) ? "Black-market pressure shifted" : "Market pressure eased"}. +${mission.reward} credits.`
-      : `${mission.title} complete. +${mission.reward} credits.${blueprintRewardMessage}`;
-    const dispatchDeliveryRequest = generatedDispatchMission && mission.cargoRequired
-      ? {
-          missionId: mission.id,
-          systemId: state.currentSystemId,
-          stationId: state.currentStationId,
-          cargoDelivered: mission.cargoRequired
-        }
-      : undefined;
-    const economyService = generatedDispatchMission && state.economyService.status !== "connected"
-      ? { ...state.economyService, status: "fallback" as const, lastError: "Dispatch delivery recorded locally." }
-      : state.economyService;
-    audioSystem.play("mission-complete");
-    set(withOnboardingProgress(state, {
-      player: result.player,
-      reputation: result.reputation,
-      activeMissions: state.activeMissions.filter((active) => active.id !== missionId),
-      completedMissionIds: generatedDispatchMission ? state.completedMissionIds : [...state.completedMissionIds, missionId],
-      marketState,
-      economyService,
-      runtime: {
-        ...state.runtime,
-        convoys: state.runtime.convoys.filter((convoy) => convoy.missionId !== missionId),
-        salvage: state.runtime.salvage.filter((salvage) => salvage.missionId !== missionId),
-        message: completeMessage,
-        storyNotification: mission.storyCritical
-          ? createStoryNotification("complete", mission.title, completeMessage, state.gameClock)
-          : state.runtime.storyNotification
-      },
-      ...dialoguePatch
-    }));
-    if (dispatchDeliveryRequest && state.economyService.status === "connected") {
+    const result = buildCompleteMissionPatch(state, missionId);
+    if (result.audioEvent) audioSystem.play(result.audioEvent);
+    set(result.patch);
+    if (result.dispatchDeliveryRequest && result.shouldPostDispatchDelivery && result.completeMessage) {
+      const { dispatchDeliveryRequest, completeMessage } = result;
       void postEconomyDispatchDelivery(dispatchDeliveryRequest)
         .then((delivery) => {
           set((latest) => {

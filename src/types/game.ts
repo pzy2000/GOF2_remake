@@ -802,6 +802,7 @@ export interface ActiveDialogueState {
   sceneId: string;
   lineIndex: number;
   replay?: boolean;
+  queuedSceneIds?: string[];
 }
 
 export type OnboardingStepId =

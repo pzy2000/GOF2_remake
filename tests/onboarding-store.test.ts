@@ -48,12 +48,10 @@ describe("onboarding store flow", () => {
     store.setState((state) => ({ player: { ...state.player, hull: 10 } }));
     store.getState().dockAt("helion-prime");
     expect(store.getState().onboardingState?.completedStepIds).toContain("dock-helion");
-    expect(store.getState().player.credits).toBe(1625);
-    expect(store.getState().player.hull).toBeGreaterThanOrEqual(Math.ceil(store.getState().player.stats.hull * 0.75));
-
-    store.getState().acceptMission("story-clean-carrier");
     expect(store.getState().onboardingState?.completedStepIds).toContain("accept-clean-carrier");
+    expect(store.getState().activeMissions.map((mission) => mission.id)).toContain("story-clean-carrier");
     expect(store.getState().player.credits).toBe(1725);
+    expect(store.getState().player.hull).toBeGreaterThanOrEqual(Math.ceil(store.getState().player.stats.hull * 0.75));
 
     store.getState().startJumpToStation("mirr-lattice");
     expect(store.getState().onboardingState?.completedStepIds).toEqual([
@@ -67,10 +65,8 @@ describe("onboarding store flow", () => {
 
     store.getState().dockAt("mirr-lattice");
     expect(store.getState().onboardingState?.completedStepIds).toContain("dock-mirr-lattice");
-    expect(store.getState().player.credits).toBe(1975);
-
-    store.getState().completeMission("story-clean-carrier");
     expect(store.getState().completedMissionIds).toContain("story-clean-carrier");
+    expect(store.getState().activeMissions.map((mission) => mission.id)).toContain("story-probe-in-glass");
     expect(store.getState().onboardingState).toMatchObject({
       enabled: true,
       collapsed: false,
@@ -81,7 +77,8 @@ describe("onboarding store flow", () => {
         "plot-clean-carrier-route",
         "launch-for-mirr",
         "dock-mirr-lattice",
-        "complete-clean-carrier"
+        "complete-clean-carrier",
+        "accept-probe-in-glass"
       ],
       claimedRewardStepIds: [
         "first-flight",
@@ -90,14 +87,13 @@ describe("onboarding store flow", () => {
         "plot-clean-carrier-route",
         "launch-for-mirr",
         "dock-mirr-lattice",
-        "complete-clean-carrier"
+        "complete-clean-carrier",
+        "accept-probe-in-glass"
       ]
     });
-    expect(store.getState().player.credits).toBe(3020);
+    expect(store.getState().player.credits).toBe(3120);
 
     store.setState({ currentSystemId: "mirr-vale", currentStationId: "mirr-lattice" });
-    store.getState().acceptMission("story-probe-in-glass");
-    expect(store.getState().onboardingState?.completedStepIds).toContain("accept-probe-in-glass");
 
     store.setState((state) => ({
       activeMissions: state.activeMissions.map((mission) =>

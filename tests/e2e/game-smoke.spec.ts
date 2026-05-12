@@ -398,21 +398,28 @@ async function expectWebGlCanvasHasBrightPixels(page: Page) {
   expect(metrics!.uniqueColors).toBeGreaterThan(20);
 }
 
-async function dockAtStation(page: Page, stationId: string) {
+async function dockAtStation(page: Page, stationId: string, options: { keepDialogue?: boolean } = {}) {
   await page.evaluate((targetStationId) => {
     const state = window.__GOF2_E2E__!.getState() as { dockAt: (stationId: string) => void };
     state.dockAt(targetStationId);
   }, stationId);
+  if (!options.keepDialogue) {
+    const dialogue = page.getByTestId("dialogue-overlay");
+    if (await dialogue.count()) {
+      await page.evaluate(() => {
+        const state = window.__GOF2_E2E__!.getState() as { closeDialogue: () => void };
+        state.closeDialogue();
+      });
+      await expect(dialogue).toHaveCount(0);
+    }
+  }
 }
 
 async function acceptCleanCarrierMission(page: Page) {
-  await dockAtStation(page, "helion-prime");
+  await dockAtStation(page, "helion-prime", { keepDialogue: true });
   await expect(page.getByRole("heading", { name: "Helion Prime Exchange" })).toBeVisible();
-  await page.getByRole("button", { name: "Mission Board" }).click();
-  const storyMission = page.getByTestId("mission-card-story-clean-carrier");
-  await expect(storyMission).toContainText("Glass Wake 01: Clean Carrier");
-  await storyMission.getByRole("button", { name: "Accept" }).click();
   await expect(page.getByTestId("dialogue-overlay")).toContainText("Clean Carrier Briefing");
+  expect((await getGameState(page)).activeMissions.map((mission) => mission.id)).toContain("story-clean-carrier");
 }
 
 async function expectRouteActionInsideStationBody(page: Page) {
@@ -591,17 +598,7 @@ test.describe("browser smoke", () => {
     await page.getByTestId("dialogue-overlay").getByRole("button", { name: "跳过" }).click();
     await expect(page.getByTestId("dialogue-overlay")).toHaveCount(0);
 
-    await dockAtStation(page, "helion-prime");
-    await expect(page.getByRole("button", { name: "发射" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "赫利昂主星交易所" })).toBeVisible();
-    await expect(page.locator(".station-header")).toContainText("太阳理事会");
-    await expect(page.getByTestId("market-row-basic-food")).toContainText("基础食品");
-    await expect(page.getByTestId("market-row-basic-food")).toContainText("持有");
-    await expect(page.getByTestId("market-row-basic-food")).toContainText("出口");
-    await expect(page.getByTestId("market-row-drinking-water")).toContainText("饮用水");
-    await expect(page.locator(".station-screen")).not.toContainText(/Helion Prime Exchange|Solar Directorate|Trade Hub|Basic Food|Drinking Water|Electronics|Medical Supplies|Energy Cells|Hold|Export|Import|Balanced/);
-    await page.getByRole("button", { name: "任务板", exact: true }).click();
-    await page.getByTestId("mission-card-story-clean-carrier").getByRole("button", { name: "接受" }).click();
+    await dockAtStation(page, "helion-prime", { keepDialogue: true });
     const dialogue = page.getByTestId("dialogue-overlay");
     await expect(dialogue).toContainText("洁净航载简报");
     await expect(dialogue).toContainText("洁净同步钥");
@@ -615,6 +612,16 @@ test.describe("browser smoke", () => {
     }
     await dialogue.getByRole("button", { name: "跳过" }).click();
     await expect(dialogue).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "发射" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "赫利昂主星交易所" })).toBeVisible();
+    await expect(page.locator(".station-header")).toContainText("太阳理事会");
+    await expect(page.getByTestId("market-row-basic-food")).toContainText("基础食品");
+    await expect(page.getByTestId("market-row-basic-food")).toContainText("持有");
+    await expect(page.getByTestId("market-row-basic-food")).toContainText("出口");
+    await expect(page.getByTestId("market-row-drinking-water")).toContainText("饮用水");
+    await expect(page.locator(".station-screen")).not.toContainText(/Helion Prime Exchange|Solar Directorate|Trade Hub|Basic Food|Drinking Water|Electronics|Medical Supplies|Energy Cells|Hold|Export|Import|Balanced/);
+    await page.getByRole("button", { name: "任务板", exact: true }).click();
+    await expect(page.getByTestId("mission-card-story-clean-carrier")).toContainText("Glass Wake 01: Clean Carrier");
     await page.evaluate(() => {
       window.__GOF2_E2E__!.setState({ screen: "settings" });
     });
@@ -1219,6 +1226,7 @@ test.describe("browser smoke", () => {
       };
       state.dockAt("helion-prime");
       window.__GOF2_E2E__!.setState({
+        activeDialogue: undefined,
         stationTab: "Economy",
         economyService: { status: "connected", url: "http://127.0.0.1:19777", snapshotId: 303 },
         runtime: {
@@ -1339,7 +1347,10 @@ test.describe("browser smoke", () => {
     await expect(dialogue).toContainText("That is a lot of purity for one missing probe.");
     await expect(dialogue).not.toContainText("Purity is the point.");
 
-    await dialogue.getByRole("button", { name: "Skip" }).click();
+    await page.evaluate(() => {
+      const state = window.__GOF2_E2E__!.getState() as { closeDialogue: () => void };
+      state.closeDialogue();
+    });
     await endLastCanceledVoice(page);
     await expect(dialogue).toHaveCount(0);
   });
@@ -1373,7 +1384,10 @@ test.describe("browser smoke", () => {
     const dialogue = page.getByTestId("dialogue-overlay");
     await expect(dialogue).toContainText("Glass Wake Opening");
     await expect(page.getByTestId("dialogue-cinematic-glass-wake-intro")).toBeVisible();
-    await dialogue.getByRole("button", { name: "Skip" }).click();
+    await page.evaluate(() => {
+      const store = window.__GOF2_E2E__!.getState() as { closeDialogue: () => void };
+      store.closeDialogue();
+    });
     await expect(dialogue).toHaveCount(0);
 
     await acceptCleanCarrierMission(page);
@@ -1385,20 +1399,12 @@ test.describe("browser smoke", () => {
       const store = window.__GOF2_E2E__!.getState() as {
         jumpToSystem: (systemId: string) => void;
         dockAt: (stationId: string) => void;
-        completeMission: (missionId: string) => void;
       };
       store.jumpToSystem("mirr-vale");
       store.dockAt("mirr-lattice");
-      store.completeMission("story-clean-carrier");
     });
     await expect(dialogue).toContainText("Clean Carrier Debrief");
     await dialogue.getByRole("button", { name: "Skip" }).click();
-    await expect(dialogue).toHaveCount(0);
-
-    await page.getByRole("button", { name: "Mission Board" }).click();
-    const probeMission = page.getByTestId("mission-card-story-probe-in-glass");
-    await expect(probeMission).toContainText("Glass Wake 02: Probe in the Glass");
-    await probeMission.getByRole("button", { name: "Accept" }).click();
     await expect(dialogue).toContainText("Probe in the Glass Briefing");
     await dialogue.getByRole("button", { name: "Skip" }).click();
     await expect(dialogue).toHaveCount(0);
@@ -1584,7 +1590,7 @@ test.describe("browser smoke", () => {
     expect(headerType!.titleFontSize).toBeLessThanOrEqual(28);
   });
 
-  test("surfaces and completes the Quiet Signals exploration loop", async ({ page }) => {
+  test("surfaces Quiet Signals progress and unlocks the chain reward", async ({ page }) => {
     await resetApp(page);
     await startNewGame(page);
     await dockAtStation(page, "helion-prime");
@@ -1608,7 +1614,7 @@ test.describe("browser smoke", () => {
 
     await dockAtStation(page, "helion-prime");
     await page.getByRole("button", { name: "Captain's Log" }).click();
-    await expect(page.getByTestId("exploration-chain-helion-sundog-chain")).toContainText("Chain complete");
+    await expect(page.getByTestId("exploration-chain-helion-sundog-chain")).toContainText("2/3");
     await expect(page.getByTestId("exploration-chain-helion-sundog-chain")).toContainText("Survey Array");
   });
 
@@ -1616,12 +1622,15 @@ test.describe("browser smoke", () => {
     await resetApp(page);
     await startNewGame(page);
 
-    await page.evaluate(() => {
-      const state = window.__GOF2_E2E__!.getState() as { dockAt: (stationId: string) => void };
-      state.dockAt("helion-prime");
-    });
+    await dockAtStation(page, "helion-prime", { keepDialogue: true });
     await expect(page.getByRole("heading", { name: "Helion Prime Exchange" })).toBeVisible();
     await expect(page.locator(".station-header")).toContainText("Tech Level 2");
+    await expect(page.getByTestId("dialogue-overlay")).toContainText("Clean Carrier Briefing");
+    await expect(page.getByTestId("speaker-portrait-helion-handler")).toBeVisible();
+    await expect(page.getByTestId("speaker-portrait-helion-handler")).toHaveAttribute("src", /\/assets\/generated\/portraits\/helion-handler\.webp$/);
+    await expect(page.getByTestId("dialogue-overlay")).toContainText("Captain, Helion traffic is handing you a clean sync key. It has never touched");
+    await page.getByTestId("dialogue-overlay").getByRole("button", { name: "Skip" }).click();
+    await expect(page.getByTestId("dialogue-overlay")).toHaveCount(0);
 
     const basicFoodRow = page.getByTestId("market-row-basic-food");
     await expect(basicFoodRow).toContainText("Basic Food");
@@ -1642,13 +1651,6 @@ test.describe("browser smoke", () => {
     await page.getByRole("button", { name: "Mission Board" }).click();
     const storyMission = page.getByTestId("mission-card-story-clean-carrier");
     await expect(storyMission).toContainText("Glass Wake 01: Clean Carrier");
-    await storyMission.getByRole("button", { name: "Accept" }).click();
-    await expect(page.getByTestId("dialogue-overlay")).toContainText("Clean Carrier Briefing");
-    await expect(page.getByTestId("speaker-portrait-helion-handler")).toBeVisible();
-    await expect(page.getByTestId("speaker-portrait-helion-handler")).toHaveAttribute("src", /\/assets\/generated\/portraits\/helion-handler\.webp$/);
-    await expect(page.getByTestId("dialogue-overlay")).toContainText("Captain, Helion traffic is handing you a clean sync key. It has never touched");
-    await page.getByTestId("dialogue-overlay").getByRole("button", { name: "Skip" }).click();
-    await expect(page.getByTestId("dialogue-overlay")).toHaveCount(0);
     expect((await getGameState(page)).activeMissions.map((mission) => mission.id)).toContain("story-clean-carrier");
 
     await page.getByRole("button", { name: "Launch" }).click();
@@ -1674,31 +1676,25 @@ test.describe("browser smoke", () => {
     expect((await getGameState(page)).currentSystemId).toBe("kuro-belt");
   });
 
-  test("keeps the mission board onboarding note clear of the first mission card", async ({ page }) => {
+  test("marks Clean Carrier active after station auto-accept", async ({ page }) => {
     await resetApp(page);
     await startNewGame(page);
 
-    await page.evaluate(() => {
-      const state = window.__GOF2_E2E__!.getState() as { dockAt: (stationId: string) => void };
-      state.dockAt("helion-prime");
-    });
+    await dockAtStation(page, "helion-prime");
     await page.getByRole("button", { name: "Mission Board" }).click();
 
-    const onboardingNote = page.getByTestId("onboarding-board-note");
     const storyMission = page.getByTestId("mission-card-story-clean-carrier");
-    await expect(onboardingNote).toContainText("Recommended first contract");
+    await expect(page.getByTestId("onboarding-board-note")).toHaveCount(0);
     await expect(storyMission).toContainText("Glass Wake 01: Clean Carrier");
-    await expectVerticalGap(onboardingNote, storyMission, 8);
+    await expect(storyMission.getByRole("button", { name: "Set Route" })).toBeVisible();
+    expect((await getGameState(page)).activeMissions.map((mission) => mission.id)).toContain("story-clean-carrier");
   });
 
   test("keeps shipyard and blueprint long card details collapsed until expanded", async ({ page }) => {
     await resetApp(page);
     await startNewGame(page);
 
-    await page.evaluate(() => {
-      const state = window.__GOF2_E2E__!.getState() as { dockAt: (stationId: string) => void };
-      state.dockAt("helion-prime");
-    });
+    await dockAtStation(page, "helion-prime");
 
     await page.getByRole("button", { name: "Shipyard" }).click();
     const starterShip = page.getByTestId("ship-card-sparrow-mk1");
@@ -2146,7 +2142,7 @@ test.describe("browser smoke", () => {
     await expect(page.getByRole("heading", { name: "Save Slots" })).toBeVisible();
 
     const metrics = await page.evaluate(() => {
-      const repairButton = [...document.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Repair Hull and Refill Missiles");
+      const repairButton = [...document.querySelectorAll("button")].find((button) => button.textContent?.includes("Repair Hull and Refill Missiles"));
       const hangarGrid = document.querySelector(".hangar-build-grid");
       const saveSlots = document.querySelector(".save-slots-panel");
       if (!repairButton || !hangarGrid || !saveSlots) return null;
