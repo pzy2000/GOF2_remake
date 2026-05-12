@@ -945,7 +945,7 @@ describe("economy store integration", () => {
     expect(mission.id).toMatch(/^market-gap:/);
 
     store.getState().acceptMission(mission.id);
-    expect(store.getState().activeMissions[0]).toMatchObject({ id: mission.id, accepted: true });
+    expect(store.getState().activeMissions.find((active) => active.id === mission.id)).toMatchObject({ id: mission.id, accepted: true });
 
     store.setState((state) => ({
       player: {
@@ -1051,7 +1051,7 @@ describe("economy store integration", () => {
 
     store.getState().acceptMission(offer.id);
 
-    expect(store.getState().activeMissions[0]).toMatchObject({ id: offer.id, accepted: true });
+    expect(store.getState().activeMissions.find((active) => active.id === offer.id)).toMatchObject({ id: offer.id, accepted: true });
     expect(store.getState().runtime.message).toContain("Personal Call");
   });
 

@@ -49,6 +49,8 @@ jobs:
     if: github.ref == 'refs/heads/main'
     needs: quality
     runs-on: ubuntu-latest
+    env:
+      VITE_BASE_PATH: /GOF2_remake/
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -67,20 +69,21 @@ jobs:
 
       - name: Build for GitHub Pages
         run: npm run build
-        env:
-          VITE_BASE_PATH: /GOF2_remake/
 
       - name: Smoke test static preview
         run: |
           npx vite preview --host 127.0.0.1 --port 4173 --strictPort &
           preview_pid=$!
           trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
+          base_path="${VITE_BASE_PATH:-/GOF2_remake/}"
           for attempt in {1..30}; do
-            if curl --fail --silent --show-error http://127.0.0.1:4173/GOF2_remake/ > /tmp/gof2-preview.html; then
+            if curl --fail --silent --show-error "http://127.0.0.1:4173${base_path}" > /tmp/gof2-preview.html; then
               grep -q '<div id="root"></div>' /tmp/gof2-preview.html
-              asset_path="$(grep -o '/GOF2_remake/assets/[^"]*\.js' /tmp/gof2-preview.html | head -n 1)"
+              asset_path="$(grep -o "${base_path}assets/[^\"']*\.js" /tmp/gof2-preview.html | head -n 1)"
               test -n "$asset_path"
-              curl --fail --silent --show-error "http://127.0.0.1:4173${asset_path}" > /dev/null
+              curl --fail --silent --show-error -D /tmp/gof2-preview.headers "http://127.0.0.1:4173${asset_path}" -o /tmp/gof2-preview.js
+              grep -qi 'content-type:.*javascript' /tmp/gof2-preview.headers
+              ! grep -qi '<!doctype html' /tmp/gof2-preview.js
               exit 0
             fi
             sleep 1
