@@ -1408,6 +1408,26 @@ test.describe("browser smoke", () => {
     await expect(solarRow).not.toContainText("3,000");
   });
 
+  test("keeps station header title compact", async ({ page }) => {
+    await resetApp(page);
+    await startNewGame(page);
+    await dockAtStation(page, "mirr-lattice");
+    await expect(page.getByRole("heading", { name: "Mirr Lattice" })).toBeVisible();
+
+    const headerType = await page.locator(".station-header").evaluate((element) => {
+      const title = element.querySelector("h1");
+      const techLine = title?.nextElementSibling;
+      if (!title || !techLine) return null;
+      return {
+        titleFontSize: Number.parseFloat(window.getComputedStyle(title).fontSize),
+        techFontSize: Number.parseFloat(window.getComputedStyle(techLine).fontSize)
+      };
+    });
+    expect(headerType).not.toBeNull();
+    expect(headerType!.titleFontSize).toBeLessThanOrEqual(headerType!.techFontSize * 1.4);
+    expect(headerType!.titleFontSize).toBeLessThanOrEqual(28);
+  });
+
   test("surfaces and completes the Quiet Signals exploration loop", async ({ page }) => {
     await resetApp(page);
     await startNewGame(page);
