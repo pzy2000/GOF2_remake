@@ -1012,6 +1012,13 @@ test.describe("browser smoke", () => {
     await expect(dispatchBoard).toContainText("Supply Run");
     await expect(dispatchBoard.getByRole("button", { name: "Accept" }).first()).toBeVisible();
     await expect(dispatchBoard.getByRole("button", { name: /Set Route/ }).first()).toBeVisible();
+    const dispatchDashboardGap = await economy.evaluate((element) => {
+      const dispatch = element.querySelector('[data-testid="economy-dispatch-board"]');
+      const dashboard = element.querySelector(".economy-dashboard");
+      if (!dispatch || !dashboard) return Number.NEGATIVE_INFINITY;
+      return dashboard.getBoundingClientRect().top - dispatch.getBoundingClientRect().bottom;
+    });
+    expect(dispatchDashboardGap).toBeGreaterThanOrEqual(0);
     const eventsList = economy.locator(".economy-events-list");
     await expect(eventsList).toContainText("Ore Cutter mined 1 Iron.");
     await expect(eventsList).toContainText("[Helion Reach]");
