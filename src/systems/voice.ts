@@ -535,6 +535,8 @@ type BrowserAudioContext = AudioContext & {
   createDelay(maxDelay?: number): DelayNode;
   createConvolver(): ConvolverNode;
   createMediaElementSource(element: HTMLMediaElement): MediaElementAudioSourceNode;
+  resume?: () => Promise<void>;
+  state?: AudioContextState;
 };
 
 class BrowserVoiceSystem {
@@ -550,7 +552,7 @@ class BrowserVoiceSystem {
     let speaking = false;
     let paused = false;
     if (this.active?.kind === "audio") {
-      speaking = !this.active.audio.paused;
+      speaking = !this.active.audio.paused && !this.isAudioContextSuspended();
       paused = this.active.audio.paused;
     } else if (this.active?.kind === "speech") {
       speaking = synthesis?.speaking ?? false;
@@ -613,7 +615,16 @@ class BrowserVoiceSystem {
 
   pauseOrResume(): "paused" | "speaking" | "idle" {
     if (this.active?.kind === "audio") {
+      const playback = this.active;
       const audio = this.active.audio;
+      if (this.isAudioContextSuspended()) {
+        if (audio.paused) {
+          const restart = audio.play();
+          if (restart && typeof restart.then === "function") void restart.catch(() => this.handleAudioFailure());
+        }
+        this.resumeAudioContext(playback);
+        return "speaking";
+      }
       if (audio.paused) {
         const playback = audio.play();
         if (playback && typeof playback.then === "function") void playback.catch(() => undefined);
@@ -685,6 +696,20 @@ class BrowserVoiceSystem {
     return ctx;
   }
 
+  private isAudioContextSuspended(): boolean {
+    return this.context?.state === "suspended";
+  }
+
+  private resumeAudioContext(playback?: ActivePlayback) {
+    const context = this.context;
+    if (!context || context.state !== "suspended" || typeof context.resume !== "function") return;
+    void context.resume()
+      .then(() => {
+        if (playback?.kind === "audio") this.markAudioPlaybackStarted(playback);
+      })
+      .catch(() => undefined);
+  }
+
   private tryPlayAudioClip(
     url: string,
     fxPreset: VoiceFxPreset,
@@ -750,10 +775,12 @@ class BrowserVoiceSystem {
 
   private startAudioPlayback(): boolean {
     if (this.active?.kind !== "audio") return false;
+    const active = this.active;
     const playback = this.active.audio.play();
     if (playback && typeof playback.then === "function") {
       void playback.catch(() => this.handleAudioFailure());
     }
+    this.resumeAudioContext(active);
     return true;
   }
 
@@ -781,9 +808,7 @@ class BrowserVoiceSystem {
     if (playback.kind === "audio") {
       const audio = playback.audio;
       const markStarted = () => {
-        if (this.active !== playback || playback.started) return;
-        playback.started = true;
-        playback.onStart?.();
+        this.markAudioPlaybackStarted(playback);
       };
       audio.onplaying = markStarted;
       audio.onended = () => {
@@ -812,6 +837,12 @@ class BrowserVoiceSystem {
         playback.onError?.();
       };
     }
+  }
+
+  private markAudioPlaybackStarted(playback: Extract<ActivePlayback, { kind: "audio" }>) {
+    if (this.active !== playback || playback.started || playback.audio.paused || this.isAudioContextSuspended()) return;
+    playback.started = true;
+    playback.onStart?.();
   }
 
   private playSpeechFallback(normalized: string, profile: VoiceProfileDefinition, locale: Locale, options: VoiceOptions): boolean {

@@ -122,8 +122,12 @@ class FakeAudioContext {
   static createdNodesByType: Map<string, FakeAudioNode[]> = new Map();
   sampleRate = 24000;
   currentTime = 1;
+  state: AudioContextState = "running";
   destination = new FakeAudioNode();
-  resume = vi.fn();
+  resume = vi.fn(() => {
+    this.state = "running";
+    return Promise.resolve();
+  });
 
   constructor() {
     FakeAudioContext.instances.push(this);
@@ -164,6 +168,21 @@ class FakeAudioContext {
   }
 }
 
+class SuspendedAudioContext extends FakeAudioContext {
+  override state: AudioContextState = "suspended";
+  override resume = vi.fn(() => Promise.resolve());
+}
+
+class RecoveringAudioContext extends FakeAudioContext {
+  override state: AudioContextState = "suspended";
+  private resumeCalls = 0;
+  override resume = vi.fn(() => {
+    this.resumeCalls += 1;
+    if (this.resumeCalls > 1) this.state = "running";
+    return Promise.resolve();
+  });
+}
+
 class FakeAudio {
   static instances: FakeAudio[] = [];
   src: string;
@@ -173,6 +192,7 @@ class FakeAudio {
   currentTime = 0;
   paused = true;
   crossOrigin: string | null = null;
+  onplaying: (() => void) | null = null;
   onended: (() => void) | null = null;
   onerror: (() => void) | null = null;
   play = vi.fn(() => {
@@ -203,6 +223,7 @@ function resetAudioMocks() {
 async function freshVoice(options: {
   voices?: SpeechSynthesisVoice[];
   withAudioContext?: boolean;
+  AudioContextClass?: typeof FakeAudioContext;
   AudioClass?: typeof FakeAudio;
 } = {}) {
   vi.resetModules();
@@ -210,7 +231,7 @@ async function freshVoice(options: {
   const { synthesis, spoken } = createFakeSynthesis(options.voices ?? []);
   const windowStub: Record<string, unknown> = { speechSynthesis: synthesis };
   if (options.withAudioContext) {
-    windowStub.AudioContext = FakeAudioContext;
+    windowStub.AudioContext = options.AudioContextClass ?? FakeAudioContext;
   }
   vi.stubGlobal("SpeechSynthesisUtterance", FakeUtterance);
   vi.stubGlobal("window", windowStub);
@@ -444,6 +465,52 @@ describe("primary audio clip path", () => {
     expect(FakeAudio.instances[0].pause).toHaveBeenCalledOnce();
     expect(voiceSystem.pauseOrResume()).toBe("speaking");
     expect(FakeAudio.instances[0].play).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not report clip playback as speaking while the audio context is suspended", async () => {
+    const onStart = vi.fn();
+    const { voiceSystem, voiceClipKey, prepareCommsSpeechText } = await freshVoice({
+      voices: [],
+      withAudioContext: true,
+      AudioContextClass: SuspendedAudioContext,
+      AudioClass: FakeAudio
+    });
+    const text = "Launch clearance is green.";
+    const key = voiceClipKey("ship-ai", "en", prepareCommsSpeechText(text));
+    voiceSystem.setVoiceClipManifest({ [key]: `/assets/voice/ship-ai/${key}.mp3` });
+    voiceSystem.applySettings({ masterVolume: 1, sfxVolume: 0.8, musicVolume: 0.5, voiceVolume: 1, muted: false });
+
+    expect(voiceSystem.speak(text, "ship-ai", { onStart })).toBe(true);
+    expect(FakeAudio.instances[0].play).toHaveBeenCalledOnce();
+    FakeAudio.instances[0].onplaying?.();
+
+    expect(onStart).not.toHaveBeenCalled();
+    expect(voiceSystem.debugState.speaking).toBe(false);
+  });
+
+  it("play/pause resumes suspended clip output before treating the line as paused", async () => {
+    const onStart = vi.fn();
+    const { voiceSystem, voiceClipKey, prepareCommsSpeechText } = await freshVoice({
+      voices: [],
+      withAudioContext: true,
+      AudioContextClass: RecoveringAudioContext,
+      AudioClass: FakeAudio
+    });
+    const text = "Launch clearance is green.";
+    const key = voiceClipKey("ship-ai", "en", prepareCommsSpeechText(text));
+    voiceSystem.setVoiceClipManifest({ [key]: `/assets/voice/ship-ai/${key}.mp3` });
+    voiceSystem.applySettings({ masterVolume: 1, sfxVolume: 0.8, musicVolume: 0.5, voiceVolume: 1, muted: false });
+    voiceSystem.speak(text, "ship-ai", { onStart });
+    FakeAudio.instances[0].onplaying?.();
+    expect(FakeAudio.instances[0].pause).not.toHaveBeenCalled();
+
+    expect(voiceSystem.pauseOrResume()).toBe("speaking");
+    await Promise.resolve();
+
+    expect(FakeAudioContext.instances[0].resume).toHaveBeenCalled();
+    expect(FakeAudio.instances[0].pause).not.toHaveBeenCalled();
+    expect(onStart).toHaveBeenCalledOnce();
+    expect(voiceSystem.debugState.speaking).toBe(true);
   });
 
   it("falls back to speech synthesis if the audio play promise rejects later", async () => {

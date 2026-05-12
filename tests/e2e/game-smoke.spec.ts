@@ -51,6 +51,14 @@ type TestSpeechHarness = {
   endLastCanceled: () => void;
 };
 
+type TestVoiceAudioHarness = {
+  resumeCalls: number;
+  playCalls: number;
+  pauseCalls: number;
+  state: AudioContextState;
+  allowResume: boolean;
+};
+
 async function resetApp(page: Page) {
   await page.addInitScript(() => {
     localStorage.setItem("gof2-e2e-disable-economy-backend", "true");
@@ -282,6 +290,98 @@ async function installSpeechSynthesisStub(page: Page) {
     Object.defineProperty(window, "AudioContext", { value: undefined, configurable: true });
     Object.defineProperty(window, "webkitAudioContext", { value: undefined, configurable: true });
     Object.defineProperty(window, "__GOF2_TEST_SPEECH__", { value: harness, configurable: true });
+  });
+}
+
+async function installSuspendedVoiceAudioStub(page: Page) {
+  await page.addInitScript(() => {
+    type TestNode = {
+      gain: { value: number; setTargetAtTime: () => void; setValueAtTime: () => void; exponentialRampToValueAtTime: () => void };
+      frequency: { value: number; setTargetAtTime: () => void; setValueAtTime: () => void; exponentialRampToValueAtTime: () => void };
+      delayTime: { value: number; setTargetAtTime: () => void; setValueAtTime: () => void; exponentialRampToValueAtTime: () => void };
+      Q: { value: number; setTargetAtTime: () => void; setValueAtTime: () => void; exponentialRampToValueAtTime: () => void };
+      type: string;
+      curve: Float32Array | null;
+      buffer: unknown;
+      connect: () => void;
+      disconnect: () => void;
+      start: () => void;
+      stop: () => void;
+    };
+    const param = () => ({
+      value: 0,
+      setTargetAtTime: () => undefined,
+      setValueAtTime: () => undefined,
+      exponentialRampToValueAtTime: () => undefined
+    });
+    const node = (): TestNode => ({
+      gain: param(),
+      frequency: param(),
+      delayTime: param(),
+      Q: param(),
+      type: "sine",
+      curve: null,
+      buffer: null,
+      connect: () => undefined,
+      disconnect: () => undefined,
+      start: () => undefined,
+      stop: () => undefined
+    });
+    const harness: TestVoiceAudioHarness = {
+      resumeCalls: 0,
+      playCalls: 0,
+      pauseCalls: 0,
+      state: "suspended",
+      allowResume: false
+    };
+    class TestAudioContext {
+      sampleRate = 24000;
+      currentTime = 1;
+      destination = node();
+      get state() {
+        return harness.state;
+      }
+      resume() {
+        harness.resumeCalls += 1;
+        if (harness.allowResume) harness.state = "running";
+        return Promise.resolve();
+      }
+      createGain() { return node(); }
+      createOscillator() { return node(); }
+      createBiquadFilter() { return node(); }
+      createWaveShaper() { return node(); }
+      createDelay() { return node(); }
+      createConvolver() { return node(); }
+      createMediaElementSource() { return node(); }
+      createBuffer(_channels: number, length: number) {
+        return { getChannelData: () => new Float32Array(length) };
+      }
+    }
+    class TestAudio {
+      loop = false;
+      preload = "";
+      volume = 1;
+      currentTime = 0;
+      paused = true;
+      onplaying: (() => void) | null = null;
+      onended: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      constructor(public src: string) {}
+      play() {
+        harness.playCalls += 1;
+        this.paused = false;
+        window.setTimeout(() => this.onplaying?.(), 0);
+        return Promise.resolve();
+      }
+      pause() {
+        harness.pauseCalls += 1;
+        this.paused = true;
+      }
+    }
+    Object.defineProperty(window, "AudioContext", { value: TestAudioContext, configurable: true });
+    Object.defineProperty(window, "webkitAudioContext", { value: undefined, configurable: true });
+    Object.defineProperty(window, "Audio", { value: TestAudio, configurable: true });
+    Object.defineProperty(window, "__GOF2_TEST_VOICE_AUDIO__", { value: harness, configurable: true });
   });
 }
 
@@ -1383,6 +1483,26 @@ test.describe("browser smoke", () => {
 
     await endCurrentVoice(page);
     await expect(dialogue).toContainText("That is a lot of purity for one missing probe.");
+  });
+
+  test("recovers first voiced story line when clip output starts with a suspended audio context", async ({ page }) => {
+    await installSuspendedVoiceAudioStub(page);
+    await resetApp(page);
+    await startNewGame(page, { keepIntro: true });
+
+    const dialogue = page.getByTestId("dialogue-overlay");
+    await expect(dialogue).toContainText("Launch clearance is green.");
+    await expect(dialogue).toContainText("Voice needs manual play");
+    await expect(dialogue).not.toContainText("Sparrow, keep the sync key sealed");
+
+    await page.evaluate(() => {
+      (window as unknown as { __GOF2_TEST_VOICE_AUDIO__: TestVoiceAudioHarness }).__GOF2_TEST_VOICE_AUDIO__.allowResume = true;
+    });
+    await dialogue.getByRole("button", { name: "Play/Pause" }).click();
+    await expect(dialogue).toContainText("Voice playing");
+    await expect.poll(async () => {
+      return page.evaluate(() => (window as unknown as { __GOF2_TEST_VOICE_AUDIO__: TestVoiceAudioHarness }).__GOF2_TEST_VOICE_AUDIO__.state);
+    }).toBe("running");
   });
 
   test("goes back to the previous voiced story line without stale auto-advance", async ({ page }) => {
