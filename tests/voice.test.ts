@@ -370,7 +370,10 @@ describe("primary audio clip path", () => {
     expect(FakeAudio.instances).toHaveLength(1);
     expect(FakeAudio.instances[0].src).toContain(`${key}.mp3`);
     expect(FakeAudio.instances[0].play).toHaveBeenCalledOnce();
-    expect(FakeAudio.instances[0].crossOrigin).toBe("anonymous");
+    // Same-origin voice assets must NOT be requested with crossOrigin set:
+    // when the dev server omits CORS headers, MediaElementSource would route
+    // a silent stream through Web Audio.
+    expect(FakeAudio.instances[0].crossOrigin).toBeNull();
   });
 
   it("builds the AI ghost FX chain with extra oscillators and a convolver for ship-ai", async () => {
@@ -430,7 +433,7 @@ describe("primary audio clip path", () => {
   });
 
   it("falls back to speech synthesis if the audio play promise rejects later", async () => {
-    const { voiceSystem, voiceClipKey, prepareCommsSpeechText } = await freshVoice({
+    const { voiceSystem, voiceClipKey, prepareCommsSpeechText, synthesis } = await freshVoice({
       voices: [fakeVoice("Generic English")],
       withAudioContext: true,
       AudioClass: RejectingAudio
@@ -442,8 +445,26 @@ describe("primary audio clip path", () => {
     expect(voiceSystem.speak(text, "ashen-broker")).toBe(true);
     await Promise.resolve();
     await Promise.resolve();
-    // After the rejection the system stays idle until the next speak() call;
-    // ensure no crash and that speak() can still be invoked again.
+    // The rejection must promote the line to the SpeechSynthesis path so the
+    // speaker is still heard when the clip file is missing or unplayable.
+    expect(synthesis.speak).toHaveBeenCalledOnce();
     expect(() => voiceSystem.cancel()).not.toThrow();
+  });
+
+  it("falls back to speech synthesis if the audio element fires an error event", async () => {
+    const { voiceSystem, voiceClipKey, prepareCommsSpeechText, synthesis } = await freshVoice({
+      voices: [fakeVoice("Generic English")],
+      withAudioContext: true,
+      AudioClass: FakeAudio
+    });
+    const text = "Sync lost.";
+    const key = voiceClipKey("helion-handler", "zh-CN", prepareCommsSpeechText(text));
+    voiceSystem.setVoiceClipManifest({ [key]: `/assets/voice/helion-handler/${key}.mp3` });
+    voiceSystem.applySettings({ masterVolume: 1, sfxVolume: 0.8, musicVolume: 0.5, voiceVolume: 1, muted: false });
+    expect(voiceSystem.speak(text, "helion-handler", { locale: "zh-CN" })).toBe(true);
+    const audio = FakeAudio.instances[0] as unknown as { onerror?: () => void };
+    expect(typeof audio.onerror).toBe("function");
+    audio.onerror?.();
+    expect(synthesis.speak).toHaveBeenCalledOnce();
   });
 });

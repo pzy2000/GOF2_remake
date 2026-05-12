@@ -1,0 +1,38 @@
+diff --git a/node_modules/msedge-tts/dist/MsEdgeTTS.js b/node_modules/msedge-tts/dist/MsEdgeTTS.js
+index 3d6b156..01b65a5 100644
+--- a/node_modules/msedge-tts/dist/MsEdgeTTS.js
++++ b/node_modules/msedge-tts/dist/MsEdgeTTS.js
+@@ -139,7 +139,11 @@ class MsEdgeTTS {
+                 else if (message.includes(`Path:${messageTypes.TURN_END}`)) {
+                     // end of turn, close stream
+                     this._log("->", message);
+-                    this._streams[requestId].audio.push(null);
++                    const stream = this._streams[requestId];
++                    if (!stream) {
++                        return;
++                    }
++                    stream.audio.push(null);
+                 }
+                 else if (message.includes(`Path:${messageTypes.RESPONSE}`)) {
+                     // context response, ignore
+@@ -212,10 +216,18 @@ class MsEdgeTTS {
+         });
+     }
+     _pushAudioData(data, requestId) {
+-        this._streams[requestId].audio.push(data);
++        const stream = this._streams[requestId];
++        if (!stream) {
++            return;
++        }
++        stream.audio.push(data);
+     }
+     _pushMetadata(data, requestId) {
+-        this._streams[requestId].metadata.push(data);
++        const stream = this._streams[requestId];
++        if (!(stream?.metadata)) {
++            return;
++        }
++        stream.metadata.push(data);
+     }
+     _SSMLTemplate(input, options = {}) {
+         // in case future updates to the edge API block these elements, we'll be concatenating strings.

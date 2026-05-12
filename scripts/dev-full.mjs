@@ -34,6 +34,7 @@ function spawnChild(label, command, args, options = {}) {
   const child = spawn(command, args, {
     stdio: "inherit",
     ...options,
+    ...(process.platform === "win32" && command === npmBin ? { shell: true } : {}),
     env: {
       ...process.env,
       ...(options.env ?? {})

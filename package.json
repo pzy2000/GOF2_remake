@@ -15,7 +15,8 @@
     "test:e2e:mobile": "playwright test --grep \"mobile and foldable layouts|PWA preview\"",
     "test:e2e:mobile:screenshots": "GOF2_UPDATE_MOBILE_MATRIX=1 playwright test --grep \"mobile and foldable layouts\"",
     "test:watch": "vitest",
-    "generate:voices": "node scripts/generate-voice-lines.mjs"
+    "generate:voices": "node scripts/generate-voice-lines.mjs",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@react-three/drei": "^9.122.0",
@@ -33,6 +34,7 @@
     "@types/three": "^0.171.0",
     "@vitejs/plugin-react": "^4.3.4",
     "msedge-tts": "^2.0.5",
+    "patch-package": "^8.0.1",
     "typescript": "~5.7.2",
     "vite": "^6.0.7",
     "vitest": "^2.1.8"

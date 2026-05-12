@@ -41,16 +41,19 @@ export type VoiceProfileDefinition = {
 };
 
 // Edge Neural voice ids picked to give each speaker a distinct base timbre even
-// before the per-profile FX chain runs. Locales beyond the four shipped audio
-// renders fall back to en-US so the runtime can still find a sensible voice.
-const englishCaptain = "en-US-DavisNeural";
+// before the per-profile FX chain runs. All entries are cross-checked against
+// the currently supported Edge TTS catalog (DavisNeural, TonyNeural, JasonNeural,
+// AmberNeural and many extra zh-CN/ja-JP/fr-FR voices were retired in 2024).
+// Locales beyond the four shipped audio renders fall back to en-US so the
+// runtime can still find a sensible voice.
+const englishCaptain = "en-US-ChristopherNeural";
 const englishShipAi = "en-US-AriaNeural";
 const englishHelion = "en-US-JennyNeural";
 const englishMirr = "en-US-MichelleNeural";
-const englishKuro = "en-US-TonyNeural";
+const englishKuro = "en-US-EricNeural";
 const englishVantara = "en-US-GuyNeural";
-const englishAshen = "en-US-JasonNeural";
-const englishCelest = "en-US-AmberNeural";
+const englishAshen = "en-US-BrianNeural";
+const englishCelest = "en-US-EmmaNeural";
 const englishUnion = "en-US-AndrewNeural";
 
 export const voiceProfiles = {
@@ -88,9 +91,9 @@ export const voiceProfiles = {
     tts: {
       voiceByLocale: {
         en: englishHelion,
-        "zh-CN": "zh-CN-XiaohanNeural",
-        "zh-TW": "zh-CN-XiaohanNeural",
-        ja: "ja-JP-MayuNeural",
+        "zh-CN": "zh-CN-XiaoyiNeural",
+        "zh-TW": "zh-CN-XiaoyiNeural",
+        ja: "ja-JP-NanamiNeural",
         fr: "fr-FR-DeniseNeural"
       },
       pitchPct: 4,
@@ -103,10 +106,10 @@ export const voiceProfiles = {
     tts: {
       voiceByLocale: {
         en: englishMirr,
-        "zh-CN": "zh-CN-XiaoyiNeural",
-        "zh-TW": "zh-CN-XiaoyiNeural",
-        ja: "ja-JP-AoiNeural",
-        fr: "fr-FR-BrigitteNeural"
+        "zh-CN": "zh-CN-XiaoxiaoNeural",
+        "zh-TW": "zh-CN-XiaoxiaoNeural",
+        ja: "ja-JP-NanamiNeural",
+        fr: "fr-FR-VivienneMultilingualNeural"
       },
       pitchPct: -3,
       ratePct: -6
@@ -120,8 +123,8 @@ export const voiceProfiles = {
         en: englishKuro,
         "zh-CN": "zh-CN-YunyangNeural",
         "zh-TW": "zh-CN-YunyangNeural",
-        ja: "ja-JP-DaichiNeural",
-        fr: "fr-FR-AlainNeural"
+        ja: "ja-JP-KeitaNeural",
+        fr: "fr-FR-RemyMultilingualNeural"
       },
       pitchPct: -10,
       ratePct: -4
@@ -148,10 +151,10 @@ export const voiceProfiles = {
     tts: {
       voiceByLocale: {
         en: englishAshen,
-        "zh-CN": "zh-CN-YunyeNeural",
-        "zh-TW": "zh-CN-YunyeNeural",
-        ja: "ja-JP-NaokiNeural",
-        fr: "fr-FR-JeromeNeural"
+        "zh-CN": "zh-CN-YunxiaNeural",
+        "zh-TW": "zh-CN-YunxiaNeural",
+        ja: "ja-JP-KeitaNeural",
+        fr: "fr-FR-RemyMultilingualNeural"
       },
       pitchPct: -6,
       ratePct: -3
@@ -163,10 +166,10 @@ export const voiceProfiles = {
     tts: {
       voiceByLocale: {
         en: englishCelest,
-        "zh-CN": "zh-CN-XiaomengNeural",
-        "zh-TW": "zh-CN-XiaomengNeural",
-        ja: "ja-JP-ShioriNeural",
-        fr: "fr-FR-JosephineNeural"
+        "zh-CN": "zh-CN-XiaoyiNeural",
+        "zh-TW": "zh-CN-XiaoyiNeural",
+        ja: "ja-JP-NanamiNeural",
+        fr: "fr-FR-EloiseNeural"
       },
       pitchPct: 6,
       ratePct: 2
@@ -178,10 +181,10 @@ export const voiceProfiles = {
     tts: {
       voiceByLocale: {
         en: englishUnion,
-        "zh-CN": "zh-CN-YunfengNeural",
-        "zh-TW": "zh-CN-YunfengNeural",
-        ja: "ja-JP-MasaruNeural",
-        fr: "fr-FR-YvesNeural"
+        "zh-CN": "zh-CN-YunxiNeural",
+        "zh-TW": "zh-CN-YunxiNeural",
+        ja: "ja-JP-KeitaNeural",
+        fr: "fr-FR-HenriNeural"
       },
       pitchPct: -7,
       ratePct: -3
@@ -510,6 +513,7 @@ type ActivePlayback =
       source?: MediaElementAudioSourceNode;
       fx?: FxNode;
       onEnd?: () => void;
+      onFailure?: () => void;
     }
   | {
       kind: "speech";
@@ -589,7 +593,13 @@ class BrowserVoiceSystem {
     this.cancel();
     const key = voiceClipKey(profileId, locale, normalized);
     const url = this.clipManifest[key];
-    if (url && this.tryPlayAudioClip(url, profile.fx, options)) return true;
+    // Capture a fallback that speech-synthesizes the line if the prerecorded
+    // clip fails to play (404, decode error, network blip). Without this hook
+    // missing/corrupt clips would simply make the speaker silent.
+    const fallback = () => {
+      this.playSpeechFallback(normalized, profile, locale, options);
+    };
+    if (url && this.tryPlayAudioClip(url, profile.fx, options, fallback)) return true;
     return this.playSpeechFallback(normalized, profile, locale, options);
   }
 
@@ -667,7 +677,12 @@ class BrowserVoiceSystem {
     return ctx;
   }
 
-  private tryPlayAudioClip(url: string, fxPreset: VoiceFxPreset, options: VoiceOptions): boolean {
+  private tryPlayAudioClip(
+    url: string,
+    fxPreset: VoiceFxPreset,
+    options: VoiceOptions,
+    onFailure?: () => void
+  ): boolean {
     if (typeof Audio === "undefined") return false;
     const ctx = this.ensureContext();
     if (!ctx || !this.voiceGain) return false;
@@ -677,7 +692,9 @@ class BrowserVoiceSystem {
     } catch {
       return false;
     }
-    audio.crossOrigin = "anonymous";
+    // Voice clips ship from the same origin as the page, so requesting CORS
+    // would only add a chance for the dev server to omit headers and turn
+    // MediaElementSource into a silent node. Leave crossOrigin unset.
     audio.preload = "auto";
     audio.volume = 1;
 
@@ -701,7 +718,7 @@ class BrowserVoiceSystem {
       } catch {
         return false;
       }
-      this.attachPlayback({ kind: "audio", audio, source, onEnd: options.onEnd });
+      this.attachPlayback({ kind: "audio", audio, source, onEnd: options.onEnd, onFailure });
       return this.startAudioPlayback();
     }
 
@@ -719,7 +736,7 @@ class BrowserVoiceSystem {
       }
     });
 
-    this.attachPlayback({ kind: "audio", audio, source, fx, onEnd: options.onEnd });
+    this.attachPlayback({ kind: "audio", audio, source, fx, onEnd: options.onEnd, onFailure });
     return this.startAudioPlayback();
   }
 
@@ -746,6 +763,9 @@ class BrowserVoiceSystem {
     } catch {
       // Best-effort teardown.
     }
+    // Hand off to SpeechSynthesis so the speaker is still heard even when
+    // the cached clip is missing or refuses to decode in this browser.
+    previous.onFailure?.();
   }
 
   private attachPlayback(playback: ActivePlayback) {
