@@ -101,6 +101,7 @@ export interface GameStore {
   cancelExplorationScan: () => void;
   openDialogueScene: (sceneId: string, replay?: boolean) => void;
   advanceDialogue: () => void;
+  rewindDialogue: () => void;
   closeDialogue: () => void;
   dockAt: (stationId: string) => void;
   undock: () => void;

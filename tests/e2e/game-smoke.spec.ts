@@ -45,6 +45,8 @@ type TestSpeechHarness = {
     text: string;
     lang: string;
   };
+  allowSpeak: () => void;
+  blockNextSpeak: (count?: number) => void;
   endCurrent: () => void;
   endLastCanceled: () => void;
 };
@@ -205,6 +207,7 @@ async function installSpeechSynthesisStub(page: Page) {
       rate: number;
       volume: number;
       voice: SpeechSynthesisVoice | null;
+      onstart: (() => void) | null;
       onend: (() => void) | null;
       onerror: (() => void) | null;
     };
@@ -215,15 +218,23 @@ async function installSpeechSynthesisStub(page: Page) {
       rate = 1;
       volume = 1;
       voice: SpeechSynthesisVoice | null = null;
+      onstart: (() => void) | null = null;
       onend: (() => void) | null = null;
       onerror: (() => void) | null = null;
 
       constructor(public text: string) {}
     }
 
+    let blockedSpeakCount = 0;
     const harness = {
       current: undefined as FakeUtterance | undefined,
       lastCanceled: undefined as FakeUtterance | undefined,
+      allowSpeak() {
+        blockedSpeakCount = 0;
+      },
+      blockNextSpeak(count = 1) {
+        blockedSpeakCount = Math.max(blockedSpeakCount, count);
+      },
       endCurrent() {
         const utterance = this.current;
         this.current = undefined;
@@ -242,8 +253,15 @@ async function installSpeechSynthesisStub(page: Page) {
       getVoices: () => [{ lang: "en-US" }],
       speak: (utterance: FakeUtterance) => {
         harness.current = utterance;
+        if (blockedSpeakCount > 0) {
+          blockedSpeakCount -= 1;
+          synthesis.speaking = false;
+          synthesis.paused = false;
+          return;
+        }
         synthesis.speaking = true;
         synthesis.paused = false;
+        utterance.onstart?.();
       },
       cancel: () => {
         if (harness.current) harness.lastCanceled = harness.current;
@@ -261,6 +279,8 @@ async function installSpeechSynthesisStub(page: Page) {
 
     Object.defineProperty(window, "SpeechSynthesisUtterance", { value: FakeSpeechSynthesisUtterance, configurable: true });
     Object.defineProperty(window, "speechSynthesis", { value: synthesis, configurable: true });
+    Object.defineProperty(window, "AudioContext", { value: undefined, configurable: true });
+    Object.defineProperty(window, "webkitAudioContext", { value: undefined, configurable: true });
     Object.defineProperty(window, "__GOF2_TEST_SPEECH__", { value: harness, configurable: true });
   });
 }
@@ -274,6 +294,18 @@ async function endCurrentVoice(page: Page) {
 async function endLastCanceledVoice(page: Page) {
   await page.evaluate(() => {
     (window as unknown as { __GOF2_TEST_SPEECH__: TestSpeechHarness }).__GOF2_TEST_SPEECH__.endLastCanceled();
+  });
+}
+
+async function blockNextVoiceStart(page: Page, count = 1) {
+  await page.evaluate((blockedCount) => {
+    (window as unknown as { __GOF2_TEST_SPEECH__: TestSpeechHarness }).__GOF2_TEST_SPEECH__.blockNextSpeak(blockedCount);
+  }, count);
+}
+
+async function allowVoiceStart(page: Page) {
+  await page.evaluate(() => {
+    (window as unknown as { __GOF2_TEST_SPEECH__: TestSpeechHarness }).__GOF2_TEST_SPEECH__.allowSpeak();
   });
 }
 
@@ -1331,6 +1363,57 @@ test.describe("browser smoke", () => {
 
     await endCurrentVoice(page);
     await expect(dialogue).toHaveCount(0);
+  });
+
+  test("keeps a blocked first voiced story line until manual play", async ({ page }) => {
+    await installSpeechSynthesisStub(page);
+    await resetApp(page);
+    await startNewGame(page);
+    await blockNextVoiceStart(page, 3);
+    await acceptCleanCarrierMission(page);
+
+    const dialogue = page.getByTestId("dialogue-overlay");
+    await expect(dialogue).toContainText("Captain, Helion traffic is handing you a clean sync key.");
+    await expect(dialogue).toContainText("Voice needs manual play");
+    await expect(dialogue).not.toContainText("That is a lot of purity for one missing probe.");
+
+    await allowVoiceStart(page);
+    await dialogue.getByRole("button", { name: "Play/Pause" }).click();
+    await expect(dialogue).toContainText("Voice playing");
+
+    await endCurrentVoice(page);
+    await expect(dialogue).toContainText("That is a lot of purity for one missing probe.");
+  });
+
+  test("goes back to the previous voiced story line without stale auto-advance", async ({ page }) => {
+    await installSpeechSynthesisStub(page);
+    await resetApp(page);
+    await startNewGame(page);
+    await acceptCleanCarrierMission(page);
+
+    const dialogue = page.getByTestId("dialogue-overlay");
+    const backButton = dialogue.getByRole("button", { name: "Back" });
+    await expect(dialogue).toContainText("Captain, Helion traffic is handing you a clean sync key.");
+    await expect(backButton).toBeDisabled();
+
+    await dialogue.getByRole("button", { name: "Next" }).click();
+    await expect(dialogue).toContainText("That is a lot of purity for one missing probe.");
+    await expect(backButton).toBeEnabled();
+
+    await endLastCanceledVoice(page);
+    await expect(dialogue).toContainText("That is a lot of purity for one missing probe.");
+    await expect(dialogue).not.toContainText("Purity is the point.");
+
+    await backButton.click();
+    await expect(dialogue).toContainText("Captain, Helion traffic is handing you a clean sync key.");
+    await expect(backButton).toBeDisabled();
+
+    await endLastCanceledVoice(page);
+    await expect(dialogue).toContainText("Captain, Helion traffic is handing you a clean sync key.");
+    await expect(dialogue).not.toContainText("That is a lot of purity for one missing probe.");
+
+    await endCurrentVoice(page);
+    await expect(dialogue).toContainText("That is a lot of purity for one missing probe.");
   });
 
   test("does not auto-skip from canceled story dialogue speech", async ({ page }) => {

@@ -2711,6 +2711,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
     set({ activeDialogue: { ...activeDialogue, lineIndex: activeDialogue.lineIndex + 1 } });
   },
+  rewindDialogue: () => {
+    const activeDialogue = get().activeDialogue;
+    if (!activeDialogue || activeDialogue.lineIndex <= 0) return;
+    set({ activeDialogue: { ...activeDialogue, lineIndex: activeDialogue.lineIndex - 1 } });
+  },
   closeDialogue: () => set((state) => closeOrAdvanceDialoguePatch(state)),
   dockAt: (stationId) => {
     const state = get();

@@ -7,6 +7,7 @@ class FakeUtterance {
   rate = 1;
   volume = 1;
   voice: SpeechSynthesisVoice | null = null;
+  onstart: (() => void) | null = null;
   onend: (() => void) | null = null;
   onerror: (() => void) | null = null;
 
@@ -336,6 +337,19 @@ describe("speech fallback path", () => {
     expect(onEnd).toHaveBeenCalledOnce();
     spoken[1].onend?.();
     expect(onEnd).toHaveBeenCalledOnce();
+  });
+
+  it("reports speech start and error callbacks for the current utterance", async () => {
+    const { voiceSystem, spoken } = await freshVoice({ voices: [fakeVoice("Generic English")] });
+    const onStart = vi.fn();
+    const onError = vi.fn();
+
+    expect(voiceSystem.speak("Line A.", "helion-handler", { onStart, onError })).toBe(true);
+    spoken[0].onstart?.();
+    expect(onStart).toHaveBeenCalledOnce();
+
+    spoken[0].onerror?.();
+    expect(onError).toHaveBeenCalledOnce();
   });
 
   it("clamps boosted voice volume to the synthesis maximum", async () => {

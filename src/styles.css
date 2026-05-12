@@ -3301,12 +3301,16 @@ button.equipment-trigger {
 }
 
 .dialogue-panel {
+  display: flex;
+  flex-direction: column;
   width: min(920px, 100%);
+  max-height: calc(100vh - 40px);
   margin: 0 auto;
   border: 1px solid rgba(128, 214, 255, 0.32);
   border-radius: 8px;
   background: rgba(4, 12, 24, 0.94);
   box-shadow: 0 22px 70px rgba(0, 0, 0, 0.48);
+  overflow: hidden;
   padding: 16px;
 }
 
@@ -3335,9 +3339,11 @@ button.equipment-trigger {
 }
 
 .dialogue-cinematic {
+  flex: 0 1 auto;
   position: relative;
   overflow: hidden;
   width: 100%;
+  max-height: min(42vh, 520px);
   aspect-ratio: 16 / 7;
   margin-bottom: 12px;
   border: 1px solid rgba(155, 255, 232, 0.22);
@@ -3353,6 +3359,7 @@ button.equipment-trigger {
 }
 
 .dialogue-current {
+  flex: 0 0 auto;
   align-items: flex-start;
   border: 1px solid rgba(128, 214, 255, 0.22);
   border-radius: 8px;
@@ -3411,8 +3418,10 @@ button.equipment-trigger {
 }
 
 .dialogue-transcript {
+  flex: 1 1 104px;
   display: grid;
   gap: 8px;
+  min-height: 72px;
   max-height: 180px;
   overflow-y: auto;
   margin: 12px 0;
@@ -3438,6 +3447,7 @@ button.equipment-trigger {
 }
 
 .dialogue-actions {
+  flex: 0 0 auto;
   justify-content: flex-end;
   flex-wrap: wrap;
 }

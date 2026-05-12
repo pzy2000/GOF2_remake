@@ -11,7 +11,9 @@ const defaultVoiceSettings: AudioSettings = {
 
 type VoiceOptions = {
   locale?: Locale;
+  onStart?: () => void;
   onEnd?: () => void;
+  onError?: () => void;
 };
 
 const VOICE_VOLUME_BOOST = 1.35;
@@ -512,13 +514,17 @@ type ActivePlayback =
       audio: HTMLAudioElement;
       source?: MediaElementAudioSourceNode;
       fx?: FxNode;
+      started?: boolean;
+      onStart?: () => void;
       onEnd?: () => void;
       onFailure?: () => void;
     }
   | {
       kind: "speech";
       utterance: SpeechSynthesisUtterance;
+      onStart?: () => void;
       onEnd?: () => void;
+      onError?: () => void;
     };
 
 type BrowserAudioContext = AudioContext & {
@@ -597,7 +603,9 @@ class BrowserVoiceSystem {
     // clip fails to play (404, decode error, network blip). Without this hook
     // missing/corrupt clips would simply make the speaker silent.
     const fallback = () => {
-      this.playSpeechFallback(normalized, profile, locale, options);
+      if (!this.playSpeechFallback(normalized, profile, locale, options)) {
+        options.onError?.();
+      }
     };
     if (url && this.tryPlayAudioClip(url, profile.fx, options, fallback)) return true;
     return this.playSpeechFallback(normalized, profile, locale, options);
@@ -718,7 +726,7 @@ class BrowserVoiceSystem {
       } catch {
         return false;
       }
-      this.attachPlayback({ kind: "audio", audio, source, onEnd: options.onEnd, onFailure });
+      this.attachPlayback({ kind: "audio", audio, source, onStart: options.onStart, onEnd: options.onEnd, onFailure });
       return this.startAudioPlayback();
     }
 
@@ -736,7 +744,7 @@ class BrowserVoiceSystem {
       }
     });
 
-    this.attachPlayback({ kind: "audio", audio, source, fx, onEnd: options.onEnd, onFailure });
+    this.attachPlayback({ kind: "audio", audio, source, fx, onStart: options.onStart, onEnd: options.onEnd, onFailure });
     return this.startAudioPlayback();
   }
 
@@ -772,6 +780,12 @@ class BrowserVoiceSystem {
     this.active = playback;
     if (playback.kind === "audio") {
       const audio = playback.audio;
+      const markStarted = () => {
+        if (this.active !== playback || playback.started) return;
+        playback.started = true;
+        playback.onStart?.();
+      };
+      audio.onplaying = markStarted;
       audio.onended = () => {
         if (this.active !== playback) return;
         this.active = undefined;
@@ -783,13 +797,19 @@ class BrowserVoiceSystem {
       };
     } else {
       const utterance = playback.utterance;
+      utterance.onstart = () => {
+        if (this.active !== playback) return;
+        playback.onStart?.();
+      };
       utterance.onend = () => {
         if (this.active !== playback) return;
         this.active = undefined;
         playback.onEnd?.();
       };
       utterance.onerror = () => {
-        if (this.active === playback) this.active = undefined;
+        if (this.active !== playback) return;
+        this.active = undefined;
+        playback.onError?.();
       };
     }
   }
@@ -804,7 +824,7 @@ class BrowserVoiceSystem {
     utterance.rate = params.rate;
     utterance.volume = volume;
     utterance.voice = selectFallbackVoice(locale);
-    this.attachPlayback({ kind: "speech", utterance, onEnd: options.onEnd });
+    this.attachPlayback({ kind: "speech", utterance, onStart: options.onStart, onEnd: options.onEnd, onError: options.onError });
     window.speechSynthesis.speak(utterance);
     return true;
   }

@@ -124,6 +124,37 @@ describe("story mission store flow", () => {
     expect(store.getState().dialogueState.seenSceneIds).toContain("dialogue-story-probe-in-glass-accept");
   });
 
+  it("rewinds within the active dialogue without dropping queued scenes", async () => {
+    const store = await freshStore();
+    store.setState({
+      activeDialogue: {
+        sceneId: "dialogue-story-clean-carrier-complete",
+        lineIndex: 0,
+        replay: false,
+        queuedSceneIds: ["dialogue-story-probe-in-glass-accept"]
+      }
+    });
+
+    store.getState().rewindDialogue();
+    expect(store.getState().activeDialogue).toMatchObject({
+      sceneId: "dialogue-story-clean-carrier-complete",
+      lineIndex: 0,
+      replay: false,
+      queuedSceneIds: ["dialogue-story-probe-in-glass-accept"]
+    });
+
+    store.getState().advanceDialogue();
+    expect(store.getState().activeDialogue?.lineIndex).toBe(1);
+
+    store.getState().rewindDialogue();
+    expect(store.getState().activeDialogue).toMatchObject({
+      sceneId: "dialogue-story-clean-carrier-complete",
+      lineIndex: 0,
+      replay: false,
+      queuedSceneIds: ["dialogue-story-probe-in-glass-accept"]
+    });
+  });
+
   it("auto-retries a failed retryable story mission at its origin station", async () => {
     const store = await freshStore();
     store.setState({
