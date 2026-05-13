@@ -314,6 +314,7 @@ describe("content data", () => {
       expect(mission).toBeDefined();
       expect(mission?.storyArcId).toBe(glassWakeProtocol.id);
       expect(mission?.storyChapterId).toBe(chapter.id);
+      expect(mission?.deadlineSeconds).toBeUndefined();
       expect(chapter.fieldObjective.length).toBeGreaterThan(20);
       expect(chapter.reveal.length).toBeGreaterThan(20);
       if (index === 0) {

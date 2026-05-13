@@ -63,6 +63,7 @@ export function hasCargo(cargo: CargoHold, required: CargoHold): boolean {
 }
 
 export function getMissionDeadlineRemaining(mission: MissionDefinition, gameClock: number): number | undefined {
+  if (mission.storyCritical) return undefined;
   if (!mission.deadlineSeconds || mission.acceptedAt === undefined) return undefined;
   return Math.max(0, mission.acceptedAt + mission.deadlineSeconds - gameClock);
 }

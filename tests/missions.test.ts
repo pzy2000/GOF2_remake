@@ -7,6 +7,7 @@ import {
   completeMission,
   failMission,
   getAvailableMissionsForSystem,
+  getMissionDeadlineRemaining,
   isMissionAvailable,
   isMissionExpired,
   markEscortArrived,
@@ -117,6 +118,8 @@ describe("missions", () => {
     expect(isMissionAvailable(sideContract, [], [], [])).toBe(true);
     expect(isMissionAvailable(second, [], [first.id], [])).toBe(true);
     expect(isMissionAvailable(second, [], [], [])).toBe(false);
+    expect(getMissionDeadlineRemaining({ ...first, accepted: true, acceptedAt: 0, deadlineSeconds: 1 }, 2)).toBeUndefined();
+    expect(isMissionExpired({ ...first, accepted: true, acceptedAt: 0, deadlineSeconds: 1 }, 2)).toBe(false);
   });
 
   it("keeps retryable failed story missions available without reopening completed missions", () => {
