@@ -3,6 +3,7 @@ import { Html, Line, Stars, useGLTF } from "@react-three/drei";
 import { Component, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import * as THREE from "three";
+import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { SPARROW_ULTIMATE_MODEL_ID, planetById, planets, shipById, stationById, systemById, useGameStore } from "../state/gameStore";
 import { commodityById, glassWakeProtocol, missionTemplates } from "../data/world";
 import type { AsteroidEntity, ConvoyEntity, ExplorationSignalDefinition, FlightEntity, LootEntity, MarketState, NpcInteractionAction, PlanetDefinition, ProjectileEntity, SalvageEntity, StationDefinition, Vec3, VisualEffectEntity } from "../types/game";
@@ -453,6 +454,7 @@ type PlayerShipVisual = {
   offset?: Vec3;
   rotation?: [number, number, number];
   emissiveBoost?: boolean;
+  fitToMaxDimension?: number;
 };
 
 const ULTIMATE_TRANSFORM_SECONDS = 1.8;
@@ -468,7 +470,8 @@ const playerShipVisuals: Record<string, PlayerShipVisual> = {
   "bastion-7": { scale: 0.9, engines: [[-14, -4, 22], [0, -3, 24], [14, -4, 22]], flameColor: "#ff7a45", afterburnerColor: "#ffd166" },
   "horizon-ark": { scale: 0.92, engines: [[-16, -2.4, 24], [-5, -2, 26], [5, -2, 26], [16, -2.4, 24]], flameColor: "#8ff7ff", afterburnerColor: "#ffffff" },
   [SPARROW_ULTIMATE_MODEL_ID]: {
-    scale: 15.5,
+    scale: 1,
+    fitToMaxDimension: 48,
     engines: [[-12, -18, 11], [12, -18, 11], [-24, 4, 3], [24, 4, 3]],
     flameColor: "#66e4ff",
     afterburnerColor: "#ffffff",
@@ -477,6 +480,26 @@ const playerShipVisuals: Record<string, PlayerShipVisual> = {
     emissiveBoost: true
   }
 };
+
+function getRenderableModelBox(object: THREE.Object3D): THREE.Box3 {
+  const modelBox = new THREE.Box3();
+  const meshBox = new THREE.Box3();
+  let hasRenderableBounds = false;
+  object.updateWorldMatrix(true, true);
+  object.traverse((node) => {
+    if (!(node instanceof THREE.Mesh) || !node.geometry) return;
+    node.geometry.computeBoundingBox();
+    if (!node.geometry.boundingBox) return;
+    meshBox.copy(node.geometry.boundingBox).applyMatrix4(node.matrixWorld);
+    if (hasRenderableBounds) {
+      modelBox.union(meshBox);
+    } else {
+      modelBox.copy(meshBox);
+      hasRenderableBounds = true;
+    }
+  });
+  return hasRenderableBounds ? modelBox : new THREE.Box3().setFromObject(object);
+}
 
 class ShipModelBoundary extends Component<{ children: ReactNode; fallback: ReactNode; onFallback: () => void }, { failed: boolean }> {
   state = { failed: false };
@@ -497,12 +520,26 @@ class ShipModelBoundary extends Component<{ children: ReactNode; fallback: React
 function boostUltimateMaterial(material: THREE.Material): THREE.Material {
   const cloned = material.clone();
   if (cloned instanceof THREE.MeshStandardMaterial || cloned instanceof THREE.MeshPhysicalMaterial) {
+    cloned.map = null;
+    cloned.alphaMap = null;
+    cloned.emissiveMap = null;
+    cloned.color = new THREE.Color("#f2f7ff");
     cloned.emissive = new THREE.Color("#75f4ff");
-    cloned.emissiveIntensity = Math.max(cloned.emissiveIntensity, 0.42);
+    cloned.emissiveIntensity = Math.max(cloned.emissiveIntensity, 0.58);
     cloned.metalness = Math.max(cloned.metalness, 0.62);
     cloned.roughness = Math.min(cloned.roughness, 0.24);
+    cloned.transparent = false;
+    cloned.opacity = 1;
+    cloned.needsUpdate = true;
+    return cloned;
   }
-  return cloned;
+  return new THREE.MeshStandardMaterial({
+    color: "#f2f7ff",
+    emissive: "#75f4ff",
+    emissiveIntensity: 0.58,
+    metalness: 0.62,
+    roughness: 0.24
+  });
 }
 
 function GltfPlayerShip({ onLoaded, shipId, url }: { onLoaded: () => void; shipId: string; url: string }) {
@@ -511,15 +548,16 @@ function GltfPlayerShip({ onLoaded, shipId, url }: { onLoaded: () => void; shipI
     onLoaded();
   }, [onLoaded]);
   const clone = useMemo(() => {
-    const scene = gltf.scene.clone(true);
-    const box = new THREE.Box3().setFromObject(scene);
+    const scene = cloneSkeleton(gltf.scene);
+    const visual = playerShipVisuals[shipId] ?? playerShipVisuals["sparrow-mk1"];
+    const box = getRenderableModelBox(scene);
     const center = box.getCenter(new THREE.Vector3());
     scene.position.sub(center);
     scene.traverse((node) => {
       if (node instanceof THREE.Mesh) {
         node.castShadow = true;
         node.receiveShadow = true;
-        if ((playerShipVisuals[shipId] ?? playerShipVisuals["sparrow-mk1"]).emissiveBoost) {
+        if (visual.emissiveBoost) {
           node.material = Array.isArray(node.material) ? node.material.map(boostUltimateMaterial) : boostUltimateMaterial(node.material);
         }
       }
@@ -527,7 +565,14 @@ function GltfPlayerShip({ onLoaded, shipId, url }: { onLoaded: () => void; shipI
     return scene;
   }, [gltf.scene, shipId]);
   const visual = playerShipVisuals[shipId] ?? playerShipVisuals["sparrow-mk1"];
-  return <primitive object={clone} position={toThree(visual.offset ?? [0, 0, 0])} rotation={visual.rotation} scale={visual.scale} />;
+  const modelScale = useMemo(() => {
+    if (!visual.fitToMaxDimension) return visual.scale;
+    const box = getRenderableModelBox(clone);
+    const size = box.getSize(new THREE.Vector3());
+    const maxDimension = Math.max(size.x, size.y, size.z);
+    return maxDimension > 0 ? visual.scale * (visual.fitToMaxDimension / maxDimension) : visual.scale;
+  }, [clone, visual.fitToMaxDimension, visual.scale]);
+  return <primitive object={clone} position={toThree(visual.offset ?? [0, 0, 0])} rotation={visual.rotation} scale={modelScale} />;
 }
 
 function UltimateTransformationFx({ activeUntil, lastActivatedAt }: { activeUntil?: number; lastActivatedAt?: number }) {
