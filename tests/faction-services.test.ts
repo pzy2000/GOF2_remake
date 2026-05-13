@@ -63,6 +63,7 @@ describe("faction service access", () => {
     }).factionHeat;
     expect(getStationServiceAccess({ station, service: "commodity-buy", reputation, factionHeat: citation, now: 6 }).ok).toBe(true);
     expect(getStationServiceAccess({ station, service: "equipment-buy", reputation, factionHeat: citation, now: 6 }).ok).toBe(false);
+    expect(getStationServiceAccess({ station, service: "repair", reputation, factionHeat: citation, now: 6 }).ok).toBe(false);
 
     const wanted = applyFactionIncident({
       factionHeat: clearHeat,
@@ -71,6 +72,7 @@ describe("faction service access", () => {
       now: 7
     }).factionHeat;
     expect(getStationServiceAccess({ station, service: "commodity-buy", reputation, factionHeat: wanted, now: 8 }).ok).toBe(false);
+    expect(getStationServiceAccess({ station, service: "repair", reputation, factionHeat: wanted, now: 8 }).ok).toBe(false);
 
     const ptdStation = stationById["ptd-home"];
     expect(ptdStation.factionId).toBe("ptd-company");
@@ -78,6 +80,7 @@ describe("faction service access", () => {
     expect(ptdAccess.ok).toBe(true);
     expect(ptdAccess.standingTier).toBe("allied");
     expect(ptdAccess.heatLevel).toBe("clear");
+    expect(getRepairCostMultiplier("ptd-company", reputation, wanted, 8)).toBe(0);
   });
 
   it("gates equipment, ships, and non-story mission acceptance by standing", () => {
@@ -121,12 +124,19 @@ describe("faction service access", () => {
     expect(getMissionAcceptAccess({ station, mission: story, reputation: { factions: { ...neutral.factions, "solar-directorate": -80 } }, factionHeat, now: 0 }).ok).toBe(true);
   });
 
-  it("applies reputation perks only while the legal record is clear", () => {
-    const friendly = { factions: { ...createInitialReputation().factions, "solar-directorate": 15 } };
+  it("applies mission perks only while clear and repair pricing by standing", () => {
+    const neutral = createInitialReputation();
+    const friendly = { factions: { ...neutral.factions, "solar-directorate": 15 } };
     const allied = { factions: { ...friendly.factions, "solar-directorate": 50 } };
+    const hostile = { factions: { ...neutral.factions, "solar-directorate": -10 } };
+    const killOnSight = { factions: { ...neutral.factions, "solar-directorate": -40 } };
     const clearHeat = createInitialFactionHeat();
     expect(getFactionRewardMultiplier("solar-directorate", friendly, clearHeat, 0)).toBe(1.1);
-    expect(getRepairCostMultiplier("solar-directorate", allied, clearHeat, 0)).toBe(0.7);
+    expect(getRepairCostMultiplier("solar-directorate", allied, clearHeat, 0)).toBe(0);
+    expect(getRepairCostMultiplier("solar-directorate", friendly, clearHeat, 0)).toBe(0.75);
+    expect(getRepairCostMultiplier("solar-directorate", neutral, clearHeat, 0)).toBe(1);
+    expect(getRepairCostMultiplier("solar-directorate", hostile, clearHeat, 0)).toBe(1.25);
+    expect(getRepairCostMultiplier("solar-directorate", killOnSight, clearHeat, 0)).toBe(1.5);
 
     const watched = applyFactionIncident({
       factionHeat: clearHeat,
@@ -135,7 +145,8 @@ describe("faction service access", () => {
       now: 1
     }).factionHeat;
     expect(getFactionRewardMultiplier("solar-directorate", allied, watched, 2)).toBe(1);
-    expect(getRepairCostMultiplier("solar-directorate", allied, watched, 2)).toBe(1);
+    expect(getRepairCostMultiplier("solar-directorate", allied, watched, 2)).toBe(0);
+    expect(getRepairCostMultiplier("solar-directorate", hostile, watched, 2)).toBe(1.25);
   });
 
   it("brokers black-market amnesty and preserves old save compatibility for intercept cooldowns", () => {

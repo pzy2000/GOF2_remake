@@ -3108,7 +3108,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
     set({
       player: { ...state.player, hull: state.player.stats.hull, shield: state.player.stats.shield, missiles: 6, credits: state.player.credits - cost },
-      runtime: { ...state.runtime, message: `Repaired and refilled for ${cost} credits.` }
+      runtime: { ...state.runtime, message: cost === 0 ? "Repaired and refilled for free." : `Repaired and refilled for ${cost} credits.` }
     });
   },
   buyShip: (shipId) => {

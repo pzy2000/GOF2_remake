@@ -170,7 +170,7 @@ export function getStationServiceAccess({
   }
 
   if (heatLevel === "watched") {
-    return { ok: true, message: "Watched status: services open, faction perks suspended.", standingTier, heatLevel };
+    return { ok: true, message: "Watched status: services open.", standingTier, heatLevel };
   }
 
   return { ok: true, message: "Service available.", standingTier, heatLevel };
@@ -284,11 +284,13 @@ export function getRepairCostMultiplier(
   factionHeat: FactionHeatState,
   now: number
 ): number {
-  const record = getFactionHeatRecord(factionHeat, factionId);
-  if (record.fineCredits > 0 || getFactionHeatLevel(record) !== "clear" || isFactionWanted(factionHeat, factionId, now)) return 1;
+  void factionHeat;
+  void now;
   const tier = getFactionStandingTier(reputation.factions[factionId] ?? 0);
-  if (tier === "allied") return 0.7;
-  if (tier === "friendly") return 0.85;
+  if (tier === "allied") return 0;
+  if (tier === "friendly") return 0.75;
+  if (tier === "hostile") return 1.25;
+  if (tier === "kill-on-sight") return 1.5;
   return 1;
 }
 

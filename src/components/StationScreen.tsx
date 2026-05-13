@@ -118,6 +118,14 @@ function repairAndRefillCost(player: ReturnType<typeof useGameStore.getState>["p
   return Math.round((missingHull * 4 + missileNeed * 45) * multiplier);
 }
 
+function repairPriceAdjustmentLabel(locale: Locale, multiplier: number): string | undefined {
+  const deltaPercent = Math.round(Math.abs(1 - multiplier) * 100);
+  if (multiplier === 0) return `${translateText("Repair discount", locale)} 100% · ${translateText("Free", locale)}`;
+  if (multiplier < 1) return `${translateText("Repair discount", locale)} ${formatNumber(locale, deltaPercent)}%`;
+  if (multiplier > 1) return `${translateText("Repair surcharge", locale)} ${formatNumber(locale, deltaPercent)}%`;
+  return undefined;
+}
+
 type EquipmentPopoverMode = "preview" | "pinned";
 
 interface EquipmentPopoverState {
@@ -924,6 +932,7 @@ function HangarTab() {
   const repairAccess = getStationServiceAccess({ station, service: "repair", reputation, factionHeat, now: gameClock });
   const repairMultiplier = getRepairCostMultiplier(station.factionId, reputation, factionHeat, gameClock);
   const repairCost = repairAndRefillCost(player, repairMultiplier);
+  const repairAdjustment = repairPriceAdjustmentLabel(locale, repairMultiplier);
   return (
     <>
       <div className="hangar-build-grid">
@@ -954,7 +963,7 @@ function HangarTab() {
           <button className="primary" onClick={repairAndRefill} disabled={!repairAccess.ok} title={repairAccess.ok ? undefined : translateText(repairAccess.message, locale)}>
             {translateText("Repair Hull and Refill Missiles", locale)} · {formatCredits(locale, repairCost, true)}
           </button>
-          {repairMultiplier < 1 ? <p className="muted">{translateText("Faction repair discount active.", locale)}</p> : null}
+          {repairAdjustment ? <p className="muted">{repairAdjustment}</p> : null}
         </section>
         <section className="hangar-panel hangar-scroll-panel">
           <h2>{translateText("Installed Equipment", locale)}</h2>
@@ -1766,6 +1775,7 @@ function FactionConsequencesPanel() {
           const standingTier = getFactionStandingTier(reputation.factions[factionId]);
           const rewardMultiplier = getFactionRewardMultiplier(factionId, reputation, factionHeat, gameClock);
           const repairMultiplier = getRepairCostMultiplier(factionId, reputation, factionHeat, gameClock);
+          const repairAdjustment = repairPriceAdjustmentLabel(locale, repairMultiplier);
           const amnestyOffer = getBlackMarketAmnestyOffer({ station, targetFactionId: factionId, factionHeat, now: gameClock });
           return (
             <article key={factionId} className={`faction-consequence heat-${heatLabel.toLowerCase().replace(/[^a-z]+/g, "-")}`}>
@@ -1777,7 +1787,7 @@ function FactionConsequencesPanel() {
                 <small>
                   {translateText("Standing", locale)} {translateText(standingTierLabel(standingTier), locale)}
                   {rewardMultiplier > 1 ? ` · ${translateText("Mission bonus", locale)} +${formatNumber(locale, Math.round((rewardMultiplier - 1) * 100))}%` : ""}
-                  {repairMultiplier < 1 ? ` · ${translateText("Repair discount", locale)} ${formatNumber(locale, Math.round((1 - repairMultiplier) * 100))}%` : ""}
+                  {repairAdjustment ? ` · ${repairAdjustment}` : ""}
                 </small>
                 {record.fineCredits > 0 ? <small>{translateText("Outstanding fine", locale)}: {formatCredits(locale, record.fineCredits)}</small> : null}
                 {showAmnesty ? (
