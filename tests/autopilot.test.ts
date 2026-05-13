@@ -35,6 +35,7 @@ const neutralInput: FlightInput = {
   afterburner: false,
   firePrimary: false,
   fireSecondary: false,
+  activateUltimate: false,
   interact: false,
   cycleTarget: false,
   toggleMap: false,

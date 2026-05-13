@@ -198,9 +198,23 @@ import { readLocalePreference, saveLocalePreference } from "../i18n";
 
 const emptyInput: FlightInput = emptyFlightInput();
 const GLASS_WAKE_INTRO_SCENE_ID = "dialogue-story-glass-wake-intro";
+const SPARROW_ULTIMATE_SHIP_ID = "sparrow-mk1";
+export const SPARROW_ULTIMATE_MODEL_ID = "sparrow-mk1-gundam";
+export const ULTIMATE_CHARGE_SECONDS = 20;
+export const ULTIMATE_DURATION_SECONDS = 30;
+export const ULTIMATE_RANGE_BONUS = 10_000;
+export const ULTIMATE_ENERGY_REGEN_MULTIPLIER = 11;
 
 let closeEconomyStream: (() => void) | undefined;
 let economyRefreshInFlight = false;
+
+function createReadyUltimateAbility() {
+  return { chargeSeconds: ULTIMATE_CHARGE_SECONDS };
+}
+
+function isUltimateActive(state: Pick<GameStore, "ultimateAbility" | "runtime">): boolean {
+  return (state.ultimateAbility.activeUntil ?? -Infinity) > state.runtime.clock;
+}
 
 function economyErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Economy service offline.";
@@ -876,6 +890,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   npcInteraction: undefined,
   npcObjective: undefined,
   autopilot: undefined,
+  ultimateAbility: createReadyUltimateAbility(),
   input: emptyInput,
   gameClock: 0,
   marketState: createInitialMarketState(),
@@ -924,6 +939,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       npcInteraction: undefined,
       npcObjective: undefined,
       autopilot: undefined,
+      ultimateAbility: createReadyUltimateAbility(),
       gameClock: 0,
       marketState: createInitialMarketState(),
       activeMissions: [],
@@ -979,6 +995,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       npcInteraction: undefined,
       npcObjective: undefined,
       autopilot: undefined,
+      ultimateAbility: createReadyUltimateAbility(),
       hasSave: true,
       saveSlots: readSaveSlots(),
       activeSaveSlotId: resolvedSlotId,
@@ -1548,6 +1565,33 @@ export const useGameStore = create<GameStore>((set, get) => ({
     let factionHeat = applyFactionHeatDecay(state.factionHeat, delta, gameClock);
     const input = state.input;
     const { dx, dy } = state.consumeMouse();
+    let ultimateAbility = state.ultimateAbility;
+    const ultimateExpired = ultimateAbility.activeUntil !== undefined && ultimateAbility.activeUntil <= now;
+    if (ultimateExpired) {
+      ultimateAbility = { ...ultimateAbility, activeUntil: undefined };
+    }
+    const ultimateIsActiveBeforeActivation = (ultimateAbility.activeUntil ?? -Infinity) > now;
+    if (
+      input.activateUltimate &&
+      state.screen === "flight" &&
+      state.player.shipId === SPARROW_ULTIMATE_SHIP_ID &&
+      !ultimateIsActiveBeforeActivation &&
+      ultimateAbility.chargeSeconds >= ULTIMATE_CHARGE_SECONDS
+    ) {
+      ultimateAbility = {
+        chargeSeconds: 0,
+        activeUntil: now + ULTIMATE_DURATION_SECONDS,
+        lastActivatedAt: now
+      };
+      audioSystem.play("mission-complete");
+    }
+    const ultimateActive = (ultimateAbility.activeUntil ?? -Infinity) > now;
+    if (!ultimateActive && ultimateAbility.chargeSeconds < ULTIMATE_CHARGE_SECONDS) {
+      ultimateAbility = {
+        ...ultimateAbility,
+        chargeSeconds: clamp(ultimateAbility.chargeSeconds + delta, 0, ULTIMATE_CHARGE_SECONDS)
+      };
+    }
 
     if (state.screen === "economyWatch") {
       const watch = state.economyNpcWatch;
@@ -1601,6 +1645,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         factionHeat,
         activeMissions: expiration.activeMissions,
         failedMissionIds: expiration.failedMissionIds,
+        ultimateAbility,
         runtime: {
           ...expiration.runtime,
           storyNotification,
@@ -1619,7 +1664,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
         for (const event of result.audioEvents ?? []) audioSystem.play(event);
         const navigatedPatch = withPatrolInterdiction(state, result.patch);
         const stationAutoSave = result.autoSave ? writeStationAutoSave({ ...state, ...navigatedPatch } as GameStore) : {};
-        set({ ...navigatedPatch, ...stationAutoSave });
+        set({
+          ...navigatedPatch,
+          ...stationAutoSave,
+          ultimateAbility,
+          ...(input.activateUltimate ? { input: { ...(navigatedPatch.input ?? get().input), activateUltimate: false } } : {})
+        });
         return;
       }
     }
@@ -1657,7 +1707,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       velocity,
       position: add(player.position, scale(velocity, delta)),
       energy: clamp(
-        player.energy + delta * equipmentEffects.energyRegenPerSecond - (afterburning ? delta * equipmentEffects.afterburnerEnergyDrain : 0),
+        player.energy + delta * equipmentEffects.energyRegenPerSecond * (ultimateActive ? ULTIMATE_ENERGY_REGEN_MULTIPLIER : 1) - (afterburning ? delta * equipmentEffects.afterburnerEnergyDrain : 0),
         0,
         player.stats.energy
       )
@@ -1717,7 +1767,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
     let primaryCooldown = Math.max(0, state.primaryCooldown - delta);
     let secondaryCooldown = Math.max(0, state.secondaryCooldown - delta);
     let pendingDialogueSceneId: string | undefined;
-    const target = runtime.enemies.find((ship) => ship.id === state.targetId && ship.hull > 0);
+    const selectedTarget = runtime.enemies.find((ship) => ship.id === state.targetId && ship.hull > 0 && ship.deathTimer === undefined);
+    const ultimateTarget = ultimateActive
+      ? runtime.enemies
+          .filter((ship) => isHostileToPlayer(ship) && ship.hull > 0 && ship.deathTimer === undefined)
+          .map((ship) => ({ ship, dist: distance(player.position, ship.position) }))
+          .sort((a, b) => a.dist - b.dist)[0]?.ship
+      : undefined;
+    const target = ultimateTarget ?? selectedTarget;
     const softLockTarget = target ?? selectSoftLockTarget(player, runtime.enemies, tuning);
     let activeMissions = state.activeMissions;
     let echoLockMessage: string | undefined;
@@ -1813,10 +1870,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
         player = { ...player, energy: clamp(player.energy - delta * baseMiningDrain * equipmentEffects.miningEnergyDrainMultiplier, 0, player.stats.energy) };
         primaryCooldown = Math.max(primaryCooldown, MINING_COOLDOWN_SECONDS);
       }
-    } else if (input.firePrimary && primaryWeapon && primaryCooldown <= 0) {
+    } else if ((input.firePrimary || (ultimateActive && !!ultimateTarget)) && primaryWeapon && primaryCooldown <= 0) {
       const primaryEnergyCost = Math.ceil(primaryWeapon.energyCost * equipmentEffects.weaponEnergyCostMultiplier);
-      if (player.energy >= primaryEnergyCost) {
-        const shotDirection = resolveAssistedShotDirection(player, softLockTarget, forward, tuning);
+      const effectivePrimaryRange = primaryWeapon.range + (ultimateActive ? ULTIMATE_RANGE_BONUS : 0);
+      const primaryTarget = ultimateTarget ?? softLockTarget;
+      const targetInRange = !primaryTarget || distance(player.position, primaryTarget.position) <= effectivePrimaryRange;
+      if (player.energy >= primaryEnergyCost && targetInRange) {
+        const shotDirection = ultimateTarget ? normalize(sub(ultimateTarget.position, player.position)) : resolveAssistedShotDirection(player, softLockTarget, forward, tuning);
         runtime.projectiles.push({
           id: projectileId("laser"),
           owner: "player",
@@ -1825,8 +1885,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
           direction: shotDirection,
           speed: primaryWeapon.speed,
           damage: Math.round(primaryWeapon.damage * equipmentEffects.weaponDamageMultiplier),
-          life: primaryWeapon.speed > 0 ? primaryWeapon.range / primaryWeapon.speed : 1.4,
-          targetId: softLockTarget?.id
+          life: primaryWeapon.speed > 0 ? effectivePrimaryRange / primaryWeapon.speed : 1.4,
+          targetId: primaryTarget?.id
         });
         audioSystem.play("laser");
         player = { ...player, energy: player.energy - primaryEnergyCost };
@@ -1836,8 +1896,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }
     }
 
-    if (input.fireSecondary && secondaryWeapon && secondaryCooldown <= 0 && player.missiles > 0) {
-      const missileDirection = resolveAssistedShotDirection(player, softLockTarget, forward, tuning);
+    if ((input.fireSecondary || (ultimateActive && !!ultimateTarget)) && secondaryWeapon && secondaryCooldown <= 0 && (player.missiles > 0 || ultimateActive)) {
+      const effectiveSecondaryRange = secondaryWeapon.range + (ultimateActive ? ULTIMATE_RANGE_BONUS : 0);
+      const secondaryTarget = ultimateTarget ?? softLockTarget;
+      const targetInRange = !secondaryTarget || distance(player.position, secondaryTarget.position) <= effectiveSecondaryRange;
+      if (targetInRange) {
+      const missileDirection = ultimateTarget ? normalize(sub(ultimateTarget.position, player.position)) : resolveAssistedShotDirection(player, softLockTarget, forward, tuning);
       runtime.projectiles.push({
         id: projectileId("missile"),
         owner: "player",
@@ -1846,12 +1910,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
         direction: missileDirection,
         speed: secondaryWeapon.speed,
         damage: Math.round(secondaryWeapon.damage * equipmentEffects.weaponDamageMultiplier),
-        life: secondaryWeapon.speed > 0 ? secondaryWeapon.range / secondaryWeapon.speed : 3.6,
-        targetId: softLockTarget?.id
+        life: secondaryWeapon.speed > 0 ? effectiveSecondaryRange / secondaryWeapon.speed : 3.6,
+        targetId: secondaryTarget?.id
       });
       audioSystem.play("missile");
-      player = { ...player, missiles: player.missiles - 1 };
+      player = ultimateActive ? player : { ...player, missiles: player.missiles - 1 };
       secondaryCooldown = getWeaponCooldown(secondaryWeapon, player.equipment);
+      }
     }
 
     runtime.enemies = runtime.enemies.map((ship) => resolveCivilianDistress(ship, runtime.enemies, now));
@@ -2148,13 +2213,30 @@ export const useGameStore = create<GameStore>((set, get) => ({
       }
 
       if (!consumed && projectile.owner === "enemy" && distance(movedProjectile.position, player.position) < 22) {
-        const shielded = player.shield > 0;
-        const previousShield = player.shield;
-        const previousHullRatio = player.hull / player.stats.hull;
-        player = applyDamage(player, projectile.damage, now);
-        if (previousShield > 0 && player.shield <= 0) audioSystem.play("shield-break");
-        if (previousHullRatio > 0.3 && player.hull / player.stats.hull <= 0.3) audioSystem.play("low-hull");
-        runtime.effects.push(...createImpactEffects(projectileId(shielded ? "shield-hit" : "player-hit"), player.position, projectile.damage, shielded, projectile.kind === "missile", tuning));
+        if (ultimateActive) {
+          runtime.effects.push({
+            id: projectileId("ultimate-guard"),
+            kind: "shield-hit",
+            position: player.position,
+            color: "#69e4ff",
+            secondaryColor: "#ffffff",
+            label: "IMMUNE",
+            particleCount: 8,
+            spread: 24,
+            size: 34,
+            life: 0.42,
+            maxLife: 0.42,
+            velocity: [0, 12, 0]
+          });
+        } else {
+          const shielded = player.shield > 0;
+          const previousShield = player.shield;
+          const previousHullRatio = player.hull / player.stats.hull;
+          player = applyDamage(player, projectile.damage, now);
+          if (previousShield > 0 && player.shield <= 0) audioSystem.play("shield-break");
+          if (previousHullRatio > 0.3 && player.hull / player.stats.hull <= 0.3) audioSystem.play("low-hull");
+          runtime.effects.push(...createImpactEffects(projectileId(shielded ? "shield-hit" : "player-hit"), player.position, projectile.damage, shielded, projectile.kind === "missile", tuning));
+        }
         consumed = true;
       } else if (!consumed && projectile.owner === "player") {
         runtime.enemies = runtime.enemies.map((ship) => {
@@ -2512,14 +2594,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
       npcInteraction: state.npcInteraction && runtime.enemies.some((ship) => ship.id === state.npcInteraction?.npcId && isEconomyNpc(ship))
         ? state.npcInteraction
         : undefined,
+      ultimateAbility,
+      ...(input.activateUltimate ? { input: { ...get().input, activateUltimate: false } } : {}),
       explorationState,
       ...dialoguePatch,
       primaryCooldown,
       secondaryCooldown,
       screen: expiration.player.hull <= 0 ? "gameOver" : get().screen,
-      targetId: runtime.enemies.some((ship) => ship.id === state.targetId && ship.hull > 0 && ship.deathTimer === undefined)
+      targetId: ultimateTarget?.id ?? (runtime.enemies.some((ship) => ship.id === state.targetId && ship.hull > 0 && ship.deathTimer === undefined)
         ? state.targetId
-        : sortTargetableShips(runtime.enemies)[0]?.id
+        : sortTargetableShips(runtime.enemies)[0]?.id)
     });
   },
   advanceGameClock: (delta) => {

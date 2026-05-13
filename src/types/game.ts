@@ -948,6 +948,12 @@ export interface AutoPilotState {
   pendingNpcAction?: "escort" | "rob";
 }
 
+export interface UltimateAbilityState {
+  chargeSeconds: number;
+  activeUntil?: number;
+  lastActivatedAt?: number;
+}
+
 export interface EconomyNpcWatchState {
   npcId: string;
   returnStationId?: string;
@@ -1024,6 +1030,7 @@ export interface FlightInput {
   afterburner: boolean;
   firePrimary: boolean;
   fireSecondary: boolean;
+  activateUltimate: boolean;
   interact: boolean;
   cycleTarget: boolean;
   toggleMap: boolean;

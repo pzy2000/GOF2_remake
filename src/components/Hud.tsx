@@ -72,7 +72,9 @@ export function Hud() {
   const currentStationId = useGameStore((state) => state.currentStationId);
   const saveGame = useGameStore((state) => state.saveGame);
   const setScreen = useGameStore((state) => state.setScreen);
+  const setInput = useGameStore((state) => state.setInput);
   const openGalaxyMap = useGameStore((state) => state.openGalaxyMap);
+  const ultimateAbility = useGameStore((state) => state.ultimateAbility);
   const knownPlanetIds = useGameStore((state) => state.knownPlanetIds);
   const explorationState = useGameStore((state) => state.explorationState);
   const factionHeat = useGameStore((state) => state.factionHeat);
@@ -159,6 +161,12 @@ export function Hud() {
   const navDistance = autopilot ? Math.round(distance(player.position, autopilot.targetPosition)) : 0;
   const navLabel = autopilot ? autopilotPhaseLabel(autopilot.phase, locale) : "";
   const occupiedCargo = getOccupiedCargo(player.cargo, activeMissions);
+  const ultimateActive = player.shipId === "sparrow-mk1" && (ultimateAbility.activeUntil ?? -Infinity) > runtime.clock;
+  const ultimateReady = player.shipId === "sparrow-mk1" && !ultimateActive && ultimateAbility.chargeSeconds >= 20;
+  const ultimateCountdown = ultimateActive
+    ? Math.max(0, Math.ceil((ultimateAbility.activeUntil ?? runtime.clock) - runtime.clock))
+    : Math.max(0, Math.ceil(20 - ultimateAbility.chargeSeconds));
+  const ultimateLabel = player.shipId !== "sparrow-mk1" ? "--" : ultimateReady ? "READY" : `${formatNumber(locale, ultimateCountdown)}s`;
   const activeDispatch = activeMissions.find((mission) => isEconomyDispatchMissionId(mission.id));
   const activeDispatchCargo = activeDispatch
     ? (Object.entries(activeDispatch.cargoRequired ?? {}) as [CommodityId, number | undefined][]).find(([, amount]) => (amount ?? 0) > 0)
@@ -175,6 +183,23 @@ export function Hud() {
         <Bar label={translateText("Shield", locale)} value={player.shield} max={player.stats.shield} tone="cyan" />
         <Bar label={translateText("Energy", locale)} value={player.energy} max={player.stats.energy} tone="orange" />
       </section>
+      <button
+        type="button"
+        className={`ultimate-skill ${ultimateActive ? "active" : ultimateReady ? "ready" : "charging"}`}
+        data-testid="ultimate-skill"
+        data-state={ultimateActive ? "active" : ultimateReady ? "ready" : "charging"}
+        disabled={!ultimateReady}
+        onClick={() => setInput({ activateUltimate: true })}
+        aria-label="Sparrow ultimate"
+      >
+        <span className="ultimate-skill-icon" aria-hidden="true">
+          <i className="ultimate-mecha-head" />
+          <i className="ultimate-mecha-body" />
+          <i className="ultimate-mecha-wing left" />
+          <i className="ultimate-mecha-wing right" />
+        </span>
+        <b>{ultimateLabel}</b>
+      </button>
       <section className="hud-panel hud-top-right">
         <h3>{localizeShipName(player.shipId, locale)}</h3>
         <p>{formatCredits(locale, player.credits)} · {formatCargoLabel(locale, occupiedCargo, player.stats.cargoCapacity)} · {translateText("Missiles", locale)} {formatNumber(locale, player.missiles)}</p>
@@ -183,6 +208,18 @@ export function Hud() {
         <p>{graceRemaining > 0 ? enemySafeLabel(graceRemaining, locale) : pirateCount > 0 ? pirateContactsLabel(pirateCount, locale) : translateText("Local space clear", locale)}</p>
         {bossContact ? <p>{bossContactLabel(locale)}: {translateDisplayName(bossContact.name, locale)}</p> : null}
         {supportCount > 0 ? <p>{patrolSupportLabel(locale)}: {formatNumber(locale, supportCount)}</p> : null}
+      </section>
+      <section className="hud-left-stack" data-testid="hud-left-stack">
+        {storyObjective.status !== "complete" ? (
+          <div className={`story-tracker focus-${storyObjective.focus}`} data-testid="story-tracker">
+            <span>{translateText("Main Story", locale)}</span>
+            <b>{translateText(storyObjective.chapterLabel, locale)} · {translateText(storyObjective.title, locale)}</b>
+            <p>
+              {translateText(storyObjective.objectiveText, locale)}
+              {storyObjective.distanceMeters !== undefined ? ` · ${formatDistance(locale, storyObjective.distanceMeters)}` : ""}
+            </p>
+          </div>
+        ) : null}
         <div className={`legal-status heat-${localHeatLabel.toLowerCase().replace(/[^a-z]+/g, "-")}`} data-testid="legal-status">
           <span>{translateText("Legal Status", locale)}</span>
           <b>{translateText(localHeatLabel, locale)} · {localizeFactionName(currentSystem.factionId, locale)}</b>
@@ -193,23 +230,27 @@ export function Hud() {
             {interdictionRisk ? ` · ${translateText("Interdiction risk", locale)}` : ""}
           </p>
         </div>
-        {contrabandAmount > 0 ? <p>{contrabandLawLabel(locale)}: {translateText(getContrabandLawSummary(currentSystem.id), locale)}</p> : null}
-        {scanningPatrol ? <p>{patrolScanLabel(locale)} {formatNumber(locale, Math.round((scanningPatrol.scanProgress ?? 0) * 100))}%</p> : null}
+        {contrabandAmount > 0 ? <p className="hud-left-note">{contrabandLawLabel(locale)}: {translateText(getContrabandLawSummary(currentSystem.id), locale)}</p> : null}
+        {scanningPatrol ? <p className="hud-left-note">{patrolScanLabel(locale)} {formatNumber(locale, Math.round((scanningPatrol.scanProgress ?? 0) * 100))}%</p> : null}
+        {nearestNavigation ? (
+          <p className="hud-left-note">
+            {nearestNavigation.kind === "station"
+              ? nearestStationLabel(locale)
+              : nearestNavigation.kind === "planet-signal"
+                ? scanTargetLabel(locale)
+                : nearestNavigation.kind === "exploration-signal"
+                  ? explorationSignalLabel(locale)
+                  : nearestNavLabel(locale)}: {navigationTargetName(nearestNavigation, locale)} {formatDistance(locale, nearestNavigation.distance)}
+            {nearestNavigation.kind === "exploration-signal" && nearestNavigation.inRange && nearestNavigation.equipmentReady === false
+              ? ` · ${translateText("Requires", locale)} ${nearestNavigation.requiredEquipmentLabel ?? translateText("upgraded scanner", locale)}`
+              : ""}
+          </p>
+        ) : null}
         {guidance && guidance.category !== "first-flight" ? (
           <div className={`guidance-tracker category-${guidance.category}`} data-testid="next-up-tracker">
             <span>{translateText("Next Up", locale)}</span>
             <b>{translateText(guidance.title, locale)}</b>
             <p>{formatRuntimeText(locale, guidance.objectiveText)}</p>
-          </div>
-        ) : null}
-        {storyObjective.status !== "complete" ? (
-          <div className={`story-tracker focus-${storyObjective.focus}`} data-testid="story-tracker">
-            <span>{translateText("Main Story", locale)}</span>
-            <b>{translateText(storyObjective.chapterLabel, locale)} · {translateText(storyObjective.title, locale)}</b>
-            <p>
-              {translateText(storyObjective.objectiveText, locale)}
-              {storyObjective.distanceMeters !== undefined ? ` · ${formatDistance(locale, storyObjective.distanceMeters)}` : ""}
-            </p>
           </div>
         ) : null}
         {onboardingView.visible && onboardingView.activeStep ? (
@@ -241,20 +282,6 @@ export function Hud() {
               {explorationObjective.distanceMeters !== undefined ? ` · ${formatDistance(locale, explorationObjective.distanceMeters)}` : ""}
             </p>
           </div>
-        ) : null}
-        {nearestNavigation ? (
-          <p>
-            {nearestNavigation.kind === "station"
-              ? nearestStationLabel(locale)
-              : nearestNavigation.kind === "planet-signal"
-                ? scanTargetLabel(locale)
-                : nearestNavigation.kind === "exploration-signal"
-                  ? explorationSignalLabel(locale)
-                  : nearestNavLabel(locale)}: {navigationTargetName(nearestNavigation, locale)} {formatDistance(locale, nearestNavigation.distance)}
-            {nearestNavigation.kind === "exploration-signal" && nearestNavigation.inRange && nearestNavigation.equipmentReady === false
-              ? ` · ${translateText("Requires", locale)} ${nearestNavigation.requiredEquipmentLabel ?? translateText("upgraded scanner", locale)}`
-              : ""}
-          </p>
         ) : null}
       </section>
       <section className="hud-panel hud-target">

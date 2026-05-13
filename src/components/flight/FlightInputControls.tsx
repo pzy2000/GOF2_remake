@@ -30,7 +30,7 @@ export function FlightControls() {
         } else if (event.code === "Escape") {
           event.preventDefault();
           setInput({ pause: true });
-        } else if (event.code in keyMap || event.code === "Space" || event.code === "KeyE" || event.code === "KeyM" || event.code === "Tab") {
+        } else if (event.code in keyMap || event.code === "Space" || event.code === "KeyE" || event.code === "KeyG" || event.code === "KeyM" || event.code === "Tab") {
           event.preventDefault();
         }
         return;
@@ -57,6 +57,7 @@ export function FlightControls() {
       }
       if (event.repeat) return;
       if (event.code === "KeyE") setInput({ interact: true });
+      if (event.code === "KeyG") setInput({ activateUltimate: true });
       if (event.code === "Tab") {
         event.preventDefault();
         setInput({ cycleTarget: true });
@@ -225,7 +226,7 @@ export function TouchFlightControls() {
     };
   }
 
-  function tapInput(key: "interact" | "cycleTarget" | "toggleMap" | "toggleCamera" | "pause") {
+  function tapInput(key: "interact" | "cycleTarget" | "toggleMap" | "toggleCamera" | "pause" | "activateUltimate") {
     return (event: ReactPointerEvent<HTMLButtonElement>) => {
       event.preventDefault();
       setInput({ [key]: true });
@@ -259,6 +260,7 @@ export function TouchFlightControls() {
       <div className="touch-action-cluster right">
         <button {...holdInput("firePrimary")}>FIRE</button>
         <button {...holdInput("fireSecondary")}>MISSILE</button>
+        <button onPointerDown={tapInput("activateUltimate")}>ULT</button>
         <button onPointerDown={tapInput("interact")}>E</button>
         <button onPointerDown={tapInput("cycleTarget")}>TARGET</button>
         <button onPointerDown={tapInput("toggleCamera")}>CAM</button>

@@ -3,7 +3,7 @@ import { Html, Line, Stars, useGLTF } from "@react-three/drei";
 import { Component, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import * as THREE from "three";
-import { planetById, planets, shipById, stationById, systemById, useGameStore } from "../state/gameStore";
+import { SPARROW_ULTIMATE_MODEL_ID, planetById, planets, shipById, stationById, systemById, useGameStore } from "../state/gameStore";
 import { commodityById, glassWakeProtocol, missionTemplates } from "../data/world";
 import type { AsteroidEntity, ConvoyEntity, ExplorationSignalDefinition, FlightEntity, LootEntity, MarketState, NpcInteractionAction, PlanetDefinition, ProjectileEntity, SalvageEntity, StationDefinition, Vec3, VisualEffectEntity } from "../types/game";
 import { add, clamp, distance, forwardFromRotation, normalize, scale, sub } from "../systems/math";
@@ -453,7 +453,8 @@ const playerShipVisuals: Record<string, { scale: number; engines: Vec3[]; flameC
   "wayfarer-x": { scale: 0.92, engines: [[-15, -2.6, 27], [15, -2.6, 27]], flameColor: "#a7f3ff", afterburnerColor: "#ffffff" },
   "raptor-v": { scale: 0.96, engines: [[-8, -1.8, 18], [0, -1.2, 20], [8, -1.8, 18]], flameColor: "#ff5f6d", afterburnerColor: "#70f0ff" },
   "bastion-7": { scale: 0.9, engines: [[-14, -4, 22], [0, -3, 24], [14, -4, 22]], flameColor: "#ff7a45", afterburnerColor: "#ffd166" },
-  "horizon-ark": { scale: 0.92, engines: [[-16, -2.4, 24], [-5, -2, 26], [5, -2, 26], [16, -2.4, 24]], flameColor: "#8ff7ff", afterburnerColor: "#ffffff" }
+  "horizon-ark": { scale: 0.92, engines: [[-16, -2.4, 24], [-5, -2, 26], [5, -2, 26], [16, -2.4, 24]], flameColor: "#8ff7ff", afterburnerColor: "#ffffff" },
+  [SPARROW_ULTIMATE_MODEL_ID]: { scale: 0.9, engines: [[-9, -3, 18], [9, -3, 18], [-18, 1, 7], [18, 1, 7]], flameColor: "#66e4ff", afterburnerColor: "#ffffff" }
 };
 
 class ShipModelBoundary extends Component<{ children: ReactNode; fallback: ReactNode; onFallback: () => void }, { failed: boolean }> {
@@ -559,10 +560,12 @@ function PlayerEngineFlames({ shipId, afterburning, speed }: { shipId: string; a
 function PlayerShip({ onModelStatus }: { onModelStatus: (status: ShipModelStatus | null) => void }) {
   const player = useGameStore((state) => state.player);
   const locale = useGameStore((state) => state.locale);
-  const modelUrl = useGameStore((state) => state.assetManifest.shipModels[state.player.shipId]);
+  const ultimateActive = useGameStore((state) => state.player.shipId === "sparrow-mk1" && (state.ultimateAbility.activeUntil ?? -Infinity) > state.runtime.clock);
+  const renderShipId = ultimateActive ? SPARROW_ULTIMATE_MODEL_ID : player.shipId;
+  const modelUrl = useGameStore((state) => state.assetManifest.shipModels[renderShipId]);
   const afterburning = useGameStore((state) => state.input.afterburner && state.player.energy > 12);
   const speed = Math.hypot(...player.velocity);
-  const fallback = <ProceduralPlayerShip shipId={player.shipId} />;
+  const fallback = <ProceduralPlayerShip shipId={renderShipId} />;
   const shipName = translateDisplayName(shipById[player.shipId]?.name ?? player.shipId, locale);
 
   useEffect(() => {
@@ -584,15 +587,15 @@ function PlayerShip({ onModelStatus }: { onModelStatus: (status: ShipModelStatus
   return (
     <group position={toThree(player.position)} rotation={player.rotation}>
       {modelUrl ? (
-        <ShipModelBoundary key={player.shipId} fallback={fallback} onFallback={markFallback}>
+        <ShipModelBoundary key={renderShipId} fallback={fallback} onFallback={markFallback}>
           <Suspense fallback={fallback}>
-            <GltfPlayerShip onLoaded={markLoaded} shipId={player.shipId} url={modelUrl} />
+            <GltfPlayerShip onLoaded={markLoaded} shipId={renderShipId} url={modelUrl} />
           </Suspense>
         </ShipModelBoundary>
       ) : (
         fallback
       )}
-      <PlayerEngineFlames shipId={player.shipId} afterburning={afterburning} speed={speed} />
+      <PlayerEngineFlames shipId={renderShipId} afterburning={afterburning} speed={speed} />
     </group>
   );
 }

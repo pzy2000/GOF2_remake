@@ -100,6 +100,9 @@ describe("asset manifest", () => {
       expectProjectAssetExists(assetManifest.shipModels[ship.id]);
     }
     expect(new Set(modelPaths).size).toBe(ships.length);
+    expect(assetManifest.shipModels["sparrow-mk1-gundam"]).toBe("/assets/generated/ships/sparrow-gundam.glb");
+    expect(fallbackAssetManifest.shipModels["sparrow-mk1-gundam"]).toBe(assetManifest.shipModels["sparrow-mk1-gundam"]);
+    expectProjectAssetExists(assetManifest.shipModels["sparrow-mk1-gundam"]);
   });
 
   it("defines material and hardpoint metadata for every player ship", () => {

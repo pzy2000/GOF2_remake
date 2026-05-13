@@ -761,6 +761,126 @@ h3 {
   overflow: hidden;
 }
 
+.hud-left-stack {
+  position: absolute;
+  top: 238px;
+  left: 18px;
+  width: min(360px, 32vw);
+  display: grid;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.hud-left-note {
+  margin: 0;
+  border: 1px solid rgba(128, 214, 255, 0.24);
+  border-radius: 6px;
+  background: rgba(3, 10, 20, 0.58);
+  padding: 9px;
+  backdrop-filter: blur(10px);
+  font-size: 0.78rem;
+}
+
+.ultimate-skill {
+  position: absolute;
+  left: 338px;
+  top: 18px;
+  width: 74px;
+  min-height: 96px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #eaffff;
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  pointer-events: auto;
+  z-index: 18;
+}
+
+.ultimate-skill:disabled {
+  cursor: default;
+}
+
+.ultimate-skill-icon {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 999px;
+  border: 1px solid rgba(128, 214, 255, 0.58);
+  background: radial-gradient(circle at 50% 38%, rgba(105, 228, 255, 0.36), rgba(5, 14, 28, 0.92) 62%);
+  box-shadow: 0 0 18px rgba(105, 228, 255, 0.24), inset 0 0 18px rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.ultimate-skill.ready .ultimate-skill-icon,
+.ultimate-skill.active .ultimate-skill-icon {
+  border-color: rgba(255, 255, 255, 0.86);
+  box-shadow: 0 0 24px rgba(105, 228, 255, 0.48), inset 0 0 18px rgba(255, 255, 255, 0.14);
+}
+
+.ultimate-skill.charging .ultimate-skill-icon {
+  opacity: 0.58;
+  filter: grayscale(0.35);
+}
+
+.ultimate-skill b {
+  min-width: 66px;
+  padding: 3px 6px;
+  border: 1px solid rgba(128, 214, 255, 0.32);
+  border-radius: 999px;
+  background: rgba(3, 10, 20, 0.72);
+  font-size: 0.68rem;
+  line-height: 1;
+  letter-spacing: 0;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.ultimate-mecha-head,
+.ultimate-mecha-body,
+.ultimate-mecha-wing {
+  position: absolute;
+  display: block;
+  background: #eaf7ff;
+}
+
+.ultimate-mecha-head {
+  width: 14px;
+  height: 12px;
+  left: 25px;
+  top: 14px;
+  border-radius: 3px 3px 2px 2px;
+  box-shadow: -6px -4px 0 -3px #ff4e5f, 6px -4px 0 -3px #ff4e5f, inset 0 -3px 0 #2e8cff;
+}
+
+.ultimate-mecha-body {
+  width: 18px;
+  height: 22px;
+  left: 23px;
+  top: 29px;
+  clip-path: polygon(14% 0, 86% 0, 100% 100%, 0 100%);
+  box-shadow: inset 0 -8px 0 #2e8cff, inset 0 8px 0 rgba(255, 78, 95, 0.86);
+}
+
+.ultimate-mecha-wing {
+  width: 14px;
+  height: 28px;
+  top: 28px;
+  background: #2e8cff;
+  opacity: 0.95;
+}
+
+.ultimate-mecha-wing.left {
+  left: 12px;
+  transform: skewY(24deg);
+}
+
+.ultimate-mecha-wing.right {
+  right: 12px;
+  transform: skewY(-24deg);
+}
+
 .story-tracker,
 .exploration-tracker,
 .guidance-tracker,
@@ -3679,6 +3799,16 @@ button.equipment-trigger {
     width: calc(50vw - 26px);
   }
 
+  .hud-left-stack {
+    top: 218px;
+    width: calc(50vw - 26px);
+  }
+
+  .ultimate-skill {
+    left: calc(50vw - 37px);
+    top: 18px;
+  }
+
   .hud-target {
     display: none;
   }
@@ -3826,6 +3956,17 @@ button.equipment-trigger {
   button {
     min-height: 44px;
     padding-inline: 12px;
+  }
+
+  .ultimate-skill {
+    width: 68px;
+    min-height: 88px;
+    padding-inline: 0;
+  }
+
+  .ultimate-skill-icon {
+    width: 58px;
+    height: 58px;
   }
 
   .menu-screen,
@@ -4042,6 +4183,7 @@ button.equipment-trigger {
   .hud-top-right .guidance-tracker,
   .hud-top-right .exploration-tracker,
   .hud-top-right .onboarding-guide,
+  .hud-left-stack,
   .hud-target,
   .hud-bottom-left {
     display: none;
@@ -4458,6 +4600,7 @@ button.equipment-trigger {
   }
 
   .hud-top-right,
+  .hud-left-stack,
   .hud-bottom-left,
   .hud-target {
     display: none;
@@ -4503,6 +4646,10 @@ button.equipment-trigger {
   .hud-top-right {
     width: min(310px, 34vw);
     max-height: calc(100dvh - var(--mobile-top) - var(--mobile-bottom) - 134px);
+  }
+
+  .hud-left-stack {
+    display: none;
   }
 
   .hud-top-right p:nth-of-type(n + 4) {
@@ -4561,6 +4708,13 @@ button.equipment-trigger {
   .hud-top-right {
     width: min(360px, 42vw);
     max-height: min(48dvh, 430px);
+  }
+
+  .hud-left-stack {
+    display: grid;
+    top: calc(var(--mobile-top) + 238px);
+    left: calc(var(--mobile-edge) + 8px);
+    width: min(330px, 40vw);
   }
 
   .hud-top-right p:nth-of-type(n + 5),

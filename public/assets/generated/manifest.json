@@ -60,7 +60,8 @@
     "wayfarer-x": "/assets/generated/ships/wayfarer-x.glb",
     "raptor-v": "/assets/generated/ships/raptor-v.glb",
     "bastion-7": "/assets/generated/ships/bastion-7.glb",
-    "horizon-ark": "/assets/generated/ships/horizon-ark.glb"
+    "horizon-ark": "/assets/generated/ships/horizon-ark.glb",
+    "sparrow-mk1-gundam": "/assets/generated/ships/sparrow-gundam.glb"
   },
   "shipMaterialProfiles": {
     "sparrow-mk1": { "baseColor": "#cfefff", "trimColor": "#318ccf", "emissiveColor": "#66e4ff", "metalness": 0.48, "roughness": 0.28 },
@@ -71,7 +72,8 @@
     "wayfarer-x": { "baseColor": "#d7f7ff", "trimColor": "#2dd4bf", "emissiveColor": "#ffffff", "metalness": 0.46, "roughness": 0.3 },
     "raptor-v": { "baseColor": "#d94b58", "trimColor": "#2a2f35", "emissiveColor": "#70f0ff", "metalness": 0.58, "roughness": 0.24 },
     "bastion-7": { "baseColor": "#6f2530", "trimColor": "#ff7a45", "emissiveColor": "#ffd166", "metalness": 0.62, "roughness": 0.3 },
-    "horizon-ark": { "baseColor": "#f5ead2", "trimColor": "#8ff7ff", "emissiveColor": "#ffffff", "metalness": 0.52, "roughness": 0.22 }
+    "horizon-ark": { "baseColor": "#f5ead2", "trimColor": "#8ff7ff", "emissiveColor": "#ffffff", "metalness": 0.52, "roughness": 0.22 },
+    "sparrow-mk1-gundam": { "baseColor": "#f2f7ff", "trimColor": "#246bff", "emissiveColor": "#83ecff", "metalness": 0.56, "roughness": 0.26 }
   },
   "shipAttachmentProfiles": {
     "sparrow-mk1": { "engineHardpoints": [[-5.5, -1.6, 17], [5.5, -1.6, 17]], "primaryHardpoints": [[0, 0.4, -28]], "secondaryHardpoints": [[-8, -0.8, -10], [8, -0.8, -10]] },
@@ -82,7 +84,8 @@
     "wayfarer-x": { "engineHardpoints": [[-15, -2.6, 27], [15, -2.6, 27]], "primaryHardpoints": [[0, 0, -33]], "secondaryHardpoints": [[-13, -1, -10], [13, -1, -10]] },
     "raptor-v": { "engineHardpoints": [[-8, -1.8, 18], [0, -1.2, 20], [8, -1.8, 18]], "primaryHardpoints": [[-6, 0.4, -30], [6, 0.4, -30]], "secondaryHardpoints": [[0, -1, -11]] },
     "bastion-7": { "engineHardpoints": [[-14, -4, 22], [0, -3, 24], [14, -4, 22]], "primaryHardpoints": [[-7, 0, -34], [7, 0, -34]], "secondaryHardpoints": [[-16, -2, -14], [16, -2, -14]] },
-    "horizon-ark": { "engineHardpoints": [[-16, -2.4, 24], [-5, -2, 26], [5, -2, 26], [16, -2.4, 24]], "primaryHardpoints": [[-5, 0.4, -34], [5, 0.4, -34]], "secondaryHardpoints": [[-14, -1, -12], [14, -1, -12]] }
+    "horizon-ark": { "engineHardpoints": [[-16, -2.4, 24], [-5, -2, 26], [5, -2, 26], [16, -2.4, 24]], "primaryHardpoints": [[-5, 0.4, -34], [5, 0.4, -34]], "secondaryHardpoints": [[-14, -1, -12], [14, -1, -12]] },
+    "sparrow-mk1-gundam": { "engineHardpoints": [[-9, -3, 18], [9, -3, 18], [-18, 1, 7], [18, 1, 7]], "primaryHardpoints": [[-26, -4, -25], [26, -4, -25]], "secondaryHardpoints": [[-18, -3, 21], [18, -3, 21]] }
   },
   "npcShipTextures": {
     "freighter": "/assets/generated/npc-freighter-hull.webp"

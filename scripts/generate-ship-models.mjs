@@ -282,6 +282,38 @@ function createHorizon() {
   return finish(group, 0.9);
 }
 
+function createSparrowGundam() {
+  const group = new THREE.Group();
+  group.name = "Sparrow MK-I Gundam Mode";
+  const p = createPalette("#f2f7ff", "#246bff", "#111927", "#83ecff", "#ffffff");
+  const red = material("red command armor", "#ff3f5f", { metalness: 0.56, roughness: 0.3, emissive: "#45101a", emissiveIntensity: 0.12 });
+  const gold = material("gold sensor blades", "#ffd166", { metalness: 0.66, roughness: 0.24, emissive: "#6b4b0c", emissiveIntensity: 0.18 });
+  addBox(group, "mecha flight torso", [18, 24, 16], [0, 2, -2], p.base);
+  addBox(group, "blue reactor chest", [12, 11, 5], [0, 5, -12], p.armor);
+  addLightPanel(group, "white core vent", [6, 4, 2], [0, 5.5, -15], "#ffffff", [0, 0, 0], 0.9);
+  addBox(group, "red command waist", [16, 5, 12], [0, -12, 0], red);
+  addBox(group, "helmet crown", [13, 8, 11], [0, 20, -5], p.base);
+  addBox(group, "blue face guard", [8, 5, 3], [0, 18.5, -12], p.armor);
+  addBox(group, "red chin guard", [5, 2.6, 3], [0, 15.5, -12], red);
+  mirrored((side) => {
+    addBox(group, `gold v fin ${side}`, [2, 18, 1.8], [side * 5.8, 28, -7], gold, [0.15, 0, side * -0.5]);
+    addBox(group, `block shoulder pauldron ${side}`, [15, 10, 17], [side * 19, 9, -2], p.base, [0, 0, side * 0.08]);
+    addBox(group, `blue shoulder inset ${side}`, [11, 3, 13], [side * 19, 13.5, -5], p.armor);
+    addBox(group, `forearm cannon housing ${side}`, [7, 9, 23], [side * 26, -3, -5], p.base, [0, side * 0.08, side * 0.08]);
+    addCylinder(group, `beam rifle barrel ${side}`, 1.1, 1.4, 28, [side * 26, -4, -25], p.dark, [Math.PI / 2, 0, 0], 12);
+    addBox(group, `leg thruster block ${side}`, [8, 19, 11], [side * 7, -25, 4], p.base, [0, 0, side * 0.04]);
+    addBox(group, `red knee armor ${side}`, [8.4, 5, 5], [side * 7, -25, -5], red);
+    addCylinder(group, `leg vector nozzle ${side}`, 2.8, 3.8, 6, [side * 7, -36, 10], p.dark);
+    addBox(group, `wing binder ${side}`, [7, 35, 4], [side * 23, 1, 15], p.armor, [0.08, side * 0.28, side * -0.18]);
+    addBox(group, `white wing flare ${side}`, [16, 4, 24], [side * 27, 1, 14], p.base, [0, side * -0.22, side * 0.32]);
+    addCylinder(group, `wing booster ${side}`, 2.6, 4.2, 7, [side * 18, -3, 21], p.dark);
+    addLightPanel(group, `cyan saber glow ${side}`, [1.6, 1.6, 32], [side * 33, 0, -7], "#83ecff", [0, side * 0.22, side * 0.12], 0.7);
+  });
+  addCylinder(group, "central backpack bell", 4.5, 6, 8, [0, -3, 22], p.dark);
+  addLightPanel(group, "backpack reactor glow", [7, 5, 2], [0, -3, 27], "#83ecff", [0, 0, 0], 0.8);
+  return finish(group, 0.88);
+}
+
 const fleet = {
   "sparrow-mk1": createSparrow,
   "mule-lx": createMule,
@@ -308,3 +340,5 @@ for (const [shipId, create] of Object.entries(fleet)) {
   await exportGlb(create(), `${shipId}.glb`);
   console.log(`generated ${shipId}.glb`);
 }
+await exportGlb(createSparrowGundam(), "sparrow-gundam.glb");
+console.log("generated sparrow-gundam.glb");

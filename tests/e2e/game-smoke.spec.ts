@@ -1629,6 +1629,40 @@ test.describe("browser smoke", () => {
     await page.getByRole("button", { name: "Launch" }).click();
     await expect(page.getByTestId("story-tracker")).toContainText("Glass Wake 01");
     await expect(page.getByTestId("story-tracker")).toContainText("Mirr Lattice");
+    await expect(page.locator(".hud-top-right").getByTestId("story-tracker")).toHaveCount(0);
+    await expect(page.locator(".hud-top-right").getByTestId("onboarding-guide")).toHaveCount(0);
+    await expect(page.getByTestId("hud-left-stack").getByTestId("onboarding-guide")).toBeVisible();
+    const trackerMetrics = await page.getByTestId("story-tracker").evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return {
+        left: rect.left,
+        right: rect.right,
+        visibleHeight: rect.height,
+        scrollHeight: element.scrollHeight,
+        viewportWidth: window.innerWidth
+      };
+    });
+    expect(trackerMetrics.left).toBeLessThan(trackerMetrics.viewportWidth / 3);
+    expect(trackerMetrics.right).toBeLessThan(trackerMetrics.viewportWidth / 2);
+    expect(trackerMetrics.visibleHeight).toBeGreaterThanOrEqual(trackerMetrics.scrollHeight - 1);
+    const rightHudMetrics = await page.locator(".hud-top-right").evaluate((element) => ({
+      clientHeight: element.clientHeight,
+      scrollHeight: element.scrollHeight
+    }));
+    expect(rightHudMetrics.clientHeight).toBeGreaterThanOrEqual(rightHudMetrics.scrollHeight - 1);
+    const onboardingMetrics = await page.getByTestId("onboarding-guide").evaluate((element) => {
+      const rect = element.getBoundingClientRect();
+      return {
+        left: rect.left,
+        right: rect.right,
+        visibleHeight: rect.height,
+        scrollHeight: element.scrollHeight,
+        viewportWidth: window.innerWidth
+      };
+    });
+    expect(onboardingMetrics.left).toBeLessThan(onboardingMetrics.viewportWidth / 3);
+    expect(onboardingMetrics.right).toBeLessThan(onboardingMetrics.viewportWidth / 2);
+    expect(onboardingMetrics.visibleHeight).toBeGreaterThanOrEqual(onboardingMetrics.scrollHeight - 1);
     await expect(page.locator(".story-waypoint-label")).toContainText("Main Story");
 
     await page.keyboard.press("KeyM");

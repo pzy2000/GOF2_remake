@@ -24,7 +24,8 @@ import type {
   SaveSlotId,
   SaveSlotSummary,
   Screen,
-  StationTab
+  StationTab,
+  UltimateAbilityState
 } from "../types/game";
 import type { EconomyEvent, EconomyServiceStatus } from "../types/economy";
 import type { Locale } from "../i18n";
@@ -48,6 +49,7 @@ export interface GameStore {
   npcInteraction?: NpcInteractionState;
   npcObjective?: NpcObjectiveState;
   autopilot?: AutoPilotState;
+  ultimateAbility: UltimateAbilityState;
   input: FlightInput;
   gameClock: number;
   marketState: MarketState;
