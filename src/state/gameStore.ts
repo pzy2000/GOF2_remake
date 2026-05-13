@@ -21,6 +21,15 @@ import { fallbackAssetManifest } from "../systems/assets";
 import { add, clamp, distance, forwardFromRotation, normalize, scale, sub } from "../systems/math";
 import { applyDamage, regenerateShield } from "../systems/combat";
 import {
+  createImpactEffects,
+  createKillEffects,
+  createProjectileTrail,
+  createSalvagePulse,
+  createSpeedLineEffects,
+  resolveAssistedShotDirection,
+  selectSoftLockTarget
+} from "../systems/combatFeel";
+import {
   getMiningProgressIncrement,
   getOreColor
 } from "../systems/difficulty";
@@ -1702,12 +1711,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
         targetId: fire.targetId
       });
     }
+    runtime.effects.push(...createSpeedLineEffects(projectileId("speed-line"), player, afterburning, now, tuning));
     let explorationState = state.explorationState;
     let knownPlanetIds = state.knownPlanetIds;
     let primaryCooldown = Math.max(0, state.primaryCooldown - delta);
     let secondaryCooldown = Math.max(0, state.secondaryCooldown - delta);
     let pendingDialogueSceneId: string | undefined;
     const target = runtime.enemies.find((ship) => ship.id === state.targetId && ship.hull > 0);
+    const softLockTarget = target ?? selectSoftLockTarget(player, runtime.enemies, tuning);
     let activeMissions = state.activeMissions;
     let echoLockMessage: string | undefined;
     const echoLockAdvance = advanceStoryEchoLock({
@@ -1805,16 +1816,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
     } else if (input.firePrimary && primaryWeapon && primaryCooldown <= 0) {
       const primaryEnergyCost = Math.ceil(primaryWeapon.energyCost * equipmentEffects.weaponEnergyCostMultiplier);
       if (player.energy >= primaryEnergyCost) {
+        const shotDirection = resolveAssistedShotDirection(player, softLockTarget, forward, tuning);
         runtime.projectiles.push({
           id: projectileId("laser"),
           owner: "player",
           kind: "laser",
           position: add(player.position, scale(forward, 16)),
-          direction: target ? normalize(sub(target.position, player.position)) : forward,
+          direction: shotDirection,
           speed: primaryWeapon.speed,
           damage: Math.round(primaryWeapon.damage * equipmentEffects.weaponDamageMultiplier),
           life: primaryWeapon.speed > 0 ? primaryWeapon.range / primaryWeapon.speed : 1.4,
-          targetId: target?.id
+          targetId: softLockTarget?.id
         });
         audioSystem.play("laser");
         player = { ...player, energy: player.energy - primaryEnergyCost };
@@ -1825,16 +1837,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
     }
 
     if (input.fireSecondary && secondaryWeapon && secondaryCooldown <= 0 && player.missiles > 0) {
+      const missileDirection = resolveAssistedShotDirection(player, softLockTarget, forward, tuning);
       runtime.projectiles.push({
         id: projectileId("missile"),
         owner: "player",
         kind: "missile",
         position: add(player.position, scale(forward, 18)),
-        direction: target ? normalize(sub(target.position, player.position)) : forward,
+        direction: missileDirection,
         speed: secondaryWeapon.speed,
         damage: Math.round(secondaryWeapon.damage * equipmentEffects.weaponDamageMultiplier),
         life: secondaryWeapon.speed > 0 ? secondaryWeapon.range / secondaryWeapon.speed : 3.6,
-        targetId: target?.id
+        targetId: softLockTarget?.id
       });
       audioSystem.play("missile");
       player = { ...player, missiles: player.missiles - 1 };
@@ -2070,6 +2083,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         if (missileTarget) direction = normalize(sub(missileTarget.position, projectile.position));
       }
       const movedProjectile = { ...projectile, direction, position: add(projectile.position, scale(direction, projectile.speed * delta)) };
+      runtime.effects.push(createProjectileTrail(projectileId("projectile-trail"), projectile, movedProjectile.position, tuning));
       let consumed = false;
       if (projectile.owner === "enemy" && projectile.targetId) {
         runtime.convoys = runtime.convoys.map((convoy) => {
@@ -2116,39 +2130,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
             echoLockBlockedMessage = `Echo Lock required: hold ${ship.name} in range before lethal damage.`;
           }
           consumed = true;
-          runtime.effects.push({
-            id: projectileId(shielded ? "shield-hit" : "hit"),
-            kind: shielded ? "shield-hit" : "hit",
-            position: movedProjectile.position,
-            color: shielded ? "#69e4ff" : "#ff8a6a",
-            secondaryColor: shielded ? "#eaffff" : "#ffd166",
-            label: `-${Math.round(projectile.damage)}`,
-            particleCount: 5,
-            spread: 12,
-            size: 12,
-            life: 0.34,
-            maxLife: 0.34,
-            velocity: [0, 10, 0]
-          });
+          runtime.effects.push(...createImpactEffects(projectileId(shielded ? "shield-hit" : "hit"), movedProjectile.position, projectile.damage, shielded, projectile.kind === "missile", tuning));
           if (damaged.hull <= 0 && ship.hull > 0) {
             if (ship.role === "pirate") destroyedPirates += 1;
             if (ship.boss) destroyedBossName = ship.name;
             if (ship.storyTarget && ship.missionId) destroyedStoryTargets.push({ missionId: ship.missionId, targetId: ship.id, name: ship.name });
             lootDrops.push(...lootDropsForDestroyedShip(ship, state.currentSystemId));
-            runtime.effects.push({
-              id: projectileId("explosion"),
-              kind: "explosion",
-              position: ship.position,
-              color: ship.role === "pirate" ? "#ff784f" : ship.role === "patrol" ? "#64e4ff" : "#ffd166",
-              secondaryColor: "#ffd166",
-              label: "Destroyed",
-              particleCount: 22,
-              spread: 58,
-              size: 46,
-              life: 0.85,
-              maxLife: 0.85,
-              velocity: [0, 6, 0]
-            });
+            runtime.effects.push(...createKillEffects(projectileId("explosion"), ship, tuning));
             audioSystem.play("explosion");
             if (shouldReportEconomyNpcDestroyed(ship)) {
               void postNpcDestroyed({ npcId: ship.id, systemId: state.currentSystemId }).catch(() => undefined);
@@ -2166,20 +2154,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         player = applyDamage(player, projectile.damage, now);
         if (previousShield > 0 && player.shield <= 0) audioSystem.play("shield-break");
         if (previousHullRatio > 0.3 && player.hull / player.stats.hull <= 0.3) audioSystem.play("low-hull");
-        runtime.effects.push({
-          id: projectileId(shielded ? "shield-hit" : "player-hit"),
-          kind: shielded ? "shield-hit" : "hit",
-          position: player.position,
-          color: shielded ? "#69e4ff" : "#ff6270",
-          secondaryColor: shielded ? "#eaffff" : "#ffd166",
-          label: `-${Math.round(projectile.damage)}`,
-          particleCount: shielded ? 5 : 7,
-          spread: shielded ? 18 : 14,
-          size: shielded ? 28 : defaultFlightTuning.feedback.playerHitEffectSize,
-          life: 0.42 + defaultFlightTuning.feedback.playerHitPauseSeconds,
-          maxLife: 0.42 + defaultFlightTuning.feedback.playerHitPauseSeconds,
-          velocity: [0, 12, 0]
-        });
+        runtime.effects.push(...createImpactEffects(projectileId(shielded ? "shield-hit" : "player-hit"), player.position, projectile.damage, shielded, projectile.kind === "missile", tuning));
         consumed = true;
       } else if (!consumed && projectile.owner === "player") {
         runtime.enemies = runtime.enemies.map((ship) => {
@@ -2228,20 +2203,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             }
           }
           consumed = true;
-          runtime.effects.push({
-            id: projectileId(shielded ? "shield-hit" : "hit"),
-            kind: shielded ? "shield-hit" : "hit",
-            position: movedProjectile.position,
-            color: shielded ? "#69e4ff" : "#ff8a6a",
-            secondaryColor: shielded ? "#eaffff" : "#ffd166",
-            label: `-${Math.round(projectile.damage)}`,
-            particleCount: projectile.kind === "missile" ? 10 : 5,
-            spread: projectile.kind === "missile" ? 22 * defaultFlightTuning.feedback.missileImpactScale : 12,
-            size: projectile.kind === "missile" ? 22 * defaultFlightTuning.feedback.missileImpactScale : 12,
-            life: 0.34,
-            maxLife: 0.34,
-            velocity: [0, 10, 0]
-          });
+          runtime.effects.push(...createImpactEffects(projectileId(shielded ? "shield-hit" : "hit"), movedProjectile.position, projectile.damage, shielded, projectile.kind === "missile", tuning));
           if (damaged.hull <= 0 && ship.hull > 0) {
             if (ship.role === "pirate") {
               destroyedPirates += 1;
@@ -2255,20 +2217,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
             if (ship.boss) destroyedBossName = ship.name;
             if (ship.storyTarget && ship.missionId) destroyedStoryTargets.push({ missionId: ship.missionId, targetId: ship.id, name: ship.name });
             lootDrops.push(...lootDropsForDestroyedShip(ship, state.currentSystemId));
-            runtime.effects.push({
-              id: projectileId("explosion"),
-              kind: "explosion",
-              position: ship.position,
-              color: ship.role === "pirate" ? "#ff784f" : ship.role === "patrol" ? "#64e4ff" : "#ffd166",
-              secondaryColor: "#ffd166",
-              label: "Destroyed",
-              particleCount: Math.min(defaultFlightTuning.performance.maxExplosionParticles, ship.boss ? 34 : 22),
-              spread: 58 * (ship.boss ? defaultFlightTuning.feedback.bossExplosionScale : 1),
-              size: 46 * (ship.boss ? defaultFlightTuning.feedback.bossExplosionScale : 1),
-              life: 0.85 * (ship.boss ? 1.25 : 1),
-              maxLife: 0.85 * (ship.boss ? 1.25 : 1),
-              velocity: [0, 6, 0]
-            });
+            runtime.effects.push(...createKillEffects(projectileId("explosion"), ship, tuning));
             audioSystem.play("explosion");
             if (shouldReportEconomyNpcDestroyed(ship)) {
               void postNpcDestroyed({ npcId: ship.id, systemId: state.currentSystemId }).catch(() => undefined);
@@ -2653,20 +2602,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           salvage: state.runtime.salvage.filter((salvage) => salvage.id !== nearSalvage.salvage.id),
           effects: [
             ...state.runtime.effects,
-            {
-              id: projectileId("salvage-recovered"),
-              kind: "hit",
-              position: nearSalvage.salvage.position,
-              color: "#9b7bff",
-              secondaryColor: "#eaffff",
-              label: "Recovered",
-              particleCount: 12,
-              spread: 24,
-              size: 16,
-              life: 0.7,
-              maxLife: 0.7,
-              velocity: [0, 12, 0]
-            }
+            createSalvagePulse(projectileId("salvage-recovered"), nearSalvage.salvage.position, defaultFlightTuning)
           ],
           message: `Recovered ${nearSalvage.salvage.name}. Return to station.`
         }

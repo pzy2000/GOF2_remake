@@ -40,6 +40,33 @@ export interface FlightTuning {
     missileImpactScale: number;
     bossExplosionScale: number;
   };
+  targeting: {
+    softLockDistance: number;
+    softLockConeDegrees: number;
+    leadTimeSeconds: number;
+    softLockStrength: number;
+    maxAssistAngleDegrees: number;
+  };
+  speedFeel: {
+    speedLineThreshold: number;
+    speedLineMaxCount: number;
+    afterburnerSpeedLineMultiplier: number;
+    killPulseSeconds: number;
+  };
+  combatRhythm: {
+    fireConeDegrees: number;
+    attackWindowSeconds: number;
+    attackCycleSeconds: number;
+    bossBurstMultiplier: number;
+  };
+  vfx: {
+    projectileTrailLife: number;
+    projectileTrailSize: number;
+    shieldBreakParticles: number;
+    bossExplosionParticles: number;
+    salvagePulseLife: number;
+    salvagePulseSize: number;
+  };
   performance: {
     maxVisibleProjectiles: number;
     maxVisibleEffects: number;
@@ -88,6 +115,33 @@ export const defaultFlightTuning: FlightTuning = {
     playerHitEffectSize: 18,
     missileImpactScale: 1.45,
     bossExplosionScale: 1.6
+  },
+  targeting: {
+    softLockDistance: 860,
+    softLockConeDegrees: 18,
+    leadTimeSeconds: 0.22,
+    softLockStrength: 0.38,
+    maxAssistAngleDegrees: 12
+  },
+  speedFeel: {
+    speedLineThreshold: 185,
+    speedLineMaxCount: 4,
+    afterburnerSpeedLineMultiplier: 1.7,
+    killPulseSeconds: 0.32
+  },
+  combatRhythm: {
+    fireConeDegrees: 16,
+    attackWindowSeconds: 1.25,
+    attackCycleSeconds: 2.7,
+    bossBurstMultiplier: 1.45
+  },
+  vfx: {
+    projectileTrailLife: 0.16,
+    projectileTrailSize: 7,
+    shieldBreakParticles: 18,
+    bossExplosionParticles: 34,
+    salvagePulseLife: 0.95,
+    salvagePulseSize: 34
   },
   performance: {
     maxVisibleProjectiles: 90,

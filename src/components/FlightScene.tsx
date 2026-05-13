@@ -1521,14 +1521,15 @@ function VisualEffect({ effect }: { effect: VisualEffectEntity }) {
     );
   }
 
-  if ((effect.kind === "launch-trail" || effect.kind === "dock-corridor") && effect.endPosition) {
+  if ((effect.kind === "projectile-trail" || effect.kind === "speed-line" || effect.kind === "launch-trail" || effect.kind === "dock-corridor") && effect.endPosition) {
     const vector = sub(effect.endPosition, effect.position);
+    const simpleTrail = effect.kind === "projectile-trail" || effect.kind === "speed-line";
     const rings = effect.kind === "dock-corridor" ? [0.28, 0.48, 0.68, 0.88] : [0.35, 0.68, 0.92];
     return (
       <group>
-        <Line points={[effect.position, effect.endPosition]} color={effect.color} lineWidth={effect.kind === "dock-corridor" ? 2.4 : 3.2} transparent opacity={alpha * 0.64} />
-        <Line points={[effect.position, effect.endPosition]} color={effect.secondaryColor ?? "#ffffff"} lineWidth={0.9} transparent opacity={alpha * 0.34} />
-        {rings.map((progress) => {
+        <Line points={[effect.position, effect.endPosition]} color={effect.color} lineWidth={simpleTrail ? effect.size : effect.kind === "dock-corridor" ? 2.4 : 3.2} transparent opacity={alpha * (effect.kind === "projectile-trail" ? 0.48 : 0.64)} />
+        <Line points={[effect.position, effect.endPosition]} color={effect.secondaryColor ?? "#ffffff"} lineWidth={simpleTrail ? Math.max(0.8, effect.size * 0.32) : 0.9} transparent opacity={alpha * 0.34} />
+        {simpleTrail ? null : rings.map((progress) => {
           const position = add(effect.position, scale(vector, progress));
           const size = effect.size * (effect.kind === "dock-corridor" ? 0.58 + progress * 0.42 : 0.45 + progress * 0.36);
           return (
@@ -1538,10 +1539,10 @@ function VisualEffect({ effect }: { effect: VisualEffectEntity }) {
             </mesh>
           );
         })}
-        <mesh position={toThree(effect.endPosition)}>
+        {simpleTrail ? null : <mesh position={toThree(effect.endPosition)}>
           <sphereGeometry args={[effect.size * 0.22 + alpha * 4, 12, 8]} />
           <meshBasicMaterial color={effect.secondaryColor ?? effect.color} transparent opacity={alpha * 0.38} toneMapped={false} />
-        </mesh>
+        </mesh>}
         {effect.label ? (
           <Html center distanceFactor={10} className="effect-label" position={toThree(effect.endPosition)} style={{ opacity: alpha }}>
             {formatRuntimeText(locale, effect.label)}
@@ -1563,6 +1564,32 @@ function VisualEffect({ effect }: { effect: VisualEffectEntity }) {
           <sphereGeometry args={[7 + alpha * 5, 12, 8]} />
           <meshBasicMaterial color={effect.color} transparent opacity={0.22 + alpha * 0.38} toneMapped={false} />
         </mesh>
+      </group>
+    );
+  }
+  if (effect.kind === "shield-break" || effect.kind === "kill-pulse" || effect.kind === "salvage-pulse") {
+    const ringScale = effect.kind === "salvage-pulse" ? 1.35 - alpha * 0.25 : 1.05 + (1 - alpha) * 0.7;
+    return (
+      <group position={toThree(effect.position)}>
+        <mesh rotation={[Math.PI / 2, 0, 0]} scale={ringScale}>
+          <torusGeometry args={[effect.size, effect.kind === "shield-break" ? 1.2 : 2.4, 8, 58]} />
+          <meshBasicMaterial color={effect.color} transparent opacity={alpha * 0.72} toneMapped={false} />
+        </mesh>
+        <mesh rotation={[0, Math.PI / 2, 0]} scale={0.72 + (1 - alpha) * 0.42}>
+          <torusGeometry args={[effect.size * 0.72, 1.1, 8, 42]} />
+          <meshBasicMaterial color={effect.secondaryColor ?? effect.color} transparent opacity={alpha * 0.42} toneMapped={false} />
+        </mesh>
+        {particles.map((particle, index) => (
+          <mesh key={index} position={toThree(scale(particle.position, 1.35 - alpha * 0.2))}>
+            <sphereGeometry args={[particle.size * (0.8 + alpha), 8, 6]} />
+            <meshBasicMaterial color={particle.color} transparent opacity={alpha * 0.76} toneMapped={false} />
+          </mesh>
+        ))}
+        {effect.label ? (
+          <Html center distanceFactor={9} className="effect-label" style={{ opacity: alpha }}>
+            {formatRuntimeText(locale, effect.label)}
+          </Html>
+        ) : null}
       </group>
     );
   }
@@ -1603,14 +1630,22 @@ function VisualEffect({ effect }: { effect: VisualEffectEntity }) {
 function TargetLock() {
   const player = useGameStore((state) => state.player);
   const locale = useGameStore((state) => state.locale);
+  const clock = useGameStore((state) => state.runtime.clock);
   const target = useGameStore((state) => state.runtime.enemies.find((ship) => ship.id === state.targetId && ship.hull > 0 && ship.deathTimer === undefined));
   if (!target) return null;
   const dist = Math.round(Math.hypot(player.position[0] - target.position[0], player.position[1] - target.position[1], player.position[2] - target.position[2]));
+  const pulse = 1 + Math.sin(clock * (target.boss ? 8.5 : 6.2)) * 0.08;
+  const healthRatio = clamp(target.hull / target.maxHull, 0, 1);
+  const lockColor = target.boss ? "#ff6b6b" : target.storyTarget ? "#ff9bd5" : "#ffdf6e";
   return (
     <group position={toThree(target.position)}>
-      <mesh>
-        <torusGeometry args={[26, 1.4, 6, 4]} />
-        <meshBasicMaterial color="#ffdf6e" transparent opacity={0.78} toneMapped={false} />
+      <mesh scale={pulse}>
+        <torusGeometry args={[target.boss ? 36 : 26, 1.4, 6, 4]} />
+        <meshBasicMaterial color={lockColor} transparent opacity={0.72 + healthRatio * 0.18} toneMapped={false} />
+      </mesh>
+      <mesh rotation={[Math.PI / 2, 0, clock * 1.8]} scale={0.72 + pulse * 0.18}>
+        <torusGeometry args={[target.boss ? 44 : 32, 0.8, 8, 36]} />
+        <meshBasicMaterial color={lockColor} transparent opacity={0.26} toneMapped={false} />
       </mesh>
       <Html center distanceFactor={12} className="target-label">
         {localizeGenericName(target.storyTarget ? "STORY" : "LOCK", locale)} · {formatDistance(locale, dist)}

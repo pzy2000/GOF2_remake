@@ -897,7 +897,22 @@ export interface ProjectileEntity {
 
 export interface VisualEffectEntity {
   id: string;
-  kind: "hit" | "shield-hit" | "explosion" | "damage-text" | "mining-beam" | "gate-spool" | "wormhole" | "nav-ring" | "launch-trail" | "dock-corridor";
+  kind:
+    | "hit"
+    | "shield-hit"
+    | "explosion"
+    | "damage-text"
+    | "mining-beam"
+    | "gate-spool"
+    | "wormhole"
+    | "nav-ring"
+    | "launch-trail"
+    | "dock-corridor"
+    | "projectile-trail"
+    | "shield-break"
+    | "speed-line"
+    | "kill-pulse"
+    | "salvage-pulse";
   position: Vec3;
   endPosition?: Vec3;
   velocity?: Vec3;

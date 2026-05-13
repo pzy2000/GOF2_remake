@@ -1711,7 +1711,7 @@ test.describe("browser smoke", () => {
       });
       (e2e.getState() as { tick: (delta: number) => void }).tick(0.05);
     });
-    await expect(page.getByTestId("story-notification")).toContainText("Glass Echo Prime emerged");
+    await expect(page.getByTestId("story-notification")).toContainText("Prime Wake");
     await expect(page.getByTestId("story-tracker")).toContainText("Glass Echo Prime");
 
     await page.evaluate(() => {
@@ -1746,7 +1746,7 @@ test.describe("browser smoke", () => {
       });
       (e2e.getState() as { tick: (delta: number) => void }).tick(0.05);
     });
-    await expect(page.getByTestId("story-notification")).toContainText("Glass Echo Prime destroyed");
+    await expect(page.getByTestId("story-notification")).toContainText("Probe Core Exposed");
 
     await page.evaluate(() => {
       const e2e = window.__GOF2_E2E__!;
