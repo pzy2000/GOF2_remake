@@ -15,11 +15,14 @@ import type {
 const STATIC_FALLBACK_URL = "static economy fallback";
 const STATIC_FALLBACK_REASON = "Economy backend disabled for static build.";
 const HTTPS_HTTP_BLOCK_REASON = "Economy backend disabled: HTTPS pages cannot call an HTTP economy service.";
+const DEFAULT_LOCAL_ECONOMY_PORT = 19777;
 
 export interface EconomyServiceConfigInput {
   envUrl?: string;
   production: boolean;
   pageProtocol?: string;
+  pageHostname?: string;
+  staticFallback?: boolean;
 }
 
 export interface EconomyServiceConfig {
@@ -36,7 +39,9 @@ function normalizeConfiguredUrl(url: string): string {
 export function resolveEconomyServiceConfig({
   envUrl,
   production,
-  pageProtocol
+  pageProtocol,
+  pageHostname,
+  staticFallback = false
 }: EconomyServiceConfigInput): EconomyServiceConfig {
   const configuredUrl = envUrl?.trim() ? normalizeConfiguredUrl(envUrl) : undefined;
   if (configuredUrl) {
@@ -54,12 +59,21 @@ export function resolveEconomyServiceConfig({
       displayUrl: configuredUrl
     };
   }
-  if (production) {
+  if (staticFallback || (production && pageProtocol === "https:")) {
     return {
       enabled: false,
       requestBaseUrl: "",
       displayUrl: STATIC_FALLBACK_URL,
       disabledReason: STATIC_FALLBACK_REASON
+    };
+  }
+  if (production) {
+    const localHost = pageHostname?.trim() || "127.0.0.1";
+    const localUrl = `http://${localHost}:${DEFAULT_LOCAL_ECONOMY_PORT}`;
+    return {
+      enabled: true,
+      requestBaseUrl: localUrl,
+      displayUrl: localUrl
     };
   }
   return {
@@ -72,7 +86,9 @@ export function resolveEconomyServiceConfig({
 export const ECONOMY_SERVICE_CONFIG = resolveEconomyServiceConfig({
   envUrl: import.meta.env.VITE_ECONOMY_API_URL as string | undefined,
   production: import.meta.env.PROD,
-  pageProtocol: typeof window === "undefined" ? undefined : window.location.protocol
+  pageProtocol: typeof window === "undefined" ? undefined : window.location.protocol,
+  pageHostname: typeof window === "undefined" ? undefined : window.location.hostname,
+  staticFallback: import.meta.env.VITE_ECONOMY_STATIC_FALLBACK === "true"
 });
 
 export const ECONOMY_SERVICE_URL = ECONOMY_SERVICE_CONFIG.displayUrl;

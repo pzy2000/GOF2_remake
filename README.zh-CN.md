@@ -27,7 +27,9 @@ npm run test:e2e:mobile
 
 `npm run dev:full` 会同时启动本地权威经济后端 `127.0.0.1:19777` 和 Vite 前端。开发环境前端会请求同源 `/api/economy`，由 Vite 代理到本地后端。只想使用浏览器内置的经济 fallback 时，可以运行普通的 `npm run dev`。
 
-GitHub Pages 构建只是静态预览，不会启动经济后端，因此默认使用浏览器本地 fallback 模拟。若要接入线上权威经济服务，需要在构建时设置 `VITE_ECONOMY_API_URL` 指向 HTTPS 服务源/基址；HTTPS 页面会拒绝不安全的 `http://` 经济端点。
+本地生产式部署时，先构建前端并在 `19777` 端口运行经济后端。如果生产构建通过 HTTP 提供且没有设置 `VITE_ECONOMY_API_URL`，浏览器会默认连接 `http://<当前页面主机>:19777`。
+
+GitHub Pages 构建只是静态预览，不会启动经济后端，因此会设置 `VITE_ECONOMY_STATIC_FALLBACK=true` 并默认使用浏览器本地 fallback 模拟。若要接入线上权威经济服务，需要在构建时设置 `VITE_ECONOMY_API_URL` 指向 HTTPS 服务源/基址；HTTPS 页面会拒绝不安全的 `http://` 经济端点。
 
 也可以直接运行一键脚本：
 

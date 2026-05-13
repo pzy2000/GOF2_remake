@@ -51,6 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       VITE_BASE_PATH: /GOF2_remake/
+      VITE_ECONOMY_STATIC_FALLBACK: "true"
     steps:
       - name: Check out repository
         uses: actions/checkout@v4

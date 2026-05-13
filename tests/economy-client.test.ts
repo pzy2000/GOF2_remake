@@ -2,11 +2,48 @@ import { describe, expect, it } from "vitest";
 import { resolveEconomyServiceConfig } from "../src/systems/economyClient";
 
 describe("economy service configuration", () => {
-  it("disables the backend for static production builds without an API URL", () => {
+  it("disables the backend for HTTPS production builds without an API URL", () => {
     expect(resolveEconomyServiceConfig({ production: true, pageProtocol: "https:" })).toMatchObject({
       enabled: false,
       displayUrl: "static economy fallback",
       disabledReason: "Economy backend disabled for static build."
+    });
+  });
+
+  it("disables the backend when static fallback is explicitly requested", () => {
+    expect(resolveEconomyServiceConfig({
+      production: true,
+      pageProtocol: "http:",
+      pageHostname: "127.0.0.1",
+      staticFallback: true
+    })).toMatchObject({
+      enabled: false,
+      displayUrl: "static economy fallback",
+      disabledReason: "Economy backend disabled for static build."
+    });
+  });
+
+  it("uses the local economy backend for HTTP production builds without an API URL", () => {
+    expect(resolveEconomyServiceConfig({
+      production: true,
+      pageProtocol: "http:",
+      pageHostname: "127.0.0.1"
+    })).toMatchObject({
+      enabled: true,
+      requestBaseUrl: "http://127.0.0.1:19777",
+      displayUrl: "http://127.0.0.1:19777"
+    });
+  });
+
+  it("uses the current page host for local HTTP production deployments", () => {
+    expect(resolveEconomyServiceConfig({
+      production: true,
+      pageProtocol: "http:",
+      pageHostname: "192.168.1.25"
+    })).toMatchObject({
+      enabled: true,
+      requestBaseUrl: "http://192.168.1.25:19777",
+      displayUrl: "http://192.168.1.25:19777"
     });
   });
 

@@ -27,7 +27,9 @@ npm run test:e2e:mobile
 
 `npm run dev:full` starts the local authoritative economy server on `127.0.0.1:19777` and the Vite frontend together. The frontend calls same-origin `/api/economy` in development, and Vite proxies those REST/SSE requests to the local backend. Use plain `npm run dev` when you want the browser-only fallback economy.
 
-The GitHub Pages build is a static preview and does not start the economy backend, so it defaults to browser-local fallback simulation. To connect a hosted authoritative economy service, build with `VITE_ECONOMY_API_URL` set to an HTTPS service origin/base URL; HTTPS pages intentionally refuse insecure `http://` economy endpoints.
+For local production-style deployment, build the frontend and run the economy backend on port `19777`. When a production build is served over HTTP without `VITE_ECONOMY_API_URL`, the browser connects to `http://<current-page-host>:19777` by default.
+
+The GitHub Pages build is a static preview and does not start the economy backend, so it sets `VITE_ECONOMY_STATIC_FALLBACK=true` and defaults to browser-local fallback simulation. To connect a hosted authoritative economy service, build with `VITE_ECONOMY_API_URL` set to an HTTPS service origin/base URL; HTTPS pages intentionally refuse insecure `http://` economy endpoints.
 
 You can also use the one-command launcher:
 
