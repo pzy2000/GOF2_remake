@@ -18,6 +18,12 @@ import { getEconomyFlightRouteCue } from "../systems/economyRoutes";
 import { getMarketEntry, getTradeHints } from "../systems/economy";
 import { getPlayerRuntimeEffects } from "../systems/equipment";
 import { hasActiveCivilianDistress } from "../state/domains/combatRuntime";
+import { defaultFlightTuning, resolveCameraFov, resolveCameraOffset } from "../systems/flightTuning";
+import {
+  FlightControls as FlightInputControls,
+  SimulationTicker as FlightSimulationTicker,
+  TouchFlightControls as TouchFlightInputControls
+} from "./flight/FlightInputControls";
 import {
   formatCargoContents,
   formatCredits,
@@ -361,12 +367,22 @@ function CameraRig() {
     }
     const forward = forwardFromRotation(player.rotation);
     const speed = Math.hypot(...player.velocity);
-    const speedPullback = Math.min(56, speed * 0.22 + (afterburnerHeld ? 18 : 0));
-    const chaseOffset =
-      cameraMode === "chase" ? add(scale(forward, -86 - speedPullback), [0, 28 + speedPullback * 0.08, 0]) : add(scale(forward, -122 - speedPullback), [44, 52, 0]);
+    const afterburning = afterburnerHeld && player.energy > defaultFlightTuning.motion.afterburnerMinEnergy;
+    const chaseOffset = resolveCameraOffset(forward, speed, afterburning, cameraMode !== "chase");
     const targetPosition = add(player.position, chaseOffset);
-    camera.position.lerp(new THREE.Vector3(...targetPosition), 0.08);
-    camera.lookAt(new THREE.Vector3(...add(player.position, scale(forward, 90))));
+    const hitShake = Math.max(0, defaultFlightTuning.camera.hitShakeDuration - (runtime.clock - player.lastDamageAt));
+    const shakeScale = hitShake > 0 ? (hitShake / defaultFlightTuning.camera.hitShakeDuration) * defaultFlightTuning.camera.hitShakeAmplitude : 0;
+    const shake: Vec3 = [
+      Math.sin(runtime.clock * 43.1) * shakeScale,
+      Math.cos(runtime.clock * 37.7) * shakeScale * 0.7,
+      Math.sin(runtime.clock * 29.3) * shakeScale * 0.35
+    ];
+    camera.position.lerp(new THREE.Vector3(...add(targetPosition, shake)), defaultFlightTuning.camera.lerp);
+    if (camera instanceof THREE.PerspectiveCamera) {
+      camera.fov += (resolveCameraFov(speed, afterburning) - camera.fov) * 0.08;
+      camera.updateProjectionMatrix();
+    }
+    camera.lookAt(new THREE.Vector3(...add(player.position, scale(forward, defaultFlightTuning.camera.lookAhead))));
   });
   return null;
 }
@@ -520,12 +536,15 @@ function ProceduralPlayerShip({ shipId }: { shipId: string }) {
 
 function PlayerEngineFlames({ shipId, afterburning, speed }: { shipId: string; afterburning: boolean; speed: number }) {
   const visual = playerShipVisuals[shipId] ?? playerShipVisuals["sparrow-mk1"];
+  const attachmentProfile = useGameStore((state) => state.assetManifest.shipAttachmentProfiles[shipId]);
+  const vfxCue = useGameStore((state) => state.assetManifest.vfxCues.afterburner);
+  const engines = attachmentProfile?.engineHardpoints ?? visual.engines;
   const flameScale = Math.max(0.65, Math.min(2.8, speed / 120 + (afterburning ? 1.05 : 0)));
   const color = afterburning ? visual.afterburnerColor : visual.flameColor;
   return (
     <>
-      {visual.engines.map((position, index) => (
-        <group key={`${shipId}-engine-${index}`} position={toThree(position)}>
+      {engines.map((position, index) => (
+        <group key={`${shipId}-${vfxCue}-engine-${index}`} position={toThree(position as Vec3)}>
           <mesh position={[0, 0, 5.5]} rotation={[Math.PI / 2, 0, 0]} scale={[1, 1, flameScale]}>
             <coneGeometry args={[3.2, 18, 16]} />
             <meshBasicMaterial color={color} transparent opacity={0.38 + Math.min(0.35, speed / 500)} toneMapped={false} />
@@ -2253,8 +2272,8 @@ export function FlightScene() {
         canvasRef.current?.requestPointerLock?.();
       }}
     >
-      <FlightControls />
-      <TouchFlightControls />
+      <FlightInputControls />
+      <TouchFlightInputControls />
       <Canvas
         camera={{ position: [0, 36, 210], fov: 68, near: 0.1, far: 5200 }}
         dpr={[1, 1.7]}
@@ -2267,7 +2286,7 @@ export function FlightScene() {
         shadows
       >
         <Suspense fallback={null}>
-          <SimulationTicker />
+          <FlightSimulationTicker />
           <CameraRig />
           <SceneContent onShipModelStatus={updateShipModelStatus} />
         </Suspense>

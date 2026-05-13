@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { commodities, commodityById, dialogueSceneById, equipmentById, equipmentList, missionTemplates, planetById, planets, shipById, ships, stationById, stations, systemById, systems } from "../data/world";
+import { commodities, commodityById, debugScenarioById, dialogueSceneById, encounterByMissionId, equipmentById, equipmentList, missionTemplates, planetById, planets, shipById, ships, stationById, stations, systemById, systems } from "../data/world";
 import type {
   CargoHold,
   EquipmentId,
@@ -25,6 +25,7 @@ import {
   getOreColor
 } from "../systems/difficulty";
 import { integrateVelocity } from "../systems/flight";
+import { defaultFlightTuning, isAfterburnerAvailable } from "../systems/flightTuning";
 import { getDefaultTargetStation } from "../systems/autopilot";
 import { NPC_INTERACTION_RANGE } from "../systems/npcInteraction";
 import { advanceMarketState, buyCommodity, buyEquipment, createInitialMarketState, getCargoUsed, getOccupiedCargo, sellCommodity, sellEquipment } from "../systems/economy";
@@ -145,7 +146,9 @@ import {
   currentShipStorageRecord,
   dialogueOpenPatch,
   hydrateActiveMission,
+  launchPositionForStation,
   lootDropsForDestroyedShip,
+  mergeKnownPlanetIds,
   navEffect,
   projectileId,
   upsertShipRecord
@@ -240,6 +243,71 @@ function createStoryNotification(tone: StoryNotificationTone, title: string, bod
     title,
     body,
     expiresAt: gameClock + 5
+  };
+}
+
+function getEncounterStageNotification(missionId: string, trigger: "mission-accepted" | "target-destroyed", targetId: string | undefined, gameClock: number) {
+  const encounter = encounterByMissionId[missionId];
+  const stage = encounter?.stages.find((candidate) => candidate.trigger === trigger && (!candidate.targetId || candidate.targetId === targetId));
+  return stage ? createStoryNotification("updated", stage.title, `${stage.objectiveText} ${stage.environmentCue}`, gameClock) : undefined;
+}
+
+function buildDebugScenarioPatch(state: GameStore, scenarioId: string): Partial<GameStore> | undefined {
+  const scenario = debugScenarioById[scenarioId];
+  const ship = scenario ? shipById[scenario.shipId] : undefined;
+  if (!scenario || !ship) return undefined;
+  let player = createPlayerShipLoadout(
+    {
+      ...createInitialPlayer(),
+      shipId: scenario.shipId,
+      credits: scenario.credits,
+      equipment: scenario.equipment,
+      ownedShips: addOwnedShipId(createInitialPlayer(), scenario.shipId),
+      cargo: {}
+    },
+    ship
+  );
+  player = {
+    ...player,
+    credits: scenario.credits,
+    equipment: [...scenario.equipment],
+    position: scenario.stationId ? launchPositionForStation(scenario.stationId, player.position) : player.position,
+    velocity: [0, 0, 0],
+    throttle: 0,
+    hull: ship.stats.hull,
+    shield: ship.stats.shield,
+    energy: ship.stats.energy
+  };
+  let activeMissions: MissionDefinition[] = [];
+  for (const missionId of scenario.activeMissionIds ?? []) {
+    const mission = missionTemplates.find((candidate) => candidate.id === missionId);
+    if (!mission) continue;
+    const accepted = acceptMissionPure(player, activeMissions, mission, state.gameClock);
+    player = accepted.player;
+    activeMissions = accepted.activeMissions;
+  }
+  const runtime = createRuntimeForSystem(scenario.systemId, activeMissions);
+  return {
+    screen: scenario.stationId ? "station" : "flight",
+    previousScreen: state.screen,
+    currentSystemId: scenario.systemId,
+    currentStationId: scenario.stationId,
+    player,
+    activeMissions,
+    completedMissionIds: [...(scenario.completedMissionIds ?? [])],
+    failedMissionIds: [],
+    knownSystems: scenario.knownSystemIds ?? getInitialKnownSystems(scenario.systemId),
+    knownPlanetIds: mergeKnownPlanetIds(state.knownPlanetIds, scenario.knownSystemIds ?? getInitialKnownSystems(scenario.systemId), scenario.stationId),
+    runtime: {
+      ...runtime,
+      message: scenario.message,
+      storyNotification: createStoryNotification("updated", scenario.label, scenario.description, state.gameClock)
+    },
+    targetId: scenario.targetId,
+    autopilot: undefined,
+    input: emptyFlightInput(),
+    primaryCooldown: 0,
+    secondaryCooldown: 0
   };
 }
 
@@ -508,8 +576,9 @@ function buildAcceptMissionPatch(state: GameStore, missionId: string, dialogueMo
   const dialogueScene = result.ok && !generatedDispatchMission ? getStoryMissionDialogueScene(mission.id, "accept") : undefined;
   const dialoguePatch = dialogueScene ? dialoguePatchForMode(state, dialogueScene.id, dialogueMode) : {};
   const queuedBehindActiveDialogue = dialogueMode === "queue";
+  const encounterNotification = result.ok && !queuedBehindActiveDialogue ? getEncounterStageNotification(mission.id, "mission-accepted", undefined, state.gameClock) : undefined;
   const storyNotification = result.ok && mission.storyCritical && !queuedBehindActiveDialogue
-    ? createStoryNotification("start", mission.title, result.message, state.gameClock)
+    ? encounterNotification ?? createStoryNotification("start", mission.title, result.message, state.gameClock)
     : runtime.storyNotification;
   const patch = withOnboardingProgress(state, {
     player: result.player,
@@ -1550,11 +1619,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const equipmentEffects = getPlayerRuntimeEffects(player);
     const primaryWeapon = getActivePrimaryWeapon(player.equipment);
     const secondaryWeapon = getActiveSecondaryWeapon(player.equipment);
-    const pitch = clamp(player.rotation[0] + dy * 0.0022 * player.stats.handling, -1.15, 1.15);
-    const yaw = player.rotation[1] - dx * 0.0022 * player.stats.handling;
-    const roll = clamp(player.rotation[2] + (input.rollLeft ? 1 : 0) * delta * 2.4 - (input.rollRight ? 1 : 0) * delta * 2.4, -0.9, 0.9) * 0.94;
-    const throttle = clamp(player.throttle + (input.throttleUp ? delta * 0.55 : 0) - (input.throttleDown ? delta * 0.75 : 0), 0, 1);
-    const afterburning = input.afterburner && player.energy > 12 && throttle > 0.08;
+    const tuning = defaultFlightTuning;
+    const pitch = clamp(player.rotation[0] + dy * tuning.controls.mouseSensitivity * player.stats.handling, -tuning.controls.pitchLimit, tuning.controls.pitchLimit);
+    const yaw = player.rotation[1] - dx * tuning.controls.mouseSensitivity * player.stats.handling;
+    const roll = clamp(
+      player.rotation[2] + (input.rollLeft ? 1 : 0) * delta * tuning.controls.rollRate - (input.rollRight ? 1 : 0) * delta * tuning.controls.rollRate,
+      -tuning.controls.rollLimit,
+      tuning.controls.rollLimit
+    ) * tuning.controls.rollReturn;
+    const throttle = clamp(player.throttle + (input.throttleUp ? delta * tuning.controls.throttleUpRate : 0) - (input.throttleDown ? delta * tuning.controls.throttleDownRate : 0), 0, 1);
+    const afterburning = input.afterburner && isAfterburnerAvailable(player.energy, throttle, tuning);
     const forward = forwardFromRotation([pitch, yaw, roll]);
     const velocity = integrateVelocity({
       currentVelocity: player.velocity,
@@ -1563,8 +1637,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       maxSpeed: player.stats.speed,
       afterburning,
       delta,
-      acceleration: afterburning ? 4.6 : 2.85,
-      damping: throttle <= 0.02 ? 0.55 : 0.82,
+      acceleration: afterburning ? tuning.motion.afterburnerAcceleration : tuning.motion.acceleration,
+      damping: throttle <= 0.02 ? tuning.motion.idleDamping : tuning.motion.cruiseDamping,
       afterburnerMultiplier: equipmentEffects.afterburnerMultiplier
     });
     player = {
@@ -2101,9 +2175,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
           label: `-${Math.round(projectile.damage)}`,
           particleCount: shielded ? 5 : 7,
           spread: shielded ? 18 : 14,
-          size: shielded ? 28 : 16,
-          life: 0.42,
-          maxLife: 0.42,
+          size: shielded ? 28 : defaultFlightTuning.feedback.playerHitEffectSize,
+          life: 0.42 + defaultFlightTuning.feedback.playerHitPauseSeconds,
+          maxLife: 0.42 + defaultFlightTuning.feedback.playerHitPauseSeconds,
           velocity: [0, 12, 0]
         });
         consumed = true;
@@ -2162,8 +2236,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
             secondaryColor: shielded ? "#eaffff" : "#ffd166",
             label: `-${Math.round(projectile.damage)}`,
             particleCount: projectile.kind === "missile" ? 10 : 5,
-            spread: projectile.kind === "missile" ? 22 : 12,
-            size: projectile.kind === "missile" ? 22 : 12,
+            spread: projectile.kind === "missile" ? 22 * defaultFlightTuning.feedback.missileImpactScale : 12,
+            size: projectile.kind === "missile" ? 22 * defaultFlightTuning.feedback.missileImpactScale : 12,
             life: 0.34,
             maxLife: 0.34,
             velocity: [0, 10, 0]
@@ -2188,11 +2262,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
               color: ship.role === "pirate" ? "#ff784f" : ship.role === "patrol" ? "#64e4ff" : "#ffd166",
               secondaryColor: "#ffd166",
               label: "Destroyed",
-              particleCount: 22,
-              spread: 58,
-              size: 46,
-              life: 0.85,
-              maxLife: 0.85,
+              particleCount: Math.min(defaultFlightTuning.performance.maxExplosionParticles, ship.boss ? 34 : 22),
+              spread: 58 * (ship.boss ? defaultFlightTuning.feedback.bossExplosionScale : 1),
+              size: 46 * (ship.boss ? defaultFlightTuning.feedback.bossExplosionScale : 1),
+              life: 0.85 * (ship.boss ? 1.25 : 1),
+              maxLife: 0.85 * (ship.boss ? 1.25 : 1),
               velocity: [0, 6, 0]
             });
             audioSystem.play("explosion");
@@ -2349,7 +2423,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const lastStoryTarget = destroyedStoryTargets[destroyedStoryTargets.length - 1];
       const storyMission = activeMissions.find((mission) => mission.id === lastStoryTarget?.missionId);
       if (storyMission?.storyCritical) {
-        storyNotification = createStoryNotification("updated", storyMission.title, storyTargetMessage, gameClock);
+        storyNotification = getEncounterStageNotification(storyMission.id, "target-destroyed", lastStoryTarget.targetId, gameClock)
+          ?? createStoryNotification("updated", storyMission.title, storyTargetMessage, gameClock);
       }
     }
     activeMissions = activeMissions.map((mission) => {
@@ -2473,7 +2548,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
               ? `Pirates are sizing you up · weapons free in ${Math.ceil(runtime.graceUntil - now)}s`
               : expiration.runtime.message,
         storyNotification,
-        lawNotification
+        lawNotification,
+        projectiles: expiration.runtime.projectiles.slice(-defaultFlightTuning.performance.maxVisibleProjectiles),
+        effects: expiration.runtime.effects.slice(-defaultFlightTuning.performance.maxVisibleEffects)
       },
       gameClock,
       marketState: expiration.marketState ?? marketState,
@@ -3157,14 +3234,20 @@ export const useGameStore = create<GameStore>((set, get) => ({
       runtime: { ...state.runtime, message: result.message }
     });
   },
-  toggleCamera: () => set((state) => ({ cameraMode: state.cameraMode === "chase" ? "cinematic" : "chase" }))
+  toggleCamera: () => set((state) => ({ cameraMode: state.cameraMode === "chase" ? "cinematic" : "chase" })),
+  applyDebugScenario: (scenarioId) => {
+    if (!import.meta.env.DEV) return;
+    const patch = buildDebugScenarioPatch(get(), scenarioId);
+    if (patch) set(patch);
+  }
 }));
 
 if (typeof window !== "undefined" && import.meta.env.DEV) {
   Object.assign(window, {
     __GOF2_E2E__: {
       getState: () => useGameStore.getState(),
-      setState: useGameStore.setState
+      setState: useGameStore.setState,
+      applyDebugScenario: (scenarioId: string) => useGameStore.getState().applyDebugScenario(scenarioId)
     }
   });
 }

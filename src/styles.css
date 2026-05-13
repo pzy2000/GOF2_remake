@@ -1066,6 +1066,58 @@ h3 {
   position: fixed;
 }
 
+.debug-scenario-panel {
+  position: fixed;
+  left: 18px;
+  bottom: 18px;
+  z-index: 80;
+  width: min(420px, calc(100vw - 36px));
+  padding: 12px;
+  border: 1px solid rgba(125, 211, 252, 0.45);
+  border-radius: 8px;
+  background: rgba(3, 12, 24, 0.86);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.36);
+  color: #eaf6ff;
+  backdrop-filter: blur(16px);
+}
+
+.debug-scenario-panel > div:first-child {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.76rem;
+  letter-spacing: 0;
+}
+
+.debug-scenario-panel span {
+  color: #78d7ff;
+  font-weight: 800;
+}
+
+.debug-scenario-panel p {
+  margin: 8px 0 10px;
+  color: #b9cce0;
+  font-size: 0.82rem;
+}
+
+.debug-scenario-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.debug-scenario-actions button {
+  min-height: 36px;
+  padding: 7px 8px;
+  border: 1px solid rgba(125, 211, 252, 0.42);
+  border-radius: 6px;
+  background: rgba(11, 27, 48, 0.92);
+  color: #eef7ff;
+  font-size: 0.78rem;
+  font-weight: 800;
+}
+
 .modal-panel {
   width: min(520px, 94vw);
   max-height: 88vh;

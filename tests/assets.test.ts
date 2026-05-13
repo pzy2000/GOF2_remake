@@ -102,6 +102,20 @@ describe("asset manifest", () => {
     expect(new Set(modelPaths).size).toBe(ships.length);
   });
 
+  it("defines material and hardpoint metadata for every player ship", () => {
+    const assetManifest = manifest as AssetManifest;
+    for (const ship of ships) {
+      expect(assetManifest.shipMaterialProfiles[ship.id]).toMatchObject({
+        baseColor: expect.stringMatching(/^#/),
+        trimColor: expect.stringMatching(/^#/),
+        emissiveColor: expect.stringMatching(/^#/)
+      });
+      expect(assetManifest.shipAttachmentProfiles[ship.id].engineHardpoints.length).toBeGreaterThan(0);
+      expect(fallbackAssetManifest.shipAttachmentProfiles[ship.id].engineHardpoints.length).toBeGreaterThan(0);
+    }
+    expect(assetManifest.vfxCues.explosion).toBe("cinematic-burst");
+  });
+
   it("points NPC ship textures to generated local assets", () => {
     const assetManifest = manifest as AssetManifest;
     expect(assetManifest.npcShipTextures.freighter).toBe("/assets/generated/npc-freighter-hull.webp");

@@ -107,6 +107,28 @@ export interface MusicTrackManifest {
   combat: string;
 }
 
+export interface ShipMaterialProfile {
+  baseColor: string;
+  trimColor: string;
+  emissiveColor: string;
+  metalness: number;
+  roughness: number;
+}
+
+export interface ShipAttachmentProfile {
+  engineHardpoints: number[][];
+  primaryHardpoints: number[][];
+  secondaryHardpoints: number[][];
+}
+
+export interface VfxCueManifest {
+  hit: string;
+  shieldHit: string;
+  explosion: string;
+  afterburner: string;
+  targetLock: string;
+}
+
 export type CommodityId =
   | "basic-food"
   | "drinking-water"
@@ -179,6 +201,8 @@ export interface AssetManifest {
   starSprites: Record<string, string>;
   planetTextures: Record<string, string>;
   shipModels: Record<string, string>;
+  shipMaterialProfiles: Record<string, ShipMaterialProfile>;
+  shipAttachmentProfiles: Record<string, ShipAttachmentProfile>;
   npcShipTextures: {
     freighter: string;
   };
@@ -188,6 +212,7 @@ export interface AssetManifest {
   asteroidTextures: string;
   factionEmblems: string;
   hudOverlay: string;
+  vfxCues: VfxCueManifest;
   musicTracks: MusicTrackManifest;
 }
 
@@ -546,6 +571,36 @@ export interface StoryEncounterDefinition {
   };
   targets: StoryEncounterTargetDefinition[];
   requiredTargetIds: string[];
+}
+
+export type EncounterStageTrigger = "mission-accepted" | "target-destroyed" | "salvage-recovered" | "mission-completed";
+
+export interface EncounterStageDefinition {
+  id: string;
+  trigger: EncounterStageTrigger;
+  targetId?: string;
+  title: string;
+  commsSpeakerId: string;
+  commsLine: string;
+  environmentCue: string;
+  objectiveText: string;
+}
+
+export interface EncounterDefinition {
+  id: string;
+  missionId: string;
+  title: string;
+  intent: string;
+  stages: EncounterStageDefinition[];
+  rewards?: {
+    credits?: number;
+    unlockBlueprintIds?: EquipmentId[];
+  };
+  performanceBudget: {
+    maxActiveEnemies: number;
+    maxActiveProjectiles: number;
+    maxActiveEffects: number;
+  };
 }
 
 export interface MissionDefinition {
@@ -963,6 +1018,22 @@ export interface FlightInput {
   mouseDY: number;
 }
 
+export interface DebugScenario {
+  id: string;
+  label: string;
+  description: string;
+  systemId: string;
+  stationId?: string;
+  shipId: string;
+  credits: number;
+  equipment: EquipmentId[];
+  activeMissionIds?: string[];
+  completedMissionIds?: string[];
+  knownSystemIds?: string[];
+  targetId?: string;
+  message: string;
+}
+
 export interface SaveGameData {
   version: number;
   savedAt: string;
@@ -989,6 +1060,7 @@ declare global {
     __GOF2_E2E__?: {
       getState: () => unknown;
       setState: (partial: unknown, replace?: boolean) => void;
+      applyDebugScenario?: (scenarioId: string) => void;
     };
   }
 }

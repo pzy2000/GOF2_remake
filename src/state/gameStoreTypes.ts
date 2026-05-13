@@ -127,6 +127,7 @@ export interface GameStore {
   installEquipmentFromInventory: (equipmentId: EquipmentId) => void;
   uninstallEquipmentToInventory: (equipmentId: EquipmentId) => void;
   toggleCamera: () => void;
+  applyDebugScenario: (scenarioId: string) => void;
 }
 
 export type SavePayloadOverrides = Partial<

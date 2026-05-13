@@ -64,6 +64,28 @@ const rawFallbackAssetManifest: AssetManifest = {
     "bastion-7": "/assets/generated/ships/bastion-7.glb",
     "horizon-ark": "/assets/generated/ships/horizon-ark.glb"
   },
+  shipMaterialProfiles: {
+    "sparrow-mk1": { baseColor: "#cfefff", trimColor: "#318ccf", emissiveColor: "#66e4ff", metalness: 0.48, roughness: 0.28 },
+    "mule-lx": { baseColor: "#9a7b4f", trimColor: "#ffd166", emissiveColor: "#ffb657", metalness: 0.5, roughness: 0.36 },
+    "prospector-rig": { baseColor: "#bda15f", trimColor: "#ffd166", emissiveColor: "#fff1a8", metalness: 0.54, roughness: 0.34 },
+    "veil-runner": { baseColor: "#293b4a", trimColor: "#7dd3fc", emissiveColor: "#e0f7ff", metalness: 0.58, roughness: 0.24 },
+    "talon-s": { baseColor: "#d94b58", trimColor: "#1f2937", emissiveColor: "#ffd3d8", metalness: 0.56, roughness: 0.26 },
+    "wayfarer-x": { baseColor: "#d7f7ff", trimColor: "#2dd4bf", emissiveColor: "#ffffff", metalness: 0.46, roughness: 0.3 },
+    "raptor-v": { baseColor: "#d94b58", trimColor: "#2a2f35", emissiveColor: "#70f0ff", metalness: 0.58, roughness: 0.24 },
+    "bastion-7": { baseColor: "#6f2530", trimColor: "#ff7a45", emissiveColor: "#ffd166", metalness: 0.62, roughness: 0.3 },
+    "horizon-ark": { baseColor: "#f5ead2", trimColor: "#8ff7ff", emissiveColor: "#ffffff", metalness: 0.52, roughness: 0.22 }
+  },
+  shipAttachmentProfiles: {
+    "sparrow-mk1": { engineHardpoints: [[-5.5, -1.6, 17], [5.5, -1.6, 17]], primaryHardpoints: [[0, 0.4, -28]], secondaryHardpoints: [[-8, -0.8, -10], [8, -0.8, -10]] },
+    "mule-lx": { engineHardpoints: [[-12, -3, 20], [12, -3, 20]], primaryHardpoints: [[0, 1, -30]], secondaryHardpoints: [[-14, -1, -8], [14, -1, -8]] },
+    "prospector-rig": { engineHardpoints: [[-8, -5, 27], [8, -5, 27]], primaryHardpoints: [[0, -2, -26]], secondaryHardpoints: [[-10, -2, -6], [10, -2, -6]] },
+    "veil-runner": { engineHardpoints: [[-5.2, -2.4, 24], [5.2, -2.4, 24]], primaryHardpoints: [[0, 0, -29]], secondaryHardpoints: [[-7, -1, -8], [7, -1, -8]] },
+    "talon-s": { engineHardpoints: [[-7.5, -2.2, 20], [7.5, -2.2, 20]], primaryHardpoints: [[-5, 0.5, -30], [5, 0.5, -30]], secondaryHardpoints: [[-11, -1, -12], [11, -1, -12]] },
+    "wayfarer-x": { engineHardpoints: [[-15, -2.6, 27], [15, -2.6, 27]], primaryHardpoints: [[0, 0, -33]], secondaryHardpoints: [[-13, -1, -10], [13, -1, -10]] },
+    "raptor-v": { engineHardpoints: [[-8, -1.8, 18], [0, -1.2, 20], [8, -1.8, 18]], primaryHardpoints: [[-6, 0.4, -30], [6, 0.4, -30]], secondaryHardpoints: [[0, -1, -11]] },
+    "bastion-7": { engineHardpoints: [[-14, -4, 22], [0, -3, 24], [14, -4, 22]], primaryHardpoints: [[-7, 0, -34], [7, 0, -34]], secondaryHardpoints: [[-16, -2, -14], [16, -2, -14]] },
+    "horizon-ark": { engineHardpoints: [[-16, -2.4, 24], [-5, -2, 26], [5, -2, 26], [16, -2.4, 24]], primaryHardpoints: [[-5, 0.4, -34], [5, 0.4, -34]], secondaryHardpoints: [[-14, -1, -12], [14, -1, -12]] }
+  },
   npcShipTextures: {
     freighter: "/assets/generated/npc-freighter-hull.webp"
   },
@@ -86,6 +108,13 @@ const rawFallbackAssetManifest: AssetManifest = {
   asteroidTextures: "/assets/generated/asteroid-textures.webp",
   factionEmblems: "/assets/generated/faction-emblems.webp",
   hudOverlay: "/assets/generated/hud-overlay.webp",
+  vfxCues: {
+    hit: "impact-spark",
+    shieldHit: "shield-ripple",
+    explosion: "cinematic-burst",
+    afterburner: "engine-plume",
+    targetLock: "lock-reticle"
+  },
   musicTracks: {
     systems: {
       "helion-reach": "/assets/music/magic-space.mp3",
@@ -144,6 +173,8 @@ export function resolveAssetManifest(manifest: AssetManifest, baseUrl?: string):
     starSprites: resolveAssetRecord(manifest.starSprites, baseUrl),
     planetTextures: resolveAssetRecord(manifest.planetTextures, baseUrl),
     shipModels: resolveAssetRecord(manifest.shipModels, baseUrl),
+    shipMaterialProfiles: manifest.shipMaterialProfiles,
+    shipAttachmentProfiles: manifest.shipAttachmentProfiles,
     npcShipTextures: {
       freighter: resolvePublicAssetPath(manifest.npcShipTextures.freighter, baseUrl)
     },
@@ -153,6 +184,7 @@ export function resolveAssetManifest(manifest: AssetManifest, baseUrl?: string):
     asteroidTextures: resolvePublicAssetPath(manifest.asteroidTextures, baseUrl),
     factionEmblems: resolvePublicAssetPath(manifest.factionEmblems, baseUrl),
     hudOverlay: resolvePublicAssetPath(manifest.hudOverlay, baseUrl),
+    vfxCues: manifest.vfxCues,
     musicTracks: resolveMusicTrackManifest(manifest.musicTracks, baseUrl)
   };
 }
@@ -170,10 +202,13 @@ export async function loadAssetManifest(): Promise<AssetManifest> {
     starSprites: { ...rawFallbackAssetManifest.starSprites, ...loaded.starSprites },
     planetTextures: { ...rawFallbackAssetManifest.planetTextures, ...loaded.planetTextures },
     shipModels: { ...rawFallbackAssetManifest.shipModels, ...loaded.shipModels },
+    shipMaterialProfiles: { ...rawFallbackAssetManifest.shipMaterialProfiles, ...loaded.shipMaterialProfiles },
+    shipAttachmentProfiles: { ...rawFallbackAssetManifest.shipAttachmentProfiles, ...loaded.shipAttachmentProfiles },
     npcShipTextures: { ...rawFallbackAssetManifest.npcShipTextures, ...loaded.npcShipTextures },
     speakerPortraits: { ...rawFallbackAssetManifest.speakerPortraits, ...loaded.speakerPortraits },
     storyCinematics: { ...rawFallbackAssetManifest.storyCinematics, ...loaded.storyCinematics },
     voiceClips: { ...rawFallbackAssetManifest.voiceClips, ...loaded.voiceClips },
+    vfxCues: { ...rawFallbackAssetManifest.vfxCues, ...loaded.vfxCues },
     musicTracks: {
       systems: { ...rawFallbackAssetManifest.musicTracks.systems, ...loaded.musicTracks?.systems },
       stationArchetypes: { ...rawFallbackAssetManifest.musicTracks.stationArchetypes, ...loaded.musicTracks?.stationArchetypes },

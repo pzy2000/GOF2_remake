@@ -9,6 +9,7 @@ import { DialogueOverlay } from "./components/DialogueOverlay";
 import { I18nRuntime } from "./components/I18nRuntime";
 import { LanguageSelect } from "./components/LanguageSelect";
 import { StoryNotificationOverlay } from "./components/StoryNotificationOverlay";
+import { DebugScenarioPanel } from "./components/DebugScenarioPanel";
 import { audioSystem, getAudioSettings, saveAudioSettings } from "./systems/audio";
 import { voiceSystem } from "./systems/voice";
 import { loadAssetManifest } from "./systems/assets";
@@ -193,8 +194,8 @@ export default function App() {
       .catch(() => undefined);
   }, [setAssetManifest]);
 
-  if (screen === "menu") return <><I18nRuntime /><AudioRuntime /><EconomyBackendRuntime /><MainMenu /><StoryNotificationOverlay /><DialogueOverlay /></>;
-  if (screen === "settings" || screen === "credits") return <><I18nRuntime /><AudioRuntime /><EconomyBackendRuntime /><SimpleScreen type={screen} /><StoryNotificationOverlay /><DialogueOverlay /></>;
+  if (screen === "menu") return <><I18nRuntime /><AudioRuntime /><EconomyBackendRuntime /><MainMenu /><DebugScenarioPanel /><StoryNotificationOverlay /><DialogueOverlay /></>;
+  if (screen === "settings" || screen === "credits") return <><I18nRuntime /><AudioRuntime /><EconomyBackendRuntime /><SimpleScreen type={screen} /><DebugScenarioPanel /><StoryNotificationOverlay /><DialogueOverlay /></>;
   if (screen === "station") {
     return (
       <>
@@ -203,6 +204,7 @@ export default function App() {
         <EconomyBackendRuntime />
         <GameClockTicker />
         <StationScreen />
+        <DebugScenarioPanel />
         <StoryNotificationOverlay />
         <DialogueOverlay />
       </>
@@ -220,6 +222,7 @@ export default function App() {
       {screen === "pause" ? <PauseMenu /> : null}
       {screen === "galaxyMap" ? <GalaxyMap /> : null}
       {screen === "gameOver" ? <GameOver /> : null}
+      <DebugScenarioPanel />
       <StoryNotificationOverlay />
       <DialogueOverlay />
     </main>

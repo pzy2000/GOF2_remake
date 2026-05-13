@@ -236,7 +236,8 @@ describe("story mission store flow", () => {
     expect(store.getState().runtime.message).toContain("Story objective updated");
     expect(store.getState().runtime.storyNotification).toMatchObject({
       tone: "updated",
-      title: "Glass Wake 02: Probe in the Glass"
+      title: "Prime Wake",
+      body: expect.stringContaining("Defeat Glass Echo Prime")
     });
 
     const boss = store.getState().runtime.enemies.find((ship) => ship.id === "glass-echo-prime");
@@ -272,7 +273,8 @@ describe("story mission store flow", () => {
     expect(store.getState().activeMissions[0].storyTargetDestroyedIds).toEqual(["glass-echo-drone", "glass-echo-prime"]);
     expect(store.getState().runtime.storyNotification).toMatchObject({
       tone: "updated",
-      title: "Glass Wake 02: Probe in the Glass"
+      title: "Probe Core Exposed",
+      body: expect.stringContaining("Recover the Glass Wake Probe Core")
     });
   });
 
