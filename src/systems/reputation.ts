@@ -1,9 +1,11 @@
 import type { FactionId, ReputationState } from "../types/game";
+import { factionNames, PTD_COMPANY_FACTION_ID } from "../data/factions";
 
 export function createInitialReputation(): ReputationState {
   return {
     factions: {
       "solar-directorate": 8,
+      "ptd-company": 100,
       "vossari-clans": 0,
       "mirr-collective": 0,
       "free-belt-union": 4,
@@ -13,7 +15,27 @@ export function createInitialReputation(): ReputationState {
   };
 }
 
+export function normalizeReputation(input?: Partial<ReputationState> | null): ReputationState {
+  const initial = createInitialReputation();
+  const factions = { ...initial.factions };
+  for (const factionId of Object.keys(factionNames) as FactionId[]) {
+    const value = input?.factions?.[factionId];
+    factions[factionId] = factionId === PTD_COMPANY_FACTION_ID
+      ? 100
+      : Math.max(-100, Math.min(100, typeof value === "number" && Number.isFinite(value) ? value : initial.factions[factionId]));
+  }
+  return { factions };
+}
+
 export function updateReputation(state: ReputationState, factionId: FactionId, delta: number): ReputationState {
+  if (factionId === PTD_COMPANY_FACTION_ID) {
+    return {
+      factions: {
+        ...state.factions,
+        [PTD_COMPANY_FACTION_ID]: 100
+      }
+    };
+  }
   return {
     factions: {
       ...state.factions,

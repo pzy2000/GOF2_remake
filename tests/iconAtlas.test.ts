@@ -18,6 +18,7 @@ describe("icon atlas slicing", () => {
   it("uses stable fallbacks for ids outside the atlas prompt order", () => {
     expect(getCommodityIcon("voidglass")).toMatchObject({ atlas: "commodity", index: 15 });
     expect(getEquipmentIcon("unknown-tool")).toMatchObject({ atlas: "equipment", index: 7 });
+    expect(getFactionIcon("ptd-company")).toMatchObject({ atlas: "faction", index: 0, label: "PTD Company" });
     expect(getFactionIcon("mystery-faction")).toMatchObject({ atlas: "faction", index: 5 });
   });
 });

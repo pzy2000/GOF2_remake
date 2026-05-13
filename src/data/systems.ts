@@ -454,7 +454,7 @@ const rawStations: StationDefinition[] = [
   { id: "zenith-skydock", name: "Zenith Skydock", techLevel: 5, archetype: "Mining Station", factionId: "solar-directorate", systemId: "celest-gate", planetId: "zenith-gas", position: [210, 350, -1040] },
   { id: "pearl-consulate", name: "Pearl Consulate", techLevel: 5, archetype: "Trade Hub", factionId: "solar-directorate", systemId: "celest-gate", planetId: "pearl-night", position: [-220, -310, -990] },
   { id: "crownshade-observatory", name: "Crownshade Observatory", techLevel: 5, archetype: "Research Station", factionId: "solar-directorate", systemId: "celest-gate", planetId: "celest-crown", position: [110, 430, -1060], hidden: true },
-  { id: "ptd-home", name: "PTD Home", techLevel: 5, archetype: "Trade Hub", factionId: "solar-directorate", systemId: "ptd-home", planetId: "ptd-home-world", position: [0, 0, -720] }
+  { id: "ptd-home", name: "PTD Home", techLevel: 5, archetype: "Trade Hub", factionId: "ptd-company", systemId: "ptd-home", planetId: "ptd-home-world", position: [0, 0, -720] }
 ];
 
 export const stations: StationDefinition[] = rawStations.map(layoutStation);
@@ -616,7 +616,7 @@ const rawSystems: StarSystemDefinition[] = [
     id: "ptd-home",
     name: "PTD Home",
     description: "Private storage lanes for parked ships, default loadouts, and free local hull swaps.",
-    factionId: "solar-directorate",
+    factionId: "ptd-company",
     risk: 0.05,
     position: [0.45, 0.35],
     skyboxKey: "ptd-home",

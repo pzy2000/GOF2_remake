@@ -7,6 +7,7 @@ import type {
   LawNotification,
   LawNotificationTone
 } from "../types/game";
+import { PTD_COMPANY_FACTION_ID } from "../data/factions";
 
 export const FRIENDLY_FIRE_WARNING_SECONDS = 10;
 export const WANTED_DURATION_SECONDS = 90;
@@ -88,6 +89,7 @@ export function createInitialFactionHeat(): FactionHeatState {
 export function normalizeFactionHeat(input?: Partial<FactionHeatState> | null): FactionHeatState {
   const factions: FactionHeatState["factions"] = {};
   for (const [factionId, record] of Object.entries(input?.factions ?? {})) {
+    if (factionId === PTD_COMPANY_FACTION_ID) continue;
     const normalized = normalizeFactionHeatRecord(record);
     if (normalized.heat > 0 || normalized.fineCredits > 0 || normalized.offenseCount > 0 || normalized.warningUntil || normalized.wantedUntil || normalized.interceptCooldownUntil) {
       factions[factionId as FactionId] = normalized;
@@ -146,6 +148,19 @@ export function applyFriendlyFireWarning(
   subjectName: string,
   now: number
 ): FriendlyFireWarningResult {
+  if (factionId === PTD_COMPANY_FACTION_ID) {
+    const record = getFactionHeatRecord(factionHeat, factionId);
+    return {
+      factionHeat: normalizeFactionHeat(factionHeat),
+      record,
+      notification: createLawNotification(
+        "warning",
+        "PTD escort response",
+        `${subjectName} is PTD-owned. Escort response is local only; no standing record changed.`,
+        now
+      )
+    };
+  }
   const record = {
     ...getFactionHeatRecord(factionHeat, factionId),
     warningUntil: now + FRIENDLY_FIRE_WARNING_SECONDS,
@@ -164,6 +179,23 @@ export function applyFriendlyFireWarning(
 }
 
 export function applyFactionIncident(input: FactionIncidentInput): FactionIncidentResult {
+  if (input.factionId === PTD_COMPANY_FACTION_ID) {
+    const record = getFactionHeatRecord(input.factionHeat, input.factionId);
+    return {
+      factionHeat: normalizeFactionHeat(input.factionHeat),
+      record,
+      heatDelta: 0,
+      reputationDelta: 0,
+      fineDelta: 0,
+      wanted: false,
+      notification: createLawNotification(
+        "warning",
+        "PTD escort response",
+        `${input.subjectName ?? "PTD asset"} engaged. Escort response is local only; no standing, fine, or warrant record changed.`,
+        input.now
+      )
+    };
+  }
   const rule = incidentRules[input.kind];
   const previous = getFactionHeatRecord(input.factionHeat, input.factionId);
   const fineDelta = Math.max(0, Math.round(input.fineCredits ?? rule.fineCredits));
@@ -228,6 +260,21 @@ export function payFactionFine(
   credits: number,
   now: number
 ): PayFactionFineResult {
+  if (factionId === PTD_COMPANY_FACTION_ID) {
+    return {
+      factionHeat: normalizeFactionHeat(factionHeat),
+      credits,
+      paid: false,
+      paidCredits: 0,
+      record: getFactionHeatRecord(factionHeat, factionId),
+      notification: createLawNotification(
+        "cleared",
+        "PTD record clear",
+        "PTD Company keeps no payable legal record against the player.",
+        now
+      )
+    };
+  }
   const previous = getFactionHeatRecord(factionHeat, factionId);
   if (previous.fineCredits <= 0 || credits < previous.fineCredits) {
     return {
@@ -261,6 +308,7 @@ export function payFactionFine(
 }
 
 export function setFactionHeatRecord(factionHeat: FactionHeatState, factionId: FactionId, record: FactionHeatRecord): FactionHeatState {
+  if (factionId === PTD_COMPANY_FACTION_ID) return normalizeFactionHeat(factionHeat);
   return withRecord(factionHeat, factionId, record);
 }
 
@@ -269,6 +317,7 @@ export function applyFactionInterceptCooldown(
   factionId: FactionId,
   cooldownUntil: number
 ): FactionHeatState {
+  if (factionId === PTD_COMPANY_FACTION_ID) return normalizeFactionHeat(factionHeat);
   const record: FactionHeatRecord = {
     ...getFactionHeatRecord(factionHeat, factionId),
     interceptCooldownUntil: cooldownUntil

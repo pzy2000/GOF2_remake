@@ -53,6 +53,14 @@ const factionOrder: FactionId[] = [
   "unknown-drones"
 ];
 
+const factionFallbacks: Partial<Record<FactionId, number>> = {
+  "ptd-company": 0
+};
+
+const factionLabels: Partial<Record<FactionId, string>> = {
+  "ptd-company": "PTD Company"
+};
+
 const commodityFallbacks: Partial<Record<CommodityId, number>> = {
   iron: 0,
   titanium: 1,
@@ -127,12 +135,13 @@ export function getEquipmentIcon(id: EquipmentId | string): AtlasIconDefinition 
 }
 
 export function getFactionIcon(id: FactionId | string): AtlasIconDefinition {
-  const orderedIndex = factionOrder.indexOf(id as FactionId);
+  const factionId = id as FactionId;
+  const orderedIndex = factionOrder.indexOf(factionId);
   return {
     atlas: "faction",
-    index: orderedIndex >= 0 ? orderedIndex : 5,
+    index: orderedIndex >= 0 ? orderedIndex : factionFallbacks[factionId] ?? 5,
     columns: 3,
     rows: 2,
-    label: titleize(id)
+    label: factionLabels[factionId] ?? titleize(id)
   };
 }

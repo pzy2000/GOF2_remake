@@ -1,4 +1,5 @@
 import { contrabandLawBySystem } from "../data/contraband";
+import { PTD_COMPANY_FACTION_ID } from "../data/factions";
 import type { ContrabandLaw, FlightEntity, ProjectileEntity, Vec3 } from "../types/game";
 import { canRhythmFireAtTarget } from "./combatFeel";
 import { getCombatLoadout } from "./combatDoctrine";
@@ -257,7 +258,20 @@ function resolvePatrolStep(input: CombatAiStepInput, profile: CombatProfile): Co
   const loadout = getCombatLoadout({ ...input.ship, systemId: input.systemId, risk: input.risk });
   const activePirates = sortPirateTargets(input.pirates);
   const distressTarget = getPatrolDistressTarget(input);
-  const outlawTarget = distressTarget ?? [
+  const playerThreat = input.ship.factionId === PTD_COMPANY_FACTION_ID
+    ? input.ships
+      .filter((ship) =>
+        ship.id !== input.ship.id &&
+        ship.factionId !== PTD_COMPANY_FACTION_ID &&
+        ship.hull > 0 &&
+        ship.deathTimer === undefined &&
+        ship.aiState === "attack" &&
+        ship.aiTargetId === "player"
+      )
+      .map((ship) => ({ ship, dist: distance(input.ship.position, ship.position) }))
+      .sort((a, b) => a.dist - b.dist)[0]?.ship
+    : undefined;
+  const outlawTarget = distressTarget ?? playerThreat ?? [
     ...activePirates,
     ...input.ships.filter((ship) => ["smuggler", "drone", "relay"].includes(ship.role) && ship.hull > 0 && ship.deathTimer === undefined)
   ]

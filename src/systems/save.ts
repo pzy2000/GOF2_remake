@@ -7,6 +7,7 @@ import { applyExplorationChainBlueprintRewards } from "./explorationObjectives";
 import { normalizeFactionHeat } from "./factionConsequences";
 import { getInitialKnownPlanetIds } from "./navigation";
 import { normalizeOnboardingState } from "./onboarding";
+import { normalizeReputation } from "./reputation";
 
 export const SAVE_KEY = "gof2-by-pzy-save";
 export const SAVE_INDEX_KEY = "gof2-by-pzy-save-index";
@@ -66,7 +67,7 @@ function normalizeSave(parsed: Partial<SaveGameData> | null): SaveGameData | nul
     completedMissionIds: parsed.completedMissionIds ?? [],
     failedMissionIds: parsed.failedMissionIds ?? [],
     marketState: parsed.marketState ?? createInitialMarketState(),
-    reputation: parsed.reputation,
+    reputation: normalizeReputation(parsed.reputation),
     factionHeat: normalizeFactionHeat(parsed.factionHeat),
     knownSystems,
     knownPlanetIds: parsed.knownPlanetIds ?? getInitialKnownPlanetIds(knownSystems, parsed.currentStationId),

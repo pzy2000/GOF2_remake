@@ -89,6 +89,33 @@ describe("combat runtime domain helpers", () => {
     expect(repeated).toBeUndefined();
   });
 
+  it("creates PTD-owned escort support in PTD Home", () => {
+    const patrol = {
+      ...createShipEntity("ptd-patrol-test", "patrol", [0, 0, 0], "ptd-home"),
+      aiState: "attack",
+      aiTargetId: "player"
+    } satisfies FlightEntity;
+
+    const request = createPatrolSupportRequest({
+      ship: patrol,
+      enemies: [patrol],
+      convoys: [],
+      systemId: "ptd-home",
+      risk: 0.05,
+      playerPosition: [120, 0, 0],
+      now: 100,
+      existingSpawnCount: 0
+    });
+
+    expect(request?.ships).toHaveLength(1);
+    expect(request?.ships[0]).toMatchObject({
+      name: "PTD Escort Wing",
+      factionId: "ptd-company",
+      loadoutId: "ptd-support",
+      supportWing: true
+    });
+  });
+
   it("marks civilian distress from a direct pirate target and clears it after timeout", () => {
     const freighter = createShipEntity("freighter-test", "freighter", [0, 0, 0], "ashen-drift");
     const threat = pirate({ id: "pirate-test", aiTargetId: "freighter-test", position: [70, 0, 0] });

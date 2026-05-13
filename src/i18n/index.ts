@@ -1159,6 +1159,7 @@ const shipNames: LocalizedCatalog = {
 };
 
 const factionNames: LocalizedCatalog = {
+  "ptd-company": { "zh-CN": "PTD 公司", "zh-TW": "PTD 公司", ja: "PTD社", fr: "Compagnie PTD" },
   "solar-directorate": { "zh-CN": "太阳理事会", ja: "太陽理事会", fr: "Directorat solaire" },
   "vossari-clans": { "zh-CN": "沃萨里氏族", ja: "ヴォッサリ氏族", fr: "Clans vossari" },
   "mirr-collective": { "zh-CN": "米尔联合体", ja: "ミル共同体", fr: "Collectif Mirr" },
@@ -1275,6 +1276,8 @@ const combatAiProfileNames: LocalizedCatalog = {
 };
 
 const combatLoadoutNames: LocalizedCatalog = {
+  "ptd-escort": { "zh-CN": "PTD 护航套件", "zh-TW": "PTD 護航套件", ja: "PTD護衛キット", fr: "Kit escorte PTD" },
+  "ptd-support": { "zh-CN": "PTD 支援套件", "zh-TW": "PTD 支援套件", ja: "PTD支援キット", fr: "Kit soutien PTD" },
   "pirate-raider": { "zh-CN": "刀翼袭击套件", ja: "ナイフ翼レイダーキット", fr: "Kit pillard Aile-couteau" },
   "pirate-interceptor": { "zh-CN": "刀翼拦截套件", ja: "ナイフ翼迎撃キット", fr: "Kit intercepteur Aile-couteau" },
   "pirate-gunner": { "zh-CN": "刀翼炮手套件", ja: "ナイフ翼砲手キット", fr: "Kit canonnier Aile-couteau" },
@@ -1413,6 +1416,7 @@ const displayNameAliases: LocalizedCatalog = {
   "Bastion-7": shipNames["bastion-7"],
   "Horizon Ark": shipNames["horizon-ark"],
   "Solar Directorate": factionNames["solar-directorate"],
+  "PTD Company": factionNames["ptd-company"],
   "Vossari Clans": factionNames["vossari-clans"],
   "Mirr Collective": factionNames["mirr-collective"],
   "Free Belt Union": factionNames["free-belt-union"],

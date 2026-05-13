@@ -235,6 +235,30 @@ describe("save system", () => {
     expect(readSaveIndex(storage).version).toBe(SAVE_VERSION);
   });
 
+  it("backfills permanent PTD Company reputation when reading older saves", () => {
+    const storage = new MemoryStorage();
+    const reputation = createInitialReputation();
+    const { "ptd-company": _ptd, ...legacyFactions } = reputation.factions;
+    const legacyPayload = {
+      ...payload({ reputation: { factions: legacyFactions } as SaveGameData["reputation"] }),
+      version: SAVE_VERSION,
+      savedAt: "2026-05-08T00:00:00.000Z"
+    };
+    storage.setItem(`${SAVE_SLOT_PREFIX}manual-1`, JSON.stringify(legacyPayload));
+    storage.setItem(SAVE_INDEX_KEY, JSON.stringify({
+      version: SAVE_VERSION,
+      lastPlayedSlotId: "manual-1",
+      slots: {
+        "manual-1": { id: "manual-1", label: "Manual Slot 1", exists: true, savedAt: legacyPayload.savedAt },
+        "manual-2": { id: "manual-2", label: "Manual Slot 2", exists: false },
+        "manual-3": { id: "manual-3", label: "Manual Slot 3", exists: false },
+        auto: { id: "auto", label: "Auto / Quick Slot", exists: false }
+      }
+    }));
+
+    expect(readSave(storage, "manual-1")?.reputation.factions["ptd-company"]).toBe(100);
+  });
+
   it("migrates saves without planet discovery to primary planets and the current station planet", () => {
     const storage = new MemoryStorage();
     const legacyPayload = {

@@ -1,4 +1,4 @@
-import { dialogueSceneById, equipmentById, equipmentList, missionTemplates, planetById, planets, shipById, stationById, systemById } from "../../data/world";
+import { dialogueSceneById, equipmentById, equipmentList, missionTemplates, planetById, planets, PTD_COMPANY_FACTION_ID, shipById, stationById, systemById } from "../../data/world";
 import type {
   ActiveDialogueState,
   CargoHold,
@@ -31,6 +31,19 @@ import { add, normalize, scale, sub } from "../../systems/math";
 
 export const SHIP_STORAGE_STATION_ID = "ptd-home";
 
+function isPtdHomeSystem(systemId: string): boolean {
+  return systemId === SHIP_STORAGE_STATION_ID;
+}
+
+function patrolFactionIdForSystem(systemId: string): FlightEntity["factionId"] {
+  return isPtdHomeSystem(systemId) ? PTD_COMPANY_FACTION_ID : "solar-directorate";
+}
+
+function patrolNameForSystem(systemId: string, support = false): string {
+  if (isPtdHomeSystem(systemId)) return support ? "PTD Escort Wing" : "PTD Escort Patrol";
+  return support ? "Patrol Support Wing" : "Directorate Patrol";
+}
+
 export function createInitialPlayer(): PlayerState {
   const starter = shipById["sparrow-mk1"];
   const stats = getEffectiveShipStats(starter.stats, starter.equipment);
@@ -58,9 +71,10 @@ export function createInitialPlayer(): PlayerState {
 
 export function createShipEntity(id: string, role: FlightEntity["role"], position: Vec3, systemId = "helion-reach", index = 0): FlightEntity {
   const pirateProfile = role === "pirate" ? getPirateAiProfile(systemId, index, systemById[systemId]?.risk ?? 0) : undefined;
+  const patrolFactionId = patrolFactionIdForSystem(systemId);
   const roleStats = {
     pirate: { hull: 70, shield: 42, factionId: "independent-pirates" as const },
-    patrol: { hull: 115, shield: 85, factionId: "solar-directorate" as const },
+    patrol: { hull: 115, shield: 85, factionId: patrolFactionId },
     trader: { hull: 85, shield: 55, factionId: "free-belt-union" as const },
     freighter: { hull: 170, shield: 70, factionId: "free-belt-union" as const },
     courier: { hull: 72, shield: 48, factionId: "solar-directorate" as const },
@@ -71,7 +85,7 @@ export function createShipEntity(id: string, role: FlightEntity["role"], positio
   }[role];
   const names: Record<FlightEntity["role"], string> = {
     pirate: "Knife Wing Pirate",
-    patrol: "Directorate Patrol",
+    patrol: patrolNameForSystem(systemId),
     trader: "Belt Trader",
     freighter: "Union Bulk Freighter",
     courier: "Gate Courier",
@@ -245,18 +259,19 @@ export function createPatrolSupportShip(systemId: string, index: number, targetI
   const offset: Vec3 = [index === 0 ? -42 : 42, 20 + index * 14, 58 + index * 18];
   const position = add(scale(add(anchor, gate), 0.5), offset);
   const aiProfileId: FlightEntity["aiProfileId"] = "patrol-support";
+  const factionId = patrolFactionIdForSystem(systemId);
   const loadout = getCombatLoadout({
     role: "patrol",
-    factionId: "solar-directorate",
+    factionId,
     aiProfileId,
     systemId,
     risk: systemById[systemId]?.risk ?? 0
   });
   return {
     id: `${systemId}-patrol-support-${Math.round(now * 10)}-${index}`,
-    name: "Patrol Support Wing",
+    name: patrolNameForSystem(systemId, true),
     role: "patrol",
-    factionId: "solar-directorate",
+    factionId,
     position,
     velocity: [0, 0, 0],
     hull: 96,
@@ -398,13 +413,16 @@ export function createRuntimeForSystem(systemId: string, activeMissions: Mission
   const asteroids = createAsteroidsForSystem(systemId, system.risk);
   const missionEntities = missionRuntimeEntities(systemId, activeMissions);
   const boss = createBossEntity(systemId);
+  const patrolPositions: Vec3[] = isPtdHomeSystem(systemId)
+    ? [[-210, 55, -360], [120, 35, -430]]
+    : [[-190, 55, -360]];
   return {
     enemies: [
       ...Array.from({ length: pirateCount }, (_, index) =>
         createShipEntity(`${systemId}-pirate-${index}`, "pirate", getPirateSpawnPosition(systemId, index), systemId, index)
       ),
       ...(boss ? [boss] : []),
-      createShipEntity(`${systemId}-patrol-0`, "patrol", [-190, 55, -360], systemId),
+      ...patrolPositions.map((position, index) => createShipEntity(`${systemId}-patrol-${index}`, "patrol", position, systemId, index)),
       ...createTrafficForSystem(systemId),
       ...missionEntities.storyTargets
     ],

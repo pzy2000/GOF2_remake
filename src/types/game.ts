@@ -76,6 +76,7 @@ export type StationTab =
 
 export type FactionId =
   | "solar-directorate"
+  | "ptd-company"
   | "vossari-clans"
   | "mirr-collective"
   | "free-belt-union"
@@ -515,6 +516,8 @@ export type CombatLoadoutId =
   | "directorate-patrol"
   | "directorate-support"
   | "directorate-courier"
+  | "ptd-escort"
+  | "ptd-support"
   | "union-hauler"
   | "union-freighter"
   | "union-miner"

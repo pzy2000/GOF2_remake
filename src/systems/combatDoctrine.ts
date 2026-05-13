@@ -1,4 +1,5 @@
 import type { CombatLoadoutId, FactionId, FlightAiProfileId, FlightEntityRole } from "../types/game";
+import { PTD_COMPANY_FACTION_ID } from "../data/factions";
 import { getPirateLoadout } from "./difficulty";
 
 export interface CombatLoadout {
@@ -31,6 +32,8 @@ export const combatLoadoutLabels: Record<CombatLoadoutId, string> = {
   "directorate-patrol": "Directorate precision kit",
   "directorate-support": "Directorate support kit",
   "directorate-courier": "Directorate courier kit",
+  "ptd-escort": "PTD escort kit",
+  "ptd-support": "PTD support kit",
   "union-hauler": "Union hauler kit",
   "union-freighter": "Union bulk defense kit",
   "union-miner": "Union cutter kit",
@@ -99,6 +102,8 @@ function pirateLoadout(input: CombatDoctrineInput): CombatLoadout {
 }
 
 function loadoutIdFor(input: CombatDoctrineInput): CombatLoadoutId {
+  if (input.factionId === PTD_COMPANY_FACTION_ID && input.aiProfileId === "patrol-support") return "ptd-support";
+  if (input.factionId === PTD_COMPANY_FACTION_ID && input.role === "patrol") return "ptd-escort";
   if (input.aiProfileId === "patrol-support") return "directorate-support";
   if (input.factionId === "unknown-drones") return input.role === "relay" ? "unknown-relay" : "unknown-drone";
   if (input.factionId === "mirr-collective") return "mirr-defender";
@@ -113,7 +118,13 @@ function loadoutIdFor(input: CombatDoctrineInput): CombatLoadoutId {
 function doctrineBaseFor(input: CombatDoctrineInput): Omit<CombatLoadout, "id" | "label"> {
   const base = roleFallbacks[input.role as Exclude<FlightEntityRole, "pirate">];
   if (input.aiProfileId === "patrol-support") {
-    return { damage: 13, fireCooldownMin: 0.58, fireCooldownMax: 0.82, speed: 138, attackRange: 650, retreatHullRatio: 0.2 };
+    const supportBase = { damage: 13, fireCooldownMin: 0.58, fireCooldownMax: 0.82, speed: 138, attackRange: 650, retreatHullRatio: 0.2 };
+    return input.factionId === PTD_COMPANY_FACTION_ID
+      ? { ...supportBase, damage: supportBase.damage + 2, speed: supportBase.speed + 10, attackRange: supportBase.attackRange + 45 }
+      : supportBase;
+  }
+  if (input.factionId === PTD_COMPANY_FACTION_ID) {
+    return { ...base, damage: base.damage + 3, speed: base.speed + 14, attackRange: base.attackRange + 70, fireCooldownMin: Math.max(0.5, base.fireCooldownMin - 0.08), fireCooldownMax: Math.max(base.fireCooldownMin, base.fireCooldownMax - 0.14) };
   }
   if (input.factionId === "mirr-collective") {
     return { ...base, damage: base.damage + 1, attackRange: base.attackRange + 70, fireCooldownMin: Math.max(0.6, base.fireCooldownMin - 0.08) };

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { commodities, commodityById, debugScenarioById, dialogueSceneById, encounterByMissionId, equipmentById, equipmentList, missionTemplates, planetById, planets, shipById, ships, stationById, stations, systemById, systems } from "../data/world";
+import { commodities, commodityById, debugScenarioById, dialogueSceneById, encounterByMissionId, equipmentById, equipmentList, missionTemplates, planetById, planets, PTD_COMPANY_FACTION_ID, shipById, ships, stationById, stations, systemById, systems } from "../data/world";
 import type {
   CargoHold,
   EquipmentId,
@@ -2253,14 +2253,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           const destroyedByHit = damaged.hull <= 0 && ship.hull > 0;
           const consequenceKind = !ship.storyTarget ? incidentKindForShip(ship.role, destroyedByHit) : undefined;
           if (consequenceKind && (!wasHostile || ship.provokedByPlayer || destroyedByHit)) {
-            const warningActive = hasActiveFriendlyFireWarning(factionHeat, ship.factionId, gameClock);
-            if (!destroyedByHit && !ship.provokedByPlayer && !warningActive) {
-              const warning = applyFriendlyFireWarning(factionHeat, ship.factionId, ship.name, gameClock);
-              factionHeat = warning.factionHeat;
-              lawNotification = warning.notification;
-              playerAggressionMessage = warning.notification.body;
-              audioSystem.play("ui-click");
-            } else {
+            if (ship.factionId === PTD_COMPANY_FACTION_ID) {
               const incident = applyFactionIncident({
                 factionHeat,
                 factionId: ship.factionId,
@@ -2269,9 +2262,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
                 now: gameClock
               });
               factionHeat = incident.factionHeat;
-              reputation = updateReputation(reputation, ship.factionId, incident.reputationDelta);
               lawNotification = incident.notification;
-              patrolsShouldAttackPlayer = ship.role !== "smuggler";
+              patrolsShouldAttackPlayer = true;
               playerAggressionMessage = incident.notification.body;
               damaged = {
                 ...damaged,
@@ -2281,7 +2273,38 @@ export const useGameStore = create<GameStore>((set, get) => ({
                 distressThreatId: "player",
                 distressCalledAt: now
               };
-              audioSystem.play(incident.wanted ? "mission-fail" : "ui-click");
+              audioSystem.play("ui-click");
+            } else {
+              const warningActive = hasActiveFriendlyFireWarning(factionHeat, ship.factionId, gameClock);
+              if (!destroyedByHit && !ship.provokedByPlayer && !warningActive) {
+                const warning = applyFriendlyFireWarning(factionHeat, ship.factionId, ship.name, gameClock);
+                factionHeat = warning.factionHeat;
+                lawNotification = warning.notification;
+                playerAggressionMessage = warning.notification.body;
+                audioSystem.play("ui-click");
+              } else {
+                const incident = applyFactionIncident({
+                  factionHeat,
+                  factionId: ship.factionId,
+                  kind: consequenceKind,
+                  subjectName: ship.name,
+                  now: gameClock
+                });
+                factionHeat = incident.factionHeat;
+                reputation = updateReputation(reputation, ship.factionId, incident.reputationDelta);
+                lawNotification = incident.notification;
+                patrolsShouldAttackPlayer = ship.role !== "smuggler";
+                playerAggressionMessage = incident.notification.body;
+                damaged = {
+                  ...damaged,
+                  aiState: "attack",
+                  aiTargetId: "player",
+                  provokedByPlayer: true,
+                  distressThreatId: "player",
+                  distressCalledAt: now
+                };
+                audioSystem.play(incident.wanted ? "mission-fail" : "ui-click");
+              }
             }
           }
           consumed = true;

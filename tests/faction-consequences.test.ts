@@ -91,4 +91,25 @@ describe("faction consequences", () => {
     expect(incident.reputationDelta).toBe(-6);
     expect(isFactionWanted(incident.factionHeat, "solar-directorate", 31)).toBe(true);
   });
+
+  it("keeps PTD Company incidents local with no persistent legal record", () => {
+    const warning = applyFriendlyFireWarning(createInitialFactionHeat(), "ptd-company", "PTD Escort Patrol", 40);
+    expect(warning.factionHeat.factions["ptd-company"]).toBeUndefined();
+    expect(hasActiveFriendlyFireWarning(warning.factionHeat, "ptd-company", 41)).toBe(false);
+
+    const incident = applyFactionIncident({
+      factionHeat: warning.factionHeat,
+      factionId: "ptd-company",
+      kind: "patrol-destroyed",
+      subjectName: "PTD Escort Patrol",
+      now: 42
+    });
+
+    expect(incident.heatDelta).toBe(0);
+    expect(incident.reputationDelta).toBe(0);
+    expect(incident.fineDelta).toBe(0);
+    expect(incident.wanted).toBe(false);
+    expect(incident.factionHeat.factions["ptd-company"]).toBeUndefined();
+    expect(isFactionWanted(incident.factionHeat, "ptd-company", 43)).toBe(false);
+  });
 });

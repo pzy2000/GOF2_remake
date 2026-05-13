@@ -179,6 +179,8 @@ describe("content data", () => {
     expect(station.name).toBe("PTD Home");
     expect(station.systemId).toBe(system.id);
     expect(station.planetId).toBe(planet.id);
+    expect(system.factionId).toBe("ptd-company");
+    expect(station.factionId).toBe("ptd-company");
   });
 
   it("defines multi-stage Quiet Signals exploration chains for every system", () => {

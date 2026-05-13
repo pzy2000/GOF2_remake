@@ -71,10 +71,17 @@ describe("faction service access", () => {
       now: 7
     }).factionHeat;
     expect(getStationServiceAccess({ station, service: "commodity-buy", reputation, factionHeat: wanted, now: 8 }).ok).toBe(false);
+
+    const ptdStation = stationById["ptd-home"];
+    expect(ptdStation.factionId).toBe("ptd-company");
+    const ptdAccess = getStationServiceAccess({ station: ptdStation, service: "shipyard-buy", reputation, factionHeat: wanted, now: 8 });
+    expect(ptdAccess.ok).toBe(true);
+    expect(ptdAccess.standingTier).toBe("allied");
+    expect(ptdAccess.heatLevel).toBe("clear");
   });
 
   it("gates equipment, ships, and non-story mission acceptance by standing", () => {
-    const station = stationById["ptd-home"];
+    const station = stationById["pearl-consulate"];
     const neutral = createInitialReputation();
     const friendly = { factions: { ...neutral.factions, "solar-directorate": 15 } };
     const allied = { factions: { ...neutral.factions, "solar-directorate": 50 } };

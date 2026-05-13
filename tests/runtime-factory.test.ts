@@ -15,6 +15,12 @@ describe("runtime factory domain helpers", () => {
     expect(helion.enemies.some((ship) => ship.role === "freighter" && ship.loadoutId === "union-freighter")).toBe(true);
     expect(helion.enemies.some((ship) => ship.boss)).toBe(false);
 
+    const ptdHome = createRuntimeForSystem("ptd-home");
+    const ptdPatrols = ptdHome.enemies.filter((ship) => ship.role === "patrol");
+    expect(ptdPatrols).toHaveLength(2);
+    expect(ptdPatrols.every((ship) => ship.factionId === "ptd-company" && ship.name === "PTD Escort Patrol" && ship.loadoutId === "ptd-escort")).toBe(true);
+    expect(ptdPatrols.some((ship) => ship.factionId === "solar-directorate")).toBe(false);
+
     const ashen = createRuntimeForSystem("ashen-drift");
     expect(ashen.enemies.find((ship) => ship.boss)).toMatchObject({
       id: "ashen-drift-boss-warlord",
