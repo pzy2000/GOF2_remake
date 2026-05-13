@@ -22,6 +22,7 @@ import {
   translateText,
   type Locale
 } from "../i18n";
+import { ShortcutButton } from "./ShortcutButton";
 
 const MAP_WIDTH = 840;
 const MAP_HEIGHT = 560;
@@ -36,6 +37,7 @@ interface DragState {
 }
 
 export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
+  const screen = useGameStore((state) => state.screen);
   const currentSystemId = useGameStore((state) => state.currentSystemId);
   const currentStationId = useGameStore((state) => state.currentStationId);
   const locale = useGameStore((state) => state.locale);
@@ -157,6 +159,32 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
   );
 
   useEffect(() => {
+    if (embedded || screen !== "galaxyMap") return undefined;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (shouldIgnoreGalaxyShortcut(event.target)) return;
+      if (event.code === "Minus" || event.code === "NumpadSubtract") {
+        event.preventDefault();
+        setZoom((current) => clamp(current - 0.16, 0.72, 1.85));
+      } else if (event.code === "Equal" || event.code === "NumpadAdd") {
+        event.preventDefault();
+        setZoom((current) => clamp(current + 0.16, 0.72, 1.85));
+      } else if (event.code === "KeyR" && !event.ctrlKey && !event.metaKey && !event.altKey) {
+        event.preventDefault();
+        setZoom(1);
+        setPan({ x: 0, y: 0 });
+      } else if (event.code === "Enter") {
+        event.preventDefault();
+        executeTravel();
+      } else if (event.code === "Escape") {
+        event.preventDefault();
+        setScreen("flight");
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [canTravel, embedded, mode, screen, selectedKnown, selectedSameStation, selectedStation, selectedStationKnown, setScreen, startJumpToStation, activateStargateJumpToStation, autopilot, currentStationId, knownPlanetIds, knownSystems, explorationState]);
+
+  useEffect(() => {
     if (!selectedStation || selectedStation.systemId !== selectedSystem.id || !knownPlanetIds.includes(selectedStation.planetId) || (selectedStation.hidden && !isHiddenStationRevealed(selectedStation.id, explorationState))) {
       setSelectedStationId(firstKnownPlanet ? firstKnownPlanet.stationId : undefined);
     }
@@ -215,22 +243,26 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
           </div>
           <div className="galaxy-controls">
             <span>{Math.round(zoom * 100)}%</span>
-            <button
+            <ShortcutButton
               className="galaxy-zoom-touch"
+              shortcut="-"
               aria-label={translateText("Zoom out", locale)}
+              title={translateText("Zoom out", locale)}
               onClick={() => setZoom((current) => clamp(current - 0.16, 0.72, 1.85))}
             >
               -
-            </button>
-            <button
+            </ShortcutButton>
+            <ShortcutButton
               className="galaxy-zoom-touch"
+              shortcut="="
               aria-label={translateText("Zoom in", locale)}
+              title={translateText("Zoom in", locale)}
               onClick={() => setZoom((current) => clamp(current + 0.16, 0.72, 1.85))}
             >
               +
-            </button>
-            <button onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }}>{translateText("Reset View", locale)}</button>
-            {!embedded ? <button onClick={() => setScreen("flight")}>{translateText("Return", locale)}</button> : null}
+            </ShortcutButton>
+            <ShortcutButton shortcut="R" onClick={() => { setZoom(1); setPan({ x: 0, y: 0 }); }} title={translateText("Reset View", locale)}>{translateText("Reset View", locale)}</ShortcutButton>
+            {!embedded ? <ShortcutButton shortcut="Esc" onClick={() => setScreen("flight")} title={translateText("Return", locale)}>{translateText("Return", locale)}</ShortcutButton> : null}
           </div>
         </header>
         <div className="galaxy-layout">
@@ -465,9 +497,9 @@ export function GalaxyMap({ embedded = false }: { embedded?: boolean }) {
                     ? translateText("Select a scanned planet beacon", locale)
                     : translateText("Signal masked", locale)}
               </p>
-              <button className="primary" disabled={!canTravel} onClick={() => executeTravel()}>
+              <ShortcutButton className="primary" shortcut="Enter" disabled={!canTravel} onClick={() => executeTravel()} title={travelLabel(mode, selectedSameStation, selectedKnown && selectedStationKnown, !!autopilot, locale)}>
                 {travelLabel(mode, selectedSameStation, selectedKnown && selectedStationKnown, !!autopilot, locale)}
-              </button>
+              </ShortcutButton>
               <p className="galaxy-help">{helpText(mode, locale)}</p>
             </div>
           </aside>
@@ -491,6 +523,11 @@ function seeded(index: number, salt: number): number {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+function shouldIgnoreGalaxyShortcut(target: EventTarget | null): boolean {
+  const element = target instanceof HTMLElement ? target : null;
+  return !!element?.closest("input, textarea, select, [contenteditable='true']");
 }
 
 function modeLabel(mode: GalaxyMapMode, locale: Locale): string {

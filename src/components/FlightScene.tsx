@@ -24,6 +24,7 @@ import {
   SimulationTicker as FlightSimulationTicker,
   TouchFlightControls as TouchFlightInputControls
 } from "./flight/FlightInputControls";
+import { ShortcutButton } from "./ShortcutButton";
 import {
   formatCargoContents,
   formatCredits,
@@ -2176,6 +2177,10 @@ function npcInteractionLabel(action: NpcInteractionAction): string {
   return action[0].toUpperCase() + action.slice(1);
 }
 
+function npcInteractionShortcut(action: NpcInteractionAction): string {
+  return String(npcInteractionActions.indexOf(action) + 1);
+}
+
 function canUseNpcInteraction(action: NpcInteractionAction, ship: FlightEntity, runtimeClock: number): boolean {
   if (action === "hail") return true;
   if (action === "escort") return ship.role === "trader" || ship.role === "freighter" || ship.role === "courier" || ship.role === "miner";
@@ -2192,10 +2197,12 @@ function NpcInteractionActions({ ship, compact = false }: { ship: FlightEntity; 
   return (
     <div className={compact ? "npc-interaction-actions compact" : "npc-interaction-actions"}>
       {npcInteractionActions.map((action) => (
-        <button
+        <ShortcutButton
           key={action}
           type="button"
+          shortcut={npcInteractionShortcut(action)}
           disabled={!canUseNpcInteraction(action, ship, runtimeClock)}
+          title={translateText(npcInteractionLabel(action), locale)}
           onMouseDown={(event) => event.stopPropagation()}
           onClick={(event) => {
             event.stopPropagation();
@@ -2203,7 +2210,7 @@ function NpcInteractionActions({ ship, compact = false }: { ship: FlightEntity; 
           }}
         >
           {translateText(npcInteractionLabel(action), locale)}
-        </button>
+        </ShortcutButton>
       ))}
     </div>
   );
@@ -2228,7 +2235,7 @@ function NpcInteractionOverlay() {
           <p className="eyebrow">{translateText("NPC Interaction", locale)}</p>
           <h2>{translateDisplayName(ship.name, locale)}</h2>
         </div>
-        <button type="button" onClick={closeNpcInteraction} aria-label={translateText("Close NPC interaction", locale)}>X</button>
+        <ShortcutButton type="button" shortcut="Esc" onClick={closeNpcInteraction} aria-label={translateText("Close NPC interaction", locale)} title={translateText("Close NPC interaction", locale)}>X</ShortcutButton>
       </header>
       <p>
         {formatRuntimeText(locale, ship.economyStatus)}
@@ -2238,9 +2245,9 @@ function NpcInteractionOverlay() {
       </p>
       <NpcInteractionActions ship={ship} />
       {personalCallStation ? (
-        <button type="button" className="primary" onClick={() => startJumpToStation(personalCallStation.id)}>
+        <ShortcutButton type="button" className="primary" shortcut="Enter" onClick={() => startJumpToStation(personalCallStation.id)} title={translateText("Route to Personal Call", locale)}>
           {translateText("Route to Personal Call", locale)}
-        </button>
+        </ShortcutButton>
       ) : null}
       {interaction.pending ? <p className="npc-interaction-message">{translateText("Pending backend confirmation...", locale)}</p> : null}
       {interaction.message ? <p className="npc-interaction-message">{formatRuntimeText(locale, interaction.message)}</p> : null}
@@ -2289,9 +2296,11 @@ function EconomyWatchOverlay() {
           <p className="eyebrow">{translateText("Watching", locale)}</p>
           <h2>{translateDisplayName(ship.name, locale)}</h2>
         </div>
-        <button
+        <ShortcutButton
           type="button"
           className="economy-watch-return"
+          shortcut="Esc"
+          title={translateText("Return", locale)}
           onMouseDown={(event) => event.stopPropagation()}
           onClick={(event) => {
             event.stopPropagation();
@@ -2299,7 +2308,7 @@ function EconomyWatchOverlay() {
           }}
         >
           {translateText("Return", locale)}
-        </button>
+        </ShortcutButton>
       </header>
       <div className="economy-watch-status-row">
         <span className={`economy-watch-pill task-${ship.economyTaskKind ?? "idle"}`}>{formatRuntimeText(locale, ship.economyStatus)}</span>
@@ -2309,9 +2318,11 @@ function EconomyWatchOverlay() {
       </div>
       <NpcInteractionActions ship={ship} compact />
       {personalCallStation ? (
-        <button
+        <ShortcutButton
           type="button"
           className="primary"
+          shortcut="Enter"
+          title={translateText("Route to Personal Call", locale)}
           onMouseDown={(event) => event.stopPropagation()}
           onClick={(event) => {
             event.stopPropagation();
@@ -2319,7 +2330,7 @@ function EconomyWatchOverlay() {
           }}
         >
           {translateText("Route to Personal Call", locale)}
-        </button>
+        </ShortcutButton>
       ) : null}
       <div className="economy-watch-grid">
         <p><b>{translateText("Identity", locale)}</b><span>{ship.economySerial ?? ship.id}</span></p>

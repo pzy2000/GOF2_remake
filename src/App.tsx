@@ -10,6 +10,7 @@ import { I18nRuntime } from "./components/I18nRuntime";
 import { LanguageSelect } from "./components/LanguageSelect";
 import { StoryNotificationOverlay } from "./components/StoryNotificationOverlay";
 import { DebugScenarioPanel } from "./components/DebugScenarioPanel";
+import { ShortcutButton } from "./components/ShortcutButton";
 import { audioSystem, getAudioSettings, saveAudioSettings } from "./systems/audio";
 import { voiceSystem } from "./systems/voice";
 import { loadAssetManifest } from "./systems/assets";
@@ -28,10 +29,10 @@ function PauseMenu() {
         <h2>Flight Suspended</h2>
         <p>Systems are stable. Save before risky jumps or bounty contracts.</p>
         <div className="menu-actions compact">
-          <button className="primary" onClick={() => setScreen("flight")}>Resume</button>
-          <button onClick={() => saveGame()}>Quick Save</button>
-          <button onClick={() => loadGame()}>Reload Latest</button>
-          <button onClick={() => setScreen("menu")}>Main Menu</button>
+          <ShortcutButton className="primary" shortcut="Esc" onClick={() => setScreen("flight")} title="Resume">Resume</ShortcutButton>
+          <ShortcutButton shortcut="Ctrl+S" onClick={() => saveGame()} title="Quick Save">Quick Save</ShortcutButton>
+          <ShortcutButton shortcut="Ctrl+R" onClick={() => loadGame()} title="Reload Latest">Reload Latest</ShortcutButton>
+          <ShortcutButton shortcut="Ctrl+M" onClick={() => setScreen("menu")} title="Main Menu">Main Menu</ShortcutButton>
         </div>
         <SaveSlotsPanel mode="manage" />
       </div>

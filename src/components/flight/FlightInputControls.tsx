@@ -1,8 +1,12 @@
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useRef, useState } from "react";
-import type { PointerEvent as ReactPointerEvent } from "react";
-import { useGameStore } from "../../state/gameStore";
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
+import { stationById, useGameStore } from "../../state/gameStore";
+import { getOnboardingView } from "../../systems/onboarding";
 import { clamp } from "../../systems/math";
+import { hasActiveCivilianDistress } from "../../state/domains/combatRuntime";
+import type { FlightEntity, NpcInteractionAction } from "../../types/game";
+import { ShortcutButton } from "../ShortcutButton";
 
 type TouchPadState = {
   x: number;
@@ -23,17 +27,27 @@ export function FlightControls() {
     };
     const onKeyDown = (event: KeyboardEvent) => {
       const state = useGameStore.getState();
+      if (shouldIgnoreGlobalShortcut(event.target)) return;
       if (state.screen === "economyWatch") {
-        if (event.code === "KeyC") {
-          event.preventDefault();
-          setInput({ toggleCamera: true });
-        } else if (event.code === "Escape") {
-          event.preventDefault();
-          setInput({ pause: true });
-        } else if (event.code in keyMap || event.code === "Space" || event.code === "KeyE" || event.code === "KeyG" || event.code === "KeyM" || event.code === "Tab") {
-          event.preventDefault();
-        }
+        handleEconomyWatchShortcut(event, setInput);
         return;
+      }
+      if (state.screen === "pause") {
+        handlePauseShortcut(event);
+        return;
+      }
+      if (state.screen === "galaxyMap") {
+        if (isFlightShortcut(event)) event.preventDefault();
+        return;
+      }
+      if (state.screen !== "flight") return;
+      if (event.ctrlKey && event.code === "KeyS") {
+        event.preventDefault();
+        state.saveGame();
+        return;
+      }
+      if (state.npcInteraction) {
+        if (handleNpcInteractionShortcut(event)) return;
       }
       const scanActive = state.screen === "flight" && !!state.runtime.explorationScan;
       if (scanActive && (event.code === "ArrowLeft" || event.code === "ArrowRight")) {
@@ -50,6 +64,25 @@ export function FlightControls() {
         event.preventDefault();
         return;
       }
+      if (event.code === "KeyH" || event.code === "KeyK") {
+        const onboardingView = getOnboardingView({
+          onboardingState: state.onboardingState,
+          screen: "flight",
+          currentSystemId: state.currentSystemId,
+          currentStationId: state.currentStationId,
+          player: state.player,
+          activeMissions: state.activeMissions,
+          completedMissionIds: state.completedMissionIds,
+          autopilot: state.autopilot,
+          gameClock: state.gameClock
+        });
+        if (onboardingView.visible && onboardingView.activeStep) {
+          event.preventDefault();
+          if (event.code === "KeyH") state.setOnboardingCollapsed(!onboardingView.collapsed);
+          if (event.code === "KeyK") state.skipOnboarding();
+          return;
+        }
+      }
       const mapped = keyMap[event.code];
       if (mapped) {
         event.preventDefault();
@@ -62,7 +95,7 @@ export function FlightControls() {
         event.preventDefault();
         setInput({ cycleTarget: true });
       }
-      if (event.code === "KeyM") setInput({ toggleMap: true });
+      if (event.code === "KeyM" && !state.autopilot) setInput({ toggleMap: true });
       if (event.code === "KeyC") setInput({ toggleCamera: true });
       if (event.code === "Escape") setInput({ pause: true });
     };
@@ -105,9 +138,132 @@ export function FlightControls() {
   return null;
 }
 
+const npcActionShortcuts: Record<string, NpcInteractionAction> = {
+  Digit1: "hail",
+  Numpad1: "hail",
+  Digit2: "escort",
+  Numpad2: "escort",
+  Digit3: "rob",
+  Numpad3: "rob",
+  Digit4: "rescue",
+  Numpad4: "rescue",
+  Digit5: "report",
+  Numpad5: "report"
+};
+
+function shouldIgnoreGlobalShortcut(target: EventTarget | null): boolean {
+  const element = target instanceof HTMLElement ? target : null;
+  return !!element?.closest("input, textarea, select, [contenteditable='true']");
+}
+
+function isFlightShortcut(event: KeyboardEvent): boolean {
+  if (event.ctrlKey && ["KeyS", "KeyR", "KeyM"].includes(event.code)) return true;
+  return [
+    "KeyW",
+    "KeyS",
+    "KeyA",
+    "KeyD",
+    "ShiftLeft",
+    "ShiftRight",
+    "Space",
+    "KeyE",
+    "KeyG",
+    "KeyM",
+    "KeyC",
+    "KeyH",
+    "KeyK",
+    "Escape"
+  ].includes(event.code);
+}
+
+function handlePauseShortcut(event: KeyboardEvent): void {
+  const state = useGameStore.getState();
+  if (event.code === "Escape") {
+    event.preventDefault();
+    state.setScreen("flight");
+    return;
+  }
+  if (!event.ctrlKey) return;
+  if (event.code === "KeyS") {
+    event.preventDefault();
+    state.saveGame();
+  } else if (event.code === "KeyR") {
+    event.preventDefault();
+    state.loadGame();
+  } else if (event.code === "KeyM") {
+    event.preventDefault();
+    state.setScreen("menu");
+  }
+}
+
+function handleEconomyWatchShortcut(event: KeyboardEvent, setInput: (patch: Partial<ReturnType<typeof useGameStore.getState>["input"]>) => void): void {
+  if (event.code === "KeyC") {
+    event.preventDefault();
+    setInput({ toggleCamera: true });
+    return;
+  }
+  if (event.code === "Escape") {
+    event.preventDefault();
+    setInput({ pause: true });
+    return;
+  }
+  if (handleNpcInteractionShortcut(event)) return;
+  if (event.code === "Enter" && routeToPersonalCall()) {
+    event.preventDefault();
+    return;
+  }
+  if (isFlightShortcut(event)) event.preventDefault();
+}
+
+function handleNpcInteractionShortcut(event: KeyboardEvent): boolean {
+  const state = useGameStore.getState();
+  const action = npcActionShortcuts[event.code];
+  if (action) {
+    event.preventDefault();
+    const npc = getShortcutNpc();
+    if (npc && canUseNpcShortcutAction(action, npc, state.runtime.clock)) void state.executeNpcInteraction(action, npc.id);
+    return true;
+  }
+  if (event.code === "Escape") {
+    event.preventDefault();
+    state.closeNpcInteraction();
+    return true;
+  }
+  if (event.code === "Enter" && routeToPersonalCall()) {
+    event.preventDefault();
+    return true;
+  }
+  return false;
+}
+
+function routeToPersonalCall(): boolean {
+  const state = useGameStore.getState();
+  const npc = getShortcutNpc();
+  const station = npc?.economyPersonalOfferId && npc.economyHomeStationId ? stationById[npc.economyHomeStationId] : undefined;
+  if (!station) return false;
+  state.startJumpToStation(station.id);
+  return true;
+}
+
+function getShortcutNpc(): FlightEntity | undefined {
+  const state = useGameStore.getState();
+  const npcId = state.npcInteraction?.npcId ?? state.economyNpcWatch?.npcId ?? state.targetId;
+  return npcId ? state.runtime.enemies.find((ship) => ship.id === npcId && ship.hull > 0 && ship.deathTimer === undefined) : undefined;
+}
+
+function canUseNpcShortcutAction(action: NpcInteractionAction, ship: FlightEntity, runtimeClock: number): boolean {
+  if (action === "hail") return true;
+  if (action === "escort") return ship.role === "trader" || ship.role === "freighter" || ship.role === "courier" || ship.role === "miner";
+  if (action === "rob") return Object.values(ship.economyCargo ?? {}).reduce((total, amount) => total + (amount ?? 0), 0) > 0;
+  if (action === "rescue") return hasActiveCivilianDistress(ship, runtimeClock);
+  if (action === "report") return ship.role === "smuggler" || hasActiveCivilianDistress(ship, runtimeClock) || ship.aiTargetId === "player" || !!ship.provokedByPlayer;
+  return false;
+}
+
 export function TouchFlightControls() {
   const screen = useGameStore((state) => state.screen);
   const locale = useGameStore((state) => state.locale);
+  const autopilot = useGameStore((state) => state.autopilot);
   const setInput = useGameStore((state) => state.setInput);
   const throttlePointerId = useRef<number | null>(null);
   const lookPointer = useRef<{ pointerId: number; x: number; y: number } | null>(null);
@@ -234,37 +390,41 @@ export function TouchFlightControls() {
   }
 
   return (
-    <div className="touch-flight-controls" data-locale={locale}>
+    <div className="touch-flight-controls" data-testid="touch-flight-controls" data-locale={locale}>
       <div
-        className="touch-pad throttle"
+        className="touch-pad touch-throttle-pad"
+        data-testid="touch-throttle-pad"
+        style={{ "--touch-x": throttlePad.x, "--touch-y": throttlePad.y } as CSSProperties}
         onPointerDown={handleThrottlePointerDown}
         onPointerMove={handleThrottlePointerMove}
         onPointerUp={handleThrottlePointerUp}
         onPointerCancel={resetThrottlePad}
       >
-        <span style={{ transform: `translate(${throttlePad.x * 26}px, ${throttlePad.y * 26}px)` }} />
+        <span />
       </div>
       <div
-        className="touch-pad look"
+        className="touch-pad touch-look-pad"
+        data-testid="touch-look-pad"
+        style={{ "--touch-x": lookPad.x, "--touch-y": lookPad.y } as CSSProperties}
         onPointerDown={handleLookPointerDown}
         onPointerMove={handleLookPointerMove}
         onPointerUp={handleLookPointerUp}
         onPointerCancel={handleLookPointerUp}
       >
-        <span style={{ transform: `translate(${lookPad.x * 30}px, ${lookPad.y * 30}px)` }} />
+        <span />
       </div>
-      <div className="touch-action-cluster left">
-        <button {...holdInput("afterburner")}>BOOST</button>
-        <button onPointerDown={tapInput("toggleMap")}>MAP</button>
+      <div className="touch-action-cluster touch-action-cluster-left">
+        <ShortcutButton shortcut="Shift" className="touch-afterburner" {...holdInput("afterburner")}>BOOST</ShortcutButton>
+        <ShortcutButton shortcut="M" onPointerDown={tapInput("toggleMap")} disabled={!!autopilot}>MAP</ShortcutButton>
       </div>
-      <div className="touch-action-cluster right">
-        <button {...holdInput("firePrimary")}>FIRE</button>
-        <button {...holdInput("fireSecondary")}>MISSILE</button>
-        <button onPointerDown={tapInput("activateUltimate")}>ULT</button>
-        <button onPointerDown={tapInput("interact")}>E</button>
-        <button onPointerDown={tapInput("cycleTarget")}>TARGET</button>
-        <button onPointerDown={tapInput("toggleCamera")}>CAM</button>
-        <button onPointerDown={tapInput("pause")}>PAUSE</button>
+      <div className="touch-action-cluster touch-action-cluster-right">
+        <ShortcutButton shortcut="LMB" className="touch-fire-primary" data-testid="touch-fire-primary" {...holdInput("firePrimary")}>FIRE</ShortcutButton>
+        <ShortcutButton shortcut="RMB" {...holdInput("fireSecondary")}>MISSILE</ShortcutButton>
+        <ShortcutButton shortcut="G" onPointerDown={tapInput("activateUltimate")}>ULT</ShortcutButton>
+        <ShortcutButton shortcut="E" onPointerDown={tapInput("interact")}>E</ShortcutButton>
+        <ShortcutButton shortcut="Tab" onPointerDown={tapInput("cycleTarget")}>TARGET</ShortcutButton>
+        <ShortcutButton shortcut="C" onPointerDown={tapInput("toggleCamera")}>CAM</ShortcutButton>
+        <ShortcutButton shortcut="Esc" onPointerDown={tapInput("pause")}>PAUSE</ShortcutButton>
       </div>
     </div>
   );

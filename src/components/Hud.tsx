@@ -16,6 +16,7 @@ import { getFactionHeatLevelLabel, getFactionHeatRecord, isFactionWanted } from 
 import { getOnboardingView } from "../systems/onboarding";
 import { getNextGuidanceRecommendation } from "../systems/playerGuidance";
 import { getStoryObjectiveSummary } from "../systems/story";
+import { ShortcutButton } from "./ShortcutButton";
 import {
   formatCargoLabel,
   formatCommodityAmount,
@@ -191,7 +192,10 @@ export function Hud() {
         disabled={!ultimateReady}
         onClick={() => setInput({ activateUltimate: true })}
         aria-label="Sparrow ultimate"
+        aria-keyshortcuts="G"
+        title="Sparrow ultimate (G)"
       >
+        <kbd className="shortcut-keycap" data-shortcut="G" aria-hidden="true" />
         <span className="ultimate-skill-icon" aria-hidden="true">
           <i className="ultimate-mecha-head" />
           <i className="ultimate-mecha-body" />
@@ -258,10 +262,14 @@ export function Hud() {
             <div className="onboarding-guide-header">
               <span>{translateText("First Flight", locale)} {onboardingView.completedCount}/{onboardingView.totalCount}</span>
               <div>
-                <button onClick={() => setOnboardingCollapsed(!onboardingView.collapsed)}>
+                <ShortcutButton
+                  shortcut="H"
+                  onClick={() => setOnboardingCollapsed(!onboardingView.collapsed)}
+                  title={translateText(onboardingView.collapsed ? "Expand" : "Collapse", locale)}
+                >
                   {translateText(onboardingView.collapsed ? "Expand" : "Collapse", locale)}
-                </button>
-                <button onClick={skipOnboarding}>{translateText("Skip", locale)}</button>
+                </ShortcutButton>
+                <ShortcutButton shortcut="K" onClick={skipOnboarding} title={translateText("Skip", locale)}>{translateText("Skip", locale)}</ShortcutButton>
               </div>
             </div>
             <b>{translateText(onboardingView.activeStep.title, locale)}</b>
@@ -348,16 +356,16 @@ export function Hud() {
         ) : null}
         {autopilot?.cancelable ? <p>{autopilotCancelLabel(locale)}</p> : null}
         <div className="quick-actions">
-          <button onClick={() => openGalaxyMap("station-route")} disabled={!!autopilot}>{translateText("Map", locale)}</button>
-          <button onClick={() => saveGame()}>{translateText("Save", locale)}</button>
-          <button onClick={() => setScreen("pause")}>{translateText("Pause", locale)}</button>
+          <ShortcutButton shortcut="M" onClick={() => openGalaxyMap("station-route")} disabled={!!autopilot} title={translateText("Map", locale)}>{translateText("Map", locale)}</ShortcutButton>
+          <ShortcutButton shortcut="Ctrl+S" onClick={() => saveGame()} title={translateText("Save", locale)}>{translateText("Save", locale)}</ShortcutButton>
+          <ShortcutButton shortcut="Esc" onClick={() => setScreen("pause")} title={translateText("Pause", locale)}>{translateText("Pause", locale)}</ShortcutButton>
         </div>
       </section>
       {activeScan && activeScanSignal && activeScanBand ? (
         <section className="hud-panel scan-panel">
           <div className="scan-panel-header">
             <span>{translateText("Frequency Scan", locale)}</span>
-            <button onClick={cancelExplorationScan} aria-keyshortcuts="Escape" title={translateText("Cancel scan (Esc)", locale)}>{translateText("Cancel", locale)}</button>
+            <ShortcutButton shortcut="Esc" onClick={cancelExplorationScan} title={translateText("Cancel scan", locale)}>{translateText("Cancel", locale)}</ShortcutButton>
           </div>
           <h3>{translateText(activeScanSignal.title, locale)}</h3>
           <div className="frequency-track" aria-label={translateText("Signal frequency", locale)}>
@@ -365,11 +373,11 @@ export function Hud() {
             <b style={{ left: `${activeScan.frequency}%` }} />
           </div>
           <div className="scan-controls">
-            <button onClick={() => adjustExplorationScanFrequency(-5)} aria-keyshortcuts="Shift+ArrowLeft" title="Decrease frequency by 5 (Shift+ArrowLeft)">-5</button>
-            <button onClick={() => adjustExplorationScanFrequency(-1)} aria-keyshortcuts="ArrowLeft" title="Decrease frequency by 1 (ArrowLeft)">-1</button>
+            <ShortcutButton shortcut="Shift+←" ariaShortcut="Shift+ArrowLeft" onClick={() => adjustExplorationScanFrequency(-5)} title="Decrease frequency by 5">-5</ShortcutButton>
+            <ShortcutButton shortcut="←" ariaShortcut="ArrowLeft" onClick={() => adjustExplorationScanFrequency(-1)} title="Decrease frequency by 1">-1</ShortcutButton>
             <span>{Math.round(activeScan.frequency)}</span>
-            <button onClick={() => adjustExplorationScanFrequency(1)} aria-keyshortcuts="ArrowRight" title="Increase frequency by 1 (ArrowRight)">+1</button>
-            <button onClick={() => adjustExplorationScanFrequency(5)} aria-keyshortcuts="Shift+ArrowRight" title="Increase frequency by 5 (Shift+ArrowRight)">+5</button>
+            <ShortcutButton shortcut="→" ariaShortcut="ArrowRight" onClick={() => adjustExplorationScanFrequency(1)} title="Increase frequency by 1">+1</ShortcutButton>
+            <ShortcutButton shortcut="Shift+→" ariaShortcut="Shift+ArrowRight" onClick={() => adjustExplorationScanFrequency(5)} title="Increase frequency by 5">+5</ShortcutButton>
           </div>
           <div className="scan-progress">
             <span>{activeScan.inBand ? translateText("LOCKED", locale) : translateText("TUNING", locale)}</span>

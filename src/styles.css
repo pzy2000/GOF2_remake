@@ -49,6 +49,46 @@ button.primary {
   color: #0d1117;
 }
 
+button.has-shortcut {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.button-label {
+  min-width: 0;
+}
+
+.button-shortcut,
+.shortcut-keycap {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.55em;
+  min-height: 1.35em;
+  border: 1px solid rgba(200, 232, 255, 0.32);
+  border-radius: 4px;
+  background: rgba(3, 10, 20, 0.48);
+  color: #d8edff;
+  font-family: inherit;
+  font-size: 0.68em;
+  font-weight: 900;
+  line-height: 1;
+  padding: 0.16em 0.34em;
+  white-space: nowrap;
+}
+
+.button-shortcut::before,
+.shortcut-keycap::before {
+  content: attr(data-shortcut);
+}
+
+button.primary .button-shortcut {
+  border-color: rgba(13, 17, 23, 0.32);
+  background: rgba(13, 17, 23, 0.16);
+  color: #1a2430;
+}
+
 h1,
 h2,
 h3,
@@ -573,6 +613,7 @@ h3 {
 }
 
 .npc-interaction-actions button {
+  align-items: center;
   min-width: 0;
   border: 1px solid rgba(155, 255, 232, 0.3);
   border-radius: 6px;
@@ -835,6 +876,14 @@ h3 {
   letter-spacing: 0;
   text-align: center;
   font-variant-numeric: tabular-nums;
+}
+
+.ultimate-skill .shortcut-keycap {
+  position: absolute;
+  top: 0;
+  right: 4px;
+  z-index: 2;
+  font-size: 0.62rem;
 }
 
 .ultimate-mecha-head,
@@ -4113,7 +4162,7 @@ button.equipment-trigger {
     pointer-events: auto;
   }
 
-  .touch-action-cluster button {
+.touch-action-cluster button {
     min-width: 52px;
     min-height: 44px;
     padding: 0 10px;
@@ -4121,6 +4170,16 @@ button.equipment-trigger {
     background: rgba(3, 10, 20, 0.7);
     box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
     font-size: 0.72rem;
+  }
+
+  .touch-action-cluster button.has-shortcut {
+    gap: 5px;
+    padding-inline: 8px;
+  }
+
+  .touch-action-cluster .button-shortcut {
+    font-size: 0.62rem;
+    padding-inline: 0.24em;
   }
 
   .touch-fire-primary {
