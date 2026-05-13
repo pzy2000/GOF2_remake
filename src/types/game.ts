@@ -212,8 +212,18 @@ export interface AssetManifest {
   asteroidTextures: string;
   factionEmblems: string;
   hudOverlay: string;
+  assetCredits: AssetCredit[];
   vfxCues: VfxCueManifest;
   musicTracks: MusicTrackManifest;
+}
+
+export interface AssetCredit {
+  title: string;
+  author: string;
+  sourceUrl: string;
+  license: string;
+  licenseUrl?: string;
+  assetPath: string;
 }
 
 export interface ShipStats {

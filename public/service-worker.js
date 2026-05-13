@@ -57,6 +57,7 @@ const PRECACHE_URLS = [
   "assets/generated/ships/horizon-ark.glb",
   "assets/generated/ships/mule-lx.glb",
   "assets/generated/ships/raptor-v.glb",
+  "assets/generated/ships/sparrow-gundam.glb",
   "assets/generated/ships/sparrow-mk1.glb",
   "assets/generated/skybox-ashen-drift.webp",
   "assets/generated/skybox-celest-gate.webp",

@@ -66,7 +66,7 @@ The screenshot command refreshes optional matrix captures in `docs/mobile-matrix
 
 ## Assets
 
-Original raster assets were generated with Codex built-in `$imagegen`, converted to WebP, and copied into `public/assets/generated/`. The app loads them through `public/assets/generated/manifest.json`.
+Original raster assets were generated with Codex built-in `$imagegen`, converted to WebP, and copied into `public/assets/generated/`. The app loads them through `public/assets/generated/manifest.json`. External 3D assets are included only when they have clear open-license or public-domain metadata.
 
 Generated project assets:
 
@@ -77,12 +77,12 @@ Generated project assets:
 - `skybox-panorama.webp`
 - `skybox-*.webp` per star system
 - `planet-*.webp` per visitable planet
-- `ships/*.glb` for the five generated player-ship silhouettes
+- `ships/*.glb` for generated player ships plus the Sparrow ultimate mech mode
 - `asteroid-textures.webp`
 - `faction-emblems.webp`
 - `hud-overlay.webp`
 
-No external copyrighted image or model packs are included. The flight scene uses per-system generated skyboxes as camera-locked inside-sphere backgrounds, with `skybox-panorama.webp` and `nebula-bg.webp` kept as fallbacks. Planets use generated equirectangular WebP surface textures on large Three.js spheres so each station sits beside its own visible world. Player ship models are local generated GLB files created by `scripts/generate-ship-models.mjs`; the runtime loads them through the asset manifest and falls back to procedural geometry if a model is unavailable. Stations, asteroids, projectiles, loot, and fallback ships use Three.js primitives. Background music files under `public/assets/music/` are CC0 tracks, with source and license metadata recorded in `public/assets/music/credits.json`.
+No copyrighted external image or model packs are included. The Sparrow ultimate mech model uses the public-domain `Mech` GLB by Quaternius via Get3DModels, with metadata recorded in `assetCredits` inside `public/assets/generated/manifest.json`. The flight scene uses per-system generated skyboxes as camera-locked inside-sphere backgrounds, with `skybox-panorama.webp` and `nebula-bg.webp` kept as fallbacks. Planets use generated equirectangular WebP surface textures on large Three.js spheres so each station sits beside its own visible world. Player ship models are local GLB files loaded through the asset manifest and fall back to procedural geometry if a model is unavailable. Stations, asteroids, projectiles, loot, and fallback ships use Three.js primitives. Background music files under `public/assets/music/` are CC0 tracks, with source and license metadata recorded in `public/assets/music/credits.json`.
 
 ## Jump Travel
 

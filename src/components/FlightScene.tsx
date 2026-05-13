@@ -444,7 +444,19 @@ function SystemStarBackdrop() {
   );
 }
 
-const playerShipVisuals: Record<string, { scale: number; engines: Vec3[]; flameColor: string; afterburnerColor: string }> = {
+type PlayerShipVisual = {
+  scale: number;
+  engines: Vec3[];
+  flameColor: string;
+  afterburnerColor: string;
+  offset?: Vec3;
+  rotation?: [number, number, number];
+  emissiveBoost?: boolean;
+};
+
+const ULTIMATE_TRANSFORM_SECONDS = 1.8;
+
+const playerShipVisuals: Record<string, PlayerShipVisual> = {
   "sparrow-mk1": { scale: 1, engines: [[-5.5, -1.6, 17], [5.5, -1.6, 17]], flameColor: "#ff8b3d", afterburnerColor: "#66e4ff" },
   "mule-lx": { scale: 0.95, engines: [[-12, -3, 20], [12, -3, 20]], flameColor: "#ffb657", afterburnerColor: "#7ee7ff" },
   "prospector-rig": { scale: 0.94, engines: [[-8, -5, 27], [8, -5, 27]], flameColor: "#ffd166", afterburnerColor: "#fff1a8" },
@@ -454,7 +466,15 @@ const playerShipVisuals: Record<string, { scale: number; engines: Vec3[]; flameC
   "raptor-v": { scale: 0.96, engines: [[-8, -1.8, 18], [0, -1.2, 20], [8, -1.8, 18]], flameColor: "#ff5f6d", afterburnerColor: "#70f0ff" },
   "bastion-7": { scale: 0.9, engines: [[-14, -4, 22], [0, -3, 24], [14, -4, 22]], flameColor: "#ff7a45", afterburnerColor: "#ffd166" },
   "horizon-ark": { scale: 0.92, engines: [[-16, -2.4, 24], [-5, -2, 26], [5, -2, 26], [16, -2.4, 24]], flameColor: "#8ff7ff", afterburnerColor: "#ffffff" },
-  [SPARROW_ULTIMATE_MODEL_ID]: { scale: 0.9, engines: [[-9, -3, 18], [9, -3, 18], [-18, 1, 7], [18, 1, 7]], flameColor: "#66e4ff", afterburnerColor: "#ffffff" }
+  [SPARROW_ULTIMATE_MODEL_ID]: {
+    scale: 15.5,
+    engines: [[-12, -18, 11], [12, -18, 11], [-24, 4, 3], [24, 4, 3]],
+    flameColor: "#66e4ff",
+    afterburnerColor: "#ffffff",
+    offset: [0, -4, 1],
+    rotation: [0, Math.PI, 0],
+    emissiveBoost: true
+  }
 };
 
 class ShipModelBoundary extends Component<{ children: ReactNode; fallback: ReactNode; onFallback: () => void }, { failed: boolean }> {
@@ -473,6 +493,17 @@ class ShipModelBoundary extends Component<{ children: ReactNode; fallback: React
   }
 }
 
+function boostUltimateMaterial(material: THREE.Material): THREE.Material {
+  const cloned = material.clone();
+  if (cloned instanceof THREE.MeshStandardMaterial || cloned instanceof THREE.MeshPhysicalMaterial) {
+    cloned.emissive = new THREE.Color("#75f4ff");
+    cloned.emissiveIntensity = Math.max(cloned.emissiveIntensity, 0.42);
+    cloned.metalness = Math.max(cloned.metalness, 0.62);
+    cloned.roughness = Math.min(cloned.roughness, 0.24);
+  }
+  return cloned;
+}
+
 function GltfPlayerShip({ onLoaded, shipId, url }: { onLoaded: () => void; shipId: string; url: string }) {
   const gltf = useGLTF(url);
   useEffect(() => {
@@ -480,16 +511,98 @@ function GltfPlayerShip({ onLoaded, shipId, url }: { onLoaded: () => void; shipI
   }, [onLoaded]);
   const clone = useMemo(() => {
     const scene = gltf.scene.clone(true);
+    const box = new THREE.Box3().setFromObject(scene);
+    const center = box.getCenter(new THREE.Vector3());
+    scene.position.sub(center);
     scene.traverse((node) => {
       if (node instanceof THREE.Mesh) {
         node.castShadow = true;
         node.receiveShadow = true;
+        if ((playerShipVisuals[shipId] ?? playerShipVisuals["sparrow-mk1"]).emissiveBoost) {
+          node.material = Array.isArray(node.material) ? node.material.map(boostUltimateMaterial) : boostUltimateMaterial(node.material);
+        }
       }
     });
     return scene;
-  }, [gltf.scene]);
+  }, [gltf.scene, shipId]);
   const visual = playerShipVisuals[shipId] ?? playerShipVisuals["sparrow-mk1"];
-  return <primitive object={clone} scale={visual.scale} />;
+  return <primitive object={clone} position={toThree(visual.offset ?? [0, 0, 0])} rotation={visual.rotation} scale={visual.scale} />;
+}
+
+function UltimateTransformationFx({ activeUntil, lastActivatedAt }: { activeUntil?: number; lastActivatedAt?: number }) {
+  const clock = useGameStore((state) => state.runtime.clock);
+  const groupRef = useRef<THREE.Group>(null);
+  const active = (activeUntil ?? -Infinity) > clock;
+  const blocks = useMemo(
+    () =>
+      Array.from({ length: 24 }, (_, index) => {
+        const angle = index * 1.618;
+        const height = -34 + (index % 8) * 10;
+        const radius = 70 + (index % 5) * 9;
+        return { angle, height, radius, size: 3 + (index % 4) * 0.75 };
+      }),
+    []
+  );
+
+  useFrame((_, delta) => {
+    if (groupRef.current) groupRef.current.rotation.y += delta * 0.38;
+  });
+
+  if (!active || lastActivatedAt === undefined) return null;
+
+  const elapsed = Math.max(0, clock - lastActivatedAt);
+  const transformProgress = clamp(elapsed / ULTIMATE_TRANSFORM_SECONDS, 0, 1);
+  const transforming = transformProgress < 1;
+  const pulse = 0.5 + Math.sin(clock * 8.5) * 0.5;
+
+  return (
+    <group ref={groupRef}>
+      {transforming ? (
+        <>
+          <mesh position={[0, 0, 0]}>
+            <cylinderGeometry args={[18 + transformProgress * 18, 30 + transformProgress * 24, 110, 32, 1, true]} />
+            <meshBasicMaterial color="#7df7ff" transparent opacity={(1 - transformProgress) * 0.24} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
+          </mesh>
+          <mesh rotation={[Math.PI / 2, 0, 0]}>
+            <torusGeometry args={[28 + transformProgress * 45, 2.2, 8, 72]} />
+            <meshBasicMaterial color="#ffffff" transparent opacity={(1 - transformProgress) * 0.72} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
+          </mesh>
+          {blocks.map((block, index) => {
+            const swirl = block.angle + (1 - transformProgress) * 4.8;
+            const radius = block.radius * (1 - transformProgress);
+            const y = block.height * (1 - transformProgress * 0.86);
+            const x = Math.cos(swirl) * radius;
+            const z = Math.sin(swirl) * radius;
+            return (
+              <mesh key={index} position={[x, y, z]} rotation={[clock * 2 + index, block.angle, clock * 1.4]} scale={0.65 + transformProgress * 0.7}>
+                <boxGeometry args={[block.size, block.size * 1.5, block.size * 0.8]} />
+                <meshBasicMaterial color={index % 3 === 0 ? "#ffffff" : index % 3 === 1 ? "#6ee7ff" : "#2b68ff"} transparent opacity={0.28 + (1 - transformProgress) * 0.46} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
+              </mesh>
+            );
+          })}
+          {[-1, 1].map((side) => (
+            <Line key={side} points={[[side * 74, -40, 28], [side * 16, 12, -8], [side * 8, 28, -2]]} color="#e9fdff" lineWidth={2.4} transparent opacity={(1 - transformProgress) * 0.72} />
+          ))}
+        </>
+      ) : null}
+      <mesh>
+        <sphereGeometry args={[34 + pulse * 4, 32, 18]} />
+        <meshBasicMaterial color="#72f4ff" transparent opacity={0.08 + pulse * 0.06} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
+      </mesh>
+      <mesh rotation={[Math.PI / 2, 0, clock * 0.9]}>
+        <torusGeometry args={[40 + pulse * 8, 1.3, 8, 72]} />
+        <meshBasicMaterial color="#b9fbff" transparent opacity={0.22 + pulse * 0.18} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
+      </mesh>
+      <mesh position={[0, 5, -8]}>
+        <sphereGeometry args={[6 + pulse * 2.2, 16, 10]} />
+        <meshBasicMaterial color="#ffffff" transparent opacity={0.38 + pulse * 0.22} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
+      </mesh>
+      {[-1, 1].map((side) => (
+        <Line key={`aura-wing-${side}`} points={[[side * 14, 6, 8], [side * 38, 2, 28], [side * 64, -4, 46]]} color="#83ecff" lineWidth={3.4} transparent opacity={0.24 + pulse * 0.18} />
+      ))}
+      <pointLight color="#7df7ff" intensity={2.4 + pulse * 2.2 + (transforming ? 4 * (1 - transformProgress) : 0)} distance={260} />
+    </group>
+  );
 }
 
 function ProceduralPlayerShip({ shipId }: { shipId: string }) {
@@ -560,6 +673,7 @@ function PlayerEngineFlames({ shipId, afterburning, speed }: { shipId: string; a
 function PlayerShip({ onModelStatus }: { onModelStatus: (status: ShipModelStatus | null) => void }) {
   const player = useGameStore((state) => state.player);
   const locale = useGameStore((state) => state.locale);
+  const ultimateAbility = useGameStore((state) => state.ultimateAbility);
   const ultimateActive = useGameStore((state) => state.player.shipId === "sparrow-mk1" && (state.ultimateAbility.activeUntil ?? -Infinity) > state.runtime.clock);
   const renderShipId = ultimateActive ? SPARROW_ULTIMATE_MODEL_ID : player.shipId;
   const modelUrl = useGameStore((state) => state.assetManifest.shipModels[renderShipId]);
@@ -595,6 +709,7 @@ function PlayerShip({ onModelStatus }: { onModelStatus: (status: ShipModelStatus
       ) : (
         fallback
       )}
+      <UltimateTransformationFx activeUntil={ultimateAbility.activeUntil} lastActivatedAt={ultimateAbility.lastActivatedAt} />
       <PlayerEngineFlames shipId={renderShipId} afterburning={afterburning} speed={speed} />
     </group>
   );

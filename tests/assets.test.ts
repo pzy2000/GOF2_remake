@@ -105,6 +105,25 @@ describe("asset manifest", () => {
     expectProjectAssetExists(assetManifest.shipModels["sparrow-mk1-gundam"]);
   });
 
+  it("records the online mech model source and license metadata", () => {
+    const assetManifest = manifest as AssetManifest;
+    const mechCredit = assetManifest.assetCredits.find((credit) => credit.assetPath === "/assets/generated/ships/sparrow-gundam.glb");
+
+    expect(mechCredit).toMatchObject({
+      title: "Mech",
+      author: "Quaternius via Get3DModels",
+      sourceUrl: "https://www.get3dmodels.com/robot/mech-2/",
+      license: "Public domain",
+      licenseUrl: "https://creativecommons.org/publicdomain/zero/1.0/"
+    });
+    expect(fallbackAssetManifest.assetCredits).toContainEqual(mechCredit);
+  });
+
+  it("precaches the sparrow ultimate mech model for offline preview", () => {
+    const serviceWorker = readFileSync(resolve(process.cwd(), "public", "service-worker.js"), "utf8");
+    expect(serviceWorker).toContain('"assets/generated/ships/sparrow-gundam.glb"');
+  });
+
   it("defines material and hardpoint metadata for every player ship", () => {
     const assetManifest = manifest as AssetManifest;
     for (const ship of ships) {

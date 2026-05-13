@@ -756,6 +756,16 @@
   "asteroidTextures": "/assets/generated/asteroid-textures.webp",
   "factionEmblems": "/assets/generated/faction-emblems.webp",
   "hudOverlay": "/assets/generated/hud-overlay.webp",
+  "assetCredits": [
+    {
+      "title": "Mech",
+      "author": "Quaternius via Get3DModels",
+      "sourceUrl": "https://www.get3dmodels.com/robot/mech-2/",
+      "license": "Public domain",
+      "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+      "assetPath": "/assets/generated/ships/sparrow-gundam.glb"
+    }
+  ],
   "vfxCues": {
     "hit": "impact-spark",
     "shieldHit": "shield-ripple",

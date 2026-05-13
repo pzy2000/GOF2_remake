@@ -61,6 +61,7 @@ function GameOver() {
 
 function SimpleScreen({ type }: { type: "settings" | "credits" }) {
   const setScreen = useGameStore((state) => state.setScreen);
+  const assetCredits = useGameStore((state) => state.assetManifest.assetCredits);
   const [audioSettings, setAudioSettings] = useState(getAudioSettings);
   const updateAudio = (patch: Partial<typeof audioSettings>) => {
     setAudioSettings(saveAudioSettings({ ...audioSettings, ...patch }));
@@ -99,8 +100,19 @@ function SimpleScreen({ type }: { type: "settings" | "credits" }) {
           </>
         ) : (
           <>
-            <p>GOF2 by pzy is an original browser-playable space trading/combat prototype built with React, TypeScript, Three.js, and generated project art.</p>
+            <p>GOF2 by pzy is an original browser-playable space trading/combat prototype built with React, TypeScript, Three.js, generated project art, and openly licensed assets.</p>
             <p>No copyrighted external image packs are included.</p>
+            {assetCredits.length > 0 ? (
+              <div className="credits-list">
+                {assetCredits.map((credit) => (
+                  <p key={`${credit.title}-${credit.assetPath}`}>
+                    {credit.title} by {credit.author}. {credit.license}
+                    {credit.licenseUrl ? <> · <a href={credit.licenseUrl} target="_blank" rel="noreferrer">License</a></> : null}
+                    {" · "}<a href={credit.sourceUrl} target="_blank" rel="noreferrer">Source</a>
+                  </p>
+                ))}
+              </div>
+            ) : null}
           </>
         )}
         <button className="primary" onClick={() => setScreen("menu")}>Back</button>

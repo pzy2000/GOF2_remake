@@ -1186,6 +1186,20 @@ h3 {
   position: fixed;
 }
 
+.credits-list {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0 0;
+}
+
+.credits-list p {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(125, 211, 252, 0.24);
+  border-radius: 8px;
+  background: rgba(8, 18, 34, 0.5);
+}
+
 .debug-scenario-panel {
   position: fixed;
   left: 18px;

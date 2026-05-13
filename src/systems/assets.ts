@@ -111,6 +111,16 @@ const rawFallbackAssetManifest: AssetManifest = {
   asteroidTextures: "/assets/generated/asteroid-textures.webp",
   factionEmblems: "/assets/generated/faction-emblems.webp",
   hudOverlay: "/assets/generated/hud-overlay.webp",
+  assetCredits: [
+    {
+      title: "Mech",
+      author: "Quaternius via Get3DModels",
+      sourceUrl: "https://www.get3dmodels.com/robot/mech-2/",
+      license: "Public domain",
+      licenseUrl: "https://creativecommons.org/publicdomain/zero/1.0/",
+      assetPath: "/assets/generated/ships/sparrow-gundam.glb"
+    }
+  ],
   vfxCues: {
     hit: "impact-spark",
     shieldHit: "shield-ripple",
@@ -187,6 +197,10 @@ export function resolveAssetManifest(manifest: AssetManifest, baseUrl?: string):
     asteroidTextures: resolvePublicAssetPath(manifest.asteroidTextures, baseUrl),
     factionEmblems: resolvePublicAssetPath(manifest.factionEmblems, baseUrl),
     hudOverlay: resolvePublicAssetPath(manifest.hudOverlay, baseUrl),
+    assetCredits: manifest.assetCredits.map((credit) => ({
+      ...credit,
+      assetPath: resolvePublicAssetPath(credit.assetPath, baseUrl)
+    })),
     vfxCues: manifest.vfxCues,
     musicTracks: resolveMusicTrackManifest(manifest.musicTracks, baseUrl)
   };
@@ -211,6 +225,7 @@ export async function loadAssetManifest(): Promise<AssetManifest> {
     speakerPortraits: { ...rawFallbackAssetManifest.speakerPortraits, ...loaded.speakerPortraits },
     storyCinematics: { ...rawFallbackAssetManifest.storyCinematics, ...loaded.storyCinematics },
     voiceClips: { ...rawFallbackAssetManifest.voiceClips, ...loaded.voiceClips },
+    assetCredits: loaded.assetCredits ?? rawFallbackAssetManifest.assetCredits,
     vfxCues: { ...rawFallbackAssetManifest.vfxCues, ...loaded.vfxCues },
     musicTracks: {
       systems: { ...rawFallbackAssetManifest.musicTracks.systems, ...loaded.musicTracks?.systems },

@@ -340,5 +340,4 @@ for (const [shipId, create] of Object.entries(fleet)) {
   await exportGlb(create(), `${shipId}.glb`);
   console.log(`generated ${shipId}.glb`);
 }
-await exportGlb(createSparrowGundam(), "sparrow-gundam.glb");
-console.log("generated sparrow-gundam.glb");
+console.log("skipped sparrow-gundam.glb; Sparrow ultimate mode uses an online public-domain mech asset");
