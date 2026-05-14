@@ -2182,29 +2182,24 @@ const UltraClearSharpenShader = {
   `
 };
 
-function PostProcessingRig() {
+function PostProcessingComposer({ bloomMultiplier, depthOfField, sharpenMultiplier }: { bloomMultiplier: number; depthOfField: boolean; sharpenMultiplier: number }) {
   const { camera, gl, scene, size } = useThree();
   const currentSystemId = useGameStore((state) => state.currentSystemId);
   const profile = useGameStore((state) => state.assetManifest.scenePostProfiles[currentSystemId] ?? state.assetManifest.scenePostProfiles.default);
-  const graphicsSettings = useGameStore((state) => state.graphicsSettings);
   const composerRef = useRef<EffectComposer | null>(null);
 
   useEffect(() => {
-    if (!graphicsSettings.postProcessing) {
-      composerRef.current = null;
-      return undefined;
-    }
     const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
     const composer = new EffectComposer(gl);
     composer.setSize(size.width, size.height);
     composer.setPixelRatio(pixelRatio);
     composer.addPass(new RenderPass(scene, camera));
-    const bloomStrength = profile.bloomStrength * graphicsSettings.bloomMultiplier;
+    const bloomStrength = profile.bloomStrength * bloomMultiplier;
     if (bloomStrength > 0) {
       const bloomPass = new UnrealBloomPass(new THREE.Vector2(size.width, size.height), bloomStrength, profile.bloomRadius, profile.bloomThreshold);
       composer.addPass(bloomPass);
     }
-    if (graphicsSettings.depthOfField && profile.dofMaxBlur > 0.0001 && profile.dofAperture > 0) {
+    if (depthOfField && profile.dofMaxBlur > 0.0001 && profile.dofAperture > 0) {
       composer.addPass(
         new BokehPass(scene, camera, {
           focus: profile.dofFocus,
@@ -2213,7 +2208,7 @@ function PostProcessingRig() {
         })
       );
     }
-    const sharpenStrength = profile.sharpenStrength * graphicsSettings.sharpenMultiplier;
+    const sharpenStrength = profile.sharpenStrength * sharpenMultiplier;
     if (sharpenStrength > 0) {
       const sharpenPass = new ShaderPass(UltraClearSharpenShader);
       sharpenPass.uniforms.resolution.value = new THREE.Vector2(size.width * pixelRatio, size.height * pixelRatio);
@@ -2227,11 +2222,9 @@ function PostProcessingRig() {
       composer.dispose();
     };
   }, [
+    bloomMultiplier,
     camera,
-    graphicsSettings.bloomMultiplier,
-    graphicsSettings.depthOfField,
-    graphicsSettings.postProcessing,
-    graphicsSettings.sharpenMultiplier,
+    depthOfField,
     gl,
     profile.bloomRadius,
     profile.bloomStrength,
@@ -2241,6 +2234,7 @@ function PostProcessingRig() {
     profile.dofMaxBlur,
     profile.sharpenStrength,
     scene,
+    sharpenMultiplier,
     size.height,
     size.width
   ]);
@@ -2250,6 +2244,18 @@ function PostProcessingRig() {
   }, 1);
 
   return null;
+}
+
+function PostProcessingRig() {
+  const graphicsSettings = useGameStore((state) => state.graphicsSettings);
+  if (!graphicsSettings.postProcessing) return null;
+  return (
+    <PostProcessingComposer
+      bloomMultiplier={graphicsSettings.bloomMultiplier}
+      depthOfField={graphicsSettings.depthOfField}
+      sharpenMultiplier={graphicsSettings.sharpenMultiplier}
+    />
+  );
 }
 
 function SceneContent({ onShipModelStatus }: { onShipModelStatus: (status: ShipModelStatus | null) => void }) {

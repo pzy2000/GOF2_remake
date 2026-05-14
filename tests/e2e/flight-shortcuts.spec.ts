@@ -20,6 +20,14 @@ async function startFlight(page: Page) {
   });
 }
 
+async function expectWebGlCanvasHasPixels(page: Page) {
+  const canvas = page.locator(".flight-canvas canvas");
+  await expect(canvas).toBeVisible();
+  const screenshot = await canvas.screenshot();
+  expect(screenshot.length).toBeGreaterThan(8_000);
+  expect(new Set(screenshot).size).toBeGreaterThan(80);
+}
+
 test("flight command buttons expose visible shortcuts and route keys to the right screen", async ({ page }) => {
   await startFlight(page);
 
@@ -65,4 +73,7 @@ test("flight command buttons expose visible shortcuts and route keys to the righ
   ).toMatchObject({ quality: "ultra", shadows: true });
   await page.getByRole("button", { name: "Back" }).click();
   await expect.poll(() => page.evaluate(() => (window.__GOF2_E2E__!.getState() as { screen: string }).screen)).toBe("pause");
+  await page.getByRole("button", { name: "Resume" }).click();
+  await expect.poll(() => page.evaluate(() => (window.__GOF2_E2E__!.getState() as { screen: string }).screen)).toBe("flight");
+  await expectWebGlCanvasHasPixels(page);
 });
