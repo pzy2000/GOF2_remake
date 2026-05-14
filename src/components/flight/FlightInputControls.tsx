@@ -190,6 +190,9 @@ function handlePauseShortcut(event: KeyboardEvent): void {
   } else if (event.code === "KeyR") {
     event.preventDefault();
     state.loadGame();
+  } else if (event.code === "Comma") {
+    event.preventDefault();
+    state.setScreen("settings");
   } else if (event.code === "KeyM") {
     event.preventDefault();
     state.setScreen("menu");

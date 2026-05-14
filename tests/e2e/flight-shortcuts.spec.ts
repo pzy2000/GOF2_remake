@@ -57,9 +57,10 @@ test("flight command buttons expose visible shortcuts and route keys to the righ
   await expect(page.locator(".menu-actions .button-shortcut[data-shortcut='Esc']")).toBeVisible();
   await expect(page.locator(".menu-actions .button-shortcut[data-shortcut='Ctrl+S']")).toBeVisible();
   await expect(page.locator(".menu-actions .button-shortcut[data-shortcut='Ctrl+R']")).toBeVisible();
+  await expect(page.locator(".menu-actions .button-shortcut[data-shortcut='Ctrl+,']")).toBeVisible();
   await expect(page.locator(".menu-actions .button-shortcut[data-shortcut='Ctrl+M']")).toBeVisible();
 
-  await page.getByRole("button", { name: "Settings" }).click();
+  await page.keyboard.press("Control+,");
   await expect.poll(() => page.evaluate(() => (window.__GOF2_E2E__!.getState() as { screen: string }).screen)).toBe("settings");
   await expect(page.getByRole("heading", { name: "Pilot Preferences" })).toBeVisible();
   await page.getByRole("button", { name: "Low" }).click();

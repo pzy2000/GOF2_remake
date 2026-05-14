@@ -33,7 +33,7 @@ function PauseMenu() {
           <ShortcutButton className="primary" shortcut="Esc" onClick={() => setScreen("flight")} title="Resume">Resume</ShortcutButton>
           <ShortcutButton shortcut="Ctrl+S" onClick={() => saveGame()} title="Quick Save">Quick Save</ShortcutButton>
           <ShortcutButton shortcut="Ctrl+R" onClick={() => loadGame()} title="Reload Latest">Reload Latest</ShortcutButton>
-          <button onClick={() => setScreen("settings")}>Settings</button>
+          <ShortcutButton shortcut="Ctrl+," onClick={() => setScreen("settings")} title="Settings">Settings</ShortcutButton>
           <ShortcutButton shortcut="Ctrl+M" onClick={() => setScreen("menu")} title="Main Menu">Main Menu</ShortcutButton>
         </div>
         <SaveSlotsPanel mode="manage" />
