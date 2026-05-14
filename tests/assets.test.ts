@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import manifest from "../public/assets/generated/manifest.json";
-import { dialogueSpeakers, ships, systems } from "../src/data/world";
+import { dialogueSpeakers, planets, ships, stations, systems } from "../src/data/world";
 import { fallbackAssetManifest, resolveAssetManifest, resolvePublicAssetPath } from "../src/systems/assets";
 import type { AssetManifest } from "../src/types/game";
 
@@ -134,8 +134,28 @@ describe("asset manifest", () => {
       });
       expect(assetManifest.shipAttachmentProfiles[ship.id].engineHardpoints.length).toBeGreaterThan(0);
       expect(fallbackAssetManifest.shipAttachmentProfiles[ship.id].engineHardpoints.length).toBeGreaterThan(0);
+      expect(assetManifest.shipLodProfiles[ship.id].highDetailDistance).toBeGreaterThan(0);
+      expect(assetManifest.shipLodProfiles[ship.id].mediumDetailDistance).toBeGreaterThan(assetManifest.shipLodProfiles[ship.id].highDetailDistance);
     }
     expect(assetManifest.vfxCues.explosion).toBe("cinematic-burst");
+  });
+
+  it("defines visual profiles for LOD, scene grading, stations, planets, and VFX", () => {
+    const assetManifest = manifest as AssetManifest;
+    expect(assetManifest.planetVisualProfiles.default.nearSegments[0]).toBeGreaterThan(assetManifest.planetVisualProfiles.default.farSegments[0]);
+    expect(assetManifest.stationVisualProfiles.default.nearSegments).toBeGreaterThan(assetManifest.stationVisualProfiles.default.farSegments);
+    expect(assetManifest.scenePostProfiles.default.fogFar).toBeGreaterThan(assetManifest.scenePostProfiles.default.fogNear);
+    expect(assetManifest.vfxAssetProfiles[assetManifest.vfxCues.explosion].bloomIntensity).toBeGreaterThan(1);
+
+    for (const system of systems) {
+      expect(assetManifest.scenePostProfiles[system.id] ?? assetManifest.scenePostProfiles.default).toBeTruthy();
+    }
+    for (const station of stations) {
+      expect(assetManifest.stationVisualProfiles[station.id] ?? assetManifest.stationVisualProfiles[station.archetype] ?? assetManifest.stationVisualProfiles.default).toBeTruthy();
+    }
+    for (const planet of planets) {
+      expect(assetManifest.planetVisualProfiles[planet.id] ?? assetManifest.planetVisualProfiles.default).toBeTruthy();
+    }
   });
 
   it("points NPC ship textures to generated local assets", () => {

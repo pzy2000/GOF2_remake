@@ -89,6 +89,55 @@ const rawFallbackAssetManifest: AssetManifest = {
     "horizon-ark": { engineHardpoints: [[-16, -2.4, 24], [-5, -2, 26], [5, -2, 26], [16, -2.4, 24]], primaryHardpoints: [[-5, 0.4, -34], [5, 0.4, -34]], secondaryHardpoints: [[-14, -1, -12], [14, -1, -12]] },
     "sparrow-mk1-gundam": { engineHardpoints: [[-9, -3, 18], [9, -3, 18], [-18, 1, 7], [18, 1, 7]], primaryHardpoints: [[-26, -4, -25], [26, -4, -25]], secondaryHardpoints: [[-18, -3, 21], [18, -3, 21]] }
   },
+  shipLodProfiles: {
+    default: { highDetailDistance: 720, mediumDetailDistance: 1500, highGeometrySegments: 32, mediumGeometrySegments: 18, lowGeometrySegments: 10, silhouetteScale: 1 },
+    "sparrow-mk1": { highDetailDistance: 720, mediumDetailDistance: 1500, highGeometrySegments: 32, mediumGeometrySegments: 18, lowGeometrySegments: 10, silhouetteScale: 1 },
+    "mule-lx": { highDetailDistance: 760, mediumDetailDistance: 1600, highGeometrySegments: 28, mediumGeometrySegments: 16, lowGeometrySegments: 10, silhouetteScale: 1.06 },
+    "prospector-rig": { highDetailDistance: 760, mediumDetailDistance: 1600, highGeometrySegments: 28, mediumGeometrySegments: 16, lowGeometrySegments: 10, silhouetteScale: 1.04 },
+    "veil-runner": { highDetailDistance: 740, mediumDetailDistance: 1550, highGeometrySegments: 34, mediumGeometrySegments: 18, lowGeometrySegments: 10, silhouetteScale: 0.96 },
+    "talon-s": { highDetailDistance: 740, mediumDetailDistance: 1550, highGeometrySegments: 30, mediumGeometrySegments: 16, lowGeometrySegments: 9, silhouetteScale: 0.98 },
+    "wayfarer-x": { highDetailDistance: 790, mediumDetailDistance: 1650, highGeometrySegments: 30, mediumGeometrySegments: 16, lowGeometrySegments: 10, silhouetteScale: 1.08 },
+    "raptor-v": { highDetailDistance: 760, mediumDetailDistance: 1600, highGeometrySegments: 34, mediumGeometrySegments: 18, lowGeometrySegments: 10, silhouetteScale: 1 },
+    "bastion-7": { highDetailDistance: 820, mediumDetailDistance: 1750, highGeometrySegments: 30, mediumGeometrySegments: 16, lowGeometrySegments: 10, silhouetteScale: 1.12 },
+    "horizon-ark": { highDetailDistance: 860, mediumDetailDistance: 1800, highGeometrySegments: 36, mediumGeometrySegments: 20, lowGeometrySegments: 12, silhouetteScale: 1.16 },
+    "sparrow-mk1-gundam": { highDetailDistance: 900, mediumDetailDistance: 1900, highGeometrySegments: 36, mediumGeometrySegments: 20, lowGeometrySegments: 12, silhouetteScale: 1.22 }
+  },
+  planetVisualProfiles: {
+    default: { cloudOpacity: 0.06, hazeOpacity: 0.13, ringed: false, rotationSpeed: 0.014, rimDistanceMultiplier: 2.35, cloudColor: "#f5fbff", ringColor: "#dbe8f0", cityLightColor: "#ffd166", cityLightIntensity: 0.12, nearSegments: [96, 48], farSegments: [48, 24], farDistance: 1650 },
+    rocky: { cloudOpacity: 0.025, hazeOpacity: 0.07, ringed: false, rotationSpeed: 0.009, rimDistanceMultiplier: 1.9, cloudColor: "#d9d1c4", ringColor: "#b9a889", cityLightColor: "#ffb657", cityLightIntensity: 0.08, nearSegments: [72, 36], farSegments: [36, 18], farDistance: 1450 },
+    volatile: { cloudOpacity: 0.1, hazeOpacity: 0.15, ringed: true, rotationSpeed: 0.014, rimDistanceMultiplier: 2.55, cloudColor: "#f5fbff", ringColor: "#dbe8f0", cityLightColor: "#9bffe8", cityLightIntensity: 0.14, nearSegments: [96, 48], farSegments: [56, 28], farDistance: 1750 },
+    "mirr-glass": { cloudOpacity: 0.07, hazeOpacity: 0.18, ringed: true, rotationSpeed: 0.012, rimDistanceMultiplier: 2.7, cloudColor: "#eaffff", ringColor: "#9bffe8", cityLightColor: "#ff9bd5", cityLightIntensity: 0.18, nearSegments: [112, 56], farSegments: [56, 28], farDistance: 1800 },
+    "ashen-harbor": { cloudOpacity: 0.035, hazeOpacity: 0.1, ringed: false, rotationSpeed: 0.01, rimDistanceMultiplier: 2.1, cloudColor: "#ffd6a3", ringColor: "#ff8a6a", cityLightColor: "#ff784f", cityLightIntensity: 0.16, nearSegments: [80, 40], farSegments: [40, 20], farDistance: 1500 },
+    "celest-crown": { cloudOpacity: 0.12, hazeOpacity: 0.18, ringed: true, rotationSpeed: 0.015, rimDistanceMultiplier: 2.8, cloudColor: "#ffffff", ringColor: "#ffd166", cityLightColor: "#dff8ff", cityLightIntensity: 0.22, nearSegments: [112, 56], farSegments: [64, 32], farDistance: 1850 }
+  },
+  stationVisualProfiles: {
+    default: { accentColor: "#3bb4ff", hullColor: "#7e919e", solarColor: "#5f7180", ringScale: 1, emissiveIntensity: 0.16, trafficColor: "#80d6ff", nearSegments: 72, farSegments: 36, farDistance: 1300 },
+    "Trade Hub": { accentColor: "#3bb4ff", hullColor: "#8aa0ad", solarColor: "#5f7180", ringScale: 1.2, emissiveIntensity: 0.2, trafficColor: "#dff8ff", nearSegments: 80, farSegments: 40, farDistance: 1400 },
+    "Mining Station": { accentColor: "#ffd166", hullColor: "#7b7569", solarColor: "#d8a23b", ringScale: 1, emissiveIntensity: 0.18, trafficColor: "#ffb657", nearSegments: 64, farSegments: 32, farDistance: 1250 },
+    "Research Station": { accentColor: "#9b7bff", hullColor: "#7988a6", solarColor: "#9dbbff", ringScale: 1.05, emissiveIntensity: 0.24, trafficColor: "#9bffe8", nearSegments: 80, farSegments: 40, farDistance: 1450 },
+    "Military Outpost": { accentColor: "#ff6b6b", hullColor: "#6f7782", solarColor: "#7b8794", ringScale: 0.95, emissiveIntensity: 0.2, trafficColor: "#ff9b9b", nearSegments: 64, farSegments: 32, farDistance: 1300 },
+    "Frontier Port": { accentColor: "#74e08d", hullColor: "#74838a", solarColor: "#607985", ringScale: 0.92, emissiveIntensity: 0.16, trafficColor: "#9bffe8", nearSegments: 60, farSegments: 30, farDistance: 1200 },
+    "Pirate Black Market": { accentColor: "#ff4e5f", hullColor: "#4a2a36", solarColor: "#8a3a52", ringScale: 0.82, emissiveIntensity: 0.28, trafficColor: "#ff784f", nearSegments: 56, farSegments: 28, farDistance: 1150 },
+    "mirr-lattice": { accentColor: "#9bffe8", hullColor: "#7a8fa6", solarColor: "#b8ccff", ringScale: 1.16, emissiveIntensity: 0.32, trafficColor: "#ff9bd5", nearSegments: 96, farSegments: 48, farDistance: 1500 },
+    "celest-vault": { accentColor: "#ffd166", hullColor: "#a6a18a", solarColor: "#dff8ff", ringScale: 1.28, emissiveIntensity: 0.3, trafficColor: "#ffffff", nearSegments: 96, farSegments: 48, farDistance: 1550 }
+  },
+  scenePostProfiles: {
+    default: { backgroundColor: "#030712", fogColor: "#050b18", fogNear: 1450, fogFar: 4200, ambientMultiplier: 1, fillColor: "#5fc3ff", fillIntensity: 0.42, exposure: 1 },
+    "helion-reach": { backgroundColor: "#030712", fogColor: "#07111f", fogNear: 1550, fogFar: 4300, ambientMultiplier: 1.08, fillColor: "#5fc3ff", fillIntensity: 0.44, exposure: 1.02 },
+    "kuro-belt": { backgroundColor: "#050608", fogColor: "#17110b", fogNear: 1200, fogFar: 3600, ambientMultiplier: 0.92, fillColor: "#ffd166", fillIntensity: 0.32, exposure: 0.96 },
+    vantara: { backgroundColor: "#04080f", fogColor: "#0b1424", fogNear: 1350, fogFar: 3900, ambientMultiplier: 1, fillColor: "#8fb7ff", fillIntensity: 0.38, exposure: 1 },
+    "mirr-vale": { backgroundColor: "#030912", fogColor: "#061d24", fogNear: 1300, fogFar: 3850, ambientMultiplier: 1.08, fillColor: "#9bffe8", fillIntensity: 0.48, exposure: 1.04 },
+    "ashen-drift": { backgroundColor: "#070507", fogColor: "#1a0a10", fogNear: 1100, fogFar: 3400, ambientMultiplier: 0.88, fillColor: "#ff784f", fillIntensity: 0.34, exposure: 0.94 },
+    "celest-gate": { backgroundColor: "#030713", fogColor: "#101729", fogNear: 1600, fogFar: 4600, ambientMultiplier: 1.12, fillColor: "#dff8ff", fillIntensity: 0.52, exposure: 1.08 },
+    "ptd-home": { backgroundColor: "#02070f", fogColor: "#09122a", fogNear: 1700, fogFar: 4700, ambientMultiplier: 1.1, fillColor: "#83ecff", fillIntensity: 0.5, exposure: 1.06 }
+  },
+  vfxAssetProfiles: {
+    "impact-spark": { coreColor: "#ffb657", shockColor: "#ffffff", debrisColor: "#ff784f", bloomIntensity: 1.1, particleMultiplier: 1 },
+    "shield-ripple": { coreColor: "#69e4ff", shockColor: "#eaffff", debrisColor: "#9bffe8", bloomIntensity: 1.2, particleMultiplier: 1 },
+    "cinematic-burst": { coreColor: "#ff784f", shockColor: "#ffd166", debrisColor: "#8a4b2b", bloomIntensity: 1.45, particleMultiplier: 1.25 },
+    "engine-plume": { coreColor: "#66e4ff", shockColor: "#ffffff", debrisColor: "#7dd3fc", bloomIntensity: 1.15, particleMultiplier: 1 },
+    "lock-reticle": { coreColor: "#ffdf6e", shockColor: "#eaffff", debrisColor: "#ffd166", bloomIntensity: 1, particleMultiplier: 1 }
+  },
   npcShipTextures: {
     freighter: "/assets/generated/npc-freighter-hull.webp"
   },
@@ -188,6 +237,11 @@ export function resolveAssetManifest(manifest: AssetManifest, baseUrl?: string):
     shipModels: resolveAssetRecord(manifest.shipModels, baseUrl),
     shipMaterialProfiles: manifest.shipMaterialProfiles,
     shipAttachmentProfiles: manifest.shipAttachmentProfiles,
+    shipLodProfiles: manifest.shipLodProfiles,
+    planetVisualProfiles: manifest.planetVisualProfiles,
+    stationVisualProfiles: manifest.stationVisualProfiles,
+    scenePostProfiles: manifest.scenePostProfiles,
+    vfxAssetProfiles: manifest.vfxAssetProfiles,
     npcShipTextures: {
       freighter: resolvePublicAssetPath(manifest.npcShipTextures.freighter, baseUrl)
     },
@@ -221,6 +275,11 @@ export async function loadAssetManifest(): Promise<AssetManifest> {
     shipModels: { ...rawFallbackAssetManifest.shipModels, ...loaded.shipModels },
     shipMaterialProfiles: { ...rawFallbackAssetManifest.shipMaterialProfiles, ...loaded.shipMaterialProfiles },
     shipAttachmentProfiles: { ...rawFallbackAssetManifest.shipAttachmentProfiles, ...loaded.shipAttachmentProfiles },
+    shipLodProfiles: { ...rawFallbackAssetManifest.shipLodProfiles, ...loaded.shipLodProfiles },
+    planetVisualProfiles: { ...rawFallbackAssetManifest.planetVisualProfiles, ...loaded.planetVisualProfiles },
+    stationVisualProfiles: { ...rawFallbackAssetManifest.stationVisualProfiles, ...loaded.stationVisualProfiles },
+    scenePostProfiles: { ...rawFallbackAssetManifest.scenePostProfiles, ...loaded.scenePostProfiles },
+    vfxAssetProfiles: { ...rawFallbackAssetManifest.vfxAssetProfiles, ...loaded.vfxAssetProfiles },
     npcShipTextures: { ...rawFallbackAssetManifest.npcShipTextures, ...loaded.npcShipTextures },
     speakerPortraits: { ...rawFallbackAssetManifest.speakerPortraits, ...loaded.speakerPortraits },
     storyCinematics: { ...rawFallbackAssetManifest.storyCinematics, ...loaded.storyCinematics },

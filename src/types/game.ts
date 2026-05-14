@@ -122,6 +122,61 @@ export interface ShipAttachmentProfile {
   secondaryHardpoints: number[][];
 }
 
+export interface ShipLodProfile {
+  highDetailDistance: number;
+  mediumDetailDistance: number;
+  highGeometrySegments: number;
+  mediumGeometrySegments: number;
+  lowGeometrySegments: number;
+  silhouetteScale: number;
+}
+
+export interface PlanetVisualProfile {
+  cloudOpacity: number;
+  hazeOpacity: number;
+  ringed: boolean;
+  rotationSpeed: number;
+  rimDistanceMultiplier: number;
+  cloudColor: string;
+  ringColor: string;
+  cityLightColor: string;
+  cityLightIntensity: number;
+  nearSegments: number[];
+  farSegments: number[];
+  farDistance: number;
+}
+
+export interface StationVisualProfile {
+  accentColor: string;
+  hullColor: string;
+  solarColor: string;
+  ringScale: number;
+  emissiveIntensity: number;
+  trafficColor: string;
+  nearSegments: number;
+  farSegments: number;
+  farDistance: number;
+}
+
+export interface ScenePostProfile {
+  backgroundColor: string;
+  fogColor: string;
+  fogNear: number;
+  fogFar: number;
+  ambientMultiplier: number;
+  fillColor: string;
+  fillIntensity: number;
+  exposure: number;
+}
+
+export interface VfxAssetProfile {
+  coreColor: string;
+  shockColor: string;
+  debrisColor: string;
+  bloomIntensity: number;
+  particleMultiplier: number;
+}
+
 export interface VfxCueManifest {
   hit: string;
   shieldHit: string;
@@ -204,6 +259,11 @@ export interface AssetManifest {
   shipModels: Record<string, string>;
   shipMaterialProfiles: Record<string, ShipMaterialProfile>;
   shipAttachmentProfiles: Record<string, ShipAttachmentProfile>;
+  shipLodProfiles: Record<string, ShipLodProfile>;
+  planetVisualProfiles: Record<string, PlanetVisualProfile>;
+  stationVisualProfiles: Record<string, StationVisualProfile>;
+  scenePostProfiles: Record<string, ScenePostProfile>;
+  vfxAssetProfiles: Record<string, VfxAssetProfile>;
   npcShipTextures: {
     freighter: string;
   };

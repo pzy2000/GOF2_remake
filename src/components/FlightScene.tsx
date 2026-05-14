@@ -575,6 +575,7 @@ function boostUltimateMaterial(_material: THREE.Material): THREE.Material {
 
 function GltfPlayerShip({ onLoaded, shipId, url }: { onLoaded: () => void; shipId: string; url: string }) {
   const gltf = useGLTF(url);
+  const materialProfile = useGameStore((state) => state.assetManifest.shipMaterialProfiles[shipId]);
   useEffect(() => {
     onLoaded();
   }, [onLoaded]);
@@ -591,11 +592,18 @@ function GltfPlayerShip({ onLoaded, shipId, url }: { onLoaded: () => void; shipI
         if (visual.emissiveBoost) {
           applyUltimateVertexColors(node);
           node.material = Array.isArray(node.material) ? node.material.map(boostUltimateMaterial) : boostUltimateMaterial(node.material);
+        } else if (materialProfile && node.material instanceof THREE.MeshStandardMaterial) {
+          const material = node.material.clone();
+          material.metalness = materialProfile.metalness;
+          material.roughness = materialProfile.roughness;
+          material.emissive = new THREE.Color(materialProfile.emissiveColor);
+          material.emissiveIntensity = 0.08;
+          node.material = material;
         }
       }
     });
     return scene;
-  }, [gltf.scene, shipId]);
+  }, [gltf.scene, materialProfile, shipId]);
   const visual = playerShipVisuals[shipId] ?? playerShipVisuals["sparrow-mk1"];
   const modelScale = useMemo(() => {
     if (!visual.fitToMaxDimension) return visual.scale;
@@ -684,45 +692,44 @@ function UltimateTransformationFx({ activeUntil, lastActivatedAt }: { activeUnti
 }
 
 function ProceduralPlayerShip({ shipId }: { shipId: string }) {
-  const color =
-    shipId === "mule-lx"
-      ? "#9a7b4f"
-      : shipId === "raptor-v"
-        ? "#d94b58"
-        : shipId === "bastion-7"
-          ? "#6f2530"
-          : shipId === "horizon-ark"
-            ? "#f5ead2"
-            : "#cfefff";
+  const materialProfile = useGameStore((state) => state.assetManifest.shipMaterialProfiles[shipId] ?? state.assetManifest.shipMaterialProfiles["sparrow-mk1"]);
+  const lodProfile = useGameStore((state) => state.assetManifest.shipLodProfiles[shipId] ?? state.assetManifest.shipLodProfiles.default);
+  const segments = lodProfile?.highGeometrySegments ?? 32;
+  const color = materialProfile?.baseColor ?? "#cfefff";
+  const trimColor = materialProfile?.trimColor ?? "#318ccf";
+  const emissiveColor = materialProfile?.emissiveColor ?? "#66e4ff";
+  const metalness = materialProfile?.metalness ?? 0.5;
+  const roughness = materialProfile?.roughness ?? 0.32;
+  const silhouetteScale = lodProfile?.silhouetteScale ?? 1;
   return (
-    <>
+    <group scale={silhouetteScale}>
       <mesh position={[0, 0, -8]} rotation={[-Math.PI / 2, 0, 0]} castShadow>
-        <coneGeometry args={[9, 32, shipId === "raptor-v" ? 3 : 5]} />
-        <meshStandardMaterial color={color} metalness={0.5} roughness={0.32} emissive="#12334a" />
+        <coneGeometry args={[9, segments, shipId === "raptor-v" ? 3 : 5]} />
+        <meshStandardMaterial color={color} metalness={metalness} roughness={roughness} emissive={emissiveColor} emissiveIntensity={0.08} />
       </mesh>
       <mesh position={[0, 1.8, 2]} scale={shipId === "mule-lx" ? [1.8, 0.95, 1.2] : shipId === "bastion-7" ? [1.55, 1.1, 1.25] : [1.05, 0.65, 1]} castShadow>
         <boxGeometry args={[16, 9, 26]} />
-        <meshStandardMaterial color={shipId === "horizon-ark" ? "#d8c58e" : "#15354d"} metalness={0.38} roughness={0.36} emissive="#092033" />
+        <meshStandardMaterial color={color} metalness={metalness * 0.82} roughness={roughness + 0.06} emissive={emissiveColor} emissiveIntensity={0.06} />
       </mesh>
       <mesh position={[0, 5.2, -8]} castShadow>
         <sphereGeometry args={[4.8, 12, 8]} />
-        <meshStandardMaterial color="#9be8ff" metalness={0.2} roughness={0.18} emissive="#1e95c8" emissiveIntensity={0.42} />
+        <meshStandardMaterial color={emissiveColor} metalness={0.2} roughness={0.18} emissive={emissiveColor} emissiveIntensity={0.42} />
       </mesh>
       <mesh position={[0, 0.4, 6]} castShadow>
         <boxGeometry args={shipId === "mule-lx" ? [56, 4, 14] : shipId === "raptor-v" ? [48, 2, 10] : [40, 2.2, 12]} />
-        <meshStandardMaterial color={shipId === "raptor-v" ? "#2a2f35" : "#318ccf"} metalness={0.55} roughness={0.28} />
+        <meshStandardMaterial color={trimColor} metalness={metalness + 0.06} roughness={Math.max(0.18, roughness - 0.04)} />
       </mesh>
       {[-1, 1].map((side) => (
         <mesh key={side} position={[side * 15, 0.2, -2]} rotation={[0, 0, side * -0.34]} castShadow>
           <boxGeometry args={[6, 1.8, shipId === "horizon-ark" ? 34 : 24]} />
-          <meshStandardMaterial color={shipId === "bastion-7" ? "#7a2e36" : "#71c9ff"} metalness={0.45} roughness={0.32} emissive="#0e3658" />
+          <meshStandardMaterial color={trimColor} metalness={metalness} roughness={roughness} emissive={emissiveColor} emissiveIntensity={0.05} />
         </mesh>
       ))}
       <mesh position={[0, -0.4, -18]} rotation={[0.24, 0, 0]} castShadow>
         <boxGeometry args={[5, 13, 2.4]} />
-        <meshStandardMaterial color="#2b89bd" metalness={0.55} roughness={0.28} />
+        <meshStandardMaterial color={trimColor} metalness={metalness + 0.05} roughness={roughness} />
       </mesh>
-    </>
+    </group>
   );
 }
 
@@ -1269,26 +1276,26 @@ function PlanetBackdrops() {
   );
 }
 
-function getPlanetVisualProfile(planet: PlanetDefinition) {
+function planetVisualProfileKey(planet: PlanetDefinition) {
   const text = `${planet.type} ${planet.description}`.toLowerCase();
   const rocky = /moon|dwarf|rubble|crater|ash|dust|iron|bunker|refinery/.test(text);
   const volatile = /ocean|storm|temperate|capital|gas|ice|pearl|crystal/.test(text);
-  const ringed = /gas|storm|capital|crown|pearl|reef|shepherd/.test(text);
-  return {
-    cloudOpacity: volatile ? 0.1 : rocky ? 0.025 : 0.06,
-    hazeOpacity: rocky ? 0.07 : 0.13,
-    ringed,
-    rotationSpeed: rocky ? 0.009 : 0.014,
-    rimDistance: planet.radius * (rocky ? 1.9 : 2.55)
-  };
+  return volatile ? "volatile" : rocky ? "rocky" : "default";
 }
 
 function PlanetModel({ planet }: { planet: PlanetDefinition }) {
   const textureUrl = useGameStore((state) => state.assetManifest.planetTextures[planet.textureKey] || state.assetManifest.nebulaBg);
+  const profile = useGameStore((state) =>
+    state.assetManifest.planetVisualProfiles[planet.id] ??
+    state.assetManifest.planetVisualProfiles[planetVisualProfileKey(planet)] ??
+    state.assetManifest.planetVisualProfiles.default
+  );
+  const playerPosition = useGameStore((state) => state.player.position);
   const clock = useGameStore((state) => state.runtime.clock);
   const locale = useGameStore((state) => state.locale);
   const texture = useLoader(THREE.TextureLoader, textureUrl);
-  const profile = getPlanetVisualProfile(planet);
+  const distant = distance(playerPosition, planet.position) > profile.farDistance;
+  const segments = distant ? profile.farSegments : profile.nearSegments;
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.ClampToEdgeWrapping;
@@ -1296,22 +1303,22 @@ function PlanetModel({ planet }: { planet: PlanetDefinition }) {
   return (
     <group position={toThree(planet.position)}>
       <mesh rotation={[0, clock * profile.rotationSpeed + planet.radius * 0.0007, 0]}>
-        <sphereGeometry args={[planet.radius, 96, 48]} />
+        <sphereGeometry args={[planet.radius, segments[0], segments[1]]} />
         <meshStandardMaterial map={texture} roughness={0.94} metalness={0.02} emissive="#01030a" emissiveIntensity={0.018} />
       </mesh>
       <mesh rotation={[0, -clock * 0.007, 0]}>
-        <sphereGeometry args={[planet.radius * 1.012, 72, 36]} />
-        <meshStandardMaterial color="#f5fbff" transparent opacity={profile.cloudOpacity} roughness={1} depthWrite={false} />
+        <sphereGeometry args={[planet.radius * 1.012, Math.max(24, segments[0] - 24), Math.max(12, segments[1] - 12)]} />
+        <meshStandardMaterial color={profile.cloudColor} transparent opacity={profile.cloudOpacity} roughness={1} depthWrite={false} />
       </mesh>
       <mesh>
-        <sphereGeometry args={[planet.radius * 1.028, 64, 32]} />
+        <sphereGeometry args={[planet.radius * 1.028, Math.max(24, segments[0] - 32), Math.max(12, segments[1] - 16)]} />
         <meshBasicMaterial color={planet.atmosphereColor} transparent opacity={profile.hazeOpacity} side={THREE.DoubleSide} depthWrite={false} toneMapped={false} />
       </mesh>
       {profile.ringed ? (
         <group rotation={[Math.PI / 2.35, 0.18, clock * 0.002]}>
           <mesh>
             <torusGeometry args={[planet.radius * 1.38, Math.max(1.8, planet.radius * 0.01), 10, 128]} />
-            <meshBasicMaterial color="#dbe8f0" transparent opacity={0.18} depthWrite={false} toneMapped={false} />
+            <meshBasicMaterial color={profile.ringColor} transparent opacity={0.18} depthWrite={false} toneMapped={false} />
           </mesh>
           <mesh>
             <torusGeometry args={[planet.radius * 1.58, Math.max(1.2, planet.radius * 0.006), 8, 128]} />
@@ -1319,7 +1326,13 @@ function PlanetModel({ planet }: { planet: PlanetDefinition }) {
           </mesh>
         </group>
       ) : null}
-      <pointLight color={planet.atmosphereColor} intensity={0.42} distance={profile.rimDistance} />
+      {profile.cityLightIntensity > 0 ? (
+        <mesh rotation={[0, clock * profile.rotationSpeed * 1.06 + 0.8, 0]}>
+          <torusGeometry args={[planet.radius * 0.72, Math.max(1.2, planet.radius * 0.006), 8, 96]} />
+          <meshBasicMaterial color={profile.cityLightColor} transparent opacity={profile.cityLightIntensity} depthWrite={false} toneMapped={false} />
+        </mesh>
+      ) : null}
+      <pointLight color={planet.atmosphereColor} intensity={0.42} distance={planet.radius * profile.rimDistanceMultiplier} />
       <Html center distanceFactor={22} className="planet-label" position={[0, planet.radius * 0.72, 0]}>
         {localizePlanetName(planet.id, locale, planet.name)}
       </Html>
@@ -1407,27 +1420,22 @@ function JumpGateModel() {
 function StationGeometry({ station }: { station: StationDefinition }) {
   const locale = useGameStore((state) => state.locale);
   const clock = useGameStore((state) => state.runtime.clock);
-  const accent =
-    station.archetype === "Military Outpost"
-      ? "#ff6b6b"
-      : station.archetype === "Research Station"
-        ? "#9b7bff"
-        : station.archetype === "Mining Station"
-          ? "#ffd166"
-          : station.archetype === "Pirate Black Market"
-            ? "#ff4e5f"
-            : "#3bb4ff";
-  const ringScale = station.archetype === "Trade Hub" ? 1.2 : station.archetype === "Pirate Black Market" ? 0.82 : 1;
-  const solarColor = station.archetype === "Research Station" ? "#9dbbff" : station.archetype === "Mining Station" ? "#d8a23b" : "#5f7180";
+  const playerPosition = useGameStore((state) => state.player.position);
+  const profile = useGameStore((state) =>
+    state.assetManifest.stationVisualProfiles[station.id] ??
+    state.assetManifest.stationVisualProfiles[station.archetype] ??
+    state.assetManifest.stationVisualProfiles.default
+  );
+  const segments = distance(playerPosition, station.position) > profile.farDistance ? profile.farSegments : profile.nearSegments;
   return (
     <group position={toThree(station.position)}>
       <mesh>
-        <cylinderGeometry args={[38, 54, 42, 12]} />
-        <meshStandardMaterial color="#7e919e" metalness={0.66} roughness={0.34} emissive="#0e1b29" emissiveIntensity={0.16} />
+        <cylinderGeometry args={[38, 54, 42, Math.max(8, Math.round(segments / 6))]} />
+        <meshStandardMaterial color={profile.hullColor} metalness={0.66} roughness={0.34} emissive={profile.accentColor} emissiveIntensity={profile.emissiveIntensity * 0.45} />
       </mesh>
-      <mesh rotation={[Math.PI / 2, 0, 0]} scale={[ringScale, ringScale, ringScale]}>
-        <torusGeometry args={[84, 4.2, 10, 72]} />
-        <meshStandardMaterial color="#536a7b" metalness={0.72} roughness={0.28} emissive={accent} emissiveIntensity={0.16} />
+      <mesh rotation={[Math.PI / 2, 0, 0]} scale={[profile.ringScale, profile.ringScale, profile.ringScale]}>
+        <torusGeometry args={[84, 4.2, 10, segments]} />
+        <meshStandardMaterial color={profile.hullColor} metalness={0.72} roughness={0.28} emissive={profile.accentColor} emissiveIntensity={profile.emissiveIntensity} />
       </mesh>
       {[0, 1, 2, 3].map((index) => {
         const angle = index * (Math.PI / 2);
@@ -1439,7 +1447,7 @@ function StationGeometry({ station }: { station: StationDefinition }) {
             </mesh>
             <mesh position={[125, 0, 0]} rotation={[0, 0, 0.02]}>
               <boxGeometry args={[28, 18, 3]} />
-              <meshStandardMaterial color={solarColor} metalness={0.34} roughness={0.5} emissive={accent} emissiveIntensity={0.1} />
+              <meshStandardMaterial color={profile.solarColor} metalness={0.34} roughness={0.5} emissive={profile.accentColor} emissiveIntensity={0.1} />
             </mesh>
           </group>
         );
@@ -1529,10 +1537,12 @@ function StationGeometry({ station }: { station: StationDefinition }) {
         </>
       ) : null}
       <mesh rotation={[Math.PI / 2, 0, clock * 0.08]}>
-        <torusGeometry args={[106 * ringScale, 1.2, 8, 96]} />
-        <meshBasicMaterial color={accent} transparent opacity={0.24} toneMapped={false} />
+        <torusGeometry args={[106 * profile.ringScale, 1.2, 8, segments]} />
+        <meshBasicMaterial color={profile.accentColor} transparent opacity={0.24 + profile.emissiveIntensity * 0.12} toneMapped={false} />
       </mesh>
-      <pointLight color={accent} intensity={0.95} distance={280} />
+      <Line points={[[-150 * profile.ringScale, 0, 110], [0, 0, 24], [150 * profile.ringScale, 0, 110]]} color={profile.trafficColor} lineWidth={1.1} transparent opacity={0.16 + Math.sin(clock * 2.6) * 0.04} />
+      <Line points={[[0, -120, -96], [0, 0, -18], [0, 120, -96]]} color={profile.trafficColor} lineWidth={0.9} transparent opacity={0.12 + Math.cos(clock * 2.2) * 0.04} />
+      <pointLight color={profile.accentColor} intensity={0.95 + profile.emissiveIntensity} distance={280} />
       <Html center distanceFactor={13} className="target-label station-tech-label" position={[0, 92, 0]}>
         {stationTechLabel(station.techLevel, locale)} · {localizeStationName(station.id, locale, station.name)}
       </Html>
@@ -1620,6 +1630,7 @@ function WormholeTunnel() {
 
 function VisualEffect({ effect }: { effect: VisualEffectEntity }) {
   const locale = useGameStore((state) => state.locale);
+  const explosionProfile = useGameStore((state) => state.assetManifest.vfxAssetProfiles[state.assetManifest.vfxCues.explosion]);
   const alpha = Math.max(0, effect.life / effect.maxLife);
   const particles = useMemo(
     () =>
@@ -1790,12 +1801,26 @@ function VisualEffect({ effect }: { effect: VisualEffectEntity }) {
     );
   }
   const radius = effect.kind === "explosion" ? effect.size * (1.2 - alpha * 0.55) : effect.size * (1.1 - alpha * 0.35);
+  const explosionCore = effect.kind === "explosion" ? explosionProfile?.coreColor ?? effect.color : effect.color;
+  const explosionShock = effect.kind === "explosion" ? explosionProfile?.shockColor ?? effect.secondaryColor ?? effect.color : effect.secondaryColor ?? effect.color;
   return (
     <group position={toThree(effect.position)}>
       <mesh>
         <sphereGeometry args={[radius, 18, 12]} />
-        <meshBasicMaterial color={effect.color} transparent opacity={effect.kind === "explosion" ? alpha * 0.42 : alpha * 0.28} toneMapped={false} />
+        <meshBasicMaterial color={explosionCore} transparent opacity={effect.kind === "explosion" ? alpha * 0.42 * (explosionProfile?.bloomIntensity ?? 1) : alpha * 0.28} toneMapped={false} />
       </mesh>
+      {effect.kind === "explosion" ? (
+        <>
+          <mesh rotation={[Math.PI / 2, 0, effect.life * 0.9]}>
+            <torusGeometry args={[radius * 1.18, Math.max(1.4, effect.size * 0.035), 8, 72]} />
+            <meshBasicMaterial color={explosionShock} transparent opacity={alpha * 0.48} toneMapped={false} />
+          </mesh>
+          <mesh>
+            <sphereGeometry args={[radius * 1.42, 24, 12]} />
+            <meshBasicMaterial color={explosionShock} transparent opacity={alpha * 0.12} wireframe toneMapped={false} />
+          </mesh>
+        </>
+      ) : null}
       {effect.kind === "shield-hit" ? (
         <>
           <mesh>
@@ -2017,17 +2042,19 @@ function SceneContent({ onShipModelStatus }: { onShipModelStatus: (status: ShipM
   const economyNpcWatch = useGameStore((state) => state.economyNpcWatch);
   const currentSystemId = useGameStore((state) => state.currentSystemId);
   const explorationState = useGameStore((state) => state.explorationState);
+  const sceneProfile = useGameStore((state) => state.assetManifest.scenePostProfiles[currentSystemId] ?? state.assetManifest.scenePostProfiles.default);
   const system = systemById[currentSystemId];
-  const ambient = 0.18 + system.risk * 0.06;
+  const ambient = (0.18 + system.risk * 0.06) * sceneProfile.ambientMultiplier;
   const starLightPosition = scale(system.star.direction, 480);
   const fillLightPosition: Vec3 = [-system.star.direction[0] * 260, 90, -system.star.direction[2] * 260];
   const explorationSignals = getIncompleteExplorationSignals(currentSystemId, explorationState);
   return (
     <>
-      <color attach="background" args={["#030712"]} />
+      <color attach="background" args={[sceneProfile.backgroundColor]} />
+      <fog attach="fog" args={[sceneProfile.fogColor, sceneProfile.fogNear, sceneProfile.fogFar]} />
       <ambientLight intensity={ambient} />
-      <directionalLight position={toThree(starLightPosition)} intensity={system.star.lightIntensity} color={system.star.color} />
-      <directionalLight position={[-220, 90, -320]} intensity={0.42} color="#5fc3ff" />
+      <directionalLight position={toThree(starLightPosition)} intensity={system.star.lightIntensity * sceneProfile.exposure} color={system.star.color} />
+      <directionalLight position={[-220, 90, -320]} intensity={sceneProfile.fillIntensity} color={sceneProfile.fillColor} />
       <pointLight position={toThree(fillLightPosition)} color={system.star.color} intensity={0.32} distance={720} />
       <InfiniteSkybox />
       <SystemStarBackdrop />
