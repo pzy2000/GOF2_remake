@@ -1734,12 +1734,47 @@ function Asteroid({ asteroid }: { asteroid: AsteroidEntity }) {
 
 function Projectile({ projectile }: { projectile: ProjectileEntity }) {
   const color = projectile.kind === "missile" ? "#ffb657" : projectile.owner === "enemy" ? "#ff4c6a" : projectile.owner === "npc" ? "#ffd166" : "#64e4ff";
+  const core = projectile.kind === "missile" ? "#fff2c5" : "#eaffff";
+  const tail = add(projectile.position, scale(projectile.direction, projectile.kind === "missile" ? -32 : -18));
+  const headScale = projectile.kind === "missile" ? [1.2, 1.2, 2.2] as const : [1, 1, 1.5] as const;
   return (
-    <mesh position={toThree(projectile.position)}>
-      <sphereGeometry args={[projectile.kind === "missile" ? 4 : 2, 10, 8]} />
-      <meshBasicMaterial color={color} toneMapped={false} />
-    </mesh>
+    <group>
+      <Line points={[tail, projectile.position]} color={color} lineWidth={projectile.kind === "missile" ? 4.2 : 2.4} transparent opacity={0.62} />
+      <Line points={[tail, projectile.position]} color={core} lineWidth={projectile.kind === "missile" ? 1.3 : 0.8} transparent opacity={0.42} />
+      <mesh position={toThree(projectile.position)} scale={headScale}>
+        <sphereGeometry args={[projectile.kind === "missile" ? 4 : 2.4, 12, 8]} />
+        <meshBasicMaterial color={color} toneMapped={false} />
+      </mesh>
+      {projectile.kind === "missile" ? (
+        <mesh position={toThree(tail)}>
+          <sphereGeometry args={[5.2, 12, 8]} />
+          <meshBasicMaterial color="#ff6b4a" transparent opacity={0.38} toneMapped={false} />
+        </mesh>
+      ) : null}
+      <pointLight color={color} intensity={projectile.kind === "missile" ? 1.6 : 0.75} distance={projectile.kind === "missile" ? 86 : 52} />
+    </group>
   );
+}
+
+function FlightIntensityOverlay() {
+  const afterburning = useGameStore((state) => state.input.afterburner && state.player.energy > defaultFlightTuning.motion.afterburnerMinEnergy);
+  const combatActive = useGameStore((state) =>
+    state.runtime.enemies.some((ship) =>
+      ship.hull > 0 &&
+      ship.deathTimer === undefined &&
+      (ship.role === "pirate" || ship.role === "drone" || ship.role === "relay" || ship.aiTargetId === "player")
+    )
+  );
+  const recentDamage = useGameStore((state) => state.runtime.clock - state.player.lastDamageAt < 0.72);
+  const lowHull = useGameStore((state) => state.player.hull / Math.max(1, state.player.stats.hull) <= 0.32);
+  const classes = [
+    "flight-intensity-overlay",
+    combatActive ? "combat" : "",
+    afterburning ? "boost" : "",
+    recentDamage ? "hit" : "",
+    lowHull ? "critical" : ""
+  ].filter(Boolean).join(" ");
+  return <div className={classes} aria-hidden="true" />;
 }
 
 function LootCrate({ loot }: { loot: LootEntity }) {
@@ -2893,6 +2928,7 @@ export function FlightScene() {
           <SceneContent onShipModelStatus={updateShipModelStatus} />
         </Suspense>
       </Canvas>
+      <FlightIntensityOverlay />
       {shipModelStatus ? <div className={`ship-model-status ${shipModelStatus.kind}`}>{shipModelStatus.text}</div> : null}
       {screen === "economyWatch" ? <EconomyWatchOverlay /> : null}
       <NpcInteractionOverlay />

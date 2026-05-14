@@ -38,7 +38,12 @@ export type AudioEventName =
   | "mission-fail"
   | "low-hull"
   | "shield-break"
-  | "comms-open";
+  | "comms-open"
+  | "target-lock"
+  | "hit-confirm"
+  | "shield-hit"
+  | "afterburner"
+  | "objective-cue";
 
 export type MusicMode = "safe" | "combat" | "station" | "silent";
 

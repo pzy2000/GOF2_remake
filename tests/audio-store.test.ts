@@ -48,6 +48,39 @@ describe("store audio triggers", () => {
     expect(play).toHaveBeenCalledWith("laser");
   });
 
+  it("plays target-lock audio when a missile lock finishes acquiring", async () => {
+    const { store, play } = await freshStore();
+    store.setState((state) => ({
+      runtime: {
+        ...state.runtime,
+        enemies: [
+          {
+            id: "lock-target",
+            name: "Lock Target",
+            role: "pirate",
+            factionId: "independent-pirates",
+            position: [0, 0, -280],
+            velocity: [0, 0, 0],
+            hull: 80,
+            shield: 20,
+            maxHull: 80,
+            maxShield: 20,
+            lastDamageAt: -999,
+            fireCooldown: 0,
+            aiProfileId: "raider",
+            aiState: "attack",
+            aiTimer: 0
+          }
+        ]
+      }
+    }));
+
+    store.getState().tick(0.6);
+
+    expect(play).toHaveBeenCalledWith("target-lock");
+    expect(store.getState().runtime.effects.some((effect) => effect.label === "LOCKED")).toBe(true);
+  });
+
   it("plays shield break and low hull warnings on heavy enemy damage", async () => {
     const { store, play } = await freshStore();
     store.setState((state) => ({

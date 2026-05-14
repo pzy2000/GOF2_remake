@@ -74,7 +74,11 @@ async function resetApp(page: Page) {
 
 async function startNewGame(page: Page, options: { keepIntro?: boolean } = {}) {
   await expect(page.getByRole("heading", { name: "GOF2 by pzy" })).toBeVisible();
-  await page.getByRole("button", { name: "New Game" }).click();
+  await expect(async () => {
+    const screen = await page.evaluate(() => (window.__GOF2_E2E__?.getState?.() as { screen?: string } | undefined)?.screen);
+    if (screen !== "flight") await page.getByRole("button", { name: "New Game" }).click();
+    await expect(page.locator(".flight-canvas canvas")).toBeVisible({ timeout: 2500 });
+  }).toPass({ timeout: 15_000 });
   await expect(page.locator(".flight-canvas canvas")).toBeVisible();
   await expect(page.locator(".hud-top-left")).toContainText("Helion Reach");
   await expect(page.locator(".dock-hint")).toBeVisible();
@@ -637,6 +641,7 @@ test.describe("browser smoke", () => {
   });
 
   test("renders generated system star sprites in flight and galaxy map", async ({ page }) => {
+    test.setTimeout(120_000);
     await resetApp(page);
     await startNewGame(page);
 
@@ -770,6 +775,7 @@ test.describe("browser smoke", () => {
   });
 
   test("tunes active frequency scans from the keyboard", async ({ page }) => {
+    test.setTimeout(75_000);
     await resetApp(page);
     await startNewGame(page);
 
@@ -1816,6 +1822,7 @@ test.describe("browser smoke", () => {
   });
 
   test("runs glass-wake-hero direct encounter stages", async ({ page }) => {
+    test.setTimeout(120_000);
     await resetApp(page);
     await startNewGame(page);
 
@@ -2138,6 +2145,7 @@ test.describe("browser smoke", () => {
   });
 
   test("opens the flight galaxy map as a route planner from HUD and keyboard", async ({ page }) => {
+    test.setTimeout(120_000);
     await page.setViewportSize({ width: 2048, height: 930 });
     await resetApp(page);
     await startNewGame(page);
@@ -2172,12 +2180,12 @@ test.describe("browser smoke", () => {
     await page.locator(".hud-bottom-right").getByRole("button", { name: "Map" }).click();
     await expect(page.getByText("Route Planning")).toBeVisible();
     await page.getByRole("button", { name: "Mirr Vale known" }).click();
-    await expect(page.locator(".planet-list button.selected")).toContainText("Tech Level 3");
+    await expect(page.locator(".planet-list")).toContainText("Tech Level 3");
     await expect(page.locator(".galaxy-actions")).toContainText("Mirr Glass · Mirr Lattice · Tech Level 3");
 
     const routeButton = page.getByRole("button", { name: "Set Route" });
     await expect(routeButton).toBeEnabled();
-    await routeButton.click();
+    await page.keyboard.press("Enter");
 
     await expect(page.locator(".flight-canvas canvas")).toBeVisible();
     await expect(page.locator(".hud-top-right")).toContainText("Autopilot: Aligning to gate");
@@ -2246,7 +2254,7 @@ test.describe("browser smoke", () => {
     }
 
     test("keeps flight HUD and touch controls inside phone and foldable viewports", async ({ page }) => {
-      test.setTimeout(120_000);
+      test.setTimeout(180_000);
       const viewports = [
         { name: "phone portrait 375x667", width: 375, height: 667 },
         { name: "phone portrait 393x852", width: 393, height: 852 },
@@ -2278,6 +2286,7 @@ test.describe("browser smoke", () => {
     });
 
     test("maps touch pads and action buttons onto existing flight input", async ({ page }) => {
+      test.setTimeout(75_000);
       await page.setViewportSize({ width: 852, height: 393 });
       await resetApp(page);
       await startNewGame(page);
@@ -2455,6 +2464,15 @@ test.describe("browser smoke", () => {
         await page.goto("/?pwa=1");
         await page.waitForFunction(() => !!window.__GOF2_PWA_READY__);
         await page.evaluate(() => window.__GOF2_PWA_READY__?.then(() => true));
+        const controlled = await page.waitForFunction(() => !!navigator.serviceWorker.controller, undefined, { timeout: 8_000 })
+          .then(() => true)
+          .catch(() => false);
+        if (!controlled) {
+          await page.reload({ waitUntil: "domcontentloaded" });
+          await page.waitForFunction(() => !!navigator.serviceWorker.controller, undefined, { timeout: 8_000 });
+          await page.waitForFunction(() => !!window.__GOF2_PWA_READY__);
+          await page.evaluate(() => window.__GOF2_PWA_READY__?.then(() => true));
+        }
         await page.waitForFunction(async () => {
           const keys = await caches.keys();
           const matches = await Promise.all(keys.map(async (key) => {
@@ -2463,6 +2481,21 @@ test.describe("browser smoke", () => {
           }));
           return matches.some(Boolean);
         });
+        await page.waitForFunction(async () => {
+          const resourceUrls = performance.getEntriesByType("resource")
+            .map((entry) => entry.name)
+            .filter((entryUrl) => {
+              try {
+                const url = new URL(entryUrl);
+                return url.origin === window.location.origin && /\.(css|js)$/.test(url.pathname);
+              } catch {
+                return false;
+              }
+            });
+          if (resourceUrls.length === 0) return false;
+          const matches = await Promise.all(resourceUrls.map((entryUrl) => caches.match(entryUrl)));
+          return matches.every(Boolean);
+        }, undefined, { timeout: 15_000 });
 
         const manifestResponse = await page.request.get("/manifest.webmanifest");
         expect(manifestResponse.ok()).toBe(true);

@@ -72,6 +72,7 @@ describe("story mission store flow", () => {
       tone: "start",
       title: "Glass Wake 01: Clean Carrier"
     });
+    expect(store.getState().runtime.effects.some((effect) => effect.label === "OBJECTIVE")).toBe(true);
 
     store.getState().closeDialogue();
     store.setState({
@@ -85,6 +86,7 @@ describe("story mission store flow", () => {
       tone: "complete",
       title: "Glass Wake 01: Clean Carrier"
     });
+    expect(store.getState().runtime.effects.some((effect) => effect.label === "CLEARED")).toBe(true);
 
     store.getState().closeDialogue();
     store.setState({ activeMissions: [], completedMissionIds: [], currentSystemId: "helion-reach" });

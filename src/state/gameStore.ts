@@ -38,6 +38,11 @@ import {
 import { integrateVelocity } from "../systems/flight";
 import { defaultFlightTuning, isAfterburnerAvailable } from "../systems/flightTuning";
 import {
+  createStoryBeatEffects,
+  createTargetLockReadyEffects,
+  createWeaponDischargeEffects
+} from "../systems/flightPresentation";
+import {
   createEncounterStageEffects,
   createEncounterStageNotification,
   createEncounterStageRuntime,
@@ -646,6 +651,15 @@ function buildAcceptMissionPatch(state: GameStore, missionId: string, dialogueMo
     runtime = applyEncounterStageRuntime(runtime, result.mission, "mission-accepted", state.gameClock, {
       position: firstTargetPosition ? [...firstTargetPosition] : undefined
     });
+    if (mission.storyCritical) {
+      runtime = {
+        ...runtime,
+        effects: [
+          ...runtime.effects,
+          ...createStoryBeatEffects(projectileId(`story-${mission.id}-accepted`), firstTargetPosition ? [...firstTargetPosition] : accessStation.position, "accepted")
+        ]
+      };
+    }
   }
   const encounterNotification = result.ok && !queuedBehindActiveDialogue
     ? runtime.activeEncounterStage?.missionId === mission.id
@@ -662,7 +676,7 @@ function buildAcceptMissionPatch(state: GameStore, missionId: string, dialogueMo
     runtime: { ...runtime, message: queuedBehindActiveDialogue ? runtime.message : result.message, storyNotification },
     ...dialoguePatch
   });
-  return { ok: result.ok, patch, audioEvent: result.ok ? "ui-click" : undefined };
+  return { ok: result.ok, patch, audioEvent: result.ok ? mission.storyCritical ? "objective-cue" : "ui-click" : undefined };
 }
 
 function buildCompleteMissionPatch(state: GameStore, missionId: string, dialogueMode: MissionDialogueMode = "open"): MissionPatchResult {
@@ -705,6 +719,15 @@ function buildCompleteMissionPatch(state: GameStore, missionId: string, dialogue
       ? createStoryNotification("complete", mission.title, completeMessage, state.gameClock)
       : state.runtime.storyNotification
   };
+  if (mission.storyCritical) {
+    const cuePosition = state.currentStationId ? stationById[state.currentStationId]?.position : undefined;
+    if (cuePosition) {
+      completionRuntimeBase.effects = [
+        ...completionRuntimeBase.effects,
+        ...createStoryBeatEffects(projectileId(`story-${mission.id}-completed`), cuePosition, "completed")
+      ];
+    }
+  }
   const completionRuntime = mission.storyCritical
     ? applyEncounterStageRuntime(completionRuntimeBase, mission, "mission-completed", state.gameClock, {
         position: state.currentStationId ? stationById[state.currentStationId]?.position : undefined
@@ -1772,6 +1795,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         player.stats.energy
       )
     };
+    if (afterburning) audioSystem.play("afterburner");
     player = regenerateShield(player, player.stats.shield, now, delta, 8);
     if (equipmentEffects.hullRegenPerSecond > 0 && now - player.lastDamageAt >= equipmentEffects.hullRegenDelay && player.hull < player.stats.hull) {
       player = { ...player, hull: clamp(player.hull + equipmentEffects.hullRegenPerSecond * delta, 0, player.stats.hull) };
@@ -1837,8 +1861,16 @@ export const useGameStore = create<GameStore>((set, get) => ({
           .map((ship) => ({ ship, dist: distance(player.position, ship.position) }))
           .sort((a, b) => a.dist - b.dist)[0]?.ship
       : undefined;
-    const nextTargetLockState = resolveTargetLockState(state.runtime.targetLockState, player, runtime.enemies, now, delta, tuning);
+    const previousTargetLockState = state.runtime.targetLockState;
+    const nextTargetLockState = resolveTargetLockState(previousTargetLockState, player, runtime.enemies, now, delta, tuning);
     runtime = { ...runtime, targetLockState: nextTargetLockState };
+    if (nextTargetLockState?.isMissileReady && !previousTargetLockState?.isMissileReady) {
+      const lockedShip = runtime.enemies.find((ship) => ship.id === nextTargetLockState.targetId);
+      if (lockedShip) {
+        runtime.effects.push(...createTargetLockReadyEffects(projectileId("target-lock"), lockedShip.position, nextTargetLockState.leadPosition));
+        audioSystem.play("target-lock");
+      }
+    }
     const lockedTarget = nextTargetLockState
       ? runtime.enemies.find((ship) => ship.id === nextTargetLockState.targetId && ship.hull > 0 && ship.deathTimer === undefined)
       : undefined;
@@ -1955,6 +1987,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           life: primaryWeapon.speed > 0 ? effectivePrimaryRange / primaryWeapon.speed : 1.4,
           targetId: primaryTarget?.id
         });
+        runtime.effects.push(...createWeaponDischargeEffects(projectileId("laser-discharge"), player.position, forward, "laser"));
         audioSystem.play("laser");
         player = { ...player, energy: player.energy - primaryEnergyCost };
         primaryCooldown = getWeaponCooldown(primaryWeapon, player.equipment);
@@ -1968,22 +2001,23 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const secondaryTarget = ultimateTarget ?? softLockTarget;
       const targetInRange = !secondaryTarget || distance(player.position, secondaryTarget.position) <= effectiveSecondaryRange;
       if (targetInRange) {
-      const missileDirection = ultimateTarget ? normalize(sub(ultimateTarget.position, player.position)) : resolveAssistedShotDirection(player, softLockTarget, forward, tuning);
-      const missileLocked = ultimateTarget || (secondaryTarget && nextTargetLockState?.targetId === secondaryTarget.id && nextTargetLockState.isMissileReady);
-      runtime.projectiles.push({
-        id: projectileId("missile"),
-        owner: "player",
-        kind: "missile",
-        position: add(player.position, scale(forward, 18)),
-        direction: missileDirection,
-        speed: secondaryWeapon.speed,
-        damage: Math.round(secondaryWeapon.damage * equipmentEffects.weaponDamageMultiplier),
-        life: secondaryWeapon.speed > 0 ? effectiveSecondaryRange / secondaryWeapon.speed : 3.6,
-        targetId: missileLocked ? secondaryTarget?.id : undefined
-      });
-      audioSystem.play("missile");
-      player = ultimateActive ? player : { ...player, missiles: player.missiles - 1 };
-      secondaryCooldown = getWeaponCooldown(secondaryWeapon, player.equipment);
+        const missileDirection = ultimateTarget ? normalize(sub(ultimateTarget.position, player.position)) : resolveAssistedShotDirection(player, softLockTarget, forward, tuning);
+        const missileLocked = ultimateTarget || (secondaryTarget && nextTargetLockState?.targetId === secondaryTarget.id && nextTargetLockState.isMissileReady);
+        runtime.projectiles.push({
+          id: projectileId("missile"),
+          owner: "player",
+          kind: "missile",
+          position: add(player.position, scale(forward, 18)),
+          direction: missileDirection,
+          speed: secondaryWeapon.speed,
+          damage: Math.round(secondaryWeapon.damage * equipmentEffects.weaponDamageMultiplier),
+          life: secondaryWeapon.speed > 0 ? effectiveSecondaryRange / secondaryWeapon.speed : 3.6,
+          targetId: missileLocked ? secondaryTarget?.id : undefined
+        });
+        runtime.effects.push(...createWeaponDischargeEffects(projectileId("missile-discharge"), player.position, forward, "missile"));
+        audioSystem.play("missile");
+        player = ultimateActive ? player : { ...player, missiles: player.missiles - 1 };
+        secondaryCooldown = getWeaponCooldown(secondaryWeapon, player.equipment);
       }
     }
 
@@ -2264,6 +2298,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           }
           consumed = true;
           runtime.effects.push(...createImpactEffects(projectileId(shielded ? "shield-hit" : "hit"), movedProjectile.position, projectile.damage, shielded, projectile.kind === "missile", tuning));
+          audioSystem.play(shielded ? "shield-hit" : "hit-confirm");
           if (damaged.hull <= 0 && ship.hull > 0) {
             if (ship.role === "pirate") destroyedPirates += 1;
             if (ship.boss) destroyedBossName = ship.name;
@@ -2303,6 +2338,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           player = applyDamage(player, projectile.damage, now);
           if (previousShield > 0 && player.shield <= 0) audioSystem.play("shield-break");
           if (previousHullRatio > 0.3 && player.hull / player.stats.hull <= 0.3) audioSystem.play("low-hull");
+          audioSystem.play(shielded ? "shield-hit" : "hit-confirm");
           runtime.effects.push(...createImpactEffects(projectileId(shielded ? "shield-hit" : "player-hit"), player.position, projectile.damage, shielded, projectile.kind === "missile", tuning));
         }
         consumed = true;
@@ -2377,6 +2413,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           }
           consumed = true;
           runtime.effects.push(...createImpactEffects(projectileId(shielded ? "shield-hit" : "hit"), movedProjectile.position, projectile.damage, shielded, projectile.kind === "missile", tuning));
+          audioSystem.play(shielded ? "shield-hit" : "hit-confirm");
           if (damaged.hull <= 0 && ship.hull > 0) {
             if (ship.role === "pirate") {
               destroyedPirates += 1;
@@ -2557,10 +2594,24 @@ export const useGameStore = create<GameStore>((set, get) => ({
             targetId: lastStoryTarget.targetId,
             position: spawnedForMission?.position ?? exposedSalvage?.position ?? lastStoryTarget.position
           });
+          runtime = {
+            ...runtime,
+            effects: [
+              ...runtime.effects,
+              ...createStoryBeatEffects(
+                projectileId(`story-${storyMission.id}-target`),
+                spawnedForMission?.position ?? exposedSalvage?.position ?? lastStoryTarget.position,
+                "target-updated"
+              )
+            ]
+          };
+          audioSystem.play("objective-cue");
           storyNotification = runtime.storyNotification;
           storyTargetMessage = runtime.message || storyTargetMessage;
         } else {
           storyNotification = createStoryNotification("updated", storyMission.title, storyTargetMessage, gameClock);
+          runtime.effects.push(...createStoryBeatEffects(projectileId(`story-${storyMission.id}-target`), lastStoryTarget.position, "target-updated"));
+          audioSystem.play("objective-cue");
         }
       }
     }

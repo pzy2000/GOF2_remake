@@ -121,7 +121,15 @@ class ProceduralAudioSystem {
     const context = this.ensureContext();
     if (!context || this.settings.muted) return;
     const now = context.currentTime;
-    const minimumGap = event === "mining" ? 0.11 : event === "low-hull" ? 1.6 : event === "shield-break" ? 0.7 : event === "comms-open" ? 0.18 : 0.025;
+    const minimumGap =
+      event === "mining" ? 0.11
+        : event === "afterburner" ? 0.28
+          : event === "hit-confirm" || event === "shield-hit" ? 0.06
+            : event === "target-lock" ? 0.55
+              : event === "low-hull" ? 1.6
+                : event === "shield-break" ? 0.7
+                  : event === "comms-open" ? 0.18
+                    : 0.025;
     if (now - (this.lastEventAt.get(event) ?? -999) < minimumGap) return;
     this.lastEventAt.set(event, now);
     if (!this.unlocked) return;
@@ -141,6 +149,11 @@ class ProceduralAudioSystem {
     if (event === "shield-break") this.noiseSweep(720, 120, 0.42, 0.25);
     if (event === "comms-open") this.arpeggio([760, 1080], 0.08, 0.028);
     if (event === "ui-click") this.zap(540, 660, 0.035, "#ui", 0.06);
+    if (event === "target-lock") this.arpeggio([540, 720, 1080], 0.24, 0.12);
+    if (event === "hit-confirm") this.zap(960, 520, 0.055, "#hit", 0.08);
+    if (event === "shield-hit") this.zap(740, 940, 0.07, "#shield", 0.09);
+    if (event === "afterburner") this.noiseSweep(120, 84, 0.24, 0.09);
+    if (event === "objective-cue") this.arpeggio([392, 587, 784], 0.32, 0.15);
   }
 
   setMusicMode(mode: MusicMode) {

@@ -96,6 +96,11 @@ describe("procedural audio system", () => {
     expect(() => audioSystem.unlock()).not.toThrow();
     expect(() => audioSystem.play("laser")).not.toThrow();
     expect(() => audioSystem.play("comms-open")).not.toThrow();
+    expect(() => audioSystem.play("target-lock")).not.toThrow();
+    expect(() => audioSystem.play("hit-confirm")).not.toThrow();
+    expect(() => audioSystem.play("shield-hit")).not.toThrow();
+    expect(() => audioSystem.play("afterburner")).not.toThrow();
+    expect(() => audioSystem.play("objective-cue")).not.toThrow();
     expect(() => audioSystem.setMusicMode("combat")).not.toThrow();
   });
 

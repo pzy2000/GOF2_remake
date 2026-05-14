@@ -1,6 +1,6 @@
 import { useFrame } from "@react-three/fiber";
 import { useEffect, useRef, useState } from "react";
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
+import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { stationById, useGameStore } from "../../state/gameStore";
 import { getOnboardingView } from "../../systems/onboarding";
 import { clamp } from "../../systems/math";
@@ -111,11 +111,19 @@ export function FlightControls() {
     };
     const onMouseDown = (event: MouseEvent) => {
       if (useGameStore.getState().screen !== "flight") return;
+      if (event.button === 0 && isTouchControlTarget(event.target, ".touch-afterburner")) {
+        setInput({ afterburner: true });
+        return;
+      }
       if (event.button === 0) setInput({ firePrimary: true });
       if (event.button === 2) setInput({ fireSecondary: true });
     };
     const onMouseUp = (event: MouseEvent) => {
       if (useGameStore.getState().screen !== "flight") return;
+      if (event.button === 0 && isTouchControlTarget(event.target, ".touch-afterburner")) {
+        setInput({ afterburner: false });
+        return;
+      }
       if (event.button === 0) setInput({ firePrimary: false });
       if (event.button === 2) setInput({ fireSecondary: false });
     };
@@ -174,6 +182,10 @@ function isFlightShortcut(event: KeyboardEvent): boolean {
     "KeyK",
     "Escape"
   ].includes(event.code);
+}
+
+function isTouchControlTarget(target: EventTarget | null, selector: string): boolean {
+  return target instanceof HTMLElement && !!target.closest(selector);
 }
 
 function handlePauseShortcut(event: KeyboardEvent): void {
@@ -294,6 +306,10 @@ export function TouchFlightControls() {
 
   if (!isFlight) return null;
 
+  function stopTouchControlClick(event: ReactMouseEvent<HTMLDivElement>) {
+    event.stopPropagation();
+  }
+
   function updateThrottlePad(event: ReactPointerEvent<HTMLElement>) {
     const rect = event.currentTarget.getBoundingClientRect();
     const rawX = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -370,18 +386,28 @@ export function TouchFlightControls() {
   }
 
   function holdInput(key: "firePrimary" | "fireSecondary" | "afterburner") {
+    const setHeld = (held: boolean) => setInput({ [key]: held });
     return {
       onPointerDown: (event: ReactPointerEvent<HTMLButtonElement>) => {
         event.preventDefault();
         event.currentTarget.setPointerCapture(event.pointerId);
-        setInput({ [key]: true });
+        setHeld(true);
       },
       onPointerUp: (event: ReactPointerEvent<HTMLButtonElement>) => {
         event.preventDefault();
-        setInput({ [key]: false });
+        setHeld(false);
       },
-      onPointerCancel: () => setInput({ [key]: false }),
-      onPointerLeave: () => setInput({ [key]: false })
+      onPointerCancel: () => setHeld(false),
+      onPointerLeave: () => setHeld(false),
+      onMouseDown: (event: ReactMouseEvent<HTMLButtonElement>) => {
+        event.preventDefault();
+        setHeld(true);
+      },
+      onMouseUp: (event: ReactMouseEvent<HTMLButtonElement>) => {
+        event.preventDefault();
+        setHeld(false);
+      },
+      onMouseLeave: () => setHeld(false)
     };
   }
 
@@ -393,7 +419,8 @@ export function TouchFlightControls() {
   }
 
   return (
-    <div className="touch-flight-controls" data-testid="touch-flight-controls" data-locale={locale}>
+    <div className="touch-flight-controls" data-testid="touch-flight-controls" data-locale={locale} onClick={stopTouchControlClick}>
+      <div className="touch-orientation-hint">Landscape flight recommended</div>
       <div
         className="touch-pad touch-throttle-pad"
         data-testid="touch-throttle-pad"
@@ -417,17 +444,17 @@ export function TouchFlightControls() {
         <span />
       </div>
       <div className="touch-action-cluster touch-action-cluster-left">
-        <ShortcutButton shortcut="Shift" className="touch-afterburner" {...holdInput("afterburner")}>BOOST</ShortcutButton>
-        <ShortcutButton shortcut="M" onPointerDown={tapInput("toggleMap")} disabled={!!autopilot}>MAP</ShortcutButton>
+        <ShortcutButton shortcut="Shift" className="touch-afterburner" data-testid="touch-afterburner" aria-label="Afterburner" {...holdInput("afterburner")}>BOOST</ShortcutButton>
+        <ShortcutButton shortcut="M" aria-label="Open map" onPointerDown={tapInput("toggleMap")} disabled={!!autopilot}>MAP</ShortcutButton>
       </div>
       <div className="touch-action-cluster touch-action-cluster-right">
-        <ShortcutButton shortcut="LMB" className="touch-fire-primary" data-testid="touch-fire-primary" {...holdInput("firePrimary")}>FIRE</ShortcutButton>
-        <ShortcutButton shortcut="RMB" {...holdInput("fireSecondary")}>MISSILE</ShortcutButton>
-        <ShortcutButton shortcut="G" onPointerDown={tapInput("activateUltimate")}>ULT</ShortcutButton>
-        <ShortcutButton shortcut="E" onPointerDown={tapInput("interact")}>E</ShortcutButton>
-        <ShortcutButton shortcut="Tab" onPointerDown={tapInput("cycleTarget")}>TARGET</ShortcutButton>
-        <ShortcutButton shortcut="C" onPointerDown={tapInput("toggleCamera")}>CAM</ShortcutButton>
-        <ShortcutButton shortcut="Esc" onPointerDown={tapInput("pause")}>PAUSE</ShortcutButton>
+        <ShortcutButton shortcut="LMB" className="touch-fire-primary" data-testid="touch-fire-primary" aria-label="Fire primary weapon" {...holdInput("firePrimary")}>FIRE</ShortcutButton>
+        <ShortcutButton shortcut="RMB" aria-label="Fire secondary weapon" {...holdInput("fireSecondary")}>MISSILE</ShortcutButton>
+        <ShortcutButton shortcut="G" aria-label="Activate ultimate" onPointerDown={tapInput("activateUltimate")}>ULT</ShortcutButton>
+        <ShortcutButton shortcut="E" aria-label="Interact" onPointerDown={tapInput("interact")}>E</ShortcutButton>
+        <ShortcutButton shortcut="Tab" aria-label="Cycle target" onPointerDown={tapInput("cycleTarget")}>TARGET</ShortcutButton>
+        <ShortcutButton shortcut="C" aria-label="Toggle camera" onPointerDown={tapInput("toggleCamera")}>CAM</ShortcutButton>
+        <ShortcutButton shortcut="Esc" aria-label="Pause" onPointerDown={tapInput("pause")}>PAUSE</ShortcutButton>
       </div>
     </div>
   );
