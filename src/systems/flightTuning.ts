@@ -46,18 +46,26 @@ export interface FlightTuning {
     leadTimeSeconds: number;
     softLockStrength: number;
     maxAssistAngleDegrees: number;
+    lockAcquireSeconds: number;
+    lockDecaySeconds: number;
+    leadPipMaxDistance: number;
   };
   speedFeel: {
     speedLineThreshold: number;
     speedLineMaxCount: number;
     afterburnerSpeedLineMultiplier: number;
     killPulseSeconds: number;
+    killImpulseSeconds: number;
+    afterburnerLineDensity: number;
   };
   combatRhythm: {
     fireConeDegrees: number;
     attackWindowSeconds: number;
     attackCycleSeconds: number;
     bossBurstMultiplier: number;
+    telegraphSeconds: number;
+    breakawaySeconds: number;
+    bossBurstWindowSeconds: number;
   };
   vfx: {
     projectileTrailLife: number;
@@ -121,19 +129,27 @@ export const defaultFlightTuning: FlightTuning = {
     softLockConeDegrees: 18,
     leadTimeSeconds: 0.22,
     softLockStrength: 0.38,
-    maxAssistAngleDegrees: 12
+    maxAssistAngleDegrees: 12,
+    lockAcquireSeconds: 0.55,
+    lockDecaySeconds: 0.42,
+    leadPipMaxDistance: 135
   },
   speedFeel: {
     speedLineThreshold: 185,
     speedLineMaxCount: 4,
     afterburnerSpeedLineMultiplier: 1.7,
-    killPulseSeconds: 0.32
+    killPulseSeconds: 0.32,
+    killImpulseSeconds: 0.22,
+    afterburnerLineDensity: 1.45
   },
   combatRhythm: {
     fireConeDegrees: 16,
     attackWindowSeconds: 1.25,
     attackCycleSeconds: 2.7,
-    bossBurstMultiplier: 1.45
+    bossBurstMultiplier: 1.45,
+    telegraphSeconds: 0.38,
+    breakawaySeconds: 0.72,
+    bossBurstWindowSeconds: 1.65
   },
   vfx: {
     projectileTrailLife: 0.16,

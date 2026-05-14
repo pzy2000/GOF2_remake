@@ -380,14 +380,18 @@ function CameraRig() {
     const targetPosition = add(player.position, chaseOffset);
     const hitShake = Math.max(0, defaultFlightTuning.camera.hitShakeDuration - (runtime.clock - player.lastDamageAt));
     const shakeScale = hitShake > 0 ? (hitShake / defaultFlightTuning.camera.hitShakeDuration) * defaultFlightTuning.camera.hitShakeAmplitude : 0;
+    const killImpulse = runtime.effects
+      .filter((effect) => effect.kind === "kill-pulse")
+      .reduce((value, effect) => Math.max(value, effect.life / Math.max(0.001, effect.maxLife)), 0);
+    const impulseScale = killImpulse * defaultFlightTuning.speedFeel.killImpulseSeconds * 10;
     const shake: Vec3 = [
-      Math.sin(runtime.clock * 43.1) * shakeScale,
-      Math.cos(runtime.clock * 37.7) * shakeScale * 0.7,
-      Math.sin(runtime.clock * 29.3) * shakeScale * 0.35
+      Math.sin(runtime.clock * 43.1) * (shakeScale + impulseScale),
+      Math.cos(runtime.clock * 37.7) * (shakeScale * 0.7 + impulseScale * 0.45),
+      Math.sin(runtime.clock * 29.3) * (shakeScale * 0.35 + impulseScale * 0.25)
     ];
     camera.position.lerp(new THREE.Vector3(...add(targetPosition, shake)), defaultFlightTuning.camera.lerp);
     if (camera instanceof THREE.PerspectiveCamera) {
-      camera.fov += (resolveCameraFov(speed, afterburning) - camera.fov) * 0.08;
+      camera.fov += (resolveCameraFov(speed, afterburning) + killImpulse * 1.8 - camera.fov) * 0.08;
       camera.updateProjectionMatrix();
     }
     camera.lookAt(new THREE.Vector3(...add(player.position, scale(forward, defaultFlightTuning.camera.lookAhead))));
@@ -1746,9 +1750,11 @@ function VisualEffect({ effect }: { effect: VisualEffectEntity }) {
   const explosionProfile = useGameStore((state) => state.assetManifest.vfxAssetProfiles[state.assetManifest.vfxCues.explosion]);
   const explosionFrames = useGameStore((state) => state.assetManifest.vfxTextureSequences[state.assetManifest.vfxCues.explosion] ?? []);
   const alpha = Math.max(0, effect.life / effect.maxLife);
+  const explosionLike = effect.kind === "explosion" || effect.kind === "boss-burst";
+  const impactLike = effect.kind === "hit" || effect.kind === "missile-impact";
   const particles = useMemo(
     () =>
-      Array.from({ length: effect.particleCount ?? (effect.kind === "explosion" ? 14 : effect.kind === "hit" ? 4 : 0) }, (_, index) => {
+      Array.from({ length: effect.particleCount ?? (explosionLike ? 14 : impactLike ? 4 : 0) }, (_, index) => {
         const seed = index * 12.9898 + effect.id.length * 78.233;
         const a = Math.sin(seed) * 43758.5453;
         const b = Math.sin(seed * 1.73) * 24634.6345;
@@ -1764,7 +1770,7 @@ function VisualEffect({ effect }: { effect: VisualEffectEntity }) {
           color: index % 2 === 0 ? effect.color : effect.secondaryColor ?? "#ffd166"
         };
       }),
-    [effect.id, effect.kind, effect.particleCount, effect.secondaryColor, effect.size, effect.spread, effect.color]
+    [effect.id, effect.kind, effect.particleCount, effect.secondaryColor, effect.size, effect.spread, effect.color, explosionLike, impactLike]
   );
 
   if (effect.kind === "nav-ring") {
@@ -1914,16 +1920,16 @@ function VisualEffect({ effect }: { effect: VisualEffectEntity }) {
       </group>
     );
   }
-  const radius = effect.kind === "explosion" ? effect.size * (1.2 - alpha * 0.55) : effect.size * (1.1 - alpha * 0.35);
-  const explosionCore = effect.kind === "explosion" ? explosionProfile?.coreColor ?? effect.color : effect.color;
-  const explosionShock = effect.kind === "explosion" ? explosionProfile?.shockColor ?? effect.secondaryColor ?? effect.color : effect.secondaryColor ?? effect.color;
+  const radius = explosionLike ? effect.size * (1.2 - alpha * 0.55) : effect.size * (1.1 - alpha * 0.35);
+  const explosionCore = explosionLike ? explosionProfile?.coreColor ?? effect.color : effect.color;
+  const explosionShock = explosionLike ? explosionProfile?.shockColor ?? effect.secondaryColor ?? effect.color : effect.secondaryColor ?? effect.color;
   return (
     <group position={toThree(effect.position)}>
       <mesh>
         <sphereGeometry args={[radius, 18, 12]} />
-        <meshBasicMaterial color={explosionCore} transparent opacity={effect.kind === "explosion" ? alpha * 0.42 * (explosionProfile?.bloomIntensity ?? 1) : alpha * 0.28} toneMapped={false} />
+        <meshBasicMaterial color={explosionCore} transparent opacity={explosionLike ? alpha * 0.42 * (explosionProfile?.bloomIntensity ?? 1) : alpha * 0.28} toneMapped={false} />
       </mesh>
-      {effect.kind === "explosion" ? (
+      {explosionLike ? (
         <>
           {explosionFrames.length > 0 ? <ExplosionTextureBillboard alpha={alpha} frameUrls={explosionFrames} life={effect.life} maxLife={effect.maxLife} size={effect.size} /> : null}
           <mesh rotation={[Math.PI / 2, 0, effect.life * 0.9]}>
@@ -1935,6 +1941,12 @@ function VisualEffect({ effect }: { effect: VisualEffectEntity }) {
             <meshBasicMaterial color={explosionShock} transparent opacity={alpha * 0.12} wireframe toneMapped={false} />
           </mesh>
         </>
+      ) : null}
+      {effect.kind === "missile-impact" ? (
+        <mesh rotation={[Math.PI / 2, 0, effect.life * 1.4]}>
+          <torusGeometry args={[radius * 1.18, 1.8, 8, 42]} />
+          <meshBasicMaterial color={effect.secondaryColor ?? effect.color} transparent opacity={alpha * 0.64} toneMapped={false} />
+        </mesh>
       ) : null}
       {effect.kind === "shield-hit" ? (
         <>
@@ -1966,27 +1978,46 @@ function VisualEffect({ effect }: { effect: VisualEffectEntity }) {
 function TargetLock() {
   const player = useGameStore((state) => state.player);
   const locale = useGameStore((state) => state.locale);
-  const clock = useGameStore((state) => state.runtime.clock);
-  const target = useGameStore((state) => state.runtime.enemies.find((ship) => ship.id === state.targetId && ship.hull > 0 && ship.deathTimer === undefined));
-  if (!target) return null;
+  const runtime = useGameStore((state) => state.runtime);
+  const lockState = runtime.targetLockState;
+  const target = lockState ? runtime.enemies.find((ship) => ship.id === lockState.targetId && ship.hull > 0 && ship.deathTimer === undefined) : undefined;
+  if (!target || !lockState) return null;
   const dist = Math.round(Math.hypot(player.position[0] - target.position[0], player.position[1] - target.position[1], player.position[2] - target.position[2]));
-  const pulse = 1 + Math.sin(clock * (target.boss ? 8.5 : 6.2)) * 0.08;
+  const pulse = 1 + Math.sin(runtime.clock * (target.boss ? 8.5 : 6.2)) * (0.05 + lockState.strength * 0.08);
   const healthRatio = clamp(target.hull / target.maxHull, 0, 1);
+  const shieldRatio = target.maxShield > 0 ? clamp(target.shield / target.maxShield, 0, 1) : 0;
   const lockColor = target.boss ? "#ff6b6b" : target.storyTarget ? "#ff9bd5" : "#ffdf6e";
+  const lockLabel = lockState.isMissileReady ? "MISSILE READY" : `LOCK ${Math.round(lockState.strength * 100)}%`;
   return (
+    <>
+    <Line points={[player.position, lockState.leadPosition]} color={lockColor} lineWidth={0.8 + lockState.strength * 1.4} transparent opacity={0.12 + lockState.strength * 0.22} />
     <group position={toThree(target.position)}>
       <mesh scale={pulse}>
-        <torusGeometry args={[target.boss ? 36 : 26, 1.4, 6, 4]} />
-        <meshBasicMaterial color={lockColor} transparent opacity={0.72 + healthRatio * 0.18} toneMapped={false} />
+        <torusGeometry args={[target.boss ? 36 : 26, 1.4 + lockState.strength * 0.8, 6, 4]} />
+        <meshBasicMaterial color={lockColor} transparent opacity={0.32 + lockState.strength * 0.48 + healthRatio * 0.12} toneMapped={false} />
       </mesh>
-      <mesh rotation={[Math.PI / 2, 0, clock * 1.8]} scale={0.72 + pulse * 0.18}>
+      <mesh rotation={[Math.PI / 2, 0, runtime.clock * (1.2 + lockState.strength * 1.8)]} scale={0.72 + pulse * 0.18}>
         <torusGeometry args={[target.boss ? 44 : 32, 0.8, 8, 36]} />
-        <meshBasicMaterial color={lockColor} transparent opacity={0.26} toneMapped={false} />
+        <meshBasicMaterial color={lockColor} transparent opacity={0.16 + lockState.strength * 0.24} toneMapped={false} />
       </mesh>
       <Html center distanceFactor={12} className="target-label">
         {localizeGenericName(target.storyTarget ? "STORY" : "LOCK", locale)} · {formatDistance(locale, dist)}
       </Html>
     </group>
+    <Html center distanceFactor={11} className="target-label" position={toThree(add(target.position, [0, target.boss ? -52 : -40, 0]))}>
+      {formatRuntimeText(locale, lockLabel)} - H {Math.round(healthRatio * 100)}% - S {Math.round(shieldRatio * 100)}%
+    </Html>
+    <group position={toThree(lockState.leadPosition)}>
+      <mesh rotation={[Math.PI / 2, 0, runtime.clock * 2.8]}>
+        <torusGeometry args={[9 + lockState.strength * 7, 0.7, 6, 28]} />
+        <meshBasicMaterial color={lockState.isMissileReady ? "#ffd166" : "#eaffff"} transparent opacity={0.22 + lockState.strength * 0.52} toneMapped={false} />
+      </mesh>
+      <mesh>
+        <sphereGeometry args={[2.4 + lockState.strength * 2.4, 8, 6]} />
+        <meshBasicMaterial color={lockColor} transparent opacity={0.3 + lockState.strength * 0.36} toneMapped={false} />
+      </mesh>
+    </group>
+    </>
   );
 }
 

@@ -6,6 +6,7 @@ import {
   resolveCombatAiStep
 } from "../src/systems/combatAi";
 import { getCombatLoadout } from "../src/systems/combatDoctrine";
+import { defaultFlightTuning } from "../src/systems/flightTuning";
 import { normalize, sub } from "../src/systems/math";
 import type { FlightEntity, Vec3 } from "../src/types/game";
 
@@ -72,6 +73,32 @@ describe("combat AI", () => {
     });
 
     expect(result.ship.aiState).toBe("evade");
+  });
+
+  it("breaks away after a player attack burst instead of firing continuously", () => {
+    const pirate = entity("pirate", {
+      position: [0, 0, -260],
+      aiState: "attack",
+      aiTargetId: "player",
+      aiTimer: defaultFlightTuning.combatRhythm.attackWindowSeconds + 0.08
+    });
+    const result = resolveCombatAiStep({
+      ship: pirate,
+      systemId: "ashen-drift",
+      risk: 0.68,
+      playerPosition: [0, 0, 0],
+      playerHasContraband: false,
+      delta: 0.2,
+      now: 12,
+      graceUntil: 0,
+      pirates: [pirate],
+      ships: [pirate],
+      convoys: []
+    });
+
+    expect(result.ship.aiState).toBe("evade");
+    expect(result.fire).toBeUndefined();
+    expect(dot(result.desiredDirection, normalize(sub([0, 0, 0], pirate.position)))).toBeLessThan(0);
   });
 
   it("keeps patrols on orbit until pirates appear, then intercepts pirates", () => {

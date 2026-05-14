@@ -15,4 +15,11 @@ describe("flight tuning", () => {
     expect(boosted[2]).toBeGreaterThan(idle[2]);
     expect(boosted[1]).toBeGreaterThan(idle[1]);
   });
+
+  it("exposes combat loop feel controls for locks, speed, and attack rhythm", () => {
+    expect(defaultFlightTuning.targeting.lockAcquireSeconds).toBeGreaterThan(0);
+    expect(defaultFlightTuning.targeting.lockDecaySeconds).toBeGreaterThan(0);
+    expect(defaultFlightTuning.speedFeel.afterburnerLineDensity).toBeGreaterThan(1);
+    expect(defaultFlightTuning.combatRhythm.bossBurstWindowSeconds).toBeGreaterThan(defaultFlightTuning.combatRhythm.attackWindowSeconds);
+  });
 });

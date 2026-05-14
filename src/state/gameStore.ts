@@ -26,6 +26,7 @@ import {
   createProjectileTrail,
   createSalvagePulse,
   createSpeedLineEffects,
+  resolveTargetLockState,
   resolveAssistedShotDirection,
   selectSoftLockTarget
 } from "../systems/combatFeel";
@@ -1777,8 +1778,12 @@ export const useGameStore = create<GameStore>((set, get) => ({
           .map((ship) => ({ ship, dist: distance(player.position, ship.position) }))
           .sort((a, b) => a.dist - b.dist)[0]?.ship
       : undefined;
-    const target = ultimateTarget ?? selectedTarget;
-    const softLockTarget = target ?? selectSoftLockTarget(player, runtime.enemies, tuning);
+    const nextTargetLockState = resolveTargetLockState(state.runtime.targetLockState, player, runtime.enemies, now, delta, tuning);
+    runtime = { ...runtime, targetLockState: nextTargetLockState };
+    const lockedTarget = nextTargetLockState
+      ? runtime.enemies.find((ship) => ship.id === nextTargetLockState.targetId && ship.hull > 0 && ship.deathTimer === undefined)
+      : undefined;
+    const softLockTarget = ultimateTarget ?? lockedTarget ?? selectSoftLockTarget(player, runtime.enemies, tuning) ?? selectedTarget;
     let activeMissions = state.activeMissions;
     let echoLockMessage: string | undefined;
     const echoLockAdvance = advanceStoryEchoLock({
@@ -1905,6 +1910,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const targetInRange = !secondaryTarget || distance(player.position, secondaryTarget.position) <= effectiveSecondaryRange;
       if (targetInRange) {
       const missileDirection = ultimateTarget ? normalize(sub(ultimateTarget.position, player.position)) : resolveAssistedShotDirection(player, softLockTarget, forward, tuning);
+      const missileLocked = ultimateTarget || (secondaryTarget && nextTargetLockState?.targetId === secondaryTarget.id && nextTargetLockState.isMissileReady);
       runtime.projectiles.push({
         id: projectileId("missile"),
         owner: "player",
@@ -1914,7 +1920,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         speed: secondaryWeapon.speed,
         damage: Math.round(secondaryWeapon.damage * equipmentEffects.weaponDamageMultiplier),
         life: secondaryWeapon.speed > 0 ? effectiveSecondaryRange / secondaryWeapon.speed : 3.6,
-        targetId: secondaryTarget?.id
+        targetId: missileLocked ? secondaryTarget?.id : undefined
       });
       audioSystem.play("missile");
       player = ultimateActive ? player : { ...player, missiles: player.missiles - 1 };

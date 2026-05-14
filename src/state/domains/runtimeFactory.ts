@@ -437,7 +437,8 @@ export function createRuntimeForSystem(systemId: string, activeMissions: Mission
     clock: 0,
     graceUntil: STARTER_GRACE_SECONDS,
     message: "Flight systems online.",
-    explorationScan: undefined
+    explorationScan: undefined,
+    targetLockState: undefined
   };
 }
 

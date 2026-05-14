@@ -1,7 +1,7 @@
 import { contrabandLawBySystem } from "../data/contraband";
 import { PTD_COMPANY_FACTION_ID } from "../data/factions";
 import type { ContrabandLaw, FlightEntity, ProjectileEntity, Vec3 } from "../types/game";
-import { canRhythmFireAtTarget } from "./combatFeel";
+import { canRhythmFireAtTarget, isInsideBreakawayWindow } from "./combatFeel";
 import { getCombatLoadout } from "./combatDoctrine";
 import { defaultFlightTuning } from "./flightTuning";
 import { add, distance, normalize, rightFromRotation, scale, sub } from "./math";
@@ -212,19 +212,23 @@ function resolvePirateStep(input: CombatAiStepInput, profile: CombatProfile): Co
   const toTarget = normalize(sub(targetPosition, input.ship.position));
   const distToTarget = distance(input.ship.position, targetPosition);
   const recentlyHit = input.now - input.ship.lastDamageAt < 0.7;
+  const attackRange = loadout.attackRange * profile.rangeMultiplier;
+  const breakingAway = !nearbyConvoy && !shipTarget && isInsideBreakawayWindow(input.ship.aiTimer, input.ship.boss);
   let aiState: FlightEntity["aiState"] = "attack";
   let desiredDirection = normalize(add(toTarget, scale(sideVector(toTarget), profile.strafe)));
 
   if (input.ship.hull / input.ship.maxHull < loadout.retreatHullRatio) {
     aiState = "retreat";
     desiredDirection = scale(toTarget, -1);
+  } else if (breakingAway && distToTarget < attackRange * 1.08) {
+    aiState = "evade";
+    desiredDirection = normalize(add(scale(toTarget, -0.72), scale(sideVector(toTarget), profile.strafe || 0.72)));
   } else if (recentlyHit && distToTarget < 320) {
     aiState = "evade";
     desiredDirection = normalize(add(scale(toTarget, -0.55), scale(sideVector(toTarget), profile.strafe || 0.8)));
   }
 
   const speed = loadout.speed * profile.speedMultiplier;
-  const attackRange = loadout.attackRange * profile.rangeMultiplier;
   const canFire = aiState === "attack" &&
     input.now >= input.graceUntil &&
     input.ship.fireCooldown <= 0 &&
@@ -283,12 +287,17 @@ function resolvePatrolStep(input: CombatAiStepInput, profile: CombatProfile): Co
   if (input.ship.aiState === "attack" && input.ship.aiTargetId === "player") {
     const toPlayer = normalize(sub(input.playerPosition, input.ship.position));
     const attackRange = loadout.attackRange * profile.rangeMultiplier;
-    const desiredDirection = normalize(add(toPlayer, scale(sideVector(toPlayer), 0.22)));
-    const canFire = input.ship.fireCooldown <= 0 &&
+    const breakingAway = isInsideBreakawayWindow(input.ship.aiTimer, input.ship.boss);
+    const aiState: FlightEntity["aiState"] = breakingAway && playerDistance < attackRange * 1.05 ? "evade" : "attack";
+    const desiredDirection = aiState === "evade"
+      ? normalize(add(scale(toPlayer, -0.68), scale(sideVector(toPlayer), 0.46)))
+      : normalize(add(toPlayer, scale(sideVector(toPlayer), 0.22)));
+    const canFire = aiState === "attack" &&
+      input.ship.fireCooldown <= 0 &&
       playerDistance < attackRange &&
       canRhythmFireAtTarget(input.ship.position, desiredDirection, input.playerPosition, input.ship.aiTimer, input.ship.boss);
     return {
-      ship: { ...input.ship, aiState: "attack", aiTargetId: "player", aiTimer: input.ship.aiTimer + input.delta, scanProgress: 1 },
+      ship: { ...input.ship, aiState, aiTargetId: "player", aiTimer: nextAiTimer(input.ship, aiState, input.delta), scanProgress: 1 },
       desiredDirection,
       speed: loadout.speed * profile.speedMultiplier,
       fire: canFire
@@ -360,12 +369,16 @@ function resolveDroneStep(input: CombatAiStepInput, profile: CombatProfile): Com
   const toTarget = normalize(sub(targetPosition, input.ship.position));
   const distToTarget = distance(input.ship.position, targetPosition);
   const recentlyHit = input.now - input.ship.lastDamageAt < 0.6;
-  const aiState: FlightEntity["aiState"] = distToTarget < loadout.attackRange ? (recentlyHit ? "evade" : "attack") : "intercept";
+  const attackRange = loadout.attackRange * profile.rangeMultiplier;
+  const breakingAway = targetId === "player" && isInsideBreakawayWindow(input.ship.aiTimer, input.ship.boss);
+  const aiState: FlightEntity["aiState"] = distToTarget < loadout.attackRange
+    ? recentlyHit || (breakingAway && distToTarget < attackRange * 1.08) ? "evade" : "attack"
+    : "intercept";
   const desiredDirection = aiState === "evade"
-    ? normalize(add(scale(toTarget, -0.45), scale(sideVector(toTarget), profile.strafe)))
+    ? normalize(add(scale(toTarget, breakingAway ? -0.72 : -0.45), scale(sideVector(toTarget), profile.strafe)))
     : normalize(add(toTarget, scale(sideVector(toTarget), profile.strafe)));
   const canFire = input.ship.fireCooldown <= 0 &&
-    distToTarget < loadout.attackRange * profile.rangeMultiplier &&
+    distToTarget < attackRange &&
     (targetId !== "player" || canRhythmFireAtTarget(input.ship.position, desiredDirection, targetPosition, input.ship.aiTimer, input.ship.boss));
   return {
     ship: {
@@ -435,12 +448,18 @@ function resolveCivilianStep(input: CombatAiStepInput, profile: CombatProfile): 
   if (input.ship.aiState === "attack" && input.ship.aiTargetId === "player") {
     const toPlayer = normalize(sub(input.playerPosition, input.ship.position));
     const playerDistance = distance(input.ship.position, input.playerPosition);
-    const desiredDirection = normalize(add(toPlayer, scale(sideVector(toPlayer), profile.strafe)));
-    const canFire = input.ship.fireCooldown <= 0 &&
-      playerDistance < loadout.attackRange * profile.rangeMultiplier &&
+    const attackRange = loadout.attackRange * profile.rangeMultiplier;
+    const breakingAway = isInsideBreakawayWindow(input.ship.aiTimer, input.ship.boss);
+    const aiState: FlightEntity["aiState"] = breakingAway && playerDistance < attackRange * 1.05 ? "evade" : "attack";
+    const desiredDirection = aiState === "evade"
+      ? normalize(add(scale(toPlayer, -0.62), scale(sideVector(toPlayer), profile.strafe || 0.4)))
+      : normalize(add(toPlayer, scale(sideVector(toPlayer), profile.strafe)));
+    const canFire = aiState === "attack" &&
+      input.ship.fireCooldown <= 0 &&
+      playerDistance < attackRange &&
       canRhythmFireAtTarget(input.ship.position, desiredDirection, input.playerPosition, input.ship.aiTimer, input.ship.boss);
     return {
-      ship: { ...input.ship, aiState: "attack", aiTargetId: "player", aiTimer: nextAiTimer(input.ship, "attack", input.delta), scanProgress: undefined },
+      ship: { ...input.ship, aiState, aiTargetId: "player", aiTimer: nextAiTimer(input.ship, aiState, input.delta), scanProgress: undefined },
       desiredDirection,
       speed: loadout.speed * profile.speedMultiplier,
       fire: canFire

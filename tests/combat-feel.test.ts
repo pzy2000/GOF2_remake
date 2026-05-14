@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   canRhythmFireAtTarget,
   createKillEffects,
+  createImpactEffects,
+  resolveTargetLockState,
   resolveAssistedShotDirection,
   selectSoftLockTarget
 } from "../src/systems/combatFeel";
@@ -58,6 +60,19 @@ describe("combat feel", () => {
     expect(assisted[0]).toBeGreaterThan(0);
   });
 
+  it("builds and decays target lock state without carrying strength across targets", () => {
+    const first = enemy("first", { position: [0, 0, -280] });
+    const acquired = resolveTargetLockState(undefined, player, [first], 10, defaultFlightTuning.targeting.lockAcquireSeconds);
+    expect(acquired).toMatchObject({ targetId: "first", isMissileReady: true });
+
+    const switched = resolveTargetLockState(acquired, player, [enemy("second", { position: [0, 0, -260] })], 10.2, 0.1);
+    expect(switched?.targetId).toBe("second");
+    expect(switched?.strength).toBeLessThan(0.3);
+
+    const decayed = resolveTargetLockState(switched, player, [], 10.4, defaultFlightTuning.targeting.lockDecaySeconds);
+    expect(decayed).toBeUndefined();
+  });
+
   it("creates larger multi-stage kill feedback for bosses", () => {
     const normal = createKillEffects("normal", enemy("normal"));
     const boss = createKillEffects("boss", enemy("boss", { boss: true, maxHull: 420, hull: 420 }));
@@ -65,6 +80,16 @@ describe("combat feel", () => {
     expect(boss.length).toBeGreaterThan(normal.length);
     expect(boss[0].size).toBeGreaterThan(normal[0].size);
     expect(boss.some((effect) => effect.kind === "kill-pulse")).toBe(true);
+    expect(boss.some((effect) => effect.kind === "boss-burst")).toBe(true);
+  });
+
+  it("separates missile impact feedback from laser hits", () => {
+    const laser = createImpactEffects("laser", [0, 0, -10], 8, false, false);
+    const missile = createImpactEffects("missile", [0, 0, -10], 24, false, true);
+
+    expect(laser[0].kind).toBe("hit");
+    expect(missile[0].kind).toBe("missile-impact");
+    expect(missile[0].size).toBeGreaterThan(laser[0].size);
   });
 
   it("gates enemy fire by attack windows and firing cone", () => {

@@ -995,7 +995,9 @@ export interface VisualEffectEntity {
   kind:
     | "hit"
     | "shield-hit"
+    | "missile-impact"
     | "explosion"
+    | "boss-burst"
     | "damage-text"
     | "mining-beam"
     | "gate-spool"
@@ -1019,6 +1021,14 @@ export interface VisualEffectEntity {
   size: number;
   life: number;
   maxLife: number;
+}
+
+export interface TargetLockState {
+  targetId: string;
+  strength: number;
+  leadPosition: Vec3;
+  isMissileReady: boolean;
+  lastSeenAt: number;
 }
 
 export type AutoPilotPhase =
@@ -1102,6 +1112,7 @@ export interface RuntimeState {
     requiredSeconds: number;
     inRange: boolean;
   };
+  targetLockState?: TargetLockState;
   storyNotification?: StoryNotification;
   lawNotification?: LawNotification;
 }

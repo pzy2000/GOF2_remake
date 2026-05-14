@@ -1,4 +1,4 @@
-import type { FlightEntity, PlayerState, ProjectileEntity, Vec3, VisualEffectEntity } from "../types/game";
+import type { FlightEntity, PlayerState, ProjectileEntity, TargetLockState, Vec3, VisualEffectEntity } from "../types/game";
 import type { FlightTuning } from "./flightTuning";
 import { add, clamp, distance, forwardFromRotation, lerpVec3, normalize, scale, sub } from "./math";
 import { defaultFlightTuning } from "./flightTuning";
@@ -48,13 +48,72 @@ export function resolveAssistedShotDirection(
   return normalize(lerpVec3(fallback, desired, clamp(tuning.targeting.softLockStrength, 0, 1)));
 }
 
+export function resolveLeadPipPosition(
+  player: Pick<PlayerState, "position">,
+  target: Pick<FlightEntity, "position" | "velocity">,
+  tuning: FlightTuning = defaultFlightTuning
+): Vec3 {
+  const predicted = add(target.position, scale(target.velocity, tuning.targeting.leadTimeSeconds));
+  const offset = sub(predicted, target.position);
+  const offsetDistance = distance(predicted, target.position);
+  if (offsetDistance <= tuning.targeting.leadPipMaxDistance) return predicted;
+  const clampedOffset = scale(normalize(offset), tuning.targeting.leadPipMaxDistance);
+  const clamped = add(target.position, clampedOffset);
+  const playerToTarget = distance(player.position, target.position);
+  const playerToPip = distance(player.position, clamped);
+  return playerToPip > playerToTarget + tuning.targeting.leadPipMaxDistance ? target.position : clamped;
+}
+
+export function resolveTargetLockState(
+  previous: TargetLockState | undefined,
+  player: Pick<PlayerState, "position" | "rotation">,
+  enemies: FlightEntity[],
+  now: number,
+  delta: number,
+  tuning: FlightTuning = defaultFlightTuning
+): TargetLockState | undefined {
+  const target = selectSoftLockTarget(player, enemies, tuning);
+  if (!target) {
+    if (!previous) return undefined;
+    const strength = clamp(previous.strength - delta / Math.max(0.001, tuning.targeting.lockDecaySeconds), 0, 1);
+    return strength > 0
+      ? {
+          ...previous,
+          strength,
+          isMissileReady: false
+        }
+      : undefined;
+  }
+  const sameTarget = previous?.targetId === target.id;
+  const strength = clamp((sameTarget ? previous.strength : 0) + delta / Math.max(0.001, tuning.targeting.lockAcquireSeconds), 0, 1);
+  return {
+    targetId: target.id,
+    strength,
+    leadPosition: resolveLeadPipPosition(player, target, tuning),
+    isMissileReady: strength >= 1,
+    lastSeenAt: now
+  };
+}
+
 export function isTargetInsideFireCone(origin: Vec3, aimDirection: Vec3, targetPosition: Vec3, coneDegrees: number): boolean {
   return dot(normalize(aimDirection), normalize(sub(targetPosition, origin))) >= coneDot(coneDegrees);
 }
 
 export function isInsideAttackWindow(aiTimer: number, boss: boolean | undefined, tuning: FlightTuning = defaultFlightTuning): boolean {
-  const windowSeconds = tuning.combatRhythm.attackWindowSeconds * (boss ? tuning.combatRhythm.bossBurstMultiplier : 1);
+  const windowSeconds = boss ? tuning.combatRhythm.bossBurstWindowSeconds : tuning.combatRhythm.attackWindowSeconds;
   return aiTimer % tuning.combatRhythm.attackCycleSeconds <= windowSeconds;
+}
+
+export function isInsideBreakawayWindow(aiTimer: number, boss: boolean | undefined, tuning: FlightTuning = defaultFlightTuning): boolean {
+  const cyclePosition = aiTimer % tuning.combatRhythm.attackCycleSeconds;
+  const fireWindow = boss ? tuning.combatRhythm.bossBurstWindowSeconds : tuning.combatRhythm.attackWindowSeconds;
+  return cyclePosition > fireWindow && cyclePosition <= fireWindow + tuning.combatRhythm.breakawaySeconds;
+}
+
+export function isInsideTelegraphWindow(aiTimer: number, boss: boolean | undefined, tuning: FlightTuning = defaultFlightTuning): boolean {
+  const cyclePosition = aiTimer % tuning.combatRhythm.attackCycleSeconds;
+  const fireWindow = boss ? tuning.combatRhythm.bossBurstWindowSeconds : tuning.combatRhythm.attackWindowSeconds;
+  return cyclePosition >= Math.max(0, fireWindow - tuning.combatRhythm.telegraphSeconds) && cyclePosition <= fireWindow;
 }
 
 export function canRhythmFireAtTarget(
@@ -99,7 +158,7 @@ export function createImpactEffects(
   const effects: VisualEffectEntity[] = [
     {
       id: `${idPrefix}-impact`,
-      kind: shielded ? "shield-hit" : "hit",
+      kind: missile && !shielded ? "missile-impact" : shielded ? "shield-hit" : "hit",
       position,
       color: shielded ? "#69e4ff" : "#ff8a6a",
       secondaryColor: shielded ? "#eaffff" : "#ffd166",
@@ -163,7 +222,7 @@ export function createKillEffects(idPrefix: string, ship: FlightEntity, tuning: 
   if (ship.boss) {
     effects.push({
       id: `${idPrefix}-boss-shock`,
-      kind: "explosion",
+      kind: "boss-burst",
       position: add(ship.position, [0, 8, 0]),
       color: "#ff4e5f",
       secondaryColor: "#eaffff",
@@ -182,7 +241,8 @@ export function createSpeedLineEffects(idPrefix: string, player: Pick<PlayerStat
   const speed = distance(player.velocity, [0, 0, 0]);
   if (speed < tuning.speedFeel.speedLineThreshold) return [];
   const forward = forwardFromRotation(player.rotation);
-  const count = Math.min(tuning.speedFeel.speedLineMaxCount, Math.max(1, Math.floor((speed - tuning.speedFeel.speedLineThreshold) / 75) + (afterburning ? 2 : 0)));
+  const density = afterburning ? tuning.speedFeel.afterburnerLineDensity : 1;
+  const count = Math.min(tuning.speedFeel.speedLineMaxCount, Math.max(1, Math.floor(((speed - tuning.speedFeel.speedLineThreshold) / 75) * density) + (afterburning ? 2 : 0)));
   const multiplier = afterburning ? tuning.speedFeel.afterburnerSpeedLineMultiplier : 1;
   return Array.from({ length: count }, (_, index) => {
     const phase = now * 9 + index * 2.17;
