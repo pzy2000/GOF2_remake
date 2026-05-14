@@ -501,6 +501,58 @@ function getRenderableModelBox(object: THREE.Object3D): THREE.Box3 {
   return hasRenderableBounds ? modelBox : new THREE.Box3().setFromObject(object);
 }
 
+function colorForUltimateVertex(boneName: string | undefined, x: number, y: number, z: number, box: THREE.Box3): THREE.Color {
+  const size = box.getSize(new THREE.Vector3());
+  const nx = size.x > 0 ? (x - box.min.x) / size.x : 0.5;
+  const ny = size.y > 0 ? (y - box.min.y) / size.y : 0.5;
+  const nz = size.z > 0 ? (z - box.min.z) / size.z : 0.5;
+  const side = Math.abs(nx - 0.5);
+  const bone = boneName?.toLowerCase() ?? "";
+  if (bone.includes("foot") || ny < 0.16) return new THREE.Color("#d83a3a");
+  if ((bone.includes("head") || bone.includes("neck") || nz > 0.82) && ny > 0.56) return new THREE.Color("#ffd65a");
+  if (side > 0.34 && ny > 0.2) return new THREE.Color("#246bff");
+  if (bone.includes("lowerleg") && ny < 0.36) return new THREE.Color("#d83a3a");
+  if (bone.includes("upperleg") && side > 0.2) return new THREE.Color("#246bff");
+  if ((bone.includes("chest") || bone.includes("torso")) && ny > 0.34 && ny < 0.72 && side < 0.24) return new THREE.Color("#f7fbff");
+  return new THREE.Color("#f2f7ff");
+}
+
+function applyUltimateVertexColors(mesh: THREE.Mesh): void {
+  const geometry = mesh.geometry.clone();
+  geometry.computeBoundingBox();
+  const box = geometry.boundingBox;
+  const position = geometry.getAttribute("position");
+  if (!box || !(position instanceof THREE.BufferAttribute)) {
+    mesh.geometry = geometry;
+    return;
+  }
+  const skinIndex = geometry.getAttribute("skinIndex");
+  const skinWeight = geometry.getAttribute("skinWeight");
+  const bones = mesh instanceof THREE.SkinnedMesh ? mesh.skeleton.bones : [];
+  const colors = new Float32Array(position.count * 3);
+  for (let index = 0; index < position.count; index += 1) {
+    let boneName: string | undefined;
+    if (skinIndex instanceof THREE.BufferAttribute && skinWeight instanceof THREE.BufferAttribute) {
+      let bestWeight = -Infinity;
+      let bestBone = 0;
+      for (let item = 0; item < skinWeight.itemSize; item += 1) {
+        const weight = skinWeight.getComponent(index, item);
+        if (weight > bestWeight) {
+          bestWeight = weight;
+          bestBone = skinIndex.getComponent(index, item);
+        }
+      }
+      boneName = bones[bestBone]?.name;
+    }
+    const color = colorForUltimateVertex(boneName, position.getX(index), position.getY(index), position.getZ(index), box);
+    colors[index * 3] = color.r;
+    colors[index * 3 + 1] = color.g;
+    colors[index * 3 + 2] = color.b;
+  }
+  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  mesh.geometry = geometry;
+}
+
 class ShipModelBoundary extends Component<{ children: ReactNode; fallback: ReactNode; onFallback: () => void }, { failed: boolean }> {
   state = { failed: false };
 
@@ -517,29 +569,8 @@ class ShipModelBoundary extends Component<{ children: ReactNode; fallback: React
   }
 }
 
-function boostUltimateMaterial(material: THREE.Material): THREE.Material {
-  const cloned = material.clone();
-  if (cloned instanceof THREE.MeshStandardMaterial || cloned instanceof THREE.MeshPhysicalMaterial) {
-    cloned.map = null;
-    cloned.alphaMap = null;
-    cloned.emissiveMap = null;
-    cloned.color = new THREE.Color("#f2f7ff");
-    cloned.emissive = new THREE.Color("#75f4ff");
-    cloned.emissiveIntensity = Math.max(cloned.emissiveIntensity, 0.58);
-    cloned.metalness = Math.max(cloned.metalness, 0.62);
-    cloned.roughness = Math.min(cloned.roughness, 0.24);
-    cloned.transparent = false;
-    cloned.opacity = 1;
-    cloned.needsUpdate = true;
-    return cloned;
-  }
-  return new THREE.MeshStandardMaterial({
-    color: "#f2f7ff",
-    emissive: "#75f4ff",
-    emissiveIntensity: 0.58,
-    metalness: 0.62,
-    roughness: 0.24
-  });
+function boostUltimateMaterial(_material: THREE.Material): THREE.Material {
+  return new THREE.MeshBasicMaterial({ color: "#ffffff", vertexColors: true });
 }
 
 function GltfPlayerShip({ onLoaded, shipId, url }: { onLoaded: () => void; shipId: string; url: string }) {
@@ -558,6 +589,7 @@ function GltfPlayerShip({ onLoaded, shipId, url }: { onLoaded: () => void; shipI
         node.castShadow = true;
         node.receiveShadow = true;
         if (visual.emissiveBoost) {
+          applyUltimateVertexColors(node);
           node.material = Array.isArray(node.material) ? node.material.map(boostUltimateMaterial) : boostUltimateMaterial(node.material);
         }
       }
