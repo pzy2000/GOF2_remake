@@ -60,6 +60,10 @@ export interface GraphicsSettings {
   sharpenMultiplier: number;
   depthOfField: boolean;
   shadows: boolean;
+  assetDetail: GraphicsQuality;
+  vfxDetail: GraphicsQuality;
+  postFxDetail: GraphicsQuality;
+  shadowDetail: GraphicsQuality;
 }
 
 export type Screen =
@@ -204,6 +208,28 @@ export interface VfxCueManifest {
   targetLock: string;
 }
 
+export type AssetQualityTier = "fallback" | "standard" | "premium" | "hero";
+export type AssetBudgetTag = "low" | "medium" | "high" | "hero";
+
+export interface AssetQualityProfile {
+  tier: AssetQualityTier;
+  recommendedQuality: GraphicsQuality;
+  triangleBudget: number;
+  materialLayerCount: number;
+  textureResolution: number;
+  supportsShadows: boolean;
+  budgetTag: AssetBudgetTag;
+  fallbackAssetKey?: string;
+}
+
+export interface MaterialMapProfile {
+  albedo?: string;
+  emissive?: string;
+  roughness?: string;
+  normal?: string;
+  resolution: number;
+}
+
 export type CommodityId =
   | "basic-food"
   | "drinking-water"
@@ -286,6 +312,8 @@ export interface AssetManifest {
   scenePostProfiles: Record<string, ScenePostProfile>;
   vfxAssetProfiles: Record<string, VfxAssetProfile>;
   vfxTextureSequences: Record<string, string[]>;
+  assetQualityProfiles: Record<string, AssetQualityProfile>;
+  materialMaps: Record<string, MaterialMapProfile>;
   npcShipTextures: {
     freighter: string;
   };
@@ -669,16 +697,23 @@ export interface StoryEncounterDefinition {
 }
 
 export type EncounterStageTrigger = "mission-accepted" | "target-destroyed" | "salvage-recovered" | "mission-completed";
+export type EncounterStageVisualCueKind = "signal" | "boss-entry" | "recovery" | "debrief";
+export type EncounterStageHudTone = "signal" | "combat" | "boss" | "recovery" | "return";
 
 export interface EncounterStageDefinition {
   id: string;
   trigger: EncounterStageTrigger;
   targetId?: string;
+  salvageId?: string;
   title: string;
   commsSpeakerId: string;
   commsLine: string;
   environmentCue: string;
   objectiveText: string;
+  visualCueKind?: EncounterStageVisualCueKind;
+  effectLabel?: string;
+  targetHint?: string;
+  hudTone?: EncounterStageHudTone;
 }
 
 export interface EncounterDefinition {
@@ -1113,6 +1148,12 @@ export interface RuntimeState {
     inRange: boolean;
   };
   targetLockState?: TargetLockState;
+  activeEncounterStage?: {
+    missionId: string;
+    stageId: string;
+    startedAt: number;
+    expiresAt: number;
+  };
   storyNotification?: StoryNotification;
   lawNotification?: LawNotification;
 }
@@ -1158,6 +1199,9 @@ export interface DebugScenario {
   activeMissionIds?: string[];
   completedMissionIds?: string[];
   knownSystemIds?: string[];
+  playerPosition?: Vec3;
+  playerRotation?: Vec3;
+  playerThrottle?: number;
   targetId?: string;
   message: string;
 }

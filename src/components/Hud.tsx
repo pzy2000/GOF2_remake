@@ -1,5 +1,5 @@
 import { commodities, stationById, systemById, useGameStore } from "../state/gameStore";
-import { commodityById, glassWakeProtocol, missionTemplates } from "../data/world";
+import { commodityById, encounterByMissionId, glassWakeProtocol, missionTemplates } from "../data/world";
 import type { CommodityId } from "../types/game";
 import { getOccupiedCargo } from "../systems/economy";
 import { getPlayerRuntimeEffects, hasMiningBeam } from "../systems/equipment";
@@ -95,6 +95,9 @@ export function Hud() {
   const activeScanBand = activeScanSignal ? getEffectiveSignalScanBand(activeScanSignal, equipmentEffects) : undefined;
   const pirateCount = runtime.enemies.filter((ship) => ship.role === "pirate" && ship.hull > 0 && ship.deathTimer === undefined).length;
   const bossContact = runtime.enemies.find((ship) => ship.boss && ship.hull > 0 && ship.deathTimer === undefined);
+  const encounterStage = runtime.activeEncounterStage
+    ? encounterByMissionId[runtime.activeEncounterStage.missionId]?.stages.find((stage) => stage.id === runtime.activeEncounterStage?.stageId)
+    : undefined;
   const supportCount = runtime.enemies.filter((ship) => ship.supportWing && ship.hull > 0 && ship.deathTimer === undefined).length;
   const contrabandAmount = player.cargo["illegal-contraband"] ?? 0;
   const scanningPatrol = runtime.enemies.find((ship) => ship.role === "patrol" && ship.aiState === "scan" && (ship.scanProgress ?? 0) > 0);
@@ -215,9 +218,10 @@ export function Hud() {
       </section>
       <section className="hud-left-stack" data-testid="hud-left-stack">
         {storyObjective.status !== "complete" ? (
-          <div className={`story-tracker focus-${storyObjective.focus}`} data-testid="story-tracker">
+          <div className={`story-tracker focus-${storyObjective.focus} tone-${encounterStage?.hudTone ?? "default"}`} data-testid="story-tracker">
             <span>{translateText("Main Story", locale)}</span>
             <b>{translateText(storyObjective.chapterLabel, locale)} · {translateText(storyObjective.title, locale)}</b>
+            {encounterStage ? <em>{formatRuntimeText(locale, encounterStage.title)} · {formatRuntimeText(locale, encounterStage.targetHint ?? encounterStage.objectiveText)}</em> : null}
             <p>
               {translateText(storyObjective.objectiveText, locale)}
               {storyObjective.distanceMeters !== undefined ? ` · ${formatDistance(locale, storyObjective.distanceMeters)}` : ""}

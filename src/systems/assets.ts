@@ -1,5 +1,55 @@
 import type { AssetManifest, MusicTrackManifest } from "../types/game";
 
+const fallbackAssetQualityProfiles: AssetManifest["assetQualityProfiles"] = {
+  default: { tier: "fallback", recommendedQuality: "low", triangleBudget: 1200, materialLayerCount: 1, textureResolution: 256, supportsShadows: false, budgetTag: "low" },
+  "sparrow-mk1": { tier: "premium", recommendedQuality: "high", triangleBudget: 9000, materialLayerCount: 3, textureResolution: 512, supportsShadows: true, budgetTag: "high", fallbackAssetKey: "default" },
+  "mule-lx": { tier: "premium", recommendedQuality: "high", triangleBudget: 8800, materialLayerCount: 3, textureResolution: 512, supportsShadows: true, budgetTag: "high", fallbackAssetKey: "default" },
+  "prospector-rig": { tier: "premium", recommendedQuality: "high", triangleBudget: 9200, materialLayerCount: 3, textureResolution: 512, supportsShadows: true, budgetTag: "high", fallbackAssetKey: "default" },
+  "veil-runner": { tier: "premium", recommendedQuality: "high", triangleBudget: 8600, materialLayerCount: 3, textureResolution: 512, supportsShadows: true, budgetTag: "high", fallbackAssetKey: "default" },
+  "talon-s": { tier: "premium", recommendedQuality: "high", triangleBudget: 9400, materialLayerCount: 3, textureResolution: 512, supportsShadows: true, budgetTag: "high", fallbackAssetKey: "default" },
+  "wayfarer-x": { tier: "premium", recommendedQuality: "high", triangleBudget: 9800, materialLayerCount: 3, textureResolution: 512, supportsShadows: true, budgetTag: "high", fallbackAssetKey: "default" },
+  "raptor-v": { tier: "premium", recommendedQuality: "high", triangleBudget: 9600, materialLayerCount: 3, textureResolution: 512, supportsShadows: true, budgetTag: "high", fallbackAssetKey: "default" },
+  "bastion-7": { tier: "premium", recommendedQuality: "high", triangleBudget: 11200, materialLayerCount: 3, textureResolution: 512, supportsShadows: true, budgetTag: "high", fallbackAssetKey: "default" },
+  "horizon-ark": { tier: "premium", recommendedQuality: "ultra", triangleBudget: 13800, materialLayerCount: 3, textureResolution: 768, supportsShadows: true, budgetTag: "hero", fallbackAssetKey: "default" },
+  "sparrow-mk1-gundam": { tier: "hero", recommendedQuality: "ultra", triangleBudget: 15000, materialLayerCount: 3, textureResolution: 768, supportsShadows: true, budgetTag: "hero", fallbackAssetKey: "sparrow-mk1" },
+  "glass-echo-drone": { tier: "hero", recommendedQuality: "high", triangleBudget: 11800, materialLayerCount: 4, textureResolution: 512, supportsShadows: true, budgetTag: "hero", fallbackAssetKey: "default" },
+  "glass-echo-prime": { tier: "hero", recommendedQuality: "ultra", triangleBudget: 18500, materialLayerCount: 4, textureResolution: 768, supportsShadows: true, budgetTag: "hero", fallbackAssetKey: "glass-echo-drone" },
+  "mirr-lattice": { tier: "hero", recommendedQuality: "ultra", triangleBudget: 24000, materialLayerCount: 4, textureResolution: 768, supportsShadows: true, budgetTag: "hero", fallbackAssetKey: "Research Station" },
+  "celest-vault": { tier: "hero", recommendedQuality: "ultra", triangleBudget: 26000, materialLayerCount: 4, textureResolution: 768, supportsShadows: true, budgetTag: "hero", fallbackAssetKey: "Trade Hub" },
+  "cinematic-burst": { tier: "premium", recommendedQuality: "high", triangleBudget: 0, materialLayerCount: 1, textureResolution: 256, supportsShadows: false, budgetTag: "high" }
+};
+
+const fallbackMaterialMaps: AssetManifest["materialMaps"] = {
+  "glass-echo-drone": {
+    albedo: "/assets/generated/materials/glass-echo-drone-albedo.png",
+    emissive: "/assets/generated/materials/glass-echo-drone-emissive.png",
+    roughness: "/assets/generated/materials/glass-echo-drone-roughness.png",
+    normal: "/assets/generated/materials/glass-echo-drone-normal.png",
+    resolution: 256
+  },
+  "glass-echo-prime": {
+    albedo: "/assets/generated/materials/glass-echo-prime-albedo.png",
+    emissive: "/assets/generated/materials/glass-echo-prime-emissive.png",
+    roughness: "/assets/generated/materials/glass-echo-prime-roughness.png",
+    normal: "/assets/generated/materials/glass-echo-prime-normal.png",
+    resolution: 256
+  },
+  "mirr-lattice": {
+    albedo: "/assets/generated/materials/mirr-lattice-albedo.png",
+    emissive: "/assets/generated/materials/mirr-lattice-emissive.png",
+    roughness: "/assets/generated/materials/mirr-lattice-roughness.png",
+    normal: "/assets/generated/materials/mirr-lattice-normal.png",
+    resolution: 256
+  },
+  "celest-vault": {
+    albedo: "/assets/generated/materials/celest-vault-albedo.png",
+    emissive: "/assets/generated/materials/celest-vault-emissive.png",
+    roughness: "/assets/generated/materials/celest-vault-roughness.png",
+    normal: "/assets/generated/materials/celest-vault-normal.png",
+    resolution: 256
+  }
+};
+
 const rawFallbackAssetManifest: AssetManifest = {
   keyArt: "/assets/generated/key-art.webp",
   commodityIcons: "/assets/generated/commodity-icons.webp",
@@ -158,6 +208,8 @@ const rawFallbackAssetManifest: AssetManifest = {
       "/assets/generated/vfx/explosion-burst-07.png"
     ]
   },
+  assetQualityProfiles: fallbackAssetQualityProfiles,
+  materialMaps: fallbackMaterialMaps,
   npcShipTextures: {
     freighter: "/assets/generated/npc-freighter-hull.webp"
   },
@@ -209,6 +261,13 @@ const rawFallbackAssetManifest: AssetManifest = {
       sourceUrl: "scripts/generate-premium-assets.mjs",
       license: "Original project asset",
       assetPath: "/assets/generated/vfx/explosion-burst-00.png"
+    },
+    {
+      title: "Premium material map set",
+      author: "GOF2 procedural asset generator",
+      sourceUrl: "scripts/generate-premium-assets.mjs",
+      license: "Original project asset",
+      assetPath: "/assets/generated/materials/glass-echo-drone-albedo.png"
     }
   ],
   vfxCues: {
@@ -261,6 +320,21 @@ function resolveAssetSequenceRecord(record: Record<string, string[]>, baseUrl?: 
   return Object.fromEntries(Object.entries(record).map(([key, values]) => [key, values.map((value) => resolvePublicAssetPath(value, baseUrl))]));
 }
 
+function resolveMaterialMapRecord(record: AssetManifest["materialMaps"], baseUrl?: string): AssetManifest["materialMaps"] {
+  return Object.fromEntries(
+    Object.entries(record).map(([key, value]) => [
+      key,
+      {
+        ...value,
+        albedo: value.albedo ? resolvePublicAssetPath(value.albedo, baseUrl) : undefined,
+        emissive: value.emissive ? resolvePublicAssetPath(value.emissive, baseUrl) : undefined,
+        roughness: value.roughness ? resolvePublicAssetPath(value.roughness, baseUrl) : undefined,
+        normal: value.normal ? resolvePublicAssetPath(value.normal, baseUrl) : undefined
+      }
+    ])
+  );
+}
+
 function resolveMusicTrackManifest(manifest: MusicTrackManifest, baseUrl?: string): MusicTrackManifest {
   return {
     systems: resolveAssetRecord(manifest.systems, baseUrl),
@@ -290,6 +364,8 @@ export function resolveAssetManifest(manifest: AssetManifest, baseUrl?: string):
     scenePostProfiles: manifest.scenePostProfiles,
     vfxAssetProfiles: manifest.vfxAssetProfiles,
     vfxTextureSequences: resolveAssetSequenceRecord(manifest.vfxTextureSequences, baseUrl),
+    assetQualityProfiles: manifest.assetQualityProfiles,
+    materialMaps: resolveMaterialMapRecord(manifest.materialMaps, baseUrl),
     npcShipTextures: {
       freighter: resolvePublicAssetPath(manifest.npcShipTextures.freighter, baseUrl)
     },
@@ -331,6 +407,8 @@ export async function loadAssetManifest(): Promise<AssetManifest> {
     scenePostProfiles: { ...rawFallbackAssetManifest.scenePostProfiles, ...loaded.scenePostProfiles },
     vfxAssetProfiles: { ...rawFallbackAssetManifest.vfxAssetProfiles, ...loaded.vfxAssetProfiles },
     vfxTextureSequences: { ...rawFallbackAssetManifest.vfxTextureSequences, ...loaded.vfxTextureSequences },
+    assetQualityProfiles: { ...rawFallbackAssetManifest.assetQualityProfiles, ...loaded.assetQualityProfiles },
+    materialMaps: { ...rawFallbackAssetManifest.materialMaps, ...loaded.materialMaps },
     npcShipTextures: { ...rawFallbackAssetManifest.npcShipTextures, ...loaded.npcShipTextures },
     speakerPortraits: { ...rawFallbackAssetManifest.speakerPortraits, ...loaded.speakerPortraits },
     storyCinematics: { ...rawFallbackAssetManifest.storyCinematics, ...loaded.storyCinematics },

@@ -40,14 +40,22 @@ describe("graphics settings", () => {
     expect(module.getGraphicsSettings()).toMatchObject({
       quality: "high",
       postProcessing: true,
-      shadows: true
+      shadows: true,
+      assetDetail: "high",
+      vfxDetail: "high",
+      postFxDetail: "high",
+      shadowDetail: "high"
     });
 
     const low = module.saveGraphicsQuality("low");
     expect(low).toMatchObject({
       quality: "low",
       postProcessing: false,
-      shadows: false
+      shadows: false,
+      assetDetail: "low",
+      vfxDetail: "low",
+      postFxDetail: "low",
+      shadowDetail: "low"
     });
     expect(storage.getItem(module.GRAPHICS_SETTINGS_KEY)).toBe("{\"quality\":\"low\"}");
     expect(module.getGraphicsSettings()).toEqual(low);
@@ -59,5 +67,21 @@ describe("graphics settings", () => {
     const { module } = await freshGraphics(storage);
 
     expect(module.getGraphicsSettings().quality).toBe("high");
+  });
+
+  it("defines complete detail budgets for every quality preset", async () => {
+    const { module } = await freshGraphics();
+
+    for (const [quality, profile] of Object.entries(module.graphicsQualityProfiles)) {
+      expect(profile).toMatchObject({
+        quality,
+        assetDetail: quality,
+        vfxDetail: quality,
+        postFxDetail: quality
+      });
+      expect(profile.depthOfField).toBe(false);
+    }
+    expect(module.graphicsQualityProfiles.medium.shadowDetail).toBe("low");
+    expect(module.graphicsQualityProfiles.ultra.sharpenMultiplier).toBeGreaterThan(module.graphicsQualityProfiles.high.sharpenMultiplier);
   });
 });

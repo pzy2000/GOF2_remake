@@ -6,13 +6,30 @@ Une tranche verticale WebGL jouable dans le navigateur pour un jeu original de c
 
 ## Captures
 
-| Vue | Capture |
-| --- | --- |
-| Menu principal | ![Menu principal presentant six systèmes frontaliers plus PTD Home, le choix de langue et les emplacements de sauvegarde](docs/screenshots/fr/main-menu.png) |
-| HUD de vol | ![HUD de vol a la troisieme personne avec jauges, checklist d'accueil, histoire, economie, statut legal et suivi des signaux](docs/screenshots/fr/flight-hud.png) |
-| Marche de station | ![Marche et services de station pour acheter, vendre, suivre les missions et lire l'etat economique local](docs/screenshots/fr/station-market.png) |
-| Carte galactique | ![Carte galactique montrant systemes decouverts, routes de station, objectifs Dispatch, histoire et Quiet Signals](docs/screenshots/fr/galaxy-map.png) |
-| Chantier de carrieres | ![Cartes de chantier naval montrant coques de carriere, traits, chemins de plans et conditions d'achat](docs/screenshots/fr/shipyard-careers.png) |
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/fr/main-menu.png" alt="Menu principal presentant six systèmes frontaliers plus PTD Home, le choix de langue et les emplacements de sauvegarde"></td>
+    <td width="50%"><img src="docs/screenshots/fr/flight-hud.png" alt="HUD de vol a la troisieme personne avec jauges, checklist d'accueil, histoire, economie, statut legal et suivi des signaux"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Menu principal</strong> &mdash; systèmes, choix de langue et sauvegardes</td>
+    <td align="center"><strong>HUD de vol</strong> &mdash; jauges, histoire, economie et signaux</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/fr/station-market.png" alt="Marche et services de station pour acheter, vendre, suivre les missions et lire l'etat economique local"></td>
+    <td width="50%"><img src="docs/screenshots/fr/galaxy-map.png" alt="Carte galactique montrant systemes decouverts, routes de station, objectifs Dispatch, histoire et Quiet Signals"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Marche de station</strong> &mdash; commerce, missions et economie locale</td>
+    <td align="center"><strong>Carte galactique</strong> &mdash; routes, objectifs Dispatch et histoire</td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/screenshots/fr/shipyard-careers.png" alt="Cartes de chantier naval montrant coques de carriere, traits, chemins de plans et conditions d'achat"></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><strong>Chantier de carrieres</strong> &mdash; traits de coque, chemins de plans et conditions d'achat</td>
+  </tr>
+</table>
 
 ## Lancer
 

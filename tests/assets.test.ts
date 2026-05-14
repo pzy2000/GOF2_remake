@@ -49,6 +49,7 @@ describe("asset manifest", () => {
     expect(pagesManifest.enemyShipModels["glass-echo-prime"]).toBe("/GOF2_remake/assets/generated/enemies/glass-echo-prime.glb");
     expect(pagesManifest.stationModels["mirr-lattice"]).toBe("/GOF2_remake/assets/generated/stations/mirr-lattice.glb");
     expect(pagesManifest.vfxTextureSequences["cinematic-burst"][0]).toBe("/GOF2_remake/assets/generated/vfx/explosion-burst-00.png");
+    expect(pagesManifest.materialMaps["glass-echo-drone"].albedo).toBe("/GOF2_remake/assets/generated/materials/glass-echo-drone-albedo.png");
     expect(pagesManifest.npcShipTextures.freighter).toBe("/GOF2_remake/assets/generated/npc-freighter-hull.webp");
     expect(pagesManifest.speakerPortraits["helion-handler"]).toBe("/GOF2_remake/assets/generated/portraits/helion-handler.webp");
     expect(pagesManifest.starSprites["helion-reach"]).toBe("/GOF2_remake/assets/generated/stars/star-helion-reach.png");
@@ -155,6 +156,17 @@ describe("asset manifest", () => {
     expect(assetManifest.scenePostProfiles.default.dofMaxBlur).toBe(0);
     expect(assetManifest.scenePostProfiles.default.sharpenStrength).toBeGreaterThan(0);
     expect(assetManifest.vfxAssetProfiles[assetManifest.vfxCues.explosion].bloomIntensity).toBeGreaterThan(1);
+    expect(assetManifest.assetQualityProfiles["glass-echo-prime"]).toMatchObject({
+      tier: "hero",
+      recommendedQuality: "ultra",
+      supportsShadows: true,
+      budgetTag: "hero"
+    });
+    expect(assetManifest.assetQualityProfiles["cinematic-burst"]).toMatchObject({
+      tier: "premium",
+      supportsShadows: false
+    });
+    expect(fallbackAssetManifest.assetQualityProfiles["glass-echo-prime"]).toEqual(assetManifest.assetQualityProfiles["glass-echo-prime"]);
 
     for (const system of systems) {
       expect(assetManifest.scenePostProfiles[system.id] ?? assetManifest.scenePostProfiles.default).toBeTruthy();
@@ -181,6 +193,14 @@ describe("asset manifest", () => {
     for (const assetPath of assetManifest.vfxTextureSequences["cinematic-burst"]) {
       expect(assetPath).toMatch(/^\/assets\/generated\/vfx\/explosion-burst-\d+\.png$/);
       expectProjectAssetExists(assetPath);
+    }
+    for (const [assetKey, mapProfile] of Object.entries(assetManifest.materialMaps)) {
+      expect(fallbackAssetManifest.materialMaps[assetKey]).toEqual(mapProfile);
+      expect(mapProfile.resolution).toBeGreaterThanOrEqual(256);
+      for (const assetPath of [mapProfile.albedo, mapProfile.emissive, mapProfile.roughness, mapProfile.normal]) {
+        expect(assetPath).toMatch(/^\/assets\/generated\/materials\/.+\.png$/);
+        expectProjectAssetExists(assetPath!);
+      }
     }
   });
 

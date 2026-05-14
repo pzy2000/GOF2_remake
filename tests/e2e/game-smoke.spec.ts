@@ -1815,6 +1815,98 @@ test.describe("browser smoke", () => {
     await expect(page.getByTestId("dialogue-cinematic-glass-echo-reversal")).toBeVisible();
   });
 
+  test("runs glass-wake-hero direct encounter stages", async ({ page }) => {
+    await resetApp(page);
+    await startNewGame(page);
+
+    await page.evaluate(() => {
+      (window.__GOF2_E2E__! as { applyDebugScenario: (scenarioId: string) => void }).applyDebugScenario("glass-wake-hero");
+    });
+    await expect(page.locator(".flight-canvas canvas")).toBeVisible();
+    await page.evaluate(() => {
+      (window.__GOF2_E2E__!.getState() as { setGraphicsQuality: (quality: "low" | "ultra") => void }).setGraphicsQuality("low");
+    });
+    await expect.poll(() =>
+      page.evaluate(() => (window.__GOF2_E2E__!.getState() as { graphicsSettings: { quality: string; postProcessing: boolean; assetDetail: string; vfxDetail: string } }).graphicsSettings)
+    ).toMatchObject({ quality: "low", postProcessing: false, assetDetail: "low", vfxDetail: "low" });
+    await expectWebGlCanvasHasPixels(page);
+    await page.evaluate(() => {
+      (window.__GOF2_E2E__!.getState() as { setGraphicsQuality: (quality: "low" | "ultra") => void }).setGraphicsQuality("ultra");
+    });
+    await expect.poll(() =>
+      page.evaluate(() => (window.__GOF2_E2E__!.getState() as { graphicsSettings: { quality: string; postProcessing: boolean; assetDetail: string; vfxDetail: string } }).graphicsSettings)
+    ).toMatchObject({ quality: "ultra", postProcessing: true, assetDetail: "ultra", vfxDetail: "ultra" });
+    await expect(page.getByTestId("story-tracker")).toContainText("Ghost Carrier");
+    await expect(page.getByTestId("story-tracker")).toContainText("Glass Echo Drone");
+
+    async function destroyTarget(targetId: "glass-echo-drone" | "glass-echo-prime") {
+      await page.evaluate((id) => {
+        const e2e = window.__GOF2_E2E__!;
+        const state = e2e.getState() as {
+          player: Record<string, unknown>;
+          runtime: {
+            enemies: Array<Record<string, unknown>>;
+            projectiles: Array<Record<string, unknown>>;
+          };
+        };
+        e2e.setState({
+          targetId: id,
+          player: { ...state.player, position: [0, 0, 0] },
+          runtime: {
+            ...state.runtime,
+            enemies: state.runtime.enemies.map((ship) =>
+              ship.id === id
+                ? { ...ship, position: [0, 0, 0] }
+                : { ...ship, position: [900, 0, 900] }
+            ),
+            projectiles: [{
+              id: `e2e-${id}-shot`,
+              owner: "player",
+              kind: "laser",
+              position: [0, 0, 0],
+              direction: [0, 0, 0],
+              speed: 0,
+              damage: 999,
+              life: 1,
+              targetId: id
+            }]
+          }
+        });
+        (e2e.getState() as { tick: (delta: number) => void }).tick(0.05);
+      }, targetId);
+    }
+
+    await destroyTarget("glass-echo-drone");
+    await expect(page.getByTestId("story-notification")).toContainText("Prime Wake");
+    await expect(page.getByTestId("story-tracker")).toContainText("Glass Echo Prime");
+
+    await destroyTarget("glass-echo-prime");
+    await expect(page.getByTestId("story-notification")).toContainText("Probe Core Exposed");
+
+    await page.evaluate(() => {
+      const e2e = window.__GOF2_E2E__!;
+      const state = e2e.getState() as {
+        player: Record<string, unknown>;
+        runtime: { salvage: Array<{ id: string; position: [number, number, number] }> };
+      };
+      const core = state.runtime.salvage.find((item) => item.id === "glass-wake-probe-core");
+      if (!core) throw new Error("Glass Wake Probe Core was not spawned");
+      e2e.setState({ player: { ...state.player, position: core.position } });
+      (e2e.getState() as { interact: () => void }).interact();
+    });
+    await expect(page.getByTestId("story-notification")).toContainText("Core Secured");
+
+    await page.evaluate(() => {
+      const store = window.__GOF2_E2E__!.getState() as {
+        dockAt: (stationId: string) => void;
+        completeMission: (missionId: string) => void;
+      };
+      store.dockAt("mirr-lattice");
+      store.completeMission("story-probe-in-glass");
+    });
+    await expect(page.getByTestId("story-notification")).toContainText("First Reversal Logged");
+  });
+
   test("surfaces wanted heat in HUD, galaxy map, and station fine payment", async ({ page }) => {
     await resetApp(page);
     await startNewGame(page);

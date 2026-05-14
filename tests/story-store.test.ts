@@ -233,12 +233,17 @@ describe("story mission store flow", () => {
     store.getState().tick(0.05);
 
     expect(store.getState().activeMissions[0].storyTargetDestroyedIds).toContain("glass-echo-drone");
-    expect(store.getState().runtime.message).toContain("Story objective updated");
+    expect(store.getState().runtime.message).toContain("Prime Wake");
     expect(store.getState().runtime.storyNotification).toMatchObject({
       tone: "updated",
       title: "Prime Wake",
       body: expect.stringContaining("Defeat Glass Echo Prime")
     });
+    expect(store.getState().runtime.activeEncounterStage).toMatchObject({
+      missionId: "story-probe-in-glass",
+      stageId: "prime-wake"
+    });
+    expect(store.getState().runtime.effects.some((effect) => effect.kind === "boss-burst" && effect.label === "PRIME WAKE")).toBe(true);
 
     const boss = store.getState().runtime.enemies.find((ship) => ship.id === "glass-echo-prime");
     expect(boss).toMatchObject({
@@ -275,6 +280,37 @@ describe("story mission store flow", () => {
       tone: "updated",
       title: "Probe Core Exposed",
       body: expect.stringContaining("Recover the Glass Wake Probe Core")
+    });
+    expect(store.getState().runtime.activeEncounterStage).toMatchObject({
+      missionId: "story-probe-in-glass",
+      stageId: "probe-core-recovery"
+    });
+
+    const core = store.getState().runtime.salvage.find((salvage) => salvage.id === "glass-wake-probe-core");
+    expect(core).toBeDefined();
+    store.setState((state) => ({ player: { ...state.player, position: core!.position } }));
+    store.getState().interact();
+
+    expect(store.getState().activeMissions[0].salvage?.recovered).toBe(true);
+    expect(store.getState().runtime.activeEncounterStage).toMatchObject({
+      missionId: "story-probe-in-glass",
+      stageId: "core-secured"
+    });
+    expect(store.getState().runtime.storyNotification).toMatchObject({
+      tone: "updated",
+      title: "Core Secured",
+      body: expect.stringContaining("Return to Mirr Lattice")
+    });
+
+    store.setState({ currentStationId: "mirr-lattice" });
+    store.getState().completeMission("story-probe-in-glass");
+    expect(store.getState().runtime.activeEncounterStage).toMatchObject({
+      missionId: "story-probe-in-glass",
+      stageId: "first-reversal"
+    });
+    expect(store.getState().runtime.storyNotification).toMatchObject({
+      tone: "complete",
+      title: "First Reversal Logged"
     });
   });
 

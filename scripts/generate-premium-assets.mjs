@@ -27,6 +27,7 @@ const generatedDir = path.join(rootDir, "public/assets/generated");
 const enemyDir = path.join(generatedDir, "enemies");
 const stationDir = path.join(generatedDir, "stations");
 const vfxDir = path.join(generatedDir, "vfx");
+const materialDir = path.join(generatedDir, "materials");
 const manifestPath = path.join(generatedDir, "manifest.json");
 
 function material(name, color, options = {}) {
@@ -299,7 +300,78 @@ async function writeExplosionFrame(frame, frameCount) {
   return `/assets/generated/vfx/${fileName}`;
 }
 
-async function updateManifest(vfxFrames) {
+function sampleMaterialColor(kind, x, y, colors) {
+  const u = x / 255;
+  const v = y / 255;
+  const grid = (Math.sin(u * Math.PI * 18) * Math.sin(v * Math.PI * 14) + 1) * 0.5;
+  const diagonal = (Math.sin((u + v) * Math.PI * 12) + 1) * 0.5;
+  const panel = Math.floor(u * 8) % 2 === Math.floor(v * 8) % 2 ? 1 : 0.55;
+  if (kind === "roughness") {
+    const value = Math.round(255 * (0.38 + grid * 0.28 + panel * 0.12));
+    return [value, value, value, 255];
+  }
+  if (kind === "normal") {
+    const nx = Math.round(128 + Math.sin(u * Math.PI * 16) * 24);
+    const ny = Math.round(128 + Math.cos(v * Math.PI * 16) * 24);
+    return [nx, ny, 220, 255];
+  }
+  const base = kind === "emissive" ? colors.emissive : colors.albedo;
+  const intensity = kind === "emissive" ? Math.max(0, diagonal * 0.9 + grid * 0.45 - 0.35) : 0.72 + grid * 0.16 + panel * 0.08;
+  return [
+    Math.round(base[0] * intensity),
+    Math.round(base[1] * intensity),
+    Math.round(base[2] * intensity),
+    255
+  ];
+}
+
+async function writeMaterialTexture(assetKey, kind, colors) {
+  const size = 256;
+  const rgba = Buffer.alloc(size * size * 4);
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const color = sampleMaterialColor(kind, x, y, colors);
+      const offset = (y * size + x) * 4;
+      rgba[offset] = color[0];
+      rgba[offset + 1] = color[1];
+      rgba[offset + 2] = color[2];
+      rgba[offset + 3] = color[3];
+    }
+  }
+  const fileName = `${assetKey}-${kind}.png`;
+  await writeFile(path.join(materialDir, fileName), writePngBuffer(size, size, rgba));
+  return `/assets/generated/materials/${fileName}`;
+}
+
+async function writeMaterialMaps() {
+  const specs = {
+    "glass-echo-drone": { albedo: [126, 238, 255], emissive: [90, 255, 232] },
+    "glass-echo-prime": { albedo: [255, 163, 216], emissive: [255, 72, 168] },
+    "mirr-lattice": { albedo: [124, 148, 174], emissive: [111, 255, 229] },
+    "celest-vault": { albedo: [207, 194, 146], emissive: [255, 226, 142] }
+  };
+  const entries = {};
+  for (const [assetKey, colors] of Object.entries(specs)) {
+    entries[assetKey] = {
+      albedo: await writeMaterialTexture(assetKey, "albedo", colors),
+      emissive: await writeMaterialTexture(assetKey, "emissive", colors),
+      roughness: await writeMaterialTexture(assetKey, "roughness", colors),
+      normal: await writeMaterialTexture(assetKey, "normal", colors),
+      resolution: 256
+    };
+  }
+  return entries;
+}
+
+const premiumAssetQualityProfiles = {
+  "glass-echo-drone": { tier: "hero", recommendedQuality: "high", triangleBudget: 11800, materialLayerCount: 4, textureResolution: 512, supportsShadows: true, budgetTag: "hero", fallbackAssetKey: "default" },
+  "glass-echo-prime": { tier: "hero", recommendedQuality: "ultra", triangleBudget: 18500, materialLayerCount: 4, textureResolution: 768, supportsShadows: true, budgetTag: "hero", fallbackAssetKey: "glass-echo-drone" },
+  "mirr-lattice": { tier: "hero", recommendedQuality: "ultra", triangleBudget: 24000, materialLayerCount: 4, textureResolution: 768, supportsShadows: true, budgetTag: "hero", fallbackAssetKey: "Research Station" },
+  "celest-vault": { tier: "hero", recommendedQuality: "ultra", triangleBudget: 26000, materialLayerCount: 4, textureResolution: 768, supportsShadows: true, budgetTag: "hero", fallbackAssetKey: "Trade Hub" },
+  "cinematic-burst": { tier: "premium", recommendedQuality: "high", triangleBudget: 0, materialLayerCount: 1, textureResolution: 256, supportsShadows: false, budgetTag: "high" }
+};
+
+async function updateManifest(vfxFrames, materialMaps) {
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
   const postFxDefaults = {
     bloomStrength: 0.22,
@@ -339,8 +411,16 @@ async function updateManifest(vfxFrames) {
     ...(manifest.vfxTextureSequences ?? {}),
     "cinematic-burst": vfxFrames
   };
+  manifest.assetQualityProfiles = {
+    ...(manifest.assetQualityProfiles ?? {}),
+    ...premiumAssetQualityProfiles
+  };
+  manifest.materialMaps = {
+    ...(manifest.materialMaps ?? {}),
+    ...materialMaps
+  };
   manifest.assetCredits = [
-    ...(manifest.assetCredits ?? []).filter((credit) => credit.assetPath !== "/assets/generated/enemies/glass-echo-drone.glb" && credit.assetPath !== "/assets/generated/stations/mirr-lattice.glb" && credit.assetPath !== "/assets/generated/vfx/explosion-burst-00.png"),
+    ...(manifest.assetCredits ?? []).filter((credit) => credit.assetPath !== "/assets/generated/enemies/glass-echo-drone.glb" && credit.assetPath !== "/assets/generated/stations/mirr-lattice.glb" && credit.assetPath !== "/assets/generated/vfx/explosion-burst-00.png" && credit.assetPath !== "/assets/generated/materials/glass-echo-drone-albedo.png"),
     {
       title: "Glass Echo premium enemy GLB set",
       author: "GOF2 procedural asset generator",
@@ -361,6 +441,13 @@ async function updateManifest(vfxFrames) {
       sourceUrl: "scripts/generate-premium-assets.mjs",
       license: "Original project asset",
       assetPath: "/assets/generated/vfx/explosion-burst-00.png"
+    },
+    {
+      title: "Premium material map set",
+      author: "GOF2 procedural asset generator",
+      sourceUrl: "scripts/generate-premium-assets.mjs",
+      license: "Original project asset",
+      assetPath: "/assets/generated/materials/glass-echo-drone-albedo.png"
     }
   ];
   await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
@@ -369,6 +456,7 @@ async function updateManifest(vfxFrames) {
 await mkdir(enemyDir, { recursive: true });
 await mkdir(stationDir, { recursive: true });
 await mkdir(vfxDir, { recursive: true });
+await mkdir(materialDir, { recursive: true });
 
 await exportGlb(createGlassEchoDrone(), path.join(enemyDir, "glass-echo-drone.glb"));
 await exportGlb(createGlassEchoPrime(), path.join(enemyDir, "glass-echo-prime.glb"));
@@ -380,6 +468,7 @@ const vfxFrames = [];
 for (let frame = 0; frame < frameCount; frame += 1) {
   vfxFrames.push(await writeExplosionFrame(frame, frameCount));
 }
-await updateManifest(vfxFrames);
+const materialMaps = await writeMaterialMaps();
+await updateManifest(vfxFrames, materialMaps);
 
-console.log("generated premium GLB enemies, stations, and explosion texture sequence");
+console.log("generated premium GLB enemies, stations, material maps, and explosion texture sequence");

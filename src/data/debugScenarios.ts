@@ -26,6 +26,9 @@ export const debugScenarios: DebugScenario[] = [
     activeMissionIds: ["story-probe-in-glass"],
     completedMissionIds: ["story-clean-carrier"],
     knownSystemIds: ["helion-reach", "mirr-vale"],
+    playerPosition: [260, -18, -360],
+    playerRotation: [0, 0.42, 0],
+    playerThrottle: 0.45,
     targetId: "glass-echo-drone",
     message: "Debug scenario: Glass Wake 02 hero encounter staged."
   },

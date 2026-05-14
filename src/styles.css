@@ -963,6 +963,17 @@ h3 {
   background: rgba(32, 24, 6, 0.42);
 }
 
+.story-tracker.tone-boss {
+  border-color: rgba(255, 78, 95, 0.48);
+  background: rgba(36, 8, 16, 0.5);
+}
+
+.story-tracker.tone-recovery,
+.story-tracker.tone-return {
+  border-color: rgba(255, 209, 102, 0.44);
+  background: rgba(32, 25, 6, 0.48);
+}
+
 .onboarding-guide {
   border-color: rgba(128, 214, 255, 0.42);
   background: rgba(7, 25, 40, 0.48);
@@ -1033,6 +1044,24 @@ h3 {
   color: #f7fbff;
   font-size: 0.82rem;
   line-height: 1.25;
+}
+
+.story-tracker em {
+  min-width: 0;
+  color: #9bffe8;
+  font-size: 0.73rem;
+  font-style: normal;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.story-tracker.tone-boss em {
+  color: #ffd166;
+}
+
+.story-tracker.tone-recovery em,
+.story-tracker.tone-return em {
+  color: #fff0b8;
 }
 
 .story-tracker p,

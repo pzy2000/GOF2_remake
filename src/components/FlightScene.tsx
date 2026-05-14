@@ -12,7 +12,7 @@ import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { SPARROW_ULTIMATE_MODEL_ID, planetById, planets, shipById, stationById, systemById, useGameStore } from "../state/gameStore";
 import { commodityById, glassWakeProtocol, missionTemplates } from "../data/world";
-import type { AsteroidEntity, ConvoyEntity, ExplorationSignalDefinition, FlightEntity, LootEntity, MarketState, NpcInteractionAction, PlanetDefinition, ProjectileEntity, SalvageEntity, StationDefinition, Vec3, VisualEffectEntity } from "../types/game";
+import type { AssetQualityProfile, AsteroidEntity, ConvoyEntity, ExplorationSignalDefinition, FlightEntity, GraphicsQuality, LootEntity, MarketState, MaterialMapProfile, NpcInteractionAction, PlanetDefinition, ProjectileEntity, SalvageEntity, StationDefinition, Vec3, VisualEffectEntity } from "../types/game";
 import { add, clamp, distance, forwardFromRotation, normalize, scale, sub } from "../systems/math";
 import { getOreColor } from "../systems/difficulty";
 import { getJumpGatePosition } from "../systems/autopilot";
@@ -583,9 +583,48 @@ function boostUltimateMaterial(_material: THREE.Material): THREE.Material {
   return new THREE.MeshBasicMaterial({ color: "#ffffff", vertexColors: true });
 }
 
+const qualityRank: Record<GraphicsQuality, number> = { low: 0, medium: 1, high: 2, ultra: 3 };
+
+function qualityAtLeast(current: GraphicsQuality, minimum: GraphicsQuality): boolean {
+  return qualityRank[current] >= qualityRank[minimum];
+}
+
+function shouldUsePremiumAsset(profile: AssetQualityProfile | undefined, assetDetail: GraphicsQuality): boolean {
+  if (!profile) return true;
+  if (assetDetail === "low" && (profile.tier === "hero" || profile.budgetTag === "hero")) return false;
+  return qualityAtLeast(assetDetail, profile.recommendedQuality) || profile.tier !== "hero";
+}
+
+function shouldCastAssetShadows(profile: AssetQualityProfile | undefined, shadowDetail: GraphicsQuality): boolean {
+  return shadowDetail !== "low" && (profile?.supportsShadows ?? true);
+}
+
+function vfxParticleMultiplier(detail: GraphicsQuality): number {
+  if (detail === "low") return 0.35;
+  if (detail === "medium") return 0.65;
+  if (detail === "ultra") return 1.18;
+  return 1;
+}
+
+function selectVfxFrames(frameUrls: string[], detail: GraphicsQuality): string[] {
+  if (frameUrls.length <= 3 || detail === "ultra" || detail === "high") return frameUrls;
+  const budget = detail === "low" ? 3 : 5;
+  const step = Math.max(1, Math.floor(frameUrls.length / budget));
+  return frameUrls.filter((_, index) => index % step === 0).slice(0, budget);
+}
+
+function materialMapBoost(materialMap: MaterialMapProfile | undefined, assetDetail: GraphicsQuality): number {
+  if (!materialMap || assetDetail === "low") return 0;
+  return materialMap.resolution >= 512 ? 0.06 : 0.035;
+}
+
 function GltfPlayerShip({ onLoaded, shipId, url }: { onLoaded: () => void; shipId: string; url: string }) {
   const gltf = useGLTF(url);
   const materialProfile = useGameStore((state) => state.assetManifest.shipMaterialProfiles[shipId]);
+  const qualityProfile = useGameStore((state) => state.assetManifest.assetQualityProfiles[shipId] ?? state.assetManifest.assetQualityProfiles.default);
+  const materialMap = useGameStore((state) => state.assetManifest.materialMaps[shipId]);
+  const assetDetail = useGameStore((state) => state.graphicsSettings.assetDetail);
+  const shadowDetail = useGameStore((state) => state.graphicsSettings.shadowDetail);
   useEffect(() => {
     onLoaded();
   }, [onLoaded]);
@@ -594,11 +633,13 @@ function GltfPlayerShip({ onLoaded, shipId, url }: { onLoaded: () => void; shipI
     const visual = playerShipVisuals[shipId] ?? playerShipVisuals["sparrow-mk1"];
     const box = getRenderableModelBox(scene);
     const center = box.getCenter(new THREE.Vector3());
+    const castsShadows = shouldCastAssetShadows(qualityProfile, shadowDetail);
+    const mapBoost = materialMapBoost(materialMap, assetDetail);
     scene.position.sub(center);
     scene.traverse((node) => {
       if (node instanceof THREE.Mesh) {
-        node.castShadow = true;
-        node.receiveShadow = true;
+        node.castShadow = castsShadows;
+        node.receiveShadow = castsShadows;
         if (visual.emissiveBoost) {
           applyUltimateVertexColors(node);
           node.material = Array.isArray(node.material) ? node.material.map(boostUltimateMaterial) : boostUltimateMaterial(node.material);
@@ -607,13 +648,13 @@ function GltfPlayerShip({ onLoaded, shipId, url }: { onLoaded: () => void; shipI
           material.metalness = materialProfile.metalness;
           material.roughness = materialProfile.roughness;
           material.emissive = new THREE.Color(materialProfile.emissiveColor);
-          material.emissiveIntensity = 0.08;
+          material.emissiveIntensity = 0.08 + mapBoost;
           node.material = material;
         }
       }
     });
     return scene;
-  }, [gltf.scene, materialProfile, shipId]);
+  }, [assetDetail, gltf.scene, materialMap, materialProfile, qualityProfile, shadowDetail, shipId]);
   const visual = playerShipVisuals[shipId] ?? playerShipVisuals["sparrow-mk1"];
   const modelScale = useMemo(() => {
     if (!visual.fitToMaxDimension) return visual.scale;
@@ -625,30 +666,39 @@ function GltfPlayerShip({ onLoaded, shipId, url }: { onLoaded: () => void; shipI
   return <primitive object={clone} position={toThree(visual.offset ?? [0, 0, 0])} rotation={visual.rotation} scale={modelScale} />;
 }
 
-function GltfRuntimeAsset({ fitToMaxDimension, opacity = 1, url }: { fitToMaxDimension: number; opacity?: number; url: string }) {
+function GltfRuntimeAsset({ assetKey, fitToMaxDimension, opacity = 1, url }: { assetKey: string; fitToMaxDimension: number; opacity?: number; url: string }) {
   const gltf = useGLTF(url);
+  const qualityProfile = useGameStore((state) => state.assetManifest.assetQualityProfiles[assetKey] ?? state.assetManifest.assetQualityProfiles.default);
+  const materialMap = useGameStore((state) => state.assetManifest.materialMaps[assetKey]);
+  const assetDetail = useGameStore((state) => state.graphicsSettings.assetDetail);
+  const shadowDetail = useGameStore((state) => state.graphicsSettings.shadowDetail);
   const clone = useMemo(() => {
     const scene = cloneSkeleton(gltf.scene);
     const box = getRenderableModelBox(scene);
     const center = box.getCenter(new THREE.Vector3());
+    const castsShadows = shouldCastAssetShadows(qualityProfile, shadowDetail);
+    const mapBoost = materialMapBoost(materialMap, assetDetail);
     scene.position.sub(center);
     scene.traverse((node) => {
       if (node instanceof THREE.Mesh) {
-        node.castShadow = true;
-        node.receiveShadow = true;
+        node.castShadow = castsShadows;
+        node.receiveShadow = castsShadows;
         const hadMaterialArray = Array.isArray(node.material);
         const materials: THREE.Material[] = hadMaterialArray ? node.material : [node.material];
         const nextMaterials = materials.map((source) => {
           const material = source.clone();
           if ("transparent" in material && opacity < 1) material.transparent = true;
           if ("opacity" in material) material.opacity = opacity;
+          if (material instanceof THREE.MeshStandardMaterial && mapBoost > 0) {
+            material.emissiveIntensity = Math.max(material.emissiveIntensity, mapBoost);
+          }
           return material;
         });
         node.material = hadMaterialArray ? nextMaterials : nextMaterials[0];
       }
     });
     return scene;
-  }, [gltf.scene, opacity]);
+  }, [assetDetail, gltf.scene, materialMap, opacity, qualityProfile, shadowDetail]);
   const modelScale = useMemo(() => {
     const box = getRenderableModelBox(clone);
     const size = box.getSize(new THREE.Vector3());
@@ -804,7 +854,10 @@ function PlayerShip({ onModelStatus }: { onModelStatus: (status: ShipModelStatus
   const ultimateAbility = useGameStore((state) => state.ultimateAbility);
   const ultimateActive = useGameStore((state) => state.player.shipId === "sparrow-mk1" && (state.ultimateAbility.activeUntil ?? -Infinity) > state.runtime.clock);
   const renderShipId = ultimateActive ? SPARROW_ULTIMATE_MODEL_ID : player.shipId;
-  const modelUrl = useGameStore((state) => state.assetManifest.shipModels[renderShipId]);
+  const rawModelUrl = useGameStore((state) => state.assetManifest.shipModels[renderShipId]);
+  const qualityProfile = useGameStore((state) => state.assetManifest.assetQualityProfiles[renderShipId]);
+  const assetDetail = useGameStore((state) => state.graphicsSettings.assetDetail);
+  const modelUrl = rawModelUrl && shouldUsePremiumAsset(qualityProfile, assetDetail) ? rawModelUrl : undefined;
   const afterburning = useGameStore((state) => state.input.afterburner && state.player.energy > 12);
   const speed = Math.hypot(...player.velocity);
   const fallback = <ProceduralPlayerShip shipId={renderShipId} />;
@@ -937,7 +990,10 @@ function DroneNpcShip({ ship }: { ship: FlightEntity }) {
   const flashing = clock - ship.lastDamageAt < 0.18 || ship.deathTimer !== undefined;
   const opacity = ship.deathTimer !== undefined ? 0.42 : 1;
   const scale = ship.deathTimer !== undefined ? 0.78 : ship.boss ? 1.34 : 1;
-  const modelUrl = useGameStore((state) => state.assetManifest.enemyShipModels[ship.id]);
+  const rawModelUrl = useGameStore((state) => state.assetManifest.enemyShipModels[ship.id]);
+  const qualityProfile = useGameStore((state) => state.assetManifest.assetQualityProfiles[ship.id]);
+  const assetDetail = useGameStore((state) => state.graphicsSettings.assetDetail);
+  const modelUrl = rawModelUrl && shouldUsePremiumAsset(qualityProfile, assetDetail) ? rawModelUrl : undefined;
   const fallbackHull = (
     <>
       <mesh castShadow rotation={[clock * 1.2, clock * 0.4, 0]}>
@@ -951,7 +1007,7 @@ function DroneNpcShip({ ship }: { ship: FlightEntity }) {
       {modelUrl ? (
         <ShipModelBoundary fallback={fallbackHull} onFallback={() => undefined}>
           <Suspense fallback={fallbackHull}>
-            <GltfRuntimeAsset fitToMaxDimension={ship.boss ? 106 : 64} opacity={opacity} url={modelUrl} />
+            <GltfRuntimeAsset assetKey={ship.id} fitToMaxDimension={ship.boss ? 106 : 64} opacity={opacity} url={modelUrl} />
           </Suspense>
         </ShipModelBoundary>
       ) : (
@@ -1483,7 +1539,10 @@ function JumpGateModel() {
 function StationGeometry({ station }: { station: StationDefinition }) {
   const locale = useGameStore((state) => state.locale);
   const clock = useGameStore((state) => state.runtime.clock);
-  const modelUrl = useGameStore((state) => state.assetManifest.stationModels[station.id] ?? state.assetManifest.stationModels[station.archetype]);
+  const rawModelUrl = useGameStore((state) => state.assetManifest.stationModels[station.id] ?? state.assetManifest.stationModels[station.archetype]);
+  const qualityProfile = useGameStore((state) => state.assetManifest.assetQualityProfiles[station.id] ?? state.assetManifest.assetQualityProfiles[station.archetype]);
+  const assetDetail = useGameStore((state) => state.graphicsSettings.assetDetail);
+  const modelUrl = rawModelUrl && shouldUsePremiumAsset(qualityProfile, assetDetail) ? rawModelUrl : undefined;
   const profile = useGameStore((state) =>
     state.assetManifest.stationVisualProfiles[station.id] ??
     state.assetManifest.stationVisualProfiles[station.archetype] ??
@@ -1494,7 +1553,7 @@ function StationGeometry({ station }: { station: StationDefinition }) {
     <ShipModelBoundary fallback={<ProceduralStationGeometry station={station} />} onFallback={() => undefined}>
       <Suspense fallback={<ProceduralStationGeometry station={station} />}>
         <group position={toThree(station.position)}>
-          <GltfRuntimeAsset fitToMaxDimension={station.id === "celest-vault" ? 360 : 330} url={modelUrl} />
+          <GltfRuntimeAsset assetKey={station.id} fitToMaxDimension={station.id === "celest-vault" ? 360 : 330} url={modelUrl} />
           <mesh rotation={[Math.PI / 2, 0, clock * 0.08]}>
             <torusGeometry args={[118 * profile.ringScale, 1.2, 8, profile.nearSegments]} />
             <meshBasicMaterial color={profile.accentColor} transparent opacity={0.26 + profile.emissiveIntensity * 0.12} toneMapped={false} />
@@ -1748,13 +1807,19 @@ function ExplosionTextureBillboard({ alpha, frameUrls, life, maxLife, size }: { 
 function VisualEffect({ effect }: { effect: VisualEffectEntity }) {
   const locale = useGameStore((state) => state.locale);
   const explosionProfile = useGameStore((state) => state.assetManifest.vfxAssetProfiles[state.assetManifest.vfxCues.explosion]);
-  const explosionFrames = useGameStore((state) => state.assetManifest.vfxTextureSequences[state.assetManifest.vfxCues.explosion] ?? []);
+  const rawExplosionFrames = useGameStore((state) => state.assetManifest.vfxTextureSequences[state.assetManifest.vfxCues.explosion] ?? []);
+  const vfxDetail = useGameStore((state) => state.graphicsSettings.vfxDetail);
+  const explosionFrames = useMemo(() => selectVfxFrames(rawExplosionFrames, vfxDetail), [rawExplosionFrames, vfxDetail]);
   const alpha = Math.max(0, effect.life / effect.maxLife);
   const explosionLike = effect.kind === "explosion" || effect.kind === "boss-burst";
   const impactLike = effect.kind === "hit" || effect.kind === "missile-impact";
+  const particleBudget = Math.max(
+    0,
+    Math.round((effect.particleCount ?? (explosionLike ? 14 : impactLike ? 4 : 0)) * vfxParticleMultiplier(vfxDetail) * (explosionLike ? explosionProfile?.particleMultiplier ?? 1 : 1))
+  );
   const particles = useMemo(
     () =>
-      Array.from({ length: effect.particleCount ?? (explosionLike ? 14 : impactLike ? 4 : 0) }, (_, index) => {
+      Array.from({ length: particleBudget }, (_, index) => {
         const seed = index * 12.9898 + effect.id.length * 78.233;
         const a = Math.sin(seed) * 43758.5453;
         const b = Math.sin(seed * 1.73) * 24634.6345;
@@ -1770,7 +1835,7 @@ function VisualEffect({ effect }: { effect: VisualEffectEntity }) {
           color: index % 2 === 0 ? effect.color : effect.secondaryColor ?? "#ffd166"
         };
       }),
-    [effect.id, effect.kind, effect.particleCount, effect.secondaryColor, effect.size, effect.spread, effect.color, explosionLike, impactLike]
+    [effect.id, effect.kind, effect.particleCount, effect.secondaryColor, effect.size, effect.spread, effect.color, explosionLike, particleBudget]
   );
 
   if (effect.kind === "nav-ring") {
@@ -2213,50 +2278,58 @@ const UltraClearSharpenShader = {
   `
 };
 
-function PostProcessingComposer({ bloomMultiplier, depthOfField, sharpenMultiplier }: { bloomMultiplier: number; depthOfField: boolean; sharpenMultiplier: number }) {
+function PostProcessingComposer({ bloomMultiplier, depthOfField, postFxDetail, sharpenMultiplier }: { bloomMultiplier: number; depthOfField: boolean; postFxDetail: GraphicsQuality; sharpenMultiplier: number }) {
   const { camera, gl, scene, size } = useThree();
   const currentSystemId = useGameStore((state) => state.currentSystemId);
   const profile = useGameStore((state) => state.assetManifest.scenePostProfiles[currentSystemId] ?? state.assetManifest.scenePostProfiles.default);
   const composerRef = useRef<EffectComposer | null>(null);
 
   useEffect(() => {
-    const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
-    const composer = new EffectComposer(gl);
-    composer.setSize(size.width, size.height);
-    composer.setPixelRatio(pixelRatio);
-    composer.addPass(new RenderPass(scene, camera));
-    const bloomStrength = profile.bloomStrength * bloomMultiplier;
-    if (bloomStrength > 0) {
-      const bloomPass = new UnrealBloomPass(new THREE.Vector2(size.width, size.height), bloomStrength, profile.bloomRadius, profile.bloomThreshold);
-      composer.addPass(bloomPass);
+    let composer: EffectComposer | null = null;
+    try {
+      const pixelRatioCap = postFxDetail === "ultra" ? 2 : postFxDetail === "high" ? 1.7 : 1.35;
+      const pixelRatio = Math.min(window.devicePixelRatio || 1, pixelRatioCap);
+      composer = new EffectComposer(gl);
+      composer.setSize(size.width, size.height);
+      composer.setPixelRatio(pixelRatio);
+      composer.addPass(new RenderPass(scene, camera));
+      const bloomStrength = profile.bloomStrength * bloomMultiplier;
+      if (bloomStrength > 0) {
+        const bloomPass = new UnrealBloomPass(new THREE.Vector2(size.width, size.height), bloomStrength, profile.bloomRadius, profile.bloomThreshold);
+        composer.addPass(bloomPass);
+      }
+      if (depthOfField && profile.dofMaxBlur > 0.0001 && profile.dofAperture > 0) {
+        composer.addPass(
+          new BokehPass(scene, camera, {
+            focus: profile.dofFocus,
+            aperture: profile.dofAperture,
+            maxblur: profile.dofMaxBlur
+          })
+        );
+      }
+      const sharpenStrength = profile.sharpenStrength * sharpenMultiplier;
+      if (sharpenStrength > 0) {
+        const sharpenPass = new ShaderPass(UltraClearSharpenShader);
+        sharpenPass.uniforms.resolution.value = new THREE.Vector2(size.width * pixelRatio, size.height * pixelRatio);
+        sharpenPass.uniforms.strength.value = sharpenStrength;
+        composer.addPass(sharpenPass);
+      }
+      composer.addPass(new OutputPass());
+      composerRef.current = composer;
+    } catch {
+      composer?.dispose();
+      composerRef.current = null;
     }
-    if (depthOfField && profile.dofMaxBlur > 0.0001 && profile.dofAperture > 0) {
-      composer.addPass(
-        new BokehPass(scene, camera, {
-          focus: profile.dofFocus,
-          aperture: profile.dofAperture,
-          maxblur: profile.dofMaxBlur
-        })
-      );
-    }
-    const sharpenStrength = profile.sharpenStrength * sharpenMultiplier;
-    if (sharpenStrength > 0) {
-      const sharpenPass = new ShaderPass(UltraClearSharpenShader);
-      sharpenPass.uniforms.resolution.value = new THREE.Vector2(size.width * pixelRatio, size.height * pixelRatio);
-      sharpenPass.uniforms.strength.value = sharpenStrength;
-      composer.addPass(sharpenPass);
-    }
-    composer.addPass(new OutputPass());
-    composerRef.current = composer;
     return () => {
       composerRef.current = null;
-      composer.dispose();
+      composer?.dispose();
     };
   }, [
     bloomMultiplier,
     camera,
     depthOfField,
     gl,
+    postFxDetail,
     profile.bloomRadius,
     profile.bloomStrength,
     profile.bloomThreshold,
@@ -2271,7 +2344,11 @@ function PostProcessingComposer({ bloomMultiplier, depthOfField, sharpenMultipli
   ]);
 
   useFrame((_, delta) => {
-    composerRef.current?.render(delta);
+    if (composerRef.current) {
+      composerRef.current.render(delta);
+    } else {
+      gl.render(scene, camera);
+    }
   }, 1);
 
   return null;
@@ -2281,11 +2358,12 @@ function PostProcessingRig() {
   const graphicsSettings = useGameStore((state) => state.graphicsSettings);
   if (!graphicsSettings.postProcessing) return null;
   return (
-    <PostProcessingComposer
-      bloomMultiplier={graphicsSettings.bloomMultiplier}
-      depthOfField={graphicsSettings.depthOfField}
-      sharpenMultiplier={graphicsSettings.sharpenMultiplier}
-    />
+      <PostProcessingComposer
+        bloomMultiplier={graphicsSettings.bloomMultiplier}
+        depthOfField={graphicsSettings.depthOfField}
+        postFxDetail={graphicsSettings.postFxDetail}
+        sharpenMultiplier={graphicsSettings.sharpenMultiplier}
+      />
   );
 }
 
@@ -2799,14 +2877,14 @@ export function FlightScene() {
       <Canvas
         camera={{ position: [0, 36, 210], fov: 68, near: 0.1, far: 5200 }}
         dpr={graphicsSettings.dprRange}
-        gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
+        gl={{ antialias: graphicsSettings.quality !== "low", alpha: false, powerPreference: "high-performance" }}
         onCreated={({ gl, scene }) => {
           gl.toneMapping = THREE.ACESFilmicToneMapping;
           gl.toneMappingExposure = 0.76;
-          gl.shadowMap.type = THREE.PCFSoftShadowMap;
+          gl.shadowMap.type = graphicsSettings.shadowDetail === "ultra" ? THREE.PCFSoftShadowMap : THREE.BasicShadowMap;
           scene.fog = new THREE.FogExp2("#030712", 0.00013);
         }}
-        shadows={graphicsSettings.shadows}
+        shadows={graphicsSettings.shadows && graphicsSettings.shadowDetail !== "low"}
       >
         <Suspense fallback={null}>
           <FlightSimulationTicker />

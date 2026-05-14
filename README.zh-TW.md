@@ -6,13 +6,30 @@
 
 ## 截圖
 
-| 視圖 | 截圖 |
-| --- | --- |
-| 主選單 | ![主選單展示六大前線星系 + PTD Home、語言選擇和存檔槽位](docs/screenshots/zh-TW/main-menu.png) |
-| 飛行 HUD | ![第三人稱飛行 HUD，包含艦船儀表、新手清單、主線、經濟、執法和信號追蹤](docs/screenshots/zh-TW/flight-hud.png) |
-| 太空站市場 | ![太空站市場和服務介面，包含買賣、任務流程和本機經濟狀態](docs/screenshots/zh-TW/station-market.png) |
-| 銀河地圖 | ![銀河地圖顯示已發現星系、太空站航線、調度目標、主線目標和 Quiet Signals](docs/screenshots/zh-TW/galaxy-map.png) |
-| 職業船塢 | ![船塢卡片展示職業船體、特性、藍圖路線和購買門檻](docs/screenshots/zh-TW/shipyard-careers.png) |
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/zh-TW/main-menu.png" alt="主選單展示六大前線星系 + PTD Home、語言選擇和存檔槽位"></td>
+    <td width="50%"><img src="docs/screenshots/zh-TW/flight-hud.png" alt="第三人稱飛行 HUD，包含艦船儀表、新手清單、主線、經濟、執法和信號追蹤"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>主選單</strong> &mdash; 星系、語言選擇和存檔槽位</td>
+    <td align="center"><strong>飛行 HUD</strong> &mdash; 艦船儀表、主線、經濟和信號追蹤</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/zh-TW/station-market.png" alt="太空站市場和服務介面，包含買賣、任務流程和本機經濟狀態"></td>
+    <td width="50%"><img src="docs/screenshots/zh-TW/galaxy-map.png" alt="銀河地圖顯示已發現星系、太空站航線、調度目標、主線目標和 Quiet Signals"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>太空站市場</strong> &mdash; 交易、任務和本機經濟狀態</td>
+    <td align="center"><strong>銀河地圖</strong> &mdash; 航線、調度目標和主線目標</td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/screenshots/zh-TW/shipyard-careers.png" alt="船塢卡片展示職業船體、特性、藍圖路線和購買門檻"></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><strong>職業船塢</strong> &mdash; 船體特性、藍圖路線和購買門檻</td>
+  </tr>
+</table>
 
 ## 執行
 

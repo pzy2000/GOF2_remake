@@ -6,13 +6,30 @@
 
 ## 截图
 
-| 视图 | 截图 |
-| --- | --- |
-| 主菜单 | ![主菜单展示六大前线星系 + PTD Home、语言选择和存档槽位](docs/screenshots/zh-CN/main-menu.png) |
-| 飞行 HUD | ![第三人称飞行 HUD，包含舰船仪表、新手清单、主线、经济、执法和信号追踪](docs/screenshots/zh-CN/flight-hud.png) |
-| 空间站市场 | ![空间站市场和服务界面，包含买卖、任务流程和本地经济状态](docs/screenshots/zh-CN/station-market.png) |
-| 银河地图 | ![银河地图显示已发现星系、空间站航线、调度目标、主线目标和 Quiet Signals](docs/screenshots/zh-CN/galaxy-map.png) |
-| 职业船坞 | ![船坞卡片展示职业船体、特性、蓝图路线和购买门槛](docs/screenshots/zh-CN/shipyard-careers.png) |
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/zh-CN/main-menu.png" alt="主菜单展示六大前线星系 + PTD Home、语言选择和存档槽位"></td>
+    <td width="50%"><img src="docs/screenshots/zh-CN/flight-hud.png" alt="第三人称飞行 HUD，包含舰船仪表、新手清单、主线、经济、执法和信号追踪"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>主菜单</strong> &mdash; 星系、语言选择和存档槽位</td>
+    <td align="center"><strong>飞行 HUD</strong> &mdash; 舰船仪表、主线、经济和信号追踪</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/zh-CN/station-market.png" alt="空间站市场和服务界面，包含买卖、任务流程和本地经济状态"></td>
+    <td width="50%"><img src="docs/screenshots/zh-CN/galaxy-map.png" alt="银河地图显示已发现星系、空间站航线、调度目标、主线目标和 Quiet Signals"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>空间站市场</strong> &mdash; 交易、任务和本地经济状态</td>
+    <td align="center"><strong>银河地图</strong> &mdash; 航线、调度目标和主线目标</td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/screenshots/zh-CN/shipyard-careers.png" alt="船坞卡片展示职业船体、特性、蓝图路线和购买门槛"></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><strong>职业船坞</strong> &mdash; 船体特性、蓝图路线和购买门槛</td>
+  </tr>
+</table>
 
 ## 运行
 

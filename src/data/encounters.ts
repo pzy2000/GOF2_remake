@@ -14,7 +14,11 @@ export const encounterDefinitions: EncounterDefinition[] = [
         commsSpeakerId: "mirr-analyst",
         commsLine: "The probe wreck is answering with your ship name. Keep weapons hot and do not trust clean traffic.",
         environmentCue: "Mirr glass haze intensifies around the wreck field.",
-        objectiveText: "Fly to the probe debris field and lock the Glass Echo Drone."
+        objectiveText: "Fly to the probe debris field and lock the Glass Echo Drone.",
+        visualCueKind: "signal",
+        effectLabel: "GHOST PING",
+        targetHint: "Glass Echo Drone",
+        hudTone: "combat"
       },
       {
         id: "prime-wake",
@@ -24,7 +28,11 @@ export const encounterDefinitions: EncounterDefinition[] = [
         commsSpeakerId: "ship-ai",
         commsLine: "Signal split detected. A heavier contact is waking behind the probe core.",
         environmentCue: "A shock ring blooms from the destroyed drone and marks the Prime spawn.",
-        objectiveText: "Defeat Glass Echo Prime before recovering the probe core."
+        objectiveText: "Defeat Glass Echo Prime before recovering the probe core.",
+        visualCueKind: "boss-entry",
+        effectLabel: "PRIME WAKE",
+        targetHint: "Glass Echo Prime",
+        hudTone: "boss"
       },
       {
         id: "probe-core-recovery",
@@ -34,7 +42,38 @@ export const encounterDefinitions: EncounterDefinition[] = [
         commsSpeakerId: "mirr-analyst",
         commsLine: "The Prime is down. Recover the probe core while the carrier is blind.",
         environmentCue: "Debris beacons switch from hostile red to recovery gold.",
-        objectiveText: "Recover the Glass Wake Probe Core and return to Mirr Lattice."
+        objectiveText: "Recover the Glass Wake Probe Core and return to Mirr Lattice.",
+        visualCueKind: "recovery",
+        effectLabel: "PROBE CORE",
+        targetHint: "Glass Wake Probe Core",
+        hudTone: "recovery"
+      },
+      {
+        id: "core-secured",
+        trigger: "salvage-recovered",
+        salvageId: "glass-wake-probe-core",
+        title: "Core Secured",
+        commsSpeakerId: "ship-ai",
+        commsLine: "Probe core sealed. The wake carrier is blind for one clean transit window.",
+        environmentCue: "Recovery gold collapses into a return vector for Mirr Lattice.",
+        objectiveText: "Return to Mirr Lattice and deliver the core.",
+        visualCueKind: "recovery",
+        effectLabel: "CORE SECURED",
+        targetHint: "Mirr Lattice",
+        hudTone: "return"
+      },
+      {
+        id: "first-reversal",
+        trigger: "mission-completed",
+        title: "First Reversal Logged",
+        commsSpeakerId: "mirr-analyst",
+        commsLine: "The carrier pattern is real. Kuro voidglass is now the only clean separator.",
+        environmentCue: "Mirr analysis tags the recovered core as the first Glass Wake reversal.",
+        objectiveText: "Glass Wake 02 complete. Next trace: Kuro Resonance.",
+        visualCueKind: "debrief",
+        effectLabel: "REVERSAL",
+        targetHint: "Kuro Resonance",
+        hudTone: "return"
       }
     ],
     rewards: {

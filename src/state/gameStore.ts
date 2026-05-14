@@ -12,6 +12,7 @@ import type {
   ProjectileEntity,
   RuntimeState,
   AudioEventName,
+  EncounterStageTrigger,
   StoryNotificationTone,
   Vec3
 } from "../types/game";
@@ -36,6 +37,12 @@ import {
 } from "../systems/difficulty";
 import { integrateVelocity } from "../systems/flight";
 import { defaultFlightTuning, isAfterburnerAvailable } from "../systems/flightTuning";
+import {
+  createEncounterStageEffects,
+  createEncounterStageNotification,
+  createEncounterStageRuntime,
+  getEncounterStageForEvent
+} from "../systems/encounters";
 import { getDefaultTargetStation } from "../systems/autopilot";
 import { NPC_INTERACTION_RANGE } from "../systems/npcInteraction";
 import { advanceMarketState, buyCommodity, buyEquipment, createInitialMarketState, getCargoUsed, getOccupiedCargo, sellCommodity, sellEquipment } from "../systems/economy";
@@ -271,10 +278,35 @@ function createStoryNotification(tone: StoryNotificationTone, title: string, bod
   };
 }
 
-function getEncounterStageNotification(missionId: string, trigger: "mission-accepted" | "target-destroyed", targetId: string | undefined, gameClock: number) {
+function getEncounterStageNotification(missionId: string, trigger: EncounterStageTrigger, targetId: string | undefined, gameClock: number) {
   const encounter = encounterByMissionId[missionId];
-  const stage = encounter?.stages.find((candidate) => candidate.trigger === trigger && (!candidate.targetId || candidate.targetId === targetId));
-  return stage ? createStoryNotification("updated", stage.title, `${stage.objectiveText} ${stage.environmentCue}`, gameClock) : undefined;
+  const stage = getEncounterStageForEvent(encounter, { missionId, trigger, targetId });
+  return stage ? createEncounterStageNotification(stage, encounter?.title ?? missionId, gameClock, trigger === "mission-completed" ? "complete" : "updated") : undefined;
+}
+
+function applyEncounterStageRuntime(
+  runtime: RuntimeState,
+  mission: Pick<MissionDefinition, "id" | "title">,
+  trigger: EncounterStageTrigger,
+  gameClock: number,
+  options: { targetId?: string; salvageId?: string; position?: Vec3 } = {}
+): RuntimeState {
+  const encounter = encounterByMissionId[mission.id];
+  const stage = getEncounterStageForEvent(encounter, { missionId: mission.id, trigger, targetId: options.targetId, salvageId: options.salvageId });
+  if (!stage) return runtime;
+  const position = options.position;
+  return {
+    ...runtime,
+    activeEncounterStage: createEncounterStageRuntime(mission.id, stage, gameClock),
+    storyNotification: createEncounterStageNotification(stage, mission.title, gameClock, trigger === "mission-completed" ? "complete" : "updated"),
+    effects: position
+      ? [
+          ...runtime.effects,
+          ...createEncounterStageEffects(projectileId(`encounter-${stage.id}`), stage, position)
+        ]
+      : runtime.effects,
+    message: `${stage.title}: ${stage.commsLine}`
+  };
 }
 
 function buildDebugScenarioPatch(state: GameStore, scenarioId: string): Partial<GameStore> | undefined {
@@ -296,13 +328,15 @@ function buildDebugScenarioPatch(state: GameStore, scenarioId: string): Partial<
     ...player,
     credits: scenario.credits,
     equipment: [...scenario.equipment],
-    position: scenario.stationId ? launchPositionForStation(scenario.stationId, player.position) : player.position,
+    position: scenario.playerPosition ? [...scenario.playerPosition] : scenario.stationId ? launchPositionForStation(scenario.stationId, player.position) : player.position,
     velocity: [0, 0, 0],
+    rotation: scenario.playerRotation ? [...scenario.playerRotation] : player.rotation,
     throttle: 0,
     hull: ship.stats.hull,
     shield: ship.stats.shield,
     energy: ship.stats.energy
   };
+  player = { ...player, throttle: scenario.playerThrottle ?? player.throttle };
   let activeMissions: MissionDefinition[] = [];
   for (const missionId of scenario.activeMissionIds ?? []) {
     const mission = missionTemplates.find((candidate) => candidate.id === missionId);
@@ -311,7 +345,13 @@ function buildDebugScenarioPatch(state: GameStore, scenarioId: string): Partial<
     player = accepted.player;
     activeMissions = accepted.activeMissions;
   }
-  const runtime = createRuntimeForSystem(scenario.systemId, activeMissions);
+  let runtime = createRuntimeForSystem(scenario.systemId, activeMissions);
+  const heroMission = activeMissions.find((mission) => mission.id === "story-probe-in-glass");
+  if (heroMission && scenario.id === "glass-wake-hero") {
+    runtime = applyEncounterStageRuntime(runtime, heroMission, "mission-accepted", state.gameClock, {
+      position: heroMission.storyEncounter?.targets.find((target) => target.id === scenario.targetId)?.position
+    });
+  }
   return {
     screen: scenario.stationId ? "station" : "flight",
     previousScreen: state.screen,
@@ -326,7 +366,7 @@ function buildDebugScenarioPatch(state: GameStore, scenarioId: string): Partial<
     runtime: {
       ...runtime,
       message: scenario.message,
-      storyNotification: createStoryNotification("updated", scenario.label, scenario.description, state.gameClock)
+      storyNotification: runtime.storyNotification ?? createStoryNotification("updated", scenario.label, scenario.description, state.gameClock)
     },
     targetId: scenario.targetId,
     autopilot: undefined,
@@ -597,11 +637,21 @@ function buildAcceptMissionPatch(state: GameStore, missionId: string, dialogueMo
   const rewardMultiplier = mission.storyCritical ? 1 : getFactionRewardMultiplier(accessStation.factionId, state.reputation, state.factionHeat, state.gameClock);
   const missionForAcceptance = rewardMultiplier === 1 ? mission : { ...mission, reward: Math.round(mission.reward * rewardMultiplier) };
   const result = acceptMissionPure(state.player, state.activeMissions, missionForAcceptance, state.gameClock);
-  const runtime = result.mission ? addMissionRuntimeEntity(state.runtime, result.mission, state.currentSystemId) : state.runtime;
+  let runtime = result.mission ? addMissionRuntimeEntity(state.runtime, result.mission, state.currentSystemId) : state.runtime;
   const dialogueScene = result.ok && !generatedDispatchMission ? getStoryMissionDialogueScene(mission.id, "accept") : undefined;
   const dialoguePatch = dialogueScene ? dialoguePatchForMode(state, dialogueScene.id, dialogueMode) : {};
   const queuedBehindActiveDialogue = dialogueMode === "queue";
-  const encounterNotification = result.ok && !queuedBehindActiveDialogue ? getEncounterStageNotification(mission.id, "mission-accepted", undefined, state.gameClock) : undefined;
+  if (result.ok && result.mission && !queuedBehindActiveDialogue) {
+    const firstTargetPosition = result.mission.storyEncounter?.targets.find((target) => target.systemId === state.currentSystemId)?.position;
+    runtime = applyEncounterStageRuntime(runtime, result.mission, "mission-accepted", state.gameClock, {
+      position: firstTargetPosition ? [...firstTargetPosition] : undefined
+    });
+  }
+  const encounterNotification = result.ok && !queuedBehindActiveDialogue
+    ? runtime.activeEncounterStage?.missionId === mission.id
+      ? runtime.storyNotification
+      : getEncounterStageNotification(mission.id, "mission-accepted", undefined, state.gameClock)
+    : undefined;
   const storyNotification = result.ok && mission.storyCritical && !queuedBehindActiveDialogue
     ? encounterNotification ?? createStoryNotification("start", mission.title, result.message, state.gameClock)
     : runtime.storyNotification;
@@ -646,6 +696,20 @@ function buildCompleteMissionPatch(state: GameStore, missionId: string, dialogue
   const economyService = generatedDispatchMission && state.economyService.status !== "connected"
     ? { ...state.economyService, status: "fallback" as const, lastError: "Dispatch delivery recorded locally." }
     : state.economyService;
+  const completionRuntimeBase: RuntimeState = {
+    ...state.runtime,
+    convoys: state.runtime.convoys.filter((convoy) => convoy.missionId !== missionId),
+    salvage: state.runtime.salvage.filter((salvage) => salvage.missionId !== missionId),
+    message: completeMessage,
+    storyNotification: mission.storyCritical
+      ? createStoryNotification("complete", mission.title, completeMessage, state.gameClock)
+      : state.runtime.storyNotification
+  };
+  const completionRuntime = mission.storyCritical
+    ? applyEncounterStageRuntime(completionRuntimeBase, mission, "mission-completed", state.gameClock, {
+        position: state.currentStationId ? stationById[state.currentStationId]?.position : undefined
+      })
+    : completionRuntimeBase;
   const patch = withOnboardingProgress(state, {
     player: result.player,
     reputation: result.reputation,
@@ -653,15 +717,7 @@ function buildCompleteMissionPatch(state: GameStore, missionId: string, dialogue
     completedMissionIds: generatedDispatchMission ? state.completedMissionIds : [...state.completedMissionIds, missionId],
     marketState,
     economyService,
-    runtime: {
-      ...state.runtime,
-      convoys: state.runtime.convoys.filter((convoy) => convoy.missionId !== missionId),
-      salvage: state.runtime.salvage.filter((salvage) => salvage.missionId !== missionId),
-      message: completeMessage,
-      storyNotification: mission.storyCritical
-        ? createStoryNotification("complete", mission.title, completeMessage, state.gameClock)
-        : state.runtime.storyNotification
-    },
+    runtime: completionRuntime,
     ...dialoguePatch
   });
   return {
@@ -1750,7 +1806,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
           endPosition: effect.endPosition ? add(effect.endPosition, scale(effect.velocity ?? [0, 0, 0], delta)) : undefined
         }))
         .filter((effect) => effect.life > 0),
-      message: state.runtime.message
+      message: state.runtime.message,
+      activeEncounterStage: state.runtime.activeEncounterStage && state.runtime.activeEncounterStage.expiresAt > gameClock
+        ? state.runtime.activeEncounterStage
+        : undefined
     };
     for (const fire of convoyFires) {
       runtime.projectiles.push({
@@ -2145,7 +2204,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const remainingProjectiles: ProjectileEntity[] = [];
     const lootDrops: LootEntity[] = [];
     let destroyedPirates = runtime.destroyedPirates;
-    const destroyedStoryTargets: Array<{ missionId: string; targetId: string; name: string }> = [];
+    const destroyedStoryTargets: Array<{ missionId: string; targetId: string; name: string; position: Vec3 }> = [];
     let destroyedBossName: string | undefined;
     let patrolsShouldAttackPlayer = false;
     let playerAggressionMessage: string | undefined;
@@ -2208,7 +2267,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
           if (damaged.hull <= 0 && ship.hull > 0) {
             if (ship.role === "pirate") destroyedPirates += 1;
             if (ship.boss) destroyedBossName = ship.name;
-            if (ship.storyTarget && ship.missionId) destroyedStoryTargets.push({ missionId: ship.missionId, targetId: ship.id, name: ship.name });
+            if (ship.storyTarget && ship.missionId) destroyedStoryTargets.push({ missionId: ship.missionId, targetId: ship.id, name: ship.name, position: ship.position });
             lootDrops.push(...lootDropsForDestroyedShip(ship, state.currentSystemId));
             runtime.effects.push(...createKillEffects(projectileId("explosion"), ship, tuning));
             audioSystem.play("explosion");
@@ -2329,7 +2388,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
               audioSystem.play("mission-complete");
             }
             if (ship.boss) destroyedBossName = ship.name;
-            if (ship.storyTarget && ship.missionId) destroyedStoryTargets.push({ missionId: ship.missionId, targetId: ship.id, name: ship.name });
+            if (ship.storyTarget && ship.missionId) destroyedStoryTargets.push({ missionId: ship.missionId, targetId: ship.id, name: ship.name, position: ship.position });
             lootDrops.push(...lootDropsForDestroyedShip(ship, state.currentSystemId));
             runtime.effects.push(...createKillEffects(projectileId("explosion"), ship, tuning));
             audioSystem.play("explosion");
@@ -2476,7 +2535,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         };
       }
     }
-    const storyTargetMessage = destroyedStoryTargets.length > 0
+    let storyTargetMessage = destroyedStoryTargets.length > 0
       ? `${destroyedStoryTargets[destroyedStoryTargets.length - 1].name} destroyed. Story objective updated.${spawnedStoryTarget ? ` ${spawnedStoryTarget.name} emerged from the wake.` : ""}`
       : undefined;
     let storyNotification = state.runtime.storyNotification && state.runtime.storyNotification.expiresAt > gameClock
@@ -2486,8 +2545,23 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const lastStoryTarget = destroyedStoryTargets[destroyedStoryTargets.length - 1];
       const storyMission = activeMissions.find((mission) => mission.id === lastStoryTarget?.missionId);
       if (storyMission?.storyCritical) {
-        storyNotification = getEncounterStageNotification(storyMission.id, "target-destroyed", lastStoryTarget.targetId, gameClock)
-          ?? createStoryNotification("updated", storyMission.title, storyTargetMessage, gameClock);
+        const spawnedForMission = spawnedStoryTarget?.missionId === storyMission.id ? spawnedStoryTarget : undefined;
+        const exposedSalvage = runtime.salvage.find((salvage) => salvage.missionId === storyMission.id);
+        const encounterStage = getEncounterStageForEvent(encounterByMissionId[storyMission.id], {
+          missionId: storyMission.id,
+          trigger: "target-destroyed",
+          targetId: lastStoryTarget.targetId
+        });
+        if (encounterStage) {
+          runtime = applyEncounterStageRuntime(runtime, storyMission, "target-destroyed", gameClock, {
+            targetId: lastStoryTarget.targetId,
+            position: spawnedForMission?.position ?? exposedSalvage?.position ?? lastStoryTarget.position
+          });
+          storyNotification = runtime.storyNotification;
+          storyTargetMessage = runtime.message || storyTargetMessage;
+        } else {
+          storyNotification = createStoryNotification("updated", storyMission.title, storyTargetMessage, gameClock);
+        }
       }
     }
     activeMissions = activeMissions.map((mission) => {
@@ -2711,17 +2785,25 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const activeMissions = state.activeMissions.map((mission) =>
         mission.id === nearSalvage.salvage.missionId ? markSalvageRecovered(mission) : mission
       );
+      const recoveredMission = activeMissions.find((mission) => mission.id === nearSalvage.salvage.missionId);
+      const baseRuntime: RuntimeState = {
+        ...state.runtime,
+        salvage: state.runtime.salvage.filter((salvage) => salvage.id !== nearSalvage.salvage.id),
+        effects: [
+          ...state.runtime.effects,
+          createSalvagePulse(projectileId("salvage-recovered"), nearSalvage.salvage.position, defaultFlightTuning)
+        ],
+        message: `Recovered ${nearSalvage.salvage.name}. Return to station.`
+      };
+      const runtime = recoveredMission?.storyCritical
+        ? applyEncounterStageRuntime(baseRuntime, recoveredMission, "salvage-recovered", state.gameClock, {
+            salvageId: nearSalvage.salvage.id,
+            position: nearSalvage.salvage.position
+          })
+        : baseRuntime;
       set({
         activeMissions,
-        runtime: {
-          ...state.runtime,
-          salvage: state.runtime.salvage.filter((salvage) => salvage.id !== nearSalvage.salvage.id),
-          effects: [
-            ...state.runtime.effects,
-            createSalvagePulse(projectileId("salvage-recovered"), nearSalvage.salvage.position, defaultFlightTuning)
-          ],
-          message: `Recovered ${nearSalvage.salvage.name}. Return to station.`
-        }
+        runtime
       });
       audioSystem.play("loot");
       return;

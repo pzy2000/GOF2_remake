@@ -17,7 +17,11 @@ export const graphicsQualityProfiles: Record<GraphicsQuality, GraphicsSettings> 
     bloomMultiplier: 0,
     sharpenMultiplier: 0,
     depthOfField: false,
-    shadows: false
+    shadows: false,
+    assetDetail: "low",
+    vfxDetail: "low",
+    postFxDetail: "low",
+    shadowDetail: "low"
   },
   medium: {
     quality: "medium",
@@ -26,7 +30,11 @@ export const graphicsQualityProfiles: Record<GraphicsQuality, GraphicsSettings> 
     bloomMultiplier: 0.55,
     sharpenMultiplier: 0.65,
     depthOfField: false,
-    shadows: false
+    shadows: false,
+    assetDetail: "medium",
+    vfxDetail: "medium",
+    postFxDetail: "medium",
+    shadowDetail: "low"
   },
   high: {
     quality: "high",
@@ -35,7 +43,11 @@ export const graphicsQualityProfiles: Record<GraphicsQuality, GraphicsSettings> 
     bloomMultiplier: 0.85,
     sharpenMultiplier: 0.9,
     depthOfField: false,
-    shadows: true
+    shadows: true,
+    assetDetail: "high",
+    vfxDetail: "high",
+    postFxDetail: "high",
+    shadowDetail: "high"
   },
   ultra: {
     quality: "ultra",
@@ -44,7 +56,11 @@ export const graphicsQualityProfiles: Record<GraphicsQuality, GraphicsSettings> 
     bloomMultiplier: 1,
     sharpenMultiplier: 1.15,
     depthOfField: false,
-    shadows: true
+    shadows: true,
+    assetDetail: "ultra",
+    vfxDetail: "ultra",
+    postFxDetail: "ultra",
+    shadowDetail: "ultra"
   }
 };
 

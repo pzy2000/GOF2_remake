@@ -1703,6 +1703,13 @@
       "sourceUrl": "scripts/generate-premium-assets.mjs",
       "license": "Original project asset",
       "assetPath": "/assets/generated/vfx/explosion-burst-00.png"
+    },
+    {
+      "title": "Premium material map set",
+      "author": "GOF2 procedural asset generator",
+      "sourceUrl": "scripts/generate-premium-assets.mjs",
+      "license": "Original project asset",
+      "assetPath": "/assets/generated/materials/glass-echo-drone-albedo.png"
     }
   ],
   "vfxCues": {
@@ -1751,5 +1758,86 @@
       "/assets/generated/vfx/explosion-burst-06.png",
       "/assets/generated/vfx/explosion-burst-07.png"
     ]
+  },
+  "assetQualityProfiles": {
+    "glass-echo-drone": {
+      "tier": "hero",
+      "recommendedQuality": "high",
+      "triangleBudget": 11800,
+      "materialLayerCount": 4,
+      "textureResolution": 512,
+      "supportsShadows": true,
+      "budgetTag": "hero",
+      "fallbackAssetKey": "default"
+    },
+    "glass-echo-prime": {
+      "tier": "hero",
+      "recommendedQuality": "ultra",
+      "triangleBudget": 18500,
+      "materialLayerCount": 4,
+      "textureResolution": 768,
+      "supportsShadows": true,
+      "budgetTag": "hero",
+      "fallbackAssetKey": "glass-echo-drone"
+    },
+    "mirr-lattice": {
+      "tier": "hero",
+      "recommendedQuality": "ultra",
+      "triangleBudget": 24000,
+      "materialLayerCount": 4,
+      "textureResolution": 768,
+      "supportsShadows": true,
+      "budgetTag": "hero",
+      "fallbackAssetKey": "Research Station"
+    },
+    "celest-vault": {
+      "tier": "hero",
+      "recommendedQuality": "ultra",
+      "triangleBudget": 26000,
+      "materialLayerCount": 4,
+      "textureResolution": 768,
+      "supportsShadows": true,
+      "budgetTag": "hero",
+      "fallbackAssetKey": "Trade Hub"
+    },
+    "cinematic-burst": {
+      "tier": "premium",
+      "recommendedQuality": "high",
+      "triangleBudget": 0,
+      "materialLayerCount": 1,
+      "textureResolution": 256,
+      "supportsShadows": false,
+      "budgetTag": "high"
+    }
+  },
+  "materialMaps": {
+    "glass-echo-drone": {
+      "albedo": "/assets/generated/materials/glass-echo-drone-albedo.png",
+      "emissive": "/assets/generated/materials/glass-echo-drone-emissive.png",
+      "roughness": "/assets/generated/materials/glass-echo-drone-roughness.png",
+      "normal": "/assets/generated/materials/glass-echo-drone-normal.png",
+      "resolution": 256
+    },
+    "glass-echo-prime": {
+      "albedo": "/assets/generated/materials/glass-echo-prime-albedo.png",
+      "emissive": "/assets/generated/materials/glass-echo-prime-emissive.png",
+      "roughness": "/assets/generated/materials/glass-echo-prime-roughness.png",
+      "normal": "/assets/generated/materials/glass-echo-prime-normal.png",
+      "resolution": 256
+    },
+    "mirr-lattice": {
+      "albedo": "/assets/generated/materials/mirr-lattice-albedo.png",
+      "emissive": "/assets/generated/materials/mirr-lattice-emissive.png",
+      "roughness": "/assets/generated/materials/mirr-lattice-roughness.png",
+      "normal": "/assets/generated/materials/mirr-lattice-normal.png",
+      "resolution": 256
+    },
+    "celest-vault": {
+      "albedo": "/assets/generated/materials/celest-vault-albedo.png",
+      "emissive": "/assets/generated/materials/celest-vault-emissive.png",
+      "roughness": "/assets/generated/materials/celest-vault-roughness.png",
+      "normal": "/assets/generated/materials/celest-vault-normal.png",
+      "resolution": 256
+    }
   }
 }

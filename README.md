@@ -6,13 +6,30 @@ Browser-playable WebGL vertical slice for an original space combat/trading game.
 
 ## Screenshots
 
-| View | Screenshot |
-| --- | --- |
-| Main Menu | ![Main menu presenting six frontier systems plus PTD Home, language selection, and save slots](docs/screenshots/main-menu.png) |
-| Flight HUD | ![Third-person flight HUD with ship gauges, onboarding, story, economy, legal, and signal trackers](docs/screenshots/flight-hud.png) |
-| Station Market | ![Station market and service interface for buying, selling, mission flow, and local economy status](docs/screenshots/station-market.png) |
-| Galaxy Map | ![Galaxy map showing discovered systems, station routes, dispatch targets, story objectives, and Quiet Signals](docs/screenshots/galaxy-map.png) |
-| Career Shipyard | ![Shipyard cards showing career hulls, traits, blueprint paths, and purchase requirements](docs/screenshots/shipyard-careers.png) |
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/main-menu.png" alt="Main menu presenting six frontier systems plus PTD Home, language selection, and save slots"></td>
+    <td width="50%"><img src="docs/screenshots/flight-hud.png" alt="Third-person flight HUD with ship gauges, onboarding, story, economy, legal, and signal trackers"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Main Menu</strong> &mdash; systems, language selection, and save slots</td>
+    <td align="center"><strong>Flight HUD</strong> &mdash; ship gauges, story, economy, and signal trackers</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/station-market.png" alt="Station market and service interface for buying, selling, mission flow, and local economy status"></td>
+    <td width="50%"><img src="docs/screenshots/galaxy-map.png" alt="Galaxy map showing discovered systems, station routes, dispatch targets, story objectives, and Quiet Signals"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>Station Market</strong> &mdash; trade, missions, and local economy status</td>
+    <td align="center"><strong>Galaxy Map</strong> &mdash; routes, dispatch targets, and story objectives</td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/screenshots/shipyard-careers.png" alt="Shipyard cards showing career hulls, traits, blueprint paths, and purchase requirements"></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><strong>Career Shipyard</strong> &mdash; hull traits, blueprint paths, and purchase requirements</td>
+  </tr>
+</table>
 
 ## Run
 

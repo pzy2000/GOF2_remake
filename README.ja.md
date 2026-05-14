@@ -6,13 +6,30 @@
 
 ## スクリーンショット
 
-| ビュー | スクリーンショット |
-| --- | --- |
-| メインメニュー | ![6つの辺境星系と専用拠点 PTD Home、言語選択、セーブスロットを表示するメインメニュー](docs/screenshots/ja/main-menu.png) |
-| フライト HUD | ![船体ゲージ、初回チェックリスト、メインストーリー、経済、法的状態、信号トラッカーを表示した三人称フライト HUD](docs/screenshots/ja/flight-hud.png) |
-| ステーション市場 | ![売買、ミッション進行、ローカル経済状態を含むステーション市場とサービス画面](docs/screenshots/ja/station-market.png) |
-| 銀河マップ | ![発見済み星系、ステーション航路、Dispatch 目標、ストーリー目標、Quiet Signals を表示する銀河マップ](docs/screenshots/ja/galaxy-map.png) |
-| キャリア造船所 | ![キャリア船体、特性、設計図ルート、購入条件を表示する造船所カード](docs/screenshots/ja/shipyard-careers.png) |
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/ja/main-menu.png" alt="6つの辺境星系と専用拠点 PTD Home、言語選択、セーブスロットを表示するメインメニュー"></td>
+    <td width="50%"><img src="docs/screenshots/ja/flight-hud.png" alt="船体ゲージ、初回チェックリスト、メインストーリー、経済、法的状態、信号トラッカーを表示した三人称フライト HUD"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>メインメニュー</strong> &mdash; 星系、言語選択、セーブスロット</td>
+    <td align="center"><strong>フライト HUD</strong> &mdash; 船体ゲージ、ストーリー、経済、信号トラッカー</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/ja/station-market.png" alt="売買、ミッション進行、ローカル経済状態を含むステーション市場とサービス画面"></td>
+    <td width="50%"><img src="docs/screenshots/ja/galaxy-map.png" alt="発見済み星系、ステーション航路、Dispatch 目標、ストーリー目標、Quiet Signals を表示する銀河マップ"></td>
+  </tr>
+  <tr>
+    <td align="center"><strong>ステーション市場</strong> &mdash; 交易、ミッション、ローカル経済状態</td>
+    <td align="center"><strong>銀河マップ</strong> &mdash; 航路、Dispatch 目標、ストーリー目標</td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/screenshots/ja/shipyard-careers.png" alt="キャリア船体、特性、設計図ルート、購入条件を表示する造船所カード"></td>
+  </tr>
+  <tr>
+    <td colspan="2" align="center"><strong>キャリア造船所</strong> &mdash; 船体特性、設計図ルート、購入条件</td>
+  </tr>
+</table>
 
 ## 実行
 

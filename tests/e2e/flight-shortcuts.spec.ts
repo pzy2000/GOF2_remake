@@ -65,13 +65,13 @@ test("flight command buttons expose visible shortcuts and route keys to the righ
   await expect(page.getByRole("heading", { name: "Pilot Preferences" })).toBeVisible();
   await page.getByRole("button", { name: "Low" }).click();
   await expect.poll(() =>
-    page.evaluate(() => (window.__GOF2_E2E__!.getState() as { graphicsSettings: { quality: string; postProcessing: boolean } }).graphicsSettings)
-  ).toMatchObject({ quality: "low", postProcessing: false });
+    page.evaluate(() => (window.__GOF2_E2E__!.getState() as { graphicsSettings: { quality: string; postProcessing: boolean; assetDetail: string; vfxDetail: string; postFxDetail: string; shadowDetail: string } }).graphicsSettings)
+  ).toMatchObject({ quality: "low", postProcessing: false, assetDetail: "low", vfxDetail: "low", postFxDetail: "low", shadowDetail: "low" });
   await expect.poll(() => page.evaluate(() => localStorage.getItem("gof2-by-pzy-graphics-settings"))).toContain("\"quality\":\"low\"");
   await page.getByRole("button", { name: "Ultra" }).click();
   await expect.poll(() =>
-    page.evaluate(() => (window.__GOF2_E2E__!.getState() as { graphicsSettings: { quality: string; shadows: boolean } }).graphicsSettings)
-  ).toMatchObject({ quality: "ultra", shadows: true });
+    page.evaluate(() => (window.__GOF2_E2E__!.getState() as { graphicsSettings: { quality: string; shadows: boolean; assetDetail: string; vfxDetail: string; postFxDetail: string; shadowDetail: string } }).graphicsSettings)
+  ).toMatchObject({ quality: "ultra", shadows: true, assetDetail: "ultra", vfxDetail: "ultra", postFxDetail: "ultra", shadowDetail: "ultra" });
   await page.getByRole("button", { name: "Back" }).click();
   await expect.poll(() => page.evaluate(() => (window.__GOF2_E2E__!.getState() as { screen: string }).screen)).toBe("pause");
   await page.getByRole("button", { name: "Resume" }).click();
