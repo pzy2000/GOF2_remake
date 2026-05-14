@@ -3,6 +3,11 @@ import { Html, Line, Stars, useGLTF } from "@react-three/drei";
 import { Component, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import * as THREE from "three";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
+import { BokehPass } from "three/examples/jsm/postprocessing/BokehPass.js";
+import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { SPARROW_ULTIMATE_MODEL_ID, planetById, planets, shipById, stationById, systemById, useGameStore } from "../state/gameStore";
 import { commodityById, glassWakeProtocol, missionTemplates } from "../data/world";
@@ -615,6 +620,39 @@ function GltfPlayerShip({ onLoaded, shipId, url }: { onLoaded: () => void; shipI
   return <primitive object={clone} position={toThree(visual.offset ?? [0, 0, 0])} rotation={visual.rotation} scale={modelScale} />;
 }
 
+function GltfRuntimeAsset({ fitToMaxDimension, opacity = 1, url }: { fitToMaxDimension: number; opacity?: number; url: string }) {
+  const gltf = useGLTF(url);
+  const clone = useMemo(() => {
+    const scene = cloneSkeleton(gltf.scene);
+    const box = getRenderableModelBox(scene);
+    const center = box.getCenter(new THREE.Vector3());
+    scene.position.sub(center);
+    scene.traverse((node) => {
+      if (node instanceof THREE.Mesh) {
+        node.castShadow = true;
+        node.receiveShadow = true;
+        const hadMaterialArray = Array.isArray(node.material);
+        const materials: THREE.Material[] = hadMaterialArray ? node.material : [node.material];
+        const nextMaterials = materials.map((source) => {
+          const material = source.clone();
+          if ("transparent" in material && opacity < 1) material.transparent = true;
+          if ("opacity" in material) material.opacity = opacity;
+          return material;
+        });
+        node.material = hadMaterialArray ? nextMaterials : nextMaterials[0];
+      }
+    });
+    return scene;
+  }, [gltf.scene, opacity]);
+  const modelScale = useMemo(() => {
+    const box = getRenderableModelBox(clone);
+    const size = box.getSize(new THREE.Vector3());
+    const maxDimension = Math.max(size.x, size.y, size.z);
+    return maxDimension > 0 ? fitToMaxDimension / maxDimension : 1;
+  }, [clone, fitToMaxDimension]);
+  return <primitive object={clone} scale={modelScale} />;
+}
+
 function UltimateTransformationFx({ activeUntil, lastActivatedAt }: { activeUntil?: number; lastActivatedAt?: number }) {
   const clock = useGameStore((state) => state.runtime.clock);
   const groupRef = useRef<THREE.Group>(null);
@@ -894,12 +932,32 @@ function DroneNpcShip({ ship }: { ship: FlightEntity }) {
   const flashing = clock - ship.lastDamageAt < 0.18 || ship.deathTimer !== undefined;
   const opacity = ship.deathTimer !== undefined ? 0.42 : 1;
   const scale = ship.deathTimer !== undefined ? 0.78 : ship.boss ? 1.34 : 1;
-  return (
-    <group position={toThree(ship.position)} rotation={[0, yaw, 0]} scale={scale}>
+  const modelUrl = useGameStore((state) => state.assetManifest.enemyShipModels[ship.id]);
+  const fallbackHull = (
+    <>
       <mesh castShadow rotation={[clock * 1.2, clock * 0.4, 0]}>
         <octahedronGeometry args={[ship.boss ? 19 + pulse * 4.2 : 14 + pulse * 2.8, 1]} />
         <meshStandardMaterial color={flashing ? "#ffffff" : ship.boss ? "#ff7db5" : "#8ff7ff"} metalness={0.48} roughness={0.24} emissive={ship.boss ? "#ff2f5f" : "#2de4ff"} emissiveIntensity={flashing ? 1.2 : ship.boss ? 0.74 + pulse * 0.42 : 0.45 + pulse * 0.3} transparent opacity={opacity} />
       </mesh>
+    </>
+  );
+  return (
+    <group position={toThree(ship.position)} rotation={[0, yaw, 0]} scale={scale}>
+      {modelUrl ? (
+        <ShipModelBoundary fallback={fallbackHull} onFallback={() => undefined}>
+          <Suspense fallback={fallbackHull}>
+            <GltfRuntimeAsset fitToMaxDimension={ship.boss ? 106 : 64} opacity={opacity} url={modelUrl} />
+          </Suspense>
+        </ShipModelBoundary>
+      ) : (
+        fallbackHull
+      )}
+      {flashing && modelUrl ? (
+        <mesh>
+          <sphereGeometry args={[ship.boss ? 34 : 22, 18, 12]} />
+          <meshBasicMaterial color="#ffffff" transparent opacity={0.24} toneMapped={false} />
+        </mesh>
+      ) : null}
       <mesh rotation={[Math.PI / 2, 0, clock * 1.6]}>
         <torusGeometry args={[ship.boss ? 36 + pulse * 8 : 25 + pulse * 4, ship.boss ? 2.2 : 1.6, 8, 42]} />
         <meshBasicMaterial color={ship.boss ? "#ffd166" : "#ff9bd5"} transparent opacity={(0.28 + pulse * 0.3) * opacity} toneMapped={false} />
@@ -1420,6 +1478,37 @@ function JumpGateModel() {
 function StationGeometry({ station }: { station: StationDefinition }) {
   const locale = useGameStore((state) => state.locale);
   const clock = useGameStore((state) => state.runtime.clock);
+  const modelUrl = useGameStore((state) => state.assetManifest.stationModels[station.id] ?? state.assetManifest.stationModels[station.archetype]);
+  const profile = useGameStore((state) =>
+    state.assetManifest.stationVisualProfiles[station.id] ??
+    state.assetManifest.stationVisualProfiles[station.archetype] ??
+    state.assetManifest.stationVisualProfiles.default
+  );
+  if (!modelUrl) return <ProceduralStationGeometry station={station} />;
+  return (
+    <ShipModelBoundary fallback={<ProceduralStationGeometry station={station} />} onFallback={() => undefined}>
+      <Suspense fallback={<ProceduralStationGeometry station={station} />}>
+        <group position={toThree(station.position)}>
+          <GltfRuntimeAsset fitToMaxDimension={station.id === "celest-vault" ? 360 : 330} url={modelUrl} />
+          <mesh rotation={[Math.PI / 2, 0, clock * 0.08]}>
+            <torusGeometry args={[118 * profile.ringScale, 1.2, 8, profile.nearSegments]} />
+            <meshBasicMaterial color={profile.accentColor} transparent opacity={0.26 + profile.emissiveIntensity * 0.12} toneMapped={false} />
+          </mesh>
+          <Line points={[[-165 * profile.ringScale, 0, 116], [0, 0, 24], [165 * profile.ringScale, 0, 116]]} color={profile.trafficColor} lineWidth={1.2} transparent opacity={0.18 + Math.sin(clock * 2.6) * 0.04} />
+          <Line points={[[0, -135, -104], [0, 0, -18], [0, 135, -104]]} color={profile.trafficColor} lineWidth={1} transparent opacity={0.14 + Math.cos(clock * 2.2) * 0.04} />
+          <pointLight color={profile.accentColor} intensity={1.35 + profile.emissiveIntensity * 2.2} distance={420} />
+          <Html center distanceFactor={13} className="target-label station-tech-label" position={[0, 102, 0]}>
+            {stationTechLabel(station.techLevel, locale)} 路 {localizeStationName(station.id, locale, station.name)}
+          </Html>
+        </group>
+      </Suspense>
+    </ShipModelBoundary>
+  );
+}
+
+function ProceduralStationGeometry({ station }: { station: StationDefinition }) {
+  const locale = useGameStore((state) => state.locale);
+  const clock = useGameStore((state) => state.runtime.clock);
   const playerPosition = useGameStore((state) => state.player.position);
   const profile = useGameStore((state) =>
     state.assetManifest.stationVisualProfiles[station.id] ??
@@ -1628,9 +1717,33 @@ function WormholeTunnel() {
   );
 }
 
+function ExplosionTextureBillboard({ alpha, frameUrls, life, maxLife, size }: { alpha: number; frameUrls: string[]; life: number; maxLife: number; size: number }) {
+  const camera = useThree((state) => state.camera);
+  const meshRef = useRef<THREE.Mesh>(null);
+  const progress = clamp(1 - life / maxLife, 0, 0.999);
+  const frameUrl = frameUrls[Math.min(frameUrls.length - 1, Math.floor(progress * frameUrls.length))];
+  const texture = useLoader(THREE.TextureLoader, frameUrl);
+  useEffect(() => {
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.wrapS = THREE.ClampToEdgeWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.anisotropy = 4;
+  }, [texture]);
+  useFrame(() => {
+    meshRef.current?.lookAt(camera.position);
+  });
+  return (
+    <mesh ref={meshRef} scale={1 + progress * 0.55}>
+      <planeGeometry args={[size * 3.1, size * 3.1]} />
+      <meshBasicMaterial map={texture} transparent opacity={alpha * 0.88} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
+    </mesh>
+  );
+}
+
 function VisualEffect({ effect }: { effect: VisualEffectEntity }) {
   const locale = useGameStore((state) => state.locale);
   const explosionProfile = useGameStore((state) => state.assetManifest.vfxAssetProfiles[state.assetManifest.vfxCues.explosion]);
+  const explosionFrames = useGameStore((state) => state.assetManifest.vfxTextureSequences[state.assetManifest.vfxCues.explosion] ?? []);
   const alpha = Math.max(0, effect.life / effect.maxLife);
   const particles = useMemo(
     () =>
@@ -1811,6 +1924,7 @@ function VisualEffect({ effect }: { effect: VisualEffectEntity }) {
       </mesh>
       {effect.kind === "explosion" ? (
         <>
+          {explosionFrames.length > 0 ? <ExplosionTextureBillboard alpha={alpha} frameUrls={explosionFrames} life={effect.life} maxLife={effect.maxLife} size={effect.size} /> : null}
           <mesh rotation={[Math.PI / 2, 0, effect.life * 0.9]}>
             <torusGeometry args={[radius * 1.18, Math.max(1.4, effect.size * 0.035), 8, 72]} />
             <meshBasicMaterial color={explosionShock} transparent opacity={alpha * 0.48} toneMapped={false} />
@@ -2034,6 +2148,55 @@ function EconomyRouteMarkers() {
       })}
     </>
   );
+}
+
+function PostProcessingRig() {
+  const { camera, gl, scene, size } = useThree();
+  const currentSystemId = useGameStore((state) => state.currentSystemId);
+  const profile = useGameStore((state) => state.assetManifest.scenePostProfiles[currentSystemId] ?? state.assetManifest.scenePostProfiles.default);
+  const composerRef = useRef<EffectComposer | null>(null);
+
+  useEffect(() => {
+    const composer = new EffectComposer(gl);
+    composer.setSize(size.width, size.height);
+    composer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.7));
+    composer.addPass(new RenderPass(scene, camera));
+    const bloomPass = new UnrealBloomPass(new THREE.Vector2(size.width, size.height), profile.bloomStrength, profile.bloomRadius, profile.bloomThreshold);
+    composer.addPass(bloomPass);
+    if (profile.dofMaxBlur > 0) {
+      composer.addPass(
+        new BokehPass(scene, camera, {
+          focus: profile.dofFocus,
+          aperture: profile.dofAperture,
+          maxblur: profile.dofMaxBlur
+        })
+      );
+    }
+    composer.addPass(new OutputPass());
+    composerRef.current = composer;
+    return () => {
+      composerRef.current = null;
+      composer.dispose();
+    };
+  }, [
+    camera,
+    gl,
+    profile.bloomRadius,
+    profile.bloomStrength,
+    profile.bloomThreshold,
+    profile.dofAperture,
+    profile.dofFocus,
+    profile.dofMaxBlur,
+    scene,
+    size.height,
+    size.width
+  ]);
+
+  useFrame((_, delta) => {
+    composerRef.current?.render(delta);
+  }, 1);
+
+  return null;
 }
 
 function SceneContent({ onShipModelStatus }: { onShipModelStatus: (status: ShipModelStatus | null) => void }) {
@@ -2556,6 +2719,7 @@ export function FlightScene() {
         <Suspense fallback={null}>
           <FlightSimulationTicker />
           <CameraRig />
+          <PostProcessingRig />
           <SceneContent onShipModelStatus={updateShipModelStatus} />
         </Suspense>
       </Canvas>

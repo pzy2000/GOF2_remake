@@ -167,6 +167,12 @@ export interface ScenePostProfile {
   fillColor: string;
   fillIntensity: number;
   exposure: number;
+  bloomStrength: number;
+  bloomRadius: number;
+  bloomThreshold: number;
+  dofFocus: number;
+  dofAperture: number;
+  dofMaxBlur: number;
 }
 
 export interface VfxAssetProfile {
@@ -257,6 +263,8 @@ export interface AssetManifest {
   starSprites: Record<string, string>;
   planetTextures: Record<string, string>;
   shipModels: Record<string, string>;
+  enemyShipModels: Record<string, string>;
+  stationModels: Record<string, string>;
   shipMaterialProfiles: Record<string, ShipMaterialProfile>;
   shipAttachmentProfiles: Record<string, ShipAttachmentProfile>;
   shipLodProfiles: Record<string, ShipLodProfile>;
@@ -264,6 +272,7 @@ export interface AssetManifest {
   stationVisualProfiles: Record<string, StationVisualProfile>;
   scenePostProfiles: Record<string, ScenePostProfile>;
   vfxAssetProfiles: Record<string, VfxAssetProfile>;
+  vfxTextureSequences: Record<string, string[]>;
   npcShipTextures: {
     freighter: string;
   };

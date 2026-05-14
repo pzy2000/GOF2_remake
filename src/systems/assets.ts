@@ -65,6 +65,14 @@ const rawFallbackAssetManifest: AssetManifest = {
     "horizon-ark": "/assets/generated/ships/horizon-ark.glb",
     "sparrow-mk1-gundam": "/assets/generated/ships/sparrow-gundam.glb"
   },
+  enemyShipModels: {
+    "glass-echo-drone": "/assets/generated/enemies/glass-echo-drone.glb",
+    "glass-echo-prime": "/assets/generated/enemies/glass-echo-prime.glb"
+  },
+  stationModels: {
+    "mirr-lattice": "/assets/generated/stations/mirr-lattice.glb",
+    "celest-vault": "/assets/generated/stations/celest-vault.glb"
+  },
   shipMaterialProfiles: {
     "sparrow-mk1": { baseColor: "#cfefff", trimColor: "#318ccf", emissiveColor: "#66e4ff", metalness: 0.48, roughness: 0.28 },
     "mule-lx": { baseColor: "#9a7b4f", trimColor: "#ffd166", emissiveColor: "#ffb657", metalness: 0.5, roughness: 0.36 },
@@ -122,14 +130,14 @@ const rawFallbackAssetManifest: AssetManifest = {
     "celest-vault": { accentColor: "#ffd166", hullColor: "#a6a18a", solarColor: "#dff8ff", ringScale: 1.28, emissiveIntensity: 0.3, trafficColor: "#ffffff", nearSegments: 96, farSegments: 48, farDistance: 1550 }
   },
   scenePostProfiles: {
-    default: { backgroundColor: "#030712", fogColor: "#050b18", fogNear: 1450, fogFar: 4200, ambientMultiplier: 1, fillColor: "#5fc3ff", fillIntensity: 0.42, exposure: 1 },
-    "helion-reach": { backgroundColor: "#030712", fogColor: "#07111f", fogNear: 1550, fogFar: 4300, ambientMultiplier: 1.08, fillColor: "#5fc3ff", fillIntensity: 0.44, exposure: 1.02 },
-    "kuro-belt": { backgroundColor: "#050608", fogColor: "#17110b", fogNear: 1200, fogFar: 3600, ambientMultiplier: 0.92, fillColor: "#ffd166", fillIntensity: 0.32, exposure: 0.96 },
-    vantara: { backgroundColor: "#04080f", fogColor: "#0b1424", fogNear: 1350, fogFar: 3900, ambientMultiplier: 1, fillColor: "#8fb7ff", fillIntensity: 0.38, exposure: 1 },
-    "mirr-vale": { backgroundColor: "#030912", fogColor: "#061d24", fogNear: 1300, fogFar: 3850, ambientMultiplier: 1.08, fillColor: "#9bffe8", fillIntensity: 0.48, exposure: 1.04 },
-    "ashen-drift": { backgroundColor: "#070507", fogColor: "#1a0a10", fogNear: 1100, fogFar: 3400, ambientMultiplier: 0.88, fillColor: "#ff784f", fillIntensity: 0.34, exposure: 0.94 },
-    "celest-gate": { backgroundColor: "#030713", fogColor: "#101729", fogNear: 1600, fogFar: 4600, ambientMultiplier: 1.12, fillColor: "#dff8ff", fillIntensity: 0.52, exposure: 1.08 },
-    "ptd-home": { backgroundColor: "#02070f", fogColor: "#09122a", fogNear: 1700, fogFar: 4700, ambientMultiplier: 1.1, fillColor: "#83ecff", fillIntensity: 0.5, exposure: 1.06 }
+    default: { backgroundColor: "#030712", fogColor: "#050b18", fogNear: 1450, fogFar: 4200, ambientMultiplier: 1, fillColor: "#5fc3ff", fillIntensity: 0.42, exposure: 1, bloomStrength: 0.34, bloomRadius: 0.28, bloomThreshold: 0.18, dofFocus: 1800, dofAperture: 0.000018, dofMaxBlur: 0.004 },
+    "helion-reach": { backgroundColor: "#030712", fogColor: "#07111f", fogNear: 1550, fogFar: 4300, ambientMultiplier: 1.08, fillColor: "#5fc3ff", fillIntensity: 0.44, exposure: 1.02, bloomStrength: 0.38, bloomRadius: 0.3, bloomThreshold: 0.16, dofFocus: 1900, dofAperture: 0.000018, dofMaxBlur: 0.004 },
+    "kuro-belt": { backgroundColor: "#050608", fogColor: "#17110b", fogNear: 1200, fogFar: 3600, ambientMultiplier: 0.92, fillColor: "#ffd166", fillIntensity: 0.32, exposure: 0.96, bloomStrength: 0.28, bloomRadius: 0.24, bloomThreshold: 0.22, dofFocus: 1550, dofAperture: 0.00002, dofMaxBlur: 0.0035 },
+    vantara: { backgroundColor: "#04080f", fogColor: "#0b1424", fogNear: 1350, fogFar: 3900, ambientMultiplier: 1, fillColor: "#8fb7ff", fillIntensity: 0.38, exposure: 1, bloomStrength: 0.32, bloomRadius: 0.28, bloomThreshold: 0.18, dofFocus: 1750, dofAperture: 0.000018, dofMaxBlur: 0.0038 },
+    "mirr-vale": { backgroundColor: "#030912", fogColor: "#061d24", fogNear: 1300, fogFar: 3850, ambientMultiplier: 1.08, fillColor: "#9bffe8", fillIntensity: 0.48, exposure: 1.04, bloomStrength: 0.54, bloomRadius: 0.42, bloomThreshold: 0.1, dofFocus: 1650, dofAperture: 0.000024, dofMaxBlur: 0.005 },
+    "ashen-drift": { backgroundColor: "#070507", fogColor: "#1a0a10", fogNear: 1100, fogFar: 3400, ambientMultiplier: 0.88, fillColor: "#ff784f", fillIntensity: 0.34, exposure: 0.94, bloomStrength: 0.42, bloomRadius: 0.34, bloomThreshold: 0.14, dofFocus: 1500, dofAperture: 0.000024, dofMaxBlur: 0.0045 },
+    "celest-gate": { backgroundColor: "#030713", fogColor: "#101729", fogNear: 1600, fogFar: 4600, ambientMultiplier: 1.12, fillColor: "#dff8ff", fillIntensity: 0.52, exposure: 1.08, bloomStrength: 0.48, bloomRadius: 0.38, bloomThreshold: 0.12, dofFocus: 2100, dofAperture: 0.000016, dofMaxBlur: 0.004 },
+    "ptd-home": { backgroundColor: "#02070f", fogColor: "#09122a", fogNear: 1700, fogFar: 4700, ambientMultiplier: 1.1, fillColor: "#83ecff", fillIntensity: 0.5, exposure: 1.06, bloomStrength: 0.4, bloomRadius: 0.34, bloomThreshold: 0.14, dofFocus: 2150, dofAperture: 0.000016, dofMaxBlur: 0.004 }
   },
   vfxAssetProfiles: {
     "impact-spark": { coreColor: "#ffb657", shockColor: "#ffffff", debrisColor: "#ff784f", bloomIntensity: 1.1, particleMultiplier: 1 },
@@ -137,6 +145,18 @@ const rawFallbackAssetManifest: AssetManifest = {
     "cinematic-burst": { coreColor: "#ff784f", shockColor: "#ffd166", debrisColor: "#8a4b2b", bloomIntensity: 1.45, particleMultiplier: 1.25 },
     "engine-plume": { coreColor: "#66e4ff", shockColor: "#ffffff", debrisColor: "#7dd3fc", bloomIntensity: 1.15, particleMultiplier: 1 },
     "lock-reticle": { coreColor: "#ffdf6e", shockColor: "#eaffff", debrisColor: "#ffd166", bloomIntensity: 1, particleMultiplier: 1 }
+  },
+  vfxTextureSequences: {
+    "cinematic-burst": [
+      "/assets/generated/vfx/explosion-burst-00.png",
+      "/assets/generated/vfx/explosion-burst-01.png",
+      "/assets/generated/vfx/explosion-burst-02.png",
+      "/assets/generated/vfx/explosion-burst-03.png",
+      "/assets/generated/vfx/explosion-burst-04.png",
+      "/assets/generated/vfx/explosion-burst-05.png",
+      "/assets/generated/vfx/explosion-burst-06.png",
+      "/assets/generated/vfx/explosion-burst-07.png"
+    ]
   },
   npcShipTextures: {
     freighter: "/assets/generated/npc-freighter-hull.webp"
@@ -168,6 +188,27 @@ const rawFallbackAssetManifest: AssetManifest = {
       license: "Public domain",
       licenseUrl: "https://creativecommons.org/publicdomain/zero/1.0/",
       assetPath: "/assets/generated/ships/sparrow-gundam.glb"
+    },
+    {
+      title: "Glass Echo premium enemy GLB set",
+      author: "GOF2 procedural asset generator",
+      sourceUrl: "scripts/generate-premium-assets.mjs",
+      license: "Original project asset",
+      assetPath: "/assets/generated/enemies/glass-echo-drone.glb"
+    },
+    {
+      title: "Mirr Lattice and Celest Vault premium station GLB set",
+      author: "GOF2 procedural asset generator",
+      sourceUrl: "scripts/generate-premium-assets.mjs",
+      license: "Original project asset",
+      assetPath: "/assets/generated/stations/mirr-lattice.glb"
+    },
+    {
+      title: "Cinematic burst explosion texture sequence",
+      author: "GOF2 procedural asset generator",
+      sourceUrl: "scripts/generate-premium-assets.mjs",
+      license: "Original project asset",
+      assetPath: "/assets/generated/vfx/explosion-burst-00.png"
     }
   ],
   vfxCues: {
@@ -216,6 +257,10 @@ function resolveAssetRecord(record: AssetRecord, baseUrl?: string): AssetRecord 
   return Object.fromEntries(Object.entries(record).map(([key, value]) => [key, resolvePublicAssetPath(value, baseUrl)]));
 }
 
+function resolveAssetSequenceRecord(record: Record<string, string[]>, baseUrl?: string): Record<string, string[]> {
+  return Object.fromEntries(Object.entries(record).map(([key, values]) => [key, values.map((value) => resolvePublicAssetPath(value, baseUrl))]));
+}
+
 function resolveMusicTrackManifest(manifest: MusicTrackManifest, baseUrl?: string): MusicTrackManifest {
   return {
     systems: resolveAssetRecord(manifest.systems, baseUrl),
@@ -235,6 +280,8 @@ export function resolveAssetManifest(manifest: AssetManifest, baseUrl?: string):
     starSprites: resolveAssetRecord(manifest.starSprites, baseUrl),
     planetTextures: resolveAssetRecord(manifest.planetTextures, baseUrl),
     shipModels: resolveAssetRecord(manifest.shipModels, baseUrl),
+    enemyShipModels: resolveAssetRecord(manifest.enemyShipModels, baseUrl),
+    stationModels: resolveAssetRecord(manifest.stationModels, baseUrl),
     shipMaterialProfiles: manifest.shipMaterialProfiles,
     shipAttachmentProfiles: manifest.shipAttachmentProfiles,
     shipLodProfiles: manifest.shipLodProfiles,
@@ -242,6 +289,7 @@ export function resolveAssetManifest(manifest: AssetManifest, baseUrl?: string):
     stationVisualProfiles: manifest.stationVisualProfiles,
     scenePostProfiles: manifest.scenePostProfiles,
     vfxAssetProfiles: manifest.vfxAssetProfiles,
+    vfxTextureSequences: resolveAssetSequenceRecord(manifest.vfxTextureSequences, baseUrl),
     npcShipTextures: {
       freighter: resolvePublicAssetPath(manifest.npcShipTextures.freighter, baseUrl)
     },
@@ -273,6 +321,8 @@ export async function loadAssetManifest(): Promise<AssetManifest> {
     starSprites: { ...rawFallbackAssetManifest.starSprites, ...loaded.starSprites },
     planetTextures: { ...rawFallbackAssetManifest.planetTextures, ...loaded.planetTextures },
     shipModels: { ...rawFallbackAssetManifest.shipModels, ...loaded.shipModels },
+    enemyShipModels: { ...rawFallbackAssetManifest.enemyShipModels, ...loaded.enemyShipModels },
+    stationModels: { ...rawFallbackAssetManifest.stationModels, ...loaded.stationModels },
     shipMaterialProfiles: { ...rawFallbackAssetManifest.shipMaterialProfiles, ...loaded.shipMaterialProfiles },
     shipAttachmentProfiles: { ...rawFallbackAssetManifest.shipAttachmentProfiles, ...loaded.shipAttachmentProfiles },
     shipLodProfiles: { ...rawFallbackAssetManifest.shipLodProfiles, ...loaded.shipLodProfiles },
@@ -280,6 +330,7 @@ export async function loadAssetManifest(): Promise<AssetManifest> {
     stationVisualProfiles: { ...rawFallbackAssetManifest.stationVisualProfiles, ...loaded.stationVisualProfiles },
     scenePostProfiles: { ...rawFallbackAssetManifest.scenePostProfiles, ...loaded.scenePostProfiles },
     vfxAssetProfiles: { ...rawFallbackAssetManifest.vfxAssetProfiles, ...loaded.vfxAssetProfiles },
+    vfxTextureSequences: { ...rawFallbackAssetManifest.vfxTextureSequences, ...loaded.vfxTextureSequences },
     npcShipTextures: { ...rawFallbackAssetManifest.npcShipTextures, ...loaded.npcShipTextures },
     speakerPortraits: { ...rawFallbackAssetManifest.speakerPortraits, ...loaded.speakerPortraits },
     storyCinematics: { ...rawFallbackAssetManifest.storyCinematics, ...loaded.storyCinematics },

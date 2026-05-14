@@ -46,6 +46,9 @@ describe("asset manifest", () => {
     expect(pagesManifest.keyArt).toBe("/GOF2_remake/assets/generated/key-art.webp");
     expect(pagesManifest.skyboxPanorama).toBe("/GOF2_remake/assets/generated/skybox-panorama.webp");
     expect(pagesManifest.shipModels["sparrow-mk1"]).toBe("/GOF2_remake/assets/generated/ships/sparrow-mk1.glb");
+    expect(pagesManifest.enemyShipModels["glass-echo-prime"]).toBe("/GOF2_remake/assets/generated/enemies/glass-echo-prime.glb");
+    expect(pagesManifest.stationModels["mirr-lattice"]).toBe("/GOF2_remake/assets/generated/stations/mirr-lattice.glb");
+    expect(pagesManifest.vfxTextureSequences["cinematic-burst"][0]).toBe("/GOF2_remake/assets/generated/vfx/explosion-burst-00.png");
     expect(pagesManifest.npcShipTextures.freighter).toBe("/GOF2_remake/assets/generated/npc-freighter-hull.webp");
     expect(pagesManifest.speakerPortraits["helion-handler"]).toBe("/GOF2_remake/assets/generated/portraits/helion-handler.webp");
     expect(pagesManifest.starSprites["helion-reach"]).toBe("/GOF2_remake/assets/generated/stars/star-helion-reach.png");
@@ -122,6 +125,9 @@ describe("asset manifest", () => {
   it("precaches the sparrow ultimate mech model for offline preview", () => {
     const serviceWorker = readFileSync(resolve(process.cwd(), "public", "service-worker.js"), "utf8");
     expect(serviceWorker).toContain('"assets/generated/ships/sparrow-gundam.glb"');
+    expect(serviceWorker).toContain('"assets/generated/enemies/glass-echo-prime.glb"');
+    expect(serviceWorker).toContain('"assets/generated/stations/mirr-lattice.glb"');
+    expect(serviceWorker).toContain('"assets/generated/vfx/explosion-burst-00.png"');
   });
 
   it("defines material and hardpoint metadata for every player ship", () => {
@@ -145,6 +151,8 @@ describe("asset manifest", () => {
     expect(assetManifest.planetVisualProfiles.default.nearSegments[0]).toBeGreaterThan(assetManifest.planetVisualProfiles.default.farSegments[0]);
     expect(assetManifest.stationVisualProfiles.default.nearSegments).toBeGreaterThan(assetManifest.stationVisualProfiles.default.farSegments);
     expect(assetManifest.scenePostProfiles.default.fogFar).toBeGreaterThan(assetManifest.scenePostProfiles.default.fogNear);
+    expect(assetManifest.scenePostProfiles["mirr-vale"].bloomStrength).toBeGreaterThan(assetManifest.scenePostProfiles.default.bloomStrength);
+    expect(assetManifest.scenePostProfiles.default.dofMaxBlur).toBeGreaterThan(0);
     expect(assetManifest.vfxAssetProfiles[assetManifest.vfxCues.explosion].bloomIntensity).toBeGreaterThan(1);
 
     for (const system of systems) {
@@ -155,6 +163,23 @@ describe("asset manifest", () => {
     }
     for (const planet of planets) {
       expect(assetManifest.planetVisualProfiles[planet.id] ?? assetManifest.planetVisualProfiles.default).toBeTruthy();
+    }
+  });
+
+  it("points premium enemy, station, and explosion sequence assets at local generated files", () => {
+    const assetManifest = manifest as AssetManifest;
+    for (const assetPath of Object.values(assetManifest.enemyShipModels)) {
+      expect(assetPath).toMatch(/^\/assets\/generated\/enemies\/.+\.glb$/);
+      expectProjectAssetExists(assetPath);
+    }
+    for (const assetPath of Object.values(assetManifest.stationModels)) {
+      expect(assetPath).toMatch(/^\/assets\/generated\/stations\/.+\.glb$/);
+      expectProjectAssetExists(assetPath);
+    }
+    expect(assetManifest.vfxTextureSequences["cinematic-burst"].length).toBeGreaterThanOrEqual(8);
+    for (const assetPath of assetManifest.vfxTextureSequences["cinematic-burst"]) {
+      expect(assetPath).toMatch(/^\/assets\/generated\/vfx\/explosion-burst-\d+\.png$/);
+      expectProjectAssetExists(assetPath);
     }
   });
 

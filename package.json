@@ -16,6 +16,7 @@
     "test:e2e:mobile:screenshots": "GOF2_UPDATE_MOBILE_MATRIX=1 playwright test --grep \"mobile and foldable layouts\"",
     "test:watch": "vitest",
     "generate:voices": "node scripts/generate-voice-lines.mjs",
+    "generate:premium-assets": "node scripts/generate-premium-assets.mjs",
     "postinstall": "patch-package"
   },
   "dependencies": {
