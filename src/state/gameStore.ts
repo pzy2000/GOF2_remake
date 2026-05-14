@@ -195,6 +195,7 @@ import {
   undockPatch
 } from "./domains/navigationRuntime";
 import { readLocalePreference, saveLocalePreference } from "../i18n";
+import { getGraphicsSettings, saveGraphicsQuality } from "../systems/graphics";
 
 const emptyInput: FlightInput = emptyFlightInput();
 const GLASS_WAKE_INTRO_SCENE_ID = "dialogue-story-glass-wake-intro";
@@ -911,8 +912,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
   saveSlots: readSaveSlots(),
   activeSaveSlotId: undefined,
   locale: readLocalePreference(),
+  graphicsSettings: getGraphicsSettings(),
   setAssetManifest: (assetManifest) => set({ assetManifest }),
   setLocale: (locale) => set({ locale: saveLocalePreference(locale) }),
+  setGraphicsQuality: (quality) => set({ graphicsSettings: saveGraphicsQuality(quality) }),
   newGame: () => {
     const introAlreadySeen = get().dialogueState.seenSceneIds.includes(GLASS_WAKE_INTRO_SCENE_ID);
     const dialogueState = introAlreadySeen

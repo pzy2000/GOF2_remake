@@ -14,6 +14,7 @@ import { ShortcutButton } from "./components/ShortcutButton";
 import { audioSystem, getAudioSettings, saveAudioSettings } from "./systems/audio";
 import { voiceSystem } from "./systems/voice";
 import { loadAssetManifest } from "./systems/assets";
+import { graphicsQualityLabels, graphicsQualityProfiles } from "./systems/graphics";
 import { resolveMusicCue } from "./systems/music";
 import { stationById, useGameStore } from "./state/gameStore";
 import "./styles.css";
@@ -32,6 +33,7 @@ function PauseMenu() {
           <ShortcutButton className="primary" shortcut="Esc" onClick={() => setScreen("flight")} title="Resume">Resume</ShortcutButton>
           <ShortcutButton shortcut="Ctrl+S" onClick={() => saveGame()} title="Quick Save">Quick Save</ShortcutButton>
           <ShortcutButton shortcut="Ctrl+R" onClick={() => loadGame()} title="Reload Latest">Reload Latest</ShortcutButton>
+          <button onClick={() => setScreen("settings")}>Settings</button>
           <ShortcutButton shortcut="Ctrl+M" onClick={() => setScreen("menu")} title="Main Menu">Main Menu</ShortcutButton>
         </div>
         <SaveSlotsPanel mode="manage" />
@@ -62,11 +64,16 @@ function GameOver() {
 
 function SimpleScreen({ type }: { type: "settings" | "credits" }) {
   const setScreen = useGameStore((state) => state.setScreen);
+  const previousScreen = useGameStore((state) => state.previousScreen);
   const assetCredits = useGameStore((state) => state.assetManifest.assetCredits);
+  const graphicsSettings = useGameStore((state) => state.graphicsSettings);
+  const setGraphicsQuality = useGameStore((state) => state.setGraphicsQuality);
   const [audioSettings, setAudioSettings] = useState(getAudioSettings);
   const updateAudio = (patch: Partial<typeof audioSettings>) => {
     setAudioSettings(saveAudioSettings({ ...audioSettings, ...patch }));
   };
+  const backTarget = previousScreen === "pause" ? "pause" : "menu";
+  const qualityOptions = Object.keys(graphicsQualityProfiles) as Array<keyof typeof graphicsQualityProfiles>;
   return (
     <section className="modal-screen static-screen">
       <div className="modal-panel wide">
@@ -77,6 +84,21 @@ function SimpleScreen({ type }: { type: "settings" | "credits" }) {
             <p>Keyboard and mouse controls are active in flight. Click the 3D view once to capture mouse movement.</p>
             <div className="settings-grid">
               <LanguageSelect />
+              <div className="settings-row graphics-quality-row">
+                <span>Graphics</span>
+                <div className="segmented-control" role="group" aria-label="Graphics quality">
+                  {qualityOptions.map((quality) => (
+                    <button
+                      key={quality}
+                      className={graphicsSettings.quality === quality ? "active" : ""}
+                      type="button"
+                      onClick={() => setGraphicsQuality(quality)}
+                    >
+                      {graphicsQualityLabels[quality]}
+                    </button>
+                  ))}
+                </div>
+              </div>
               <label>
                 <span>Master</span>
                 <input type="range" min="0" max="1" step="0.01" value={audioSettings.masterVolume} onChange={(event) => updateAudio({ masterVolume: Number(event.target.value) })} />
@@ -116,7 +138,7 @@ function SimpleScreen({ type }: { type: "settings" | "credits" }) {
             ) : null}
           </>
         )}
-        <button className="primary" onClick={() => setScreen("menu")}>Back</button>
+        <button className="primary" onClick={() => setScreen(backTarget)}>Back</button>
       </div>
     </section>
   );

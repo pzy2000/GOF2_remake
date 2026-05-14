@@ -50,6 +50,18 @@ export interface AudioSettings {
   muted: boolean;
 }
 
+export type GraphicsQuality = "low" | "medium" | "high" | "ultra";
+
+export interface GraphicsSettings {
+  quality: GraphicsQuality;
+  dprRange: [number, number];
+  postProcessing: boolean;
+  bloomMultiplier: number;
+  sharpenMultiplier: number;
+  depthOfField: boolean;
+  shadows: boolean;
+}
+
 export type Screen =
   | "menu"
   | "flight"

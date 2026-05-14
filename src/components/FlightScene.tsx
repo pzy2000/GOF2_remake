@@ -2186,17 +2186,25 @@ function PostProcessingRig() {
   const { camera, gl, scene, size } = useThree();
   const currentSystemId = useGameStore((state) => state.currentSystemId);
   const profile = useGameStore((state) => state.assetManifest.scenePostProfiles[currentSystemId] ?? state.assetManifest.scenePostProfiles.default);
+  const graphicsSettings = useGameStore((state) => state.graphicsSettings);
   const composerRef = useRef<EffectComposer | null>(null);
 
   useEffect(() => {
+    if (!graphicsSettings.postProcessing) {
+      composerRef.current = null;
+      return undefined;
+    }
     const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
     const composer = new EffectComposer(gl);
     composer.setSize(size.width, size.height);
     composer.setPixelRatio(pixelRatio);
     composer.addPass(new RenderPass(scene, camera));
-    const bloomPass = new UnrealBloomPass(new THREE.Vector2(size.width, size.height), profile.bloomStrength, profile.bloomRadius, profile.bloomThreshold);
-    composer.addPass(bloomPass);
-    if (profile.dofMaxBlur > 0.0001 && profile.dofAperture > 0) {
+    const bloomStrength = profile.bloomStrength * graphicsSettings.bloomMultiplier;
+    if (bloomStrength > 0) {
+      const bloomPass = new UnrealBloomPass(new THREE.Vector2(size.width, size.height), bloomStrength, profile.bloomRadius, profile.bloomThreshold);
+      composer.addPass(bloomPass);
+    }
+    if (graphicsSettings.depthOfField && profile.dofMaxBlur > 0.0001 && profile.dofAperture > 0) {
       composer.addPass(
         new BokehPass(scene, camera, {
           focus: profile.dofFocus,
@@ -2205,10 +2213,11 @@ function PostProcessingRig() {
         })
       );
     }
-    if (profile.sharpenStrength > 0) {
+    const sharpenStrength = profile.sharpenStrength * graphicsSettings.sharpenMultiplier;
+    if (sharpenStrength > 0) {
       const sharpenPass = new ShaderPass(UltraClearSharpenShader);
       sharpenPass.uniforms.resolution.value = new THREE.Vector2(size.width * pixelRatio, size.height * pixelRatio);
-      sharpenPass.uniforms.strength.value = profile.sharpenStrength;
+      sharpenPass.uniforms.strength.value = sharpenStrength;
       composer.addPass(sharpenPass);
     }
     composer.addPass(new OutputPass());
@@ -2219,6 +2228,10 @@ function PostProcessingRig() {
     };
   }, [
     camera,
+    graphicsSettings.bloomMultiplier,
+    graphicsSettings.depthOfField,
+    graphicsSettings.postProcessing,
+    graphicsSettings.sharpenMultiplier,
     gl,
     profile.bloomRadius,
     profile.bloomStrength,
@@ -2734,6 +2747,7 @@ export function FlightScene() {
   });
   const navigationCue = getNavigationTargetCue(navigationTarget);
   const locale = useGameStore((state) => state.locale);
+  const graphicsSettings = useGameStore((state) => state.graphicsSettings);
   const hint = getLocalizedNavigationHintText(navigationTarget, locale);
   return (
     <div
@@ -2747,7 +2761,7 @@ export function FlightScene() {
       <TouchFlightInputControls />
       <Canvas
         camera={{ position: [0, 36, 210], fov: 68, near: 0.1, far: 5200 }}
-        dpr={[1.25, 2]}
+        dpr={graphicsSettings.dprRange}
         gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
         onCreated={({ gl, scene }) => {
           gl.toneMapping = THREE.ACESFilmicToneMapping;
@@ -2755,7 +2769,7 @@ export function FlightScene() {
           gl.shadowMap.type = THREE.PCFSoftShadowMap;
           scene.fog = new THREE.FogExp2("#030712", 0.00013);
         }}
-        shadows
+        shadows={graphicsSettings.shadows}
       >
         <Suspense fallback={null}>
           <FlightSimulationTicker />

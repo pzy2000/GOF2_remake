@@ -10,6 +10,8 @@ import type {
   FactionHeatState,
   FactionId,
   FlightInput,
+  GraphicsQuality,
+  GraphicsSettings,
   NpcInteractionAction,
   NpcInteractionState,
   NpcObjectiveState,
@@ -70,8 +72,10 @@ export interface GameStore {
   saveSlots: SaveSlotSummary[];
   activeSaveSlotId?: SaveSlotId;
   locale: Locale;
+  graphicsSettings: GraphicsSettings;
   setAssetManifest: (manifest: AssetManifest) => void;
   setLocale: (locale: Locale) => void;
+  setGraphicsQuality: (quality: GraphicsQuality) => void;
   newGame: () => void;
   loadGame: (slotId?: SaveSlotId) => boolean;
   saveGame: (slotId?: SaveSlotId) => void;

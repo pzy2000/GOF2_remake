@@ -50,4 +50,19 @@ test("flight command buttons expose visible shortcuts and route keys to the righ
   await expect(page.locator(".menu-actions .button-shortcut[data-shortcut='Ctrl+S']")).toBeVisible();
   await expect(page.locator(".menu-actions .button-shortcut[data-shortcut='Ctrl+R']")).toBeVisible();
   await expect(page.locator(".menu-actions .button-shortcut[data-shortcut='Ctrl+M']")).toBeVisible();
+
+  await page.getByRole("button", { name: "Settings" }).click();
+  await expect.poll(() => page.evaluate(() => (window.__GOF2_E2E__!.getState() as { screen: string }).screen)).toBe("settings");
+  await expect(page.getByRole("heading", { name: "Pilot Preferences" })).toBeVisible();
+  await page.getByRole("button", { name: "Low" }).click();
+  await expect.poll(() =>
+    page.evaluate(() => (window.__GOF2_E2E__!.getState() as { graphicsSettings: { quality: string; postProcessing: boolean } }).graphicsSettings)
+  ).toMatchObject({ quality: "low", postProcessing: false });
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("gof2-by-pzy-graphics-settings"))).toContain("\"quality\":\"low\"");
+  await page.getByRole("button", { name: "Ultra" }).click();
+  await expect.poll(() =>
+    page.evaluate(() => (window.__GOF2_E2E__!.getState() as { graphicsSettings: { quality: string; shadows: boolean } }).graphicsSettings)
+  ).toMatchObject({ quality: "ultra", shadows: true });
+  await page.getByRole("button", { name: "Back" }).click();
+  await expect.poll(() => page.evaluate(() => (window.__GOF2_E2E__!.getState() as { screen: string }).screen)).toBe("pause");
 });

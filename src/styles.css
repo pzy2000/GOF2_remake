@@ -1331,6 +1331,38 @@ h3 {
   color: #d8efff;
 }
 
+.settings-row {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  color: #d8efff;
+}
+
+.segmented-control {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid rgba(128, 214, 255, 0.22);
+  border-radius: 8px;
+  background: rgba(3, 10, 22, 0.54);
+}
+
+.segmented-control button {
+  min-height: 34px;
+  padding: 8px 10px;
+  border-color: rgba(128, 214, 255, 0.18);
+  background: rgba(8, 20, 38, 0.78);
+  color: #b8d6e8;
+}
+
+.segmented-control button.active {
+  border-color: rgba(155, 255, 232, 0.66);
+  background: rgba(36, 108, 132, 0.78);
+  color: #f3fbff;
+}
+
 .language-select {
   display: grid;
   grid-template-columns: 84px minmax(0, 1fr);
