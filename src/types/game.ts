@@ -173,6 +173,7 @@ export interface ScenePostProfile {
   dofFocus: number;
   dofAperture: number;
   dofMaxBlur: number;
+  sharpenStrength: number;
 }
 
 export interface VfxAssetProfile {

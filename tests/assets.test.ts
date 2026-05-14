@@ -152,7 +152,8 @@ describe("asset manifest", () => {
     expect(assetManifest.stationVisualProfiles.default.nearSegments).toBeGreaterThan(assetManifest.stationVisualProfiles.default.farSegments);
     expect(assetManifest.scenePostProfiles.default.fogFar).toBeGreaterThan(assetManifest.scenePostProfiles.default.fogNear);
     expect(assetManifest.scenePostProfiles["mirr-vale"].bloomStrength).toBeGreaterThan(assetManifest.scenePostProfiles.default.bloomStrength);
-    expect(assetManifest.scenePostProfiles.default.dofMaxBlur).toBeGreaterThan(0);
+    expect(assetManifest.scenePostProfiles.default.dofMaxBlur).toBe(0);
+    expect(assetManifest.scenePostProfiles.default.sharpenStrength).toBeGreaterThan(0);
     expect(assetManifest.vfxAssetProfiles[assetManifest.vfxCues.explosion].bloomIntensity).toBeGreaterThan(1);
 
     for (const system of systems) {

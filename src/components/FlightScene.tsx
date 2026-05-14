@@ -7,6 +7,7 @@ import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { BokehPass } from "three/examples/jsm/postprocessing/BokehPass.js";
+import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { SPARROW_ULTIMATE_MODEL_ID, planetById, planets, shipById, stationById, systemById, useGameStore } from "../state/gameStore";
@@ -2150,6 +2151,37 @@ function EconomyRouteMarkers() {
   );
 }
 
+const UltraClearSharpenShader = {
+  uniforms: {
+    tDiffuse: { value: null },
+    resolution: { value: new THREE.Vector2(1, 1) },
+    strength: { value: 0.18 }
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main() {
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }
+  `,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform vec2 resolution;
+    uniform float strength;
+    varying vec2 vUv;
+    void main() {
+      vec2 texel = 1.0 / resolution;
+      vec4 center = texture2D(tDiffuse, vUv);
+      vec4 north = texture2D(tDiffuse, vUv + vec2(0.0, texel.y));
+      vec4 south = texture2D(tDiffuse, vUv - vec2(0.0, texel.y));
+      vec4 east = texture2D(tDiffuse, vUv + vec2(texel.x, 0.0));
+      vec4 west = texture2D(tDiffuse, vUv - vec2(texel.x, 0.0));
+      vec4 sharpened = center * (1.0 + 4.0 * strength) - (north + south + east + west) * strength;
+      gl_FragColor = vec4(clamp(sharpened.rgb, 0.0, 1.0), center.a);
+    }
+  `
+};
+
 function PostProcessingRig() {
   const { camera, gl, scene, size } = useThree();
   const currentSystemId = useGameStore((state) => state.currentSystemId);
@@ -2157,13 +2189,14 @@ function PostProcessingRig() {
   const composerRef = useRef<EffectComposer | null>(null);
 
   useEffect(() => {
+    const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
     const composer = new EffectComposer(gl);
     composer.setSize(size.width, size.height);
-    composer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.7));
+    composer.setPixelRatio(pixelRatio);
     composer.addPass(new RenderPass(scene, camera));
     const bloomPass = new UnrealBloomPass(new THREE.Vector2(size.width, size.height), profile.bloomStrength, profile.bloomRadius, profile.bloomThreshold);
     composer.addPass(bloomPass);
-    if (profile.dofMaxBlur > 0) {
+    if (profile.dofMaxBlur > 0.0001 && profile.dofAperture > 0) {
       composer.addPass(
         new BokehPass(scene, camera, {
           focus: profile.dofFocus,
@@ -2171,6 +2204,12 @@ function PostProcessingRig() {
           maxblur: profile.dofMaxBlur
         })
       );
+    }
+    if (profile.sharpenStrength > 0) {
+      const sharpenPass = new ShaderPass(UltraClearSharpenShader);
+      sharpenPass.uniforms.resolution.value = new THREE.Vector2(size.width * pixelRatio, size.height * pixelRatio);
+      sharpenPass.uniforms.strength.value = profile.sharpenStrength;
+      composer.addPass(sharpenPass);
     }
     composer.addPass(new OutputPass());
     composerRef.current = composer;
@@ -2187,6 +2226,7 @@ function PostProcessingRig() {
     profile.dofAperture,
     profile.dofFocus,
     profile.dofMaxBlur,
+    profile.sharpenStrength,
     scene,
     size.height,
     size.width
@@ -2707,11 +2747,12 @@ export function FlightScene() {
       <TouchFlightInputControls />
       <Canvas
         camera={{ position: [0, 36, 210], fov: 68, near: 0.1, far: 5200 }}
-        dpr={[1, 1.7]}
+        dpr={[1.25, 2]}
         gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
         onCreated={({ gl, scene }) => {
           gl.toneMapping = THREE.ACESFilmicToneMapping;
           gl.toneMappingExposure = 0.76;
+          gl.shadowMap.type = THREE.PCFSoftShadowMap;
           scene.fog = new THREE.FogExp2("#030712", 0.00013);
         }}
         shadows

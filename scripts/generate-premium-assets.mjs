@@ -302,25 +302,26 @@ async function writeExplosionFrame(frame, frameCount) {
 async function updateManifest(vfxFrames) {
   const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
   const postFxDefaults = {
-    bloomStrength: 0.34,
-    bloomRadius: 0.28,
-    bloomThreshold: 0.18,
-    dofFocus: 1800,
-    dofAperture: 0.000018,
-    dofMaxBlur: 0.004
+    bloomStrength: 0.22,
+    bloomRadius: 0.18,
+    bloomThreshold: 0.3,
+    dofFocus: 0,
+    dofAperture: 0,
+    dofMaxBlur: 0,
+    sharpenStrength: 0.18
   };
   const postFxOverrides = {
-    "mirr-vale": { bloomStrength: 0.54, bloomRadius: 0.42, bloomThreshold: 0.1, dofFocus: 1650, dofAperture: 0.000024, dofMaxBlur: 0.005 },
-    "celest-gate": { bloomStrength: 0.48, bloomRadius: 0.38, bloomThreshold: 0.12, dofFocus: 2100, dofAperture: 0.000016, dofMaxBlur: 0.004 },
-    "ashen-drift": { bloomStrength: 0.42, bloomRadius: 0.34, bloomThreshold: 0.14, dofFocus: 1500, dofAperture: 0.000024, dofMaxBlur: 0.0045 }
+    "mirr-vale": { bloomStrength: 0.34, bloomRadius: 0.24, bloomThreshold: 0.22, sharpenStrength: 0.2 },
+    "celest-gate": { bloomStrength: 0.3, bloomRadius: 0.22, bloomThreshold: 0.24, sharpenStrength: 0.18 },
+    "ashen-drift": { bloomStrength: 0.28, bloomRadius: 0.22, bloomThreshold: 0.24, sharpenStrength: 0.2 }
   };
   manifest.scenePostProfiles = Object.fromEntries(
     Object.entries(manifest.scenePostProfiles ?? {}).map(([key, profile]) => [
       key,
       {
+        ...profile,
         ...postFxDefaults,
-        ...(postFxOverrides[key] ?? {}),
-        ...profile
+        ...(postFxOverrides[key] ?? {})
       }
     ])
   );
