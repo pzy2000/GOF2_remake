@@ -23,6 +23,7 @@ import type {
   ReputationState,
   RuntimeState,
   SaveGameData,
+  SaveGameScreen,
   SaveSlotId,
   SaveSlotSummary,
   Screen,
@@ -156,6 +157,6 @@ export type SavePayloadOverrides = Partial<
     | "dialogueState"
     | "onboardingState"
   >
->;
+> & { screen?: SaveGameScreen };
 
 export type SavePayload = Omit<SaveGameData, "version" | "savedAt">;

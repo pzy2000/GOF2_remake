@@ -11,6 +11,7 @@ import type {
   NpcInteractionAction,
   ProjectileEntity,
   RuntimeState,
+  SaveGameScreen,
   AudioEventName,
   EncounterStageTrigger,
   StoryNotificationTone,
@@ -269,9 +270,16 @@ function dispatchVisibilityFor(state: Pick<GameStore, "knownSystems" | "knownPla
 }
 
 function savePayload(state: GameStore, overrides: SavePayloadOverrides = {}): SavePayload {
+  const screen: SaveGameScreen = overrides.screen ?? (state.screen === "station" ? "station" : "flight");
+  const currentStationId = Object.prototype.hasOwnProperty.call(overrides, "currentStationId")
+    ? overrides.currentStationId
+    : screen === "station"
+      ? state.currentStationId
+      : undefined;
   return {
+    screen,
     currentSystemId: overrides.currentSystemId ?? state.currentSystemId,
-    currentStationId: Object.prototype.hasOwnProperty.call(overrides, "currentStationId") ? overrides.currentStationId : state.currentStationId,
+    currentStationId,
     gameClock: overrides.gameClock ?? state.gameClock,
     player: overrides.player ?? state.player,
     activeMissions: overrides.activeMissions ?? state.activeMissions,
@@ -1072,12 +1080,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const save = readSave(undefined, resolvedSlotId);
     if (!save) return false;
     const activeMissions = save.activeMissions.map(hydrateActiveMission);
+    const screen: SaveGameScreen = save.screen === "station" && save.currentStationId ? "station" : "flight";
     set({
-      screen: "flight",
+      screen,
       previousScreen: "menu",
+      stationTab: screen === "station" ? "Market" : get().stationTab,
       galaxyMapMode: "browse",
       currentSystemId: save.currentSystemId,
-      currentStationId: save.currentStationId,
+      currentStationId: screen === "station" ? save.currentStationId : undefined,
       gameClock: save.gameClock,
       player: normalizePlayerEquipmentStats(save.player),
       activeMissions,

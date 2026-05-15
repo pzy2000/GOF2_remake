@@ -67,6 +67,7 @@ function player(): PlayerState {
 describe("save system", () => {
   function payload(overrides: Partial<Omit<SaveGameData, "version" | "savedAt">> = {}): Omit<SaveGameData, "version" | "savedAt"> {
     return {
+      screen: "flight",
       currentSystemId: "helion-reach",
       gameClock: 123,
       player: player(),
@@ -103,6 +104,8 @@ describe("save system", () => {
             }
           ]
         },
+        screen: "station",
+        currentStationId: "helion-prime",
         explorationState: {
           discoveredSignalIds: ["quiet-signal-sundog-lattice"],
           completedSignalIds: ["quiet-signal-sundog-lattice"],
@@ -124,6 +127,8 @@ describe("save system", () => {
     expect(storage.getItem(`${SAVE_SLOT_PREFIX}manual-1`)).toContain("helion-reach");
     expect(storage.getItem(SAVE_INDEX_KEY)).toContain("manual-1");
     const loaded = readSave(storage, "manual-1");
+    expect(loaded?.screen).toBe("station");
+    expect(readSaveSlots(storage).find((slot) => slot.id === "manual-1")?.screen).toBe("station");
     expect(loaded?.player.credits).toBe(4321);
     expect(loaded?.completedMissionIds).toEqual(["courier-helion-kuro"]);
     expect(loaded?.failedMissionIds).toEqual(["bounty-ashen"]);
@@ -207,6 +212,33 @@ describe("save system", () => {
     expect(index.lastPlayedSlotId).toBe("auto");
     expect(readSave(storage, "auto")?.version).toBe(SAVE_VERSION);
     expect(readSave(storage, "auto")?.factionHeat).toEqual(createInitialFactionHeat());
+  });
+
+  it("backfills docked screen state for older saves with a station id", () => {
+    const storage = new MemoryStorage();
+    const legacyPayload = {
+      ...payload({
+        currentStationId: "helion-prime"
+      }),
+      screen: undefined,
+      version: SAVE_VERSION,
+      savedAt: "2026-05-08T00:00:00.000Z"
+    };
+    storage.setItem(`${SAVE_SLOT_PREFIX}manual-1`, JSON.stringify(legacyPayload));
+    storage.setItem(SAVE_INDEX_KEY, JSON.stringify({
+      version: SAVE_VERSION,
+      lastPlayedSlotId: "manual-1",
+      slots: {
+        "manual-1": { id: "manual-1", label: "Manual Slot 1", exists: true, savedAt: legacyPayload.savedAt },
+        "manual-2": { id: "manual-2", label: "Manual Slot 2", exists: false },
+        "manual-3": { id: "manual-3", label: "Manual Slot 3", exists: false },
+        auto: { id: "auto", label: "Auto / Quick Slot", exists: false }
+      }
+    }));
+
+    const loaded = readSave(storage, "manual-1");
+    expect(loaded?.screen).toBe("station");
+    expect(readSaveSlots(storage).find((slot) => slot.id === "manual-1")?.screen).toBe("station");
   });
 
   it("backfills faction heat when reading v2 saves", () => {

@@ -38,7 +38,7 @@ export function SaveSlotsPanel({ mode }: SaveSlotsPanelProps) {
 
 function slotSubtitle(slot: SaveSlotSummary, locale = useGameStore.getState().locale): string {
   const system = slot.currentSystemId ? systemById[slot.currentSystemId]?.name ?? slot.currentSystemId : "Unknown system";
-  const station = slot.currentStationId ? stationById[slot.currentStationId]?.name ?? slot.currentStationId : "In flight";
+  const station = slot.screen === "station" && slot.currentStationId ? stationById[slot.currentStationId]?.name ?? slot.currentStationId : "In flight";
   const credits = slot.credits !== undefined ? formatNumber(locale, slot.credits) : "0";
   const time = formatGameTime(slot.gameClock ?? 0);
   return `${system} · ${station} · ${credits} cr · ${time}`;

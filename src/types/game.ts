@@ -4,12 +4,14 @@ export type OreRarity = "common" | "uncommon" | "rare" | "epic" | "legendary";
 export type TechLevel = 1 | 2 | 3 | 4 | 5;
 
 export type SaveSlotId = "manual-1" | "manual-2" | "manual-3" | "auto";
+export type SaveGameScreen = "flight" | "station";
 
 export interface SaveSlotSummary {
   id: SaveSlotId;
   label: string;
   exists: boolean;
   savedAt?: string;
+  screen?: SaveGameScreen;
   currentSystemId?: string;
   currentStationId?: string;
   credits?: number;
@@ -1217,6 +1219,7 @@ export interface DebugScenario {
 export interface SaveGameData {
   version: number;
   savedAt: string;
+  screen?: SaveGameScreen;
   currentSystemId: string;
   currentStationId?: string;
   gameClock: number;

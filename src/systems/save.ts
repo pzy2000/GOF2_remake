@@ -1,4 +1,4 @@
-import type { SaveGameData, SaveIndex, SaveSlotId, SaveSlotSummary } from "../types/game";
+import type { SaveGameData, SaveGameScreen, SaveIndex, SaveSlotId, SaveSlotSummary } from "../types/game";
 import { normalizeDialogueState } from "./dialogue";
 import { createInitialMarketState } from "./economy";
 import { normalizePlayerEquipmentStats } from "./equipment";
@@ -49,6 +49,11 @@ function isSupportedSaveVersion(version: unknown): boolean {
   return version === SAVE_VERSION || version === PREVIOUS_SAVE_VERSION || version === LEGACY_SAVE_VERSION;
 }
 
+function normalizeSaveScreen(screen: unknown, currentStationId?: string): SaveGameScreen {
+  if (screen === "station" || screen === "flight") return screen;
+  return currentStationId ? "station" : "flight";
+}
+
 function normalizeSave(parsed: Partial<SaveGameData> | null): SaveGameData | null {
   if (!parsed || !parsed.player || !parsed.currentSystemId) return null;
   if (!isSupportedSaveVersion(parsed.version)) return null;
@@ -59,6 +64,7 @@ function normalizeSave(parsed: Partial<SaveGameData> | null): SaveGameData | nul
     ...parsed,
     version: SAVE_VERSION,
     savedAt: parsed.savedAt ?? new Date().toISOString(),
+    screen: normalizeSaveScreen(parsed.screen, parsed.currentStationId),
     currentSystemId: parsed.currentSystemId,
     currentStationId: parsed.currentStationId,
     gameClock: parsed.gameClock ?? 0,
@@ -86,6 +92,7 @@ function summarizeSave(slotId: SaveSlotId, save: SaveGameData): SaveSlotSummary 
     label: saveSlotLabels[slotId],
     exists: true,
     savedAt: save.savedAt,
+    screen: save.screen,
     currentSystemId: save.currentSystemId,
     currentStationId: save.currentStationId,
     credits: save.player.credits,
@@ -143,7 +150,12 @@ export function readSaveIndex(storage: Storage = localStorage): SaveIndex {
 
 export function readSaveSlots(storage: Storage = localStorage): SaveSlotSummary[] {
   const index = readSaveIndex(storage);
-  return saveSlotIds.map((slotId) => index.slots[slotId] ?? emptySlot(slotId));
+  return saveSlotIds.map((slotId) => {
+    const indexed = index.slots[slotId] ?? emptySlot(slotId);
+    if (!indexed.exists) return indexed;
+    const save = parseSave(storage.getItem(slotKey(slotId)));
+    return save ? { ...indexed, ...summarizeSave(slotId, save) } : indexed;
+  });
 }
 
 export function getLatestSaveSlotId(storage: Storage = localStorage): SaveSlotId | undefined {
