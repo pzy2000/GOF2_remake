@@ -685,7 +685,7 @@ describe("economy store integration", () => {
     expect(store.getState().runtime.message).toContain("Escort complete");
   });
 
-  it("routes to a distant watched NPC before confirming escort with E", async () => {
+  it("routes to a distant watched NPC before confirming escort with F", async () => {
     const store = await freshStore();
     store.setState((state) => ({
       screen: "economyWatch",
@@ -731,7 +731,7 @@ describe("economy store integration", () => {
       openedFrom: "flight",
       lastAction: "escort"
     });
-    expect(store.getState().npcInteraction?.message).toContain("Press E or confirm Escort");
+    expect(store.getState().npcInteraction?.message).toContain("Press F or confirm Escort");
 
     store.getState().interact();
 

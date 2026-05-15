@@ -89,7 +89,8 @@ export function FlightControls() {
         setInput({ [mapped]: true });
       }
       if (event.repeat) return;
-      if (event.code === "KeyE") setInput({ interact: true });
+      if (event.code === "KeyE") setInput({ collectNearby: true });
+      if (event.code === "KeyF") setInput({ interact: true });
       if (event.code === "KeyG") setInput({ activateUltimate: true });
       if (event.code === "Tab") {
         event.preventDefault();
@@ -175,6 +176,7 @@ function isFlightShortcut(event: KeyboardEvent): boolean {
     "ShiftRight",
     "Space",
     "KeyE",
+    "KeyF",
     "KeyG",
     "KeyM",
     "KeyC",
@@ -411,7 +413,7 @@ export function TouchFlightControls() {
     };
   }
 
-  function tapInput(key: "interact" | "cycleTarget" | "toggleMap" | "toggleCamera" | "pause" | "activateUltimate") {
+  function tapInput(key: "collectNearby" | "interact" | "cycleTarget" | "toggleMap" | "toggleCamera" | "pause" | "activateUltimate") {
     return (event: ReactPointerEvent<HTMLButtonElement>) => {
       event.preventDefault();
       setInput({ [key]: true });
@@ -451,7 +453,8 @@ export function TouchFlightControls() {
         <ShortcutButton shortcut="LMB" className="touch-fire-primary" data-testid="touch-fire-primary" aria-label="Fire primary weapon" {...holdInput("firePrimary")}>FIRE</ShortcutButton>
         <ShortcutButton shortcut="RMB" aria-label="Fire secondary weapon" {...holdInput("fireSecondary")}>MISSILE</ShortcutButton>
         <ShortcutButton shortcut="G" aria-label="Activate ultimate" onPointerDown={tapInput("activateUltimate")}>ULT</ShortcutButton>
-        <ShortcutButton shortcut="E" aria-label="Interact" onPointerDown={tapInput("interact")}>E</ShortcutButton>
+        <ShortcutButton shortcut="E" aria-label="Collect nearby cargo or salvage" onPointerDown={tapInput("collectNearby")}>LOOT</ShortcutButton>
+        <ShortcutButton shortcut="F" aria-label="Interact" onPointerDown={tapInput("interact")}>USE</ShortcutButton>
         <ShortcutButton shortcut="Tab" aria-label="Cycle target" onPointerDown={tapInput("cycleTarget")}>TARGET</ShortcutButton>
         <ShortcutButton shortcut="C" aria-label="Toggle camera" onPointerDown={tapInput("toggleCamera")}>CAM</ShortcutButton>
         <ShortcutButton shortcut="Esc" aria-label="Pause" onPointerDown={tapInput("pause")}>PAUSE</ShortcutButton>

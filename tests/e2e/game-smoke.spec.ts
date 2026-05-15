@@ -734,7 +734,7 @@ test.describe("browser smoke", () => {
     await expect(page.getByTestId("dialogue-overlay")).toHaveCount(0);
     const englishResidue = /Credits|Cargo|Missiles|Throttle|Speed|Patrol support active|Nearest station|Target Hull|Target Shield|Law Patrol|Directorate precision kit|Economy offline|local fallback|Basic Food|TECH/;
     await expect(page.locator(".hud")).not.toContainText(englishResidue);
-    await expect(page.locator(".dock-hint")).not.toContainText(/E Dock|Waypoint|TECH|Helion Prime Exchange/);
+    await expect(page.locator(".dock-hint")).not.toContainText(/F Dock|Waypoint|TECH|Helion Prime Exchange/);
     await expect(page.locator(".station-tech-label").first()).toContainText("科技");
     await page.evaluate(() => {
       const state = window.__GOF2_E2E__!.getState() as { closeDialogue: () => void };
@@ -1448,8 +1448,8 @@ test.describe("browser smoke", () => {
     });
 
     const interactionOverlay = page.getByTestId("npc-interaction-overlay");
-    await expect(interactionOverlay).toContainText("Press E or confirm Escort");
-    await page.keyboard.press("KeyE");
+    await expect(interactionOverlay).toContainText("Press F or confirm Escort");
+    await page.keyboard.press("KeyF");
     await expect(interactionOverlay).toContainText("Escort accepted");
   });
 

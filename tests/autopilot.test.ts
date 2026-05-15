@@ -36,6 +36,7 @@ const neutralInput: FlightInput = {
   firePrimary: false,
   fireSecondary: false,
   activateUltimate: false,
+  collectNearby: false,
   interact: false,
   cycleTarget: false,
   toggleMap: false,
@@ -378,7 +379,7 @@ describe("autopilot jump flow", () => {
     store.getState().tick(0.05);
     expect(store.getState().currentStationId).toBeUndefined();
     expect(store.getState().autopilot).toBeUndefined();
-    expect(store.getState().runtime.message).toBe("Arrived near Lode Spindle. Press E to dock.");
+    expect(store.getState().runtime.message).toBe("Arrived near Lode Spindle. Press F to dock.");
   });
 
   it("continues through each known Stargate leg before approaching a distant station", async () => {
@@ -429,7 +430,7 @@ describe("autopilot jump flow", () => {
     store.getState().tick(0.05);
     expect(store.getState().currentStationId).toBeUndefined();
     expect(store.getState().autopilot).toBeUndefined();
-    expect(store.getState().runtime.message).toBe("Arrived near Celest Vault. Press E to dock.");
+    expect(store.getState().runtime.message).toBe("Arrived near Celest Vault. Press F to dock.");
   });
 
   it("cancels only during cancelable navigation phases and ignores invalid routes", async () => {

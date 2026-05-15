@@ -154,7 +154,7 @@ export function getNavigationTargetCue(target: NavigationTarget | undefined): Na
       targetId: target.id,
       kind: target.kind,
       label: target.name,
-      actionLabel: target.inRange ? "E Dock" : "Waypoint",
+      actionLabel: target.inRange ? "F Dock" : "Waypoint",
       distanceLabel: formatNavigationDistance(target.distance),
       tone: "station",
       inRange: target.inRange
@@ -165,7 +165,7 @@ export function getNavigationTargetCue(target: NavigationTarget | undefined): Na
       targetId: target.id,
       kind: target.kind,
       label: target.name,
-      actionLabel: target.inRange ? "E Scan" : "Beacon",
+      actionLabel: target.inRange ? "F Scan" : "Beacon",
       distanceLabel: formatNavigationDistance(target.distance),
       tone: "unknown",
       inRange: target.inRange
@@ -176,7 +176,7 @@ export function getNavigationTargetCue(target: NavigationTarget | undefined): Na
       targetId: target.id,
       kind: target.kind,
       label: target.name,
-      actionLabel: target.inRange ? target.equipmentReady === false ? "Scanner Required" : "E Scan" : "Signal",
+      actionLabel: target.inRange ? target.equipmentReady === false ? "Scanner Required" : "F Scan" : "Signal",
       distanceLabel: formatNavigationDistance(target.distance),
       tone: "exploration",
       inRange: target.inRange && target.equipmentReady !== false
@@ -186,7 +186,7 @@ export function getNavigationTargetCue(target: NavigationTarget | undefined): Na
     targetId: target.id,
     kind: target.kind,
     label: target.name,
-    actionLabel: target.inRange ? "E Activate" : "Stargate",
+    actionLabel: target.inRange ? "F Activate" : "Stargate",
     distanceLabel: formatNavigationDistance(target.distance),
     tone: "gate",
     inRange: target.inRange

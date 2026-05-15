@@ -1185,6 +1185,7 @@ export interface FlightInput {
   firePrimary: boolean;
   fireSecondary: boolean;
   activateUltimate: boolean;
+  collectNearby: boolean;
   interact: boolean;
   cycleTarget: boolean;
   toggleMap: boolean;

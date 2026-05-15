@@ -80,7 +80,7 @@ function FlightControls() {
         } else if (event.code === "Escape") {
           event.preventDefault();
           setInput({ pause: true });
-        } else if (event.code in keyMap || event.code === "Space" || event.code === "KeyE" || event.code === "KeyM" || event.code === "Tab") {
+        } else if (event.code in keyMap || event.code === "Space" || event.code === "KeyE" || event.code === "KeyF" || event.code === "KeyM" || event.code === "Tab") {
           event.preventDefault();
         }
         return;
@@ -106,7 +106,8 @@ function FlightControls() {
         setInput({ [mapped]: true });
       }
       if (event.repeat) return;
-      if (event.code === "KeyE") setInput({ interact: true });
+      if (event.code === "KeyE") setInput({ collectNearby: true });
+      if (event.code === "KeyF") setInput({ interact: true });
       if (event.code === "Tab") {
         event.preventDefault();
         setInput({ cycleTarget: true });
@@ -280,7 +281,7 @@ function TouchFlightControls() {
     };
   }
 
-  function tapInput(key: "interact" | "cycleTarget" | "toggleMap" | "toggleCamera" | "pause") {
+  function tapInput(key: "collectNearby" | "interact" | "cycleTarget" | "toggleMap" | "toggleCamera" | "pause") {
     return (event: ReactPointerEvent<HTMLButtonElement>) => {
       event.preventDefault();
       setInput({ [key]: true });
@@ -303,7 +304,8 @@ function TouchFlightControls() {
         <span />
       </section>
       <section className="touch-action-cluster touch-action-cluster-left" aria-label={translateText("Flight toggles", locale)}>
-        <button type="button" aria-label={translateText("Interact", locale)} onPointerDown={tapInput("interact")}>E</button>
+        <button type="button" aria-label={translateText("Collect nearby cargo or salvage", locale)} onPointerDown={tapInput("collectNearby")}>E</button>
+        <button type="button" aria-label={translateText("Interact", locale)} onPointerDown={tapInput("interact")}>F</button>
         <button type="button" aria-label={translateText("Cycle target", locale)} onPointerDown={tapInput("cycleTarget")}>TAB</button>
         <button type="button" aria-label={translateText("Open map", locale)} onPointerDown={tapInput("toggleMap")}>MAP</button>
       </section>
@@ -2553,31 +2555,31 @@ function navigationActionLabel(target: NavigationTarget, inRange: boolean, local
     return "Scanner Required";
   }
   if (target.kind === "station") {
-    if (locale === "zh-CN") return inRange ? "E 停靠" : "航点";
-    if (locale === "zh-TW") return inRange ? "E 停靠" : "航點";
-    if (locale === "ja") return inRange ? "E ドック" : "ウェイポイント";
-    if (locale === "fr") return inRange ? "E Amarrer" : "Point de route";
-    return inRange ? "E Dock" : "Waypoint";
+    if (locale === "zh-CN") return inRange ? "F 停靠" : "航点";
+    if (locale === "zh-TW") return inRange ? "F 停靠" : "航點";
+    if (locale === "ja") return inRange ? "F ドック" : "ウェイポイント";
+    if (locale === "fr") return inRange ? "F Amarrer" : "Point de route";
+    return inRange ? "F Dock" : "Waypoint";
   }
   if (target.kind === "planet-signal") {
-    if (locale === "zh-CN") return inRange ? "E 扫描" : "信标";
-    if (locale === "zh-TW") return inRange ? "E 掃描" : "信標";
-    if (locale === "ja") return inRange ? "E スキャン" : "ビーコン";
-    if (locale === "fr") return inRange ? "E Scanner" : "Balise";
-    return inRange ? "E Scan" : "Beacon";
+    if (locale === "zh-CN") return inRange ? "F 扫描" : "信标";
+    if (locale === "zh-TW") return inRange ? "F 掃描" : "信標";
+    if (locale === "ja") return inRange ? "F スキャン" : "ビーコン";
+    if (locale === "fr") return inRange ? "F Scanner" : "Balise";
+    return inRange ? "F Scan" : "Beacon";
   }
   if (target.kind === "exploration-signal") {
-    if (locale === "zh-CN") return inRange ? "E 扫描" : "信号";
-    if (locale === "zh-TW") return inRange ? "E 掃描" : "訊號";
-    if (locale === "ja") return inRange ? "E スキャン" : "信号";
-    if (locale === "fr") return inRange ? "E Scanner" : "Signal";
-    return inRange ? "E Scan" : "Signal";
+    if (locale === "zh-CN") return inRange ? "F 扫描" : "信号";
+    if (locale === "zh-TW") return inRange ? "F 掃描" : "訊號";
+    if (locale === "ja") return inRange ? "F スキャン" : "信号";
+    if (locale === "fr") return inRange ? "F Scanner" : "Signal";
+    return inRange ? "F Scan" : "Signal";
   }
-  if (locale === "zh-CN") return inRange ? "E 启动" : "星门";
-  if (locale === "zh-TW") return inRange ? "E 啟動" : "星門";
-  if (locale === "ja") return inRange ? "E 起動" : "スターゲート";
-  if (locale === "fr") return inRange ? "E Activer" : "Portail";
-  return inRange ? "E Activate" : "Stargate";
+  if (locale === "zh-CN") return inRange ? "F 启动" : "星门";
+  if (locale === "zh-TW") return inRange ? "F 啟動" : "星門";
+  if (locale === "ja") return inRange ? "F 起動" : "スターゲート";
+  if (locale === "fr") return inRange ? "F Activer" : "Portail";
+  return inRange ? "F Activate" : "Stargate";
 }
 
 function getLocalizedNavigationHintText(target: NavigationTarget | undefined, locale: Locale): string | undefined {

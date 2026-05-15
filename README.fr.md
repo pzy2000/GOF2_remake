@@ -57,7 +57,8 @@ Vous pouvez aussi utiliser le script de demarrage en un seul appel :
 - Clic gauche : tirer au laser a impulsion, ou miner pres d'un asteroide
 - Clic droit ou Space : tirer un missile a tete chercheuse
 - Shift : postcombustion
-- E : s'amarrer, interagir, collecter le butin
+- E : collecter le butin
+- F : s'amarrer, interagir, activer les portails, scanner
 - Tab : changer de cible pirate
 - M : carte galactique
 - C : changer de camera

@@ -51,6 +51,7 @@ export function emptyFlightInput(): FlightInput {
     firePrimary: false,
     fireSecondary: false,
     activateUltimate: false,
+    collectNearby: false,
     interact: false,
     cycleTarget: false,
     toggleMap: false,
@@ -185,9 +186,9 @@ export function advanceAutopilotPatch({
     if (step.distanceToTarget <= NPC_INTERACTION_RANGE) {
       autopilot = undefined;
       player = { ...player, velocity: [0, 0, 0], throttle: 0 };
-      const message = `Arrived near ${targetNpc.name}. Press E or confirm ${actionLabel}.`;
+      const message = `Arrived near ${targetNpc.name}. Press F or confirm ${actionLabel}.`;
       runtime.message = message;
-      runtime.effects.push(navEffect(targetNpc.position, `E ${actionLabel}`));
+      runtime.effects.push(navEffect(targetNpc.position, `F ${actionLabel}`));
       npcInteraction = {
         npcId: targetNpc.id,
         openedFrom: "flight",
@@ -336,7 +337,7 @@ export function advanceAutopilotPatch({
       if (step.distanceToTarget <= STATION_DOCK_DISTANCE) {
         autopilot = undefined;
         player = { ...player, velocity: [0, 0, 0], throttle: 0 };
-        runtime.message = `Arrived near ${targetStation.name}. Press E to dock.`;
+        runtime.message = `Arrived near ${targetStation.name}. Press F to dock.`;
       }
     } else if (autopilot.phase === "docking") {
       const step = integrateAutopilotStep({
@@ -410,7 +411,7 @@ export function advanceAutopilotPatch({
       input:
         screen === "station"
           ? emptyFlightInput()
-          : { ...state.input, interact: false, cycleTarget: false, toggleMap: false, toggleCamera: false, pause: false, mouseDX: 0, mouseDY: 0 }
+          : { ...state.input, collectNearby: false, interact: false, cycleTarget: false, toggleMap: false, toggleCamera: false, pause: false, mouseDX: 0, mouseDY: 0 }
     }
   };
 }

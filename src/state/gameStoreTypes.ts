@@ -102,6 +102,7 @@ export interface GameStore {
   tick: (delta: number) => void;
   advanceGameClock: (delta: number) => void;
   cycleTarget: () => void;
+  collectNearby: () => boolean;
   interact: () => void;
   adjustExplorationScanFrequency: (delta: number) => void;
   cancelExplorationScan: () => void;

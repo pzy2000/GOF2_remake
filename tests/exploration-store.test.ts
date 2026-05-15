@@ -65,6 +65,46 @@ beforeEach(() => {
 });
 
 describe("exploration store flow", () => {
+  it("keeps cargo collection on E separate from station interaction on F", async () => {
+    const store = await freshStore();
+    const station = stationById["helion-prime"];
+    store.setState((state) => ({
+      screen: "flight",
+      currentSystemId: station.systemId,
+      currentStationId: undefined,
+      knownPlanetIds: [station.planetId],
+      player: {
+        ...state.player,
+        position: station.position,
+        velocity: [0, 0, 0],
+        cargo: {}
+      },
+      runtime: {
+        ...state.runtime,
+        loot: [
+          {
+            id: "nearby-iron",
+            kind: "commodity",
+            commodityId: "iron",
+            amount: 1,
+            position: station.position,
+            velocity: [0, 0, 0],
+            rarity: "common"
+          }
+        ],
+        message: ""
+      }
+    }));
+
+    expect(store.getState().collectNearby()).toBe(true);
+    expect(store.getState().currentStationId).toBeUndefined();
+    expect(store.getState().runtime.loot).toHaveLength(0);
+    expect(store.getState().player.cargo.iron).toBe(1);
+
+    store.getState().interact();
+    expect(store.getState().currentStationId).toBe(station.id);
+  });
+
   it("keeps later anomaly stages locked until their prerequisite signal is resolved", async () => {
     const store = await freshStore();
     const followUp = explorationSignalById["quiet-signal-meridian-afterimage"];

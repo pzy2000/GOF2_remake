@@ -2711,6 +2711,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
       audioSystem.play("ui-click");
     }
 
+    if (input.collectNearby) {
+      get().collectNearby();
+      set((latest) => ({ input: { ...latest.input, collectNearby: false } }));
+      return;
+    }
     if (input.interact) {
       get().interact();
       set((latest) => ({ input: { ...latest.input, interact: false } }));
@@ -2857,28 +2862,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const currentIndex = targets.findIndex((ship) => ship.id === get().targetId);
     set({ targetId: targets[(currentIndex + 1) % targets.length].id });
   },
-  interact: () => {
+  collectNearby: () => {
     const state = get();
     const equipmentEffects = getPlayerRuntimeEffects(state.player);
-    const pendingNpcAction = state.npcInteraction?.pendingAction;
-    if (pendingNpcAction) {
-      const npc = economyNpcById(state, state.npcInteraction?.npcId);
-      if (!npc) {
-        set({ runtime: { ...state.runtime, message: "NPC signal lost." }, npcInteraction: undefined });
-        return;
-      }
-      if (distance(npc.position, state.player.position) <= NPC_INTERACTION_RANGE) {
-        void get().executeNpcInteraction(pendingNpcAction, npc.id);
-        return;
-      }
-      set({ runtime: { ...state.runtime, message: `Move within ${NPC_INTERACTION_RANGE}m of ${npc.name} to confirm ${npcRouteActionLabel(pendingNpcAction)}.` } });
-      return;
-    }
-    const navigationTarget = getNearestNavigationTarget(state.currentSystemId, state.player.position, state.knownPlanetIds, {
-      explorationState: state.explorationState,
-      installedEquipment: state.player.equipment,
-      runtimeEffects: equipmentEffects
-    });
     const nearSalvage = state.runtime.salvage
       .filter((salvage) => !salvage.recovered)
       .map((salvage) => ({ salvage, dist: distance(salvage.position, state.player.position) }))
@@ -2908,7 +2894,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         runtime
       });
       audioSystem.play("loot");
-      return;
+      return true;
     }
     const nearLoot = state.runtime.loot.filter((loot) => distance(loot.position, state.player.position) < equipmentEffects.lootInteractionRange);
     if (nearLoot.length > 0) {
@@ -2941,8 +2927,33 @@ export const useGameStore = create<GameStore>((set, get) => ({
         }
       });
       if (messageParts.length > 0) audioSystem.play("loot");
+      return true;
+    }
+    set({ runtime: { ...state.runtime, message: "No cargo or salvage in range." } });
+    return false;
+  },
+  interact: () => {
+    const state = get();
+    const equipmentEffects = getPlayerRuntimeEffects(state.player);
+    const pendingNpcAction = state.npcInteraction?.pendingAction;
+    if (pendingNpcAction) {
+      const npc = economyNpcById(state, state.npcInteraction?.npcId);
+      if (!npc) {
+        set({ runtime: { ...state.runtime, message: "NPC signal lost." }, npcInteraction: undefined });
+        return;
+      }
+      if (distance(npc.position, state.player.position) <= NPC_INTERACTION_RANGE) {
+        void get().executeNpcInteraction(pendingNpcAction, npc.id);
+        return;
+      }
+      set({ runtime: { ...state.runtime, message: `Move within ${NPC_INTERACTION_RANGE}m of ${npc.name} to confirm ${npcRouteActionLabel(pendingNpcAction)}.` } });
       return;
     }
+    const navigationTarget = getNearestNavigationTarget(state.currentSystemId, state.player.position, state.knownPlanetIds, {
+      explorationState: state.explorationState,
+      installedEquipment: state.player.equipment,
+      runtimeEffects: equipmentEffects
+    });
     if (navigationTarget?.inRange && navigationTarget.kind === "exploration-signal") {
       const signal = navigationTarget.signal;
       const alreadyComplete = state.explorationState.completedSignalIds.includes(signal.id);

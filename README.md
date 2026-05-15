@@ -75,7 +75,8 @@ The screenshot command refreshes optional matrix captures in `docs/mobile-matrix
 - Left mouse: fire pulse laser, or mine when close to an asteroid
 - Right mouse or Space: fire homing missile
 - Shift: afterburner
-- E: dock, interact, collect loot
+- E: collect loot
+- F: dock, interact, activate stargates, scan
 - Tab: cycle pirate target
 - M: galaxy map
 - C: camera toggle

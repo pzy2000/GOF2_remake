@@ -51,17 +51,17 @@ describe("navigation targets and discovery", () => {
     const station = stationById["kuro-deep"];
     const stationTarget = getNearestNavigationTarget("kuro-belt", station.position, ["kuro-anvil"]);
     expect(getNavigationTargetCue(stationTarget)).toMatchObject({
-      actionLabel: "E Dock",
+      actionLabel: "F Dock",
       label: "Kuro Deepworks",
       tone: "station",
       inRange: true
     });
-    expect(getNavigationHintText(stationTarget)).toBe("E Dock: Kuro Deepworks");
+    expect(getNavigationHintText(stationTarget)).toBe("F Dock: Kuro Deepworks");
 
     const gate = getJumpGatePosition("helion-reach");
     const gateTarget = getNearestNavigationTarget("helion-reach", gate, ["helion-prime-world"]);
     expect(getNavigationTargetCue(gateTarget)).toMatchObject({
-      actionLabel: "E Activate",
+      actionLabel: "F Activate",
       label: "Stargate",
       tone: "gate",
       inRange: true
