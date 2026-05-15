@@ -355,6 +355,7 @@ export function StationScreen() {
   const onboardingState = useGameStore((state) => state.onboardingState);
   const autopilot = useGameStore((state) => state.autopilot);
   const gameClock = useGameStore((state) => state.gameClock);
+  const setScreen = useGameStore((state) => state.setScreen);
   const setStationTab = useGameStore((state) => state.setStationTab);
   const undock = useGameStore((state) => state.undock);
   const saveGame = useGameStore((state) => state.saveGame);
@@ -421,6 +422,7 @@ export function StationScreen() {
         </div>
         <div className="station-actions">
           <button onClick={() => saveGame()}>{translateText("Quick Save", locale)}</button>
+          <button onClick={() => setScreen("settings")}>{translateText("Settings", locale)}</button>
           <button className="primary" onClick={undock}>{translateText("Launch", locale)}</button>
         </div>
       </header>

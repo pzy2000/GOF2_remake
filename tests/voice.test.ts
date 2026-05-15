@@ -317,7 +317,7 @@ describe("speech fallback path", () => {
 
   it("falls back to speech synthesis when no clip manifest matches", async () => {
     const { voiceSystem, synthesis, spoken } = await freshVoice({ voices: [fakeVoice("Generic English")] });
-    voiceSystem.applySettings({ masterVolume: 1, sfxVolume: 0.8, musicVolume: 0.4, voiceVolume: 1, muted: false });
+    voiceSystem.applySettings({ masterVolume: 1, sfxVolume: 0.8, musicVolume: 0.4, voiceVolume: 1, muted: false, muteOnBlur: false });
     expect(voiceSystem.speak("Signal clear.", "ship-ai")).toBe(true);
     expect(synthesis.speak).toHaveBeenCalledOnce();
     expect(spoken[0].voice?.name).toBe("Generic English");
@@ -328,7 +328,7 @@ describe("speech fallback path", () => {
   it("trims, applies boosted volume, and respects locale on the fallback path", async () => {
     const voices = [fakeVoice("Generic English"), fakeVoice("Tingting", "zh-CN"), fakeVoice("Nanami", "ja-JP")];
     const { voiceSystem, spoken } = await freshVoice({ voices });
-    voiceSystem.applySettings({ masterVolume: 0.5, sfxVolume: 0.8, musicVolume: 0.4, voiceVolume: 0.6, muted: false });
+    voiceSystem.applySettings({ masterVolume: 0.5, sfxVolume: 0.8, musicVolume: 0.4, voiceVolume: 0.6, muted: false, muteOnBlur: false });
     expect(voiceSystem.speak("  Hello   world.  ", "captain", { locale: "zh-CN" })).toBe(true);
     expect(spoken[0].text).toBe("Hello world.");
     expect(spoken[0].lang).toBe("zh-CN");
@@ -338,9 +338,9 @@ describe("speech fallback path", () => {
 
   it("returns false while muted and clears in-flight speech", async () => {
     const { voiceSystem, synthesis } = await freshVoice({ voices: [fakeVoice("Generic English")] });
-    voiceSystem.applySettings({ masterVolume: 1, sfxVolume: 0.8, musicVolume: 0.4, voiceVolume: 1, muted: false });
+    voiceSystem.applySettings({ masterVolume: 1, sfxVolume: 0.8, musicVolume: 0.4, voiceVolume: 1, muted: false, muteOnBlur: false });
     expect(voiceSystem.speak("Line one.", "captain")).toBe(true);
-    voiceSystem.applySettings({ masterVolume: 1, sfxVolume: 0.8, musicVolume: 0.4, voiceVolume: 1, muted: true });
+    voiceSystem.applySettings({ masterVolume: 1, sfxVolume: 0.8, musicVolume: 0.4, voiceVolume: 1, muted: true, muteOnBlur: false });
     expect(synthesis.cancel).toHaveBeenCalled();
     expect(voiceSystem.speak("Line two.", "captain")).toBe(false);
   });
@@ -375,7 +375,7 @@ describe("speech fallback path", () => {
 
   it("clamps boosted voice volume to the synthesis maximum", async () => {
     const { voiceSystem, spoken } = await freshVoice({ voices: [fakeVoice("Generic English")] });
-    voiceSystem.applySettings({ masterVolume: 1, sfxVolume: 0.8, musicVolume: 0.4, voiceVolume: 1, muted: false });
+    voiceSystem.applySettings({ masterVolume: 1, sfxVolume: 0.8, musicVolume: 0.4, voiceVolume: 1, muted: false, muteOnBlur: false });
     expect(voiceSystem.speak("Loud line.")).toBe(true);
     expect(spoken[0].volume).toBe(1);
   });
@@ -395,7 +395,7 @@ describe("primary audio clip path", () => {
       withAudioContext: true,
       AudioClass: FakeAudio
     });
-    voiceSystem.applySettings({ masterVolume: 1, sfxVolume: 0.8, musicVolume: 0.5, voiceVolume: 1, muted: false });
+    voiceSystem.applySettings({ masterVolume: 1, sfxVolume: 0.8, musicVolume: 0.5, voiceVolume: 1, muted: false, muteOnBlur: false });
     const text = "Glass Wake confirmed.";
     const key = voiceClipKey("captain", "en", prepareCommsSpeechText(text));
     voiceSystem.setVoiceClipManifest({ [key]: `/assets/voice/captain/${key}.mp3` });
@@ -417,7 +417,7 @@ describe("primary audio clip path", () => {
       withAudioContext: true,
       AudioClass: FakeAudio
     });
-    voiceSystem.applySettings({ masterVolume: 1, sfxVolume: 0.8, musicVolume: 0.5, voiceVolume: 1, muted: false });
+    voiceSystem.applySettings({ masterVolume: 1, sfxVolume: 0.8, musicVolume: 0.5, voiceVolume: 1, muted: false, muteOnBlur: false });
     const text = "Carrier desynchronized.";
     const aiKey = voiceClipKey("ship-ai", "en", prepareCommsSpeechText(text));
     voiceSystem.setVoiceClipManifest({ [aiKey]: `/assets/voice/ship-ai/${aiKey}.mp3` });
@@ -444,7 +444,7 @@ describe("primary audio clip path", () => {
       AudioClass: FakeAudio
     });
     voiceSystem.setVoiceClipManifest({ "00000000000000ff": "/assets/voice/captain/unused.mp3" });
-    voiceSystem.applySettings({ masterVolume: 1, sfxVolume: 0.8, musicVolume: 0.5, voiceVolume: 1, muted: false });
+    voiceSystem.applySettings({ masterVolume: 1, sfxVolume: 0.8, musicVolume: 0.5, voiceVolume: 1, muted: false, muteOnBlur: false });
     expect(voiceSystem.speak("Unmatched line.", "captain")).toBe(true);
     expect(FakeAudio.instances).toHaveLength(0);
     expect(synthesis.speak).toHaveBeenCalledOnce();
@@ -459,7 +459,7 @@ describe("primary audio clip path", () => {
     const text = "Mining clear.";
     const key = voiceClipKey("kuro-foreman", "en", prepareCommsSpeechText(text));
     voiceSystem.setVoiceClipManifest({ [key]: `/assets/voice/kuro-foreman/${key}.mp3` });
-    voiceSystem.applySettings({ masterVolume: 1, sfxVolume: 0.8, musicVolume: 0.5, voiceVolume: 1, muted: false });
+    voiceSystem.applySettings({ masterVolume: 1, sfxVolume: 0.8, musicVolume: 0.5, voiceVolume: 1, muted: false, muteOnBlur: false });
     voiceSystem.speak(text, "kuro-foreman");
     expect(voiceSystem.pauseOrResume()).toBe("paused");
     expect(FakeAudio.instances[0].pause).toHaveBeenCalledOnce();
@@ -478,7 +478,7 @@ describe("primary audio clip path", () => {
     const text = "Launch clearance is green.";
     const key = voiceClipKey("ship-ai", "en", prepareCommsSpeechText(text));
     voiceSystem.setVoiceClipManifest({ [key]: `/assets/voice/ship-ai/${key}.mp3` });
-    voiceSystem.applySettings({ masterVolume: 1, sfxVolume: 0.8, musicVolume: 0.5, voiceVolume: 1, muted: false });
+    voiceSystem.applySettings({ masterVolume: 1, sfxVolume: 0.8, musicVolume: 0.5, voiceVolume: 1, muted: false, muteOnBlur: false });
 
     expect(voiceSystem.speak(text, "ship-ai", { onStart })).toBe(true);
     expect(FakeAudio.instances[0].play).toHaveBeenCalledOnce();
@@ -499,7 +499,7 @@ describe("primary audio clip path", () => {
     const text = "Launch clearance is green.";
     const key = voiceClipKey("ship-ai", "en", prepareCommsSpeechText(text));
     voiceSystem.setVoiceClipManifest({ [key]: `/assets/voice/ship-ai/${key}.mp3` });
-    voiceSystem.applySettings({ masterVolume: 1, sfxVolume: 0.8, musicVolume: 0.5, voiceVolume: 1, muted: false });
+    voiceSystem.applySettings({ masterVolume: 1, sfxVolume: 0.8, musicVolume: 0.5, voiceVolume: 1, muted: false, muteOnBlur: false });
     voiceSystem.speak(text, "ship-ai", { onStart });
     FakeAudio.instances[0].onplaying?.();
     expect(FakeAudio.instances[0].pause).not.toHaveBeenCalled();
@@ -522,7 +522,7 @@ describe("primary audio clip path", () => {
     const text = "Wormhole stabilized.";
     const key = voiceClipKey("ashen-broker", "en", prepareCommsSpeechText(text));
     voiceSystem.setVoiceClipManifest({ [key]: `/assets/voice/ashen-broker/${key}.mp3` });
-    voiceSystem.applySettings({ masterVolume: 1, sfxVolume: 0.8, musicVolume: 0.5, voiceVolume: 1, muted: false });
+    voiceSystem.applySettings({ masterVolume: 1, sfxVolume: 0.8, musicVolume: 0.5, voiceVolume: 1, muted: false, muteOnBlur: false });
     expect(voiceSystem.speak(text, "ashen-broker")).toBe(true);
     await Promise.resolve();
     await Promise.resolve();
@@ -541,7 +541,7 @@ describe("primary audio clip path", () => {
     const text = "Sync lost.";
     const key = voiceClipKey("helion-handler", "zh-CN", prepareCommsSpeechText(text));
     voiceSystem.setVoiceClipManifest({ [key]: `/assets/voice/helion-handler/${key}.mp3` });
-    voiceSystem.applySettings({ masterVolume: 1, sfxVolume: 0.8, musicVolume: 0.5, voiceVolume: 1, muted: false });
+    voiceSystem.applySettings({ masterVolume: 1, sfxVolume: 0.8, musicVolume: 0.5, voiceVolume: 1, muted: false, muteOnBlur: false });
     expect(voiceSystem.speak(text, "helion-handler", { locale: "zh-CN" })).toBe(true);
     const audio = FakeAudio.instances[0] as unknown as { onerror?: () => void };
     expect(typeof audio.onerror).toBe("function");

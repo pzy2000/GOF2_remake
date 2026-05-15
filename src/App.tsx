@@ -72,7 +72,7 @@ function SimpleScreen({ type }: { type: "settings" | "credits" }) {
   const updateAudio = (patch: Partial<typeof audioSettings>) => {
     setAudioSettings(saveAudioSettings({ ...audioSettings, ...patch }));
   };
-  const backTarget = previousScreen === "pause" ? "pause" : "menu";
+  const backTarget = previousScreen === "station" || previousScreen === "pause" || previousScreen === "flight" ? previousScreen : "menu";
   const qualityOptions = Object.keys(graphicsQualityProfiles) as Array<keyof typeof graphicsQualityProfiles>;
   return (
     <section className="modal-screen static-screen">
@@ -118,6 +118,10 @@ function SimpleScreen({ type }: { type: "settings" | "credits" }) {
               <label className="toggle-line">
                 <input type="checkbox" checked={audioSettings.muted} onChange={(event) => updateAudio({ muted: event.target.checked })} />
                 <span>Mute audio</span>
+              </label>
+              <label className="toggle-line">
+                <input type="checkbox" checked={audioSettings.muteOnBlur} onChange={(event) => updateAudio({ muteOnBlur: event.target.checked })} />
+                <span>Mute when unfocused</span>
               </label>
             </div>
           </>
@@ -201,6 +205,22 @@ function AudioRuntime() {
     return () => {
       window.removeEventListener("pointerdown", click);
       window.removeEventListener("keydown", unlock);
+    };
+  }, []);
+  useEffect(() => {
+    const syncFocusMute = () => {
+      const documentHidden = typeof document !== "undefined" && document.hidden;
+      const windowUnfocused = typeof document !== "undefined" && typeof document.hasFocus === "function" ? !document.hasFocus() : false;
+      audioSystem.setFocusMuted(documentHidden || windowUnfocused);
+    };
+    syncFocusMute();
+    window.addEventListener("blur", syncFocusMute);
+    window.addEventListener("focus", syncFocusMute);
+    document.addEventListener("visibilitychange", syncFocusMute);
+    return () => {
+      window.removeEventListener("blur", syncFocusMute);
+      window.removeEventListener("focus", syncFocusMute);
+      document.removeEventListener("visibilitychange", syncFocusMute);
     };
   }, []);
   const musicCue = resolveMusicCue({

@@ -6,7 +6,8 @@ const defaultVoiceSettings: AudioSettings = {
   sfxVolume: 0.75,
   musicVolume: 0.35,
   voiceVolume: 0.85,
-  muted: false
+  muted: false,
+  muteOnBlur: false
 };
 
 type VoiceOptions = {

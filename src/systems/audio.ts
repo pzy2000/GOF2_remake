@@ -9,7 +9,8 @@ const defaultSettings: AudioSettings = {
   sfxVolume: 0.75,
   musicVolume: 0.35,
   voiceVolume: 0.85,
-  muted: false
+  muted: false,
+  muteOnBlur: false
 };
 
 type BrowserAudioContext = AudioContext & {
@@ -36,7 +37,8 @@ export function getAudioSettings(): AudioSettings {
       sfxVolume: clamp01(parsed.sfxVolume ?? defaultSettings.sfxVolume),
       musicVolume: clamp01(parsed.musicVolume ?? defaultSettings.musicVolume),
       voiceVolume: clamp01(parsed.voiceVolume ?? defaultSettings.voiceVolume),
-      muted: parsed.muted ?? defaultSettings.muted
+      muted: parsed.muted ?? defaultSettings.muted,
+      muteOnBlur: parsed.muteOnBlur ?? defaultSettings.muteOnBlur
     };
   } catch {
     return defaultSettings;
@@ -49,7 +51,8 @@ export function saveAudioSettings(settings: AudioSettings): AudioSettings {
     sfxVolume: clamp01(settings.sfxVolume),
     musicVolume: clamp01(settings.musicVolume),
     voiceVolume: clamp01(settings.voiceVolume),
-    muted: settings.muted
+    muted: settings.muted ?? defaultSettings.muted,
+    muteOnBlur: settings.muteOnBlur ?? defaultSettings.muteOnBlur
   };
   storage()?.setItem(AUDIO_SETTINGS_KEY, JSON.stringify(next));
   audioSystem.applySettings(next);
@@ -76,6 +79,7 @@ class ProceduralAudioSystem {
   private externalFade = 0;
   private fadeTimer?: number;
   private unlocked = false;
+  private focusMuted = false;
 
   constructor() {
     this.settings = getAudioSettings();
@@ -91,18 +95,34 @@ class ProceduralAudioSystem {
       cueId: this.cue.id,
       currentTrackUrl: this.currentTrackUrl,
       currentTrackPlaying: this.currentTrackPlaying,
+      focusMuted: this.focusMuted,
+      effectiveMuted: this.isEffectivelyMuted(),
       settings: this.settings
     };
   }
 
   applySettings(settings: AudioSettings) {
     this.settings = settings;
-    const master = settings.muted ? 0 : settings.masterVolume;
+    this.applyEffectiveSettings();
+  }
+
+  setFocusMuted(muted: boolean) {
+    if (this.focusMuted === muted) return;
+    this.focusMuted = muted;
+    this.applyEffectiveSettings();
+  }
+
+  private applyEffectiveSettings() {
+    const master = this.isEffectivelyMuted() ? 0 : this.settings.masterVolume;
     this.masterGain?.gain.setTargetAtTime(master, this.context?.currentTime ?? 0, 0.025);
-    this.sfxGain?.gain.setTargetAtTime(settings.sfxVolume, this.context?.currentTime ?? 0, 0.025);
-    this.musicGain?.gain.setTargetAtTime(settings.musicVolume, this.context?.currentTime ?? 0, 0.08);
+    this.sfxGain?.gain.setTargetAtTime(this.settings.sfxVolume, this.context?.currentTime ?? 0, 0.025);
+    this.musicGain?.gain.setTargetAtTime(this.settings.musicVolume, this.context?.currentTime ?? 0, 0.08);
     this.updateExternalTrackVolume();
-    voiceSystem.applySettings(settings);
+    voiceSystem.applySettings({ ...this.settings, muted: this.isEffectivelyMuted() });
+  }
+
+  private isEffectivelyMuted() {
+    return this.settings.muted || (this.settings.muteOnBlur && this.focusMuted);
   }
 
   unlock() {
@@ -119,7 +139,7 @@ class ProceduralAudioSystem {
 
   play(event: AudioEventName) {
     const context = this.ensureContext();
-    if (!context || this.settings.muted) return;
+    if (!context || this.isEffectivelyMuted()) return;
     const now = context.currentTime;
     const minimumGap =
       event === "mining" ? 0.11
@@ -300,7 +320,7 @@ class ProceduralAudioSystem {
 
   private updateExternalTrackVolume() {
     if (!this.currentTrack) return;
-    const volume = this.settings.muted ? 0 : this.settings.masterVolume * this.settings.musicVolume * this.externalFade;
+    const volume = this.isEffectivelyMuted() ? 0 : this.settings.masterVolume * this.settings.musicVolume * this.externalFade;
     this.currentTrack.volume = clamp01(volume);
   }
 

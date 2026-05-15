@@ -86,6 +86,7 @@ async function freshAudio(AudioClass?: typeof FakeAudio) {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
@@ -112,7 +113,7 @@ describe("procedural audio system", () => {
     expect(() => audioSystem.play("comms-open")).not.toThrow();
     expect(FakeAudioContext.startedOscillators).toBe(0);
 
-    saveAudioSettings({ masterVolume: 1, sfxVolume: 1, musicVolume: 0.5, voiceVolume: 1, muted: true });
+    saveAudioSettings({ masterVolume: 1, sfxVolume: 1, musicVolume: 0.5, voiceVolume: 1, muted: true, muteOnBlur: false });
     expect(audioSystem.unlock()).toBe(true);
     expect(() => audioSystem.play("comms-open")).not.toThrow();
     expect(FakeAudioContext.startedOscillators).toBe(9);
@@ -122,14 +123,25 @@ describe("procedural audio system", () => {
     const { AUDIO_SETTINGS_KEY, getAudioSettings, saveAudioSettings } = await freshAudio();
     const storage = new MemoryStorage();
     vi.stubGlobal("localStorage", storage);
-    const saved = saveAudioSettings({ masterVolume: 2, sfxVolume: -1, musicVolume: 0.5, voiceVolume: 1.4, muted: true });
+    const saved = saveAudioSettings({ masterVolume: 2, sfxVolume: -1, musicVolume: 0.5, voiceVolume: 1.4, muted: true, muteOnBlur: true });
     expect(saved.masterVolume).toBe(1);
     expect(saved.sfxVolume).toBe(0);
     expect(saved.musicVolume).toBe(0.5);
     expect(saved.voiceVolume).toBe(1);
     expect(saved.muted).toBe(true);
+    expect(saved.muteOnBlur).toBe(true);
     expect(storage.getItem(AUDIO_SETTINGS_KEY)).toContain("\"muted\":true");
+    expect(storage.getItem(AUDIO_SETTINGS_KEY)).toContain("\"muteOnBlur\":true");
     expect(getAudioSettings()).toEqual(saved);
+  });
+
+  it("defaults mute-on-blur off for existing saved audio settings", async () => {
+    const { AUDIO_SETTINGS_KEY, getAudioSettings } = await freshAudio();
+    const storage = new MemoryStorage();
+    storage.setItem(AUDIO_SETTINGS_KEY, JSON.stringify({ masterVolume: 0.7, sfxVolume: 0.6, musicVolume: 0.5, voiceVolume: 0.4, muted: false }));
+    vi.stubGlobal("localStorage", storage);
+
+    expect(getAudioSettings()).toMatchObject({ masterVolume: 0.7, sfxVolume: 0.6, musicVolume: 0.5, voiceVolume: 0.4, muted: false, muteOnBlur: false });
   });
 
   it("plays external music tracks after unlock and applies music volume", async () => {
@@ -145,10 +157,47 @@ describe("procedural audio system", () => {
     expect(audioSystem.debugState.proceduralMode).toBe("silent");
     expect(FakeAudio.instances[0].volume).toBeCloseTo(0.28);
 
-    saveAudioSettings({ masterVolume: 0.5, sfxVolume: 0.75, musicVolume: 0.4, voiceVolume: 0.85, muted: false });
+    saveAudioSettings({ masterVolume: 0.5, sfxVolume: 0.75, musicVolume: 0.4, voiceVolume: 0.85, muted: false, muteOnBlur: false });
     expect(FakeAudio.instances[0].volume).toBeCloseTo(0.2);
-    saveAudioSettings({ masterVolume: 0.5, sfxVolume: 0.75, musicVolume: 0.4, voiceVolume: 0.85, muted: true });
+    saveAudioSettings({ masterVolume: 0.5, sfxVolume: 0.75, musicVolume: 0.4, voiceVolume: 0.85, muted: true, muteOnBlur: false });
     expect(FakeAudio.instances[0].volume).toBe(0);
+  });
+
+  it("temporarily mutes external tracks while unfocused", async () => {
+    const { audioSystem, saveAudioSettings } = await freshAudio(FakeAudio);
+    saveAudioSettings({ masterVolume: 0.5, sfxVolume: 1, musicVolume: 0.4, voiceVolume: 0.85, muted: false, muteOnBlur: true });
+    audioSystem.setMusicCue({ id: "system:test", mode: "safe", trackUrl: "/assets/music/test.mp3" });
+
+    expect(audioSystem.unlock()).toBe(true);
+    await Promise.resolve();
+    expect(FakeAudio.instances[0].volume).toBeCloseTo(0.2);
+
+    audioSystem.setFocusMuted(true);
+    expect(audioSystem.debugState.effectiveMuted).toBe(true);
+    expect(FakeAudio.instances[0].volume).toBe(0);
+
+    audioSystem.setFocusMuted(false);
+    expect(audioSystem.debugState.effectiveMuted).toBe(false);
+    expect(FakeAudio.instances[0].volume).toBeCloseTo(0.2);
+  });
+
+  it("temporarily suppresses sfx while unfocused", async () => {
+    FakeAudioContext.startedOscillators = 0;
+    vi.stubGlobal("window", { AudioContext: FakeAudioContext });
+    const { audioSystem, saveAudioSettings } = await freshAudio();
+    saveAudioSettings({ masterVolume: 0.5, sfxVolume: 1, musicVolume: 0.4, voiceVolume: 0.85, muted: false, muteOnBlur: true });
+
+    expect(audioSystem.unlock()).toBe(true);
+    audioSystem.play("ui-click");
+    expect(FakeAudioContext.startedOscillators).toBe(10);
+
+    audioSystem.setFocusMuted(true);
+    audioSystem.play("laser");
+    expect(FakeAudioContext.startedOscillators).toBe(10);
+
+    audioSystem.setFocusMuted(false);
+    audioSystem.play("laser");
+    expect(FakeAudioContext.startedOscillators).toBe(11);
   });
 
   it("falls back to procedural music when an external track cannot play", async () => {

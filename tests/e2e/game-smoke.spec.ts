@@ -774,6 +774,27 @@ test.describe("browser smoke", () => {
     await expect(page.getByRole("button", { name: "Back" })).toBeVisible();
   });
 
+  test("opens settings from a station and persists mute when unfocused", async ({ page }) => {
+    await resetApp(page);
+    await startNewGame(page);
+    await dockAtStation(page, "helion-prime");
+
+    await expect(page.getByRole("heading", { name: "Helion Prime Exchange" })).toBeVisible();
+    const stationActions = page.locator(".station-actions");
+    await expect(stationActions.getByRole("button", { name: "Settings" })).toBeVisible();
+    await stationActions.getByRole("button", { name: "Settings" }).click();
+
+    await expect.poll(() => page.evaluate(() => (window.__GOF2_E2E__!.getState() as { screen: string }).screen)).toBe("settings");
+    const muteOnBlur = page.getByLabel("Mute when unfocused");
+    await expect(muteOnBlur).toBeVisible();
+    await muteOnBlur.check();
+    await expect.poll(() => page.evaluate(() => localStorage.getItem("gof2-by-pzy-audio-settings"))).toContain("\"muteOnBlur\":true");
+
+    await page.getByRole("button", { name: "Back" }).click();
+    await expect.poll(() => page.evaluate(() => (window.__GOF2_E2E__!.getState() as { screen: string }).screen)).toBe("station");
+    await expect(page.getByRole("heading", { name: "Helion Prime Exchange" })).toBeVisible();
+  });
+
   test("tunes active frequency scans from the keyboard", async ({ page }) => {
     test.setTimeout(75_000);
     await resetApp(page);

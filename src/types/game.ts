@@ -55,6 +55,7 @@ export interface AudioSettings {
   musicVolume: number;
   voiceVolume: number;
   muted: boolean;
+  muteOnBlur: boolean;
 }
 
 export type GraphicsQuality = "low" | "medium" | "high" | "ultra";
