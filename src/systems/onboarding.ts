@@ -27,7 +27,7 @@ export const onboardingSteps: OnboardingStepDefinition[] = [
   {
     id: "dock-helion",
     title: "Dock at Helion",
-    objective: "Approach Helion Prime Exchange and press E when the dock prompt appears.",
+    objective: "Approach Helion Prime Exchange and press F when the dock prompt appears.",
     rewardCredits: 75
   },
   {

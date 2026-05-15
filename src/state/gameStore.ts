@@ -3029,6 +3029,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       get().openNpcInteraction(npc.id, "flight");
       return;
     }
+    if (get().collectNearby()) return;
     set({ runtime: { ...state.runtime, message: "No interactable object in range." } });
   },
   adjustExplorationScanFrequency: (delta) => {
