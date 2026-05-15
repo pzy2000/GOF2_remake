@@ -26,6 +26,7 @@ import { getMarketEntry, getTradeHints } from "../systems/economy";
 import { getPlayerRuntimeEffects } from "../systems/equipment";
 import { hasActiveCivilianDistress } from "../state/domains/combatRuntime";
 import { defaultFlightTuning, resolveCameraFov, resolveCameraOffset } from "../systems/flightTuning";
+import { npcRoleIdentityProfiles, stationArchetypeIdentityProfiles } from "../systems/sceneIdentity";
 import {
   FlightControls as FlightInputControls,
   SimulationTicker as FlightSimulationTicker,
@@ -1083,41 +1084,38 @@ function RelayNpcCore({ ship }: { ship: FlightEntity }) {
 function NpcRoleHull({
   body,
   clock,
-  color,
   flashing,
   opacity,
   role,
   ship
 }: {
-  body: { cone: [number, number, number]; wing: [number, number, number]; offset: number; tail: string };
+  body: (typeof npcRoleIdentityProfiles)[FlightEntity["role"]];
   clock: number;
-  color: string;
   flashing: boolean;
   opacity: number;
   role: FlightEntity["role"];
   ship: FlightEntity;
 }) {
-  const hullColor = flashing ? "#ffffff" : color;
-  const roleGlow = role === "pirate" ? "#ff5f6d" : role === "smuggler" ? "#ff9b52" : role === "miner" ? "#ffd166" : role === "patrol" ? "#64d7ff" : "#8ff7ff";
+  const hullColor = flashing ? "#ffffff" : body.hullColor;
   return (
     <>
       <mesh castShadow position={[0, 0, -7]}>
         <coneGeometry args={body.cone} />
-        <meshStandardMaterial color={hullColor} metalness={0.48} roughness={0.36} emissive={color} emissiveIntensity={flashing ? 0.85 : ship.boss ? 0.32 : 0.12} transparent opacity={opacity} />
+        <meshStandardMaterial color={hullColor} metalness={0.48} roughness={0.36} emissive={body.hullColor} emissiveIntensity={flashing ? 0.85 : ship.boss ? 0.32 : 0.12} transparent opacity={opacity} />
       </mesh>
-      <mesh castShadow position={[0, 0.4, body.offset + 1]} scale={role === "miner" || role === "trader" ? [1.18, 1.08, 1.18] : [1, 1, 1]}>
+      <mesh castShadow position={[0, 0.4, body.offset + 1]} scale={body.dorsalScale}>
         <boxGeometry args={[body.wing[0] * 0.42, Math.max(6, body.wing[1] * 2.2), 30]} />
-        <meshStandardMaterial color={body.tail} metalness={0.5} roughness={0.42} transparent opacity={opacity} />
+        <meshStandardMaterial color={body.tailColor} metalness={0.5} roughness={0.42} transparent opacity={opacity} />
       </mesh>
-      <mesh position={[0, 4.3, -8]} scale={role === "pirate" ? [0.9, 0.32, 0.9] : [1, 0.38, 1.1]}>
+      <mesh position={[0, 4.3, -8]} scale={body.dorsalScale}>
         <sphereGeometry args={[3.8, 18, 10]} />
-        <meshStandardMaterial color="#86ddff" metalness={0.16} roughness={0.1} emissive="#226b8f" emissiveIntensity={0.28} transparent opacity={opacity} />
+        <meshStandardMaterial color="#86ddff" metalness={0.16} roughness={0.1} emissive={body.glowColor} emissiveIntensity={0.24} transparent opacity={opacity} />
       </mesh>
       {[-1, 1].map((side) => (
         <group key={side}>
           <mesh position={[side * body.wing[0] * 0.38, -0.4, body.offset]} rotation={[0, side * (role === "pirate" ? 0.36 : -0.16), side * (role === "courier" ? 0.22 : 0.12)]} castShadow>
             <boxGeometry args={body.wing} />
-            <meshStandardMaterial color={body.tail} metalness={0.42} roughness={0.44} transparent opacity={opacity} />
+            <meshStandardMaterial color={body.tailColor} metalness={0.42} roughness={0.44} transparent opacity={opacity} />
           </mesh>
           <mesh position={[side * 8.4, -2.1, 15]} rotation={[Math.PI / 2, 0, 0]}>
             <cylinderGeometry args={[2.2, 3.2, 5, 16]} />
@@ -1127,19 +1125,35 @@ function NpcRoleHull({
             <cylinderGeometry args={[0.8, 1, 18, 10]} />
             <meshStandardMaterial color="#202833" metalness={0.78} roughness={0.24} transparent opacity={opacity} />
           </mesh>
-          <pointLight position={[side * 9, 1.2, 4]} color={roleGlow} intensity={0.18} distance={80} />
+          <pointLight position={[side * 9, 1.2, 4]} color={body.glowColor} intensity={0.18} distance={80} />
         </group>
       ))}
-      {role === "pirate" || role === "smuggler" ? (
+      {body.cargoPods > 0 ? (
         <>
-          <mesh position={[-8, 1.2, -5]} rotation={[0, 0, 0.72]}>
-            <boxGeometry args={[3, 1.4, 20]} />
-            <meshStandardMaterial color={role === "pirate" ? "#711f2d" : "#3a263f"} metalness={0.42} roughness={0.4} emissive="#23050a" />
-          </mesh>
-          <mesh position={[8, 1.2, -5]} rotation={[0, 0, -0.72]}>
-            <boxGeometry args={[3, 1.4, 20]} />
-            <meshStandardMaterial color={role === "pirate" ? "#711f2d" : "#3a263f"} metalness={0.42} roughness={0.4} emissive="#23050a" />
-          </mesh>
+          {Array.from({ length: body.cargoPods }).map((_, index) => {
+            const side = index % 2 === 0 ? -1 : 1;
+            const row = Math.floor(index / 2);
+            return (
+              <mesh key={index} position={[side * (11 + row * 2), -2.8 - row * 0.8, -3 + row * 8]} castShadow>
+                <boxGeometry args={[5.8, 4.8, 10]} />
+                <meshStandardMaterial color={role === "smuggler" ? "#2b1f2e" : "#6b522c"} metalness={0.34} roughness={0.58} emissive={role === "smuggler" ? "#160817" : "#2d210f"} emissiveIntensity={0.08} transparent opacity={opacity} />
+              </mesh>
+            );
+          })}
+        </>
+      ) : null}
+      {body.bladeFins > 0 ? (
+        <>
+          {Array.from({ length: body.bladeFins }).map((_, index) => {
+            const side = index % 2 === 0 ? -1 : 1;
+            const aft = index > 1 ? 7 : -7;
+            return (
+              <mesh key={index} position={[side * 9, 1.2, aft]} rotation={[0, 0, side * 0.74]}>
+                <boxGeometry args={[3, 1.4, role === "courier" ? 15 : 20]} />
+                <meshStandardMaterial color={role === "pirate" ? "#711f2d" : role === "smuggler" ? "#3a263f" : "#1f4a42"} metalness={0.42} roughness={0.4} emissive="#23050a" />
+              </mesh>
+            );
+          })}
         </>
       ) : null}
       {role === "patrol" ? (
@@ -1193,7 +1207,7 @@ function NpcShip({ ship }: { ship: FlightEntity }) {
   if (ship.role === "freighter") return <FreighterNpcShip ship={ship} />;
   if (ship.role === "drone") return <DroneNpcShip ship={ship} />;
   if (ship.role === "relay") return <RelayNpcCore ship={ship} />;
-  const color = ship.boss ? "#ff2f5f" : ship.role === "pirate" ? "#ff4e5f" : ship.role === "patrol" ? "#5dc8ff" : ship.role === "smuggler" ? "#ff9b52" : ship.role === "courier" ? "#9bffe8" : ship.role === "miner" ? "#ffd166" : "#f6c96d";
+  const body = npcRoleIdentityProfiles[ship.role];
   const direction = normalize(ship.velocity);
   const yaw = Math.atan2(direction[0], -direction[2]);
   const flashing = clock - ship.lastDamageAt < 0.18 || ship.deathTimer !== undefined;
@@ -1201,25 +1215,13 @@ function NpcShip({ ship }: { ship: FlightEntity }) {
   const flameScale = Math.max(0.45, Math.min(1.45, speed / 115));
   const combatPulse = 0.5 + Math.sin(clock * 5.4 + ship.position[0] * 0.01) * 0.5;
   const distressActive = hasActiveCivilianDistress(ship, clock);
-  const body =
-    ship.role === "pirate"
-      ? { cone: [7, 25, 3] as [number, number, number], wing: [26, 1.8, 8] as [number, number, number], offset: 6, tail: "#3a111c" }
-      : ship.role === "patrol"
-        ? { cone: [7.5, 23, 4] as [number, number, number], wing: [22, 2.4, 12] as [number, number, number], offset: 5, tail: "#12344b" }
-        : ship.role === "courier"
-          ? { cone: [6.5, 24, 5] as [number, number, number], wing: [34, 1.8, 8] as [number, number, number], offset: 3, tail: "#1f4a42" }
-          : ship.role === "miner"
-            ? { cone: [9.5, 18, 7] as [number, number, number], wing: [24, 4.2, 18] as [number, number, number], offset: 4, tail: "#5a4520" }
-            : ship.role === "smuggler"
-              ? { cone: [7, 23, 4] as [number, number, number], wing: [30, 2.2, 9] as [number, number, number], offset: 5, tail: "#4a2418" }
-              : { cone: [9, 20, 6] as [number, number, number], wing: [28, 3.8, 15] as [number, number, number], offset: 3, tail: "#4a3820" };
   return (
     <>
       {miningTarget ? (
         <Line points={[ship.position, miningTarget.position]} color={ship.economyCommodityId ? getOreColor(ship.economyCommodityId) : "#ffd166"} lineWidth={2.4} transparent opacity={0.72} />
       ) : null}
       <group position={toThree(ship.position)} rotation={[0, yaw, 0]} scale={ship.deathTimer !== undefined ? 0.82 : ship.boss ? 1.28 : 1}>
-        <NpcRoleHull body={body} clock={clock} color={color} flashing={flashing} opacity={ship.deathTimer !== undefined ? 0.45 : 1} role={ship.role} ship={ship} />
+        <NpcRoleHull body={body} clock={clock} flashing={flashing} opacity={ship.deathTimer !== undefined ? 0.45 : 1} role={ship.role} ship={ship} />
         {ship.boss ? (
           <>
             <mesh rotation={[Math.PI / 2, 0, clock * 0.65]}>
@@ -1236,7 +1238,7 @@ function NpcShip({ ship }: { ship: FlightEntity }) {
         ) : null}
         <mesh position={[0, -1.4, 13]} rotation={[Math.PI / 2, 0, 0]} scale={[1, 1, flameScale]}>
           <coneGeometry args={[ship.role === "trader" ? 4.2 : 3, 13, 12]} />
-          <meshBasicMaterial color={ship.role === "pirate" ? "#ff5f6d" : "#64e4ff"} transparent opacity={0.36} toneMapped={false} />
+          <meshBasicMaterial color={body.engineColor} transparent opacity={0.36} toneMapped={false} />
         </mesh>
         <CivilianDistressMarker ship={ship} />
         {!distressActive && ship.economyStatus ? (
@@ -1579,28 +1581,102 @@ function ProceduralStationGeometry({ station }: { station: StationDefinition }) 
     state.assetManifest.stationVisualProfiles[station.archetype] ??
     state.assetManifest.stationVisualProfiles.default
   );
+  const identity = stationArchetypeIdentityProfiles[station.archetype];
   const segments = distance(playerPosition, station.position) > profile.farDistance ? profile.farSegments : profile.nearSegments;
   return (
     <group position={toThree(station.position)}>
       <mesh>
-        <cylinderGeometry args={[38, 54, 42, Math.max(8, Math.round(segments / 6))]} />
+        <cylinderGeometry args={[identity.core[0], identity.core[1], identity.core[2], Math.max(8, Math.round(segments / 6))]} />
         <meshStandardMaterial color={profile.hullColor} metalness={0.66} roughness={0.34} emissive={profile.accentColor} emissiveIntensity={profile.emissiveIntensity * 0.45} />
       </mesh>
       <mesh rotation={[Math.PI / 2, 0, 0]} scale={[profile.ringScale, profile.ringScale, profile.ringScale]}>
-        <torusGeometry args={[84, 4.2, 10, segments]} />
+        <torusGeometry args={[identity.ringRadius, identity.ringTube, 10, segments]} />
         <meshStandardMaterial color={profile.hullColor} metalness={0.72} roughness={0.28} emissive={profile.accentColor} emissiveIntensity={profile.emissiveIntensity} />
       </mesh>
-      {[0, 1, 2, 3].map((index) => {
-        const angle = index * (Math.PI / 2);
+      {Array.from({ length: identity.spokeCount }).map((_, index) => {
+        const angle = index * ((Math.PI * 2) / identity.spokeCount);
         return (
           <group key={index} rotation={[0, 0, angle]}>
-            <mesh position={[90, 0, 0]}>
-              <boxGeometry args={[52, 7, 12]} />
+            <mesh position={[identity.ringRadius + 4, 0, 0]}>
+              <boxGeometry args={[identity.ringRadius * 0.56, 7, 12]} />
               <meshStandardMaterial color="#5f7180" metalness={0.62} roughness={0.42} emissive="#111d2a" />
             </mesh>
-            <mesh position={[125, 0, 0]} rotation={[0, 0, 0.02]}>
+            <mesh position={[identity.ringRadius + 35, 0, 0]} rotation={[0, 0, 0.02]}>
               <boxGeometry args={[28, 18, 3]} />
               <meshStandardMaterial color={profile.solarColor} metalness={0.34} roughness={0.5} emissive={profile.accentColor} emissiveIntensity={0.1} />
+            </mesh>
+          </group>
+        );
+      })}
+      {Array.from({ length: identity.dockBayCount }).map((_, index) => {
+        const angle = index * ((Math.PI * 2) / identity.dockBayCount) + (station.archetype === "Pirate Black Market" ? 0.34 : 0);
+        const radius = identity.ringRadius + identity.dockBayLength * 0.36;
+        return (
+          <group key={index} position={[Math.cos(angle) * radius, identity.trafficLaneLift, Math.sin(angle) * radius * 0.42]} rotation={[0, -angle, angle * 0.08]}>
+            <mesh castShadow>
+              <boxGeometry args={[identity.dockBayLength, 8, 18]} />
+              <meshStandardMaterial color={identity.dockBayColor} metalness={0.52} roughness={0.36} emissive={profile.accentColor} emissiveIntensity={0.08 + profile.emissiveIntensity * 0.2} />
+            </mesh>
+            <mesh position={[identity.dockBayLength * 0.32, 0, 0]}>
+              <boxGeometry args={[14, 10, 22]} />
+              <meshBasicMaterial color={profile.trafficColor} transparent opacity={0.22} toneMapped={false} />
+            </mesh>
+          </group>
+        );
+      })}
+      {Array.from({ length: identity.cargoPodCount }).map((_, index) => {
+        const side = index % 2 === 0 ? -1 : 1;
+        const row = Math.floor(index / 2);
+        return (
+          <mesh key={index} position={[side * (58 + row * 9), -32 - row * 3, 44 - row * 13]} rotation={[0.08 * row, side * 0.1, side * 0.04]} castShadow>
+            <boxGeometry args={[18, 14, 24]} />
+            <meshStandardMaterial color={station.archetype === "Pirate Black Market" ? "#321523" : "#6f5c3a"} metalness={0.36} roughness={0.6} emissive={station.archetype === "Mining Station" ? "#442e08" : "#101820"} emissiveIntensity={0.1} />
+          </mesh>
+        );
+      })}
+      {Array.from({ length: identity.antennaCount }).map((_, index) => {
+        const angle = index * ((Math.PI * 2) / Math.max(1, identity.antennaCount));
+        const height = station.archetype === "Research Station" ? 96 : 62;
+        return (
+          <group key={index} position={[Math.cos(angle) * 42, 32 + (index % 3) * 8, Math.sin(angle) * 28]} rotation={[0.2, angle, 0]}>
+            <mesh>
+              <boxGeometry args={[4, height, 2.4]} />
+              <meshStandardMaterial color={station.archetype === "Pirate Black Market" ? "#5b2136" : "#8fa1ad"} metalness={0.42} roughness={0.36} emissive={profile.accentColor} emissiveIntensity={0.14} />
+            </mesh>
+            <mesh position={[0, height * 0.52, 0]}>
+              <sphereGeometry args={[3.4, 10, 8]} />
+              <meshBasicMaterial color={profile.trafficColor} transparent opacity={0.54} toneMapped={false} />
+            </mesh>
+          </group>
+        );
+      })}
+      {Array.from({ length: identity.defenseTurretCount }).map((_, index) => {
+        const angle = index * ((Math.PI * 2) / identity.defenseTurretCount);
+        return (
+          <group key={index} position={[Math.cos(angle) * 62, 38, Math.sin(angle) * 62]} rotation={[0, -angle, 0]}>
+            <mesh castShadow>
+              <boxGeometry args={[13, 9, 13]} />
+              <meshStandardMaterial color="#49515c" metalness={0.68} roughness={0.28} emissive="#2d1012" emissiveIntensity={0.12} />
+            </mesh>
+            <mesh position={[0, 0, -16]} rotation={[Math.PI / 2, 0, 0]}>
+              <cylinderGeometry args={[2.4, 3.2, 34, 10]} />
+              <meshStandardMaterial color={profile.accentColor} emissive={profile.accentColor} emissiveIntensity={0.3} />
+            </mesh>
+          </group>
+        );
+      })}
+      {Array.from({ length: identity.industrialCraneCount }).map((_, index) => {
+        const side = index % 2 === 0 ? -1 : 1;
+        const row = Math.floor(index / 2);
+        return (
+          <group key={index} position={[side * (82 + row * 18), -16 + row * 12, -18 + row * 28]} rotation={[0, 0, side * (0.18 + row * 0.08)]}>
+            <mesh>
+              <boxGeometry args={[54, 6, 8]} />
+              <meshStandardMaterial color="#6b7280" metalness={0.64} roughness={0.48} />
+            </mesh>
+            <mesh position={[side * 34, -8, -16]} rotation={[0, 0, Math.PI / 2]}>
+              <cylinderGeometry args={[7, 12, 24, 10]} />
+              <meshStandardMaterial color={profile.solarColor} metalness={0.5} roughness={0.4} emissive={profile.accentColor} emissiveIntensity={0.16} />
             </mesh>
           </group>
         );
@@ -1751,7 +1827,7 @@ function Projectile({ projectile }: { projectile: ProjectileEntity }) {
           <meshBasicMaterial color="#ff6b4a" transparent opacity={0.38} toneMapped={false} />
         </mesh>
       ) : null}
-      <pointLight color={color} intensity={projectile.kind === "missile" ? 1.6 : 0.75} distance={projectile.kind === "missile" ? 86 : 52} />
+      {projectile.kind === "missile" ? <pointLight color={color} intensity={1.6} distance={86} /> : null}
     </group>
   );
 }

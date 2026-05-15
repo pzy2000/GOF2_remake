@@ -1027,6 +1027,8 @@ export interface ProjectileEntity {
   speed: number;
   damage: number;
   life: number;
+  source?: "ultimate";
+  trailCooldown?: number;
   targetId?: string;
 }
 

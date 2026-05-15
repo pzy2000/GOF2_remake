@@ -217,7 +217,10 @@ export const SPARROW_ULTIMATE_MODEL_ID = "sparrow-mk1-gundam";
 export const ULTIMATE_CHARGE_SECONDS = 20;
 export const ULTIMATE_DURATION_SECONDS = 30;
 export const ULTIMATE_RANGE_BONUS = 10_000;
+export const ULTIMATE_PROJECTILE_MAX_LIFE_SECONDS = 2.8;
 export const ULTIMATE_ENERGY_REGEN_MULTIPLIER = 11;
+const ULTIMATE_PROJECTILE_TRAIL_INTERVAL_SECONDS = 0.14;
+const ULTIMATE_PROJECTILE_TRAIL_LIFE_SECONDS = 0.08;
 
 let closeEconomyStream: (() => void) | undefined;
 let economyRefreshInFlight = false;
@@ -228,6 +231,28 @@ function createReadyUltimateAbility() {
 
 function isUltimateActive(state: Pick<GameStore, "ultimateAbility" | "runtime">): boolean {
   return (state.ultimateAbility.activeUntil ?? -Infinity) > state.runtime.clock;
+}
+
+function resolveProjectileKinematics(baseSpeed: number, travelRange: number, fallbackLife: number, ultimate: boolean) {
+  const normalLife = baseSpeed > 0 ? travelRange / baseSpeed : fallbackLife;
+  if (!ultimate) return { speed: baseSpeed, life: normalLife };
+  const life = Math.min(normalLife, ULTIMATE_PROJECTILE_MAX_LIFE_SECONDS);
+  const speed = baseSpeed > 0 ? Math.max(baseSpeed, travelRange / life) : baseSpeed;
+  return { speed, life };
+}
+
+function distanceToSegment(point: Vec3, start: Vec3, end: Vec3): number {
+  const segment = sub(end, start);
+  const lengthSquared = segment[0] * segment[0] + segment[1] * segment[1] + segment[2] * segment[2];
+  if (lengthSquared <= 0) return distance(point, end);
+  const offset = sub(point, start);
+  const t = clamp((offset[0] * segment[0] + offset[1] * segment[1] + offset[2] * segment[2]) / lengthSquared, 0, 1);
+  return distance(point, add(start, scale(segment, t)));
+}
+
+function projectileIntersectsPosition(projectile: ProjectileEntity, movedProjectile: ProjectileEntity, position: Vec3, radius: number): boolean {
+  if (distance(movedProjectile.position, position) <= radius) return true;
+  return distanceToSegment(position, projectile.position, movedProjectile.position) <= radius;
 }
 
 function economyErrorMessage(error: unknown): string {
@@ -1821,7 +1846,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
         position: add(loot.position, scale(loot.velocity, delta)),
         velocity: scale(loot.velocity, Math.pow(0.08, delta))
       })),
-      projectiles: state.runtime.projectiles.map((projectile) => ({ ...projectile, life: projectile.life - delta })),
+      projectiles: state.runtime.projectiles.map((projectile) => ({
+        ...projectile,
+        life: projectile.life - delta,
+        trailCooldown: projectile.trailCooldown === undefined ? undefined : projectile.trailCooldown - delta
+      })),
       effects: state.runtime.effects
         .map((effect) => ({
           ...effect,
@@ -1976,15 +2005,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
       const targetInRange = !primaryTarget || distance(player.position, primaryTarget.position) <= effectivePrimaryRange;
       if (player.energy >= primaryEnergyCost && targetInRange) {
         const shotDirection = ultimateTarget ? normalize(sub(ultimateTarget.position, player.position)) : resolveAssistedShotDirection(player, softLockTarget, forward, tuning);
+        const primaryTravelRange = primaryTarget ? Math.min(effectivePrimaryRange, distance(player.position, primaryTarget.position) + 600) : effectivePrimaryRange;
+        const primaryKinematics = resolveProjectileKinematics(primaryWeapon.speed, primaryTravelRange, 1.4, ultimateActive);
         runtime.projectiles.push({
           id: projectileId("laser"),
           owner: "player",
           kind: "laser",
           position: add(player.position, scale(forward, 16)),
           direction: shotDirection,
-          speed: primaryWeapon.speed,
+          speed: primaryKinematics.speed,
           damage: Math.round(primaryWeapon.damage * equipmentEffects.weaponDamageMultiplier),
-          life: primaryWeapon.speed > 0 ? effectivePrimaryRange / primaryWeapon.speed : 1.4,
+          life: primaryKinematics.life,
+          source: ultimateActive ? "ultimate" : undefined,
           targetId: primaryTarget?.id
         });
         runtime.effects.push(...createWeaponDischargeEffects(projectileId("laser-discharge"), player.position, forward, "laser"));
@@ -2003,15 +2035,18 @@ export const useGameStore = create<GameStore>((set, get) => ({
       if (targetInRange) {
         const missileDirection = ultimateTarget ? normalize(sub(ultimateTarget.position, player.position)) : resolveAssistedShotDirection(player, softLockTarget, forward, tuning);
         const missileLocked = ultimateTarget || (secondaryTarget && nextTargetLockState?.targetId === secondaryTarget.id && nextTargetLockState.isMissileReady);
+        const secondaryTravelRange = secondaryTarget ? Math.min(effectiveSecondaryRange, distance(player.position, secondaryTarget.position) + 800) : effectiveSecondaryRange;
+        const secondaryKinematics = resolveProjectileKinematics(secondaryWeapon.speed, secondaryTravelRange, 3.6, ultimateActive);
         runtime.projectiles.push({
           id: projectileId("missile"),
           owner: "player",
           kind: "missile",
           position: add(player.position, scale(forward, 18)),
           direction: missileDirection,
-          speed: secondaryWeapon.speed,
+          speed: secondaryKinematics.speed,
           damage: Math.round(secondaryWeapon.damage * equipmentEffects.weaponDamageMultiplier),
-          life: secondaryWeapon.speed > 0 ? effectiveSecondaryRange / secondaryWeapon.speed : 3.6,
+          life: secondaryKinematics.life,
+          source: ultimateActive ? "ultimate" : undefined,
           targetId: missileLocked ? secondaryTarget?.id : undefined
         });
         runtime.effects.push(...createWeaponDischargeEffects(projectileId("missile-discharge"), player.position, forward, "missile"));
@@ -2249,12 +2284,28 @@ export const useGameStore = create<GameStore>((set, get) => ({
         const missileTarget = runtime.enemies.find((ship) => ship.id === projectile.targetId && ship.hull > 0);
         if (missileTarget) direction = normalize(sub(missileTarget.position, projectile.position));
       }
-      const movedProjectile = { ...projectile, direction, position: add(projectile.position, scale(direction, projectile.speed * delta)) };
-      runtime.effects.push(createProjectileTrail(projectileId("projectile-trail"), projectile, movedProjectile.position, tuning));
+      let movedProjectile = { ...projectile, direction, position: add(projectile.position, scale(direction, projectile.speed * delta)) };
+      const canEmitTrail = projectile.source !== "ultimate" || (projectile.trailCooldown ?? 0) <= 0;
+      if (canEmitTrail) {
+        const trail = createProjectileTrail(projectileId("projectile-trail"), projectile, movedProjectile.position, tuning);
+        runtime.effects.push(
+          projectile.source === "ultimate"
+            ? {
+                ...trail,
+                life: Math.min(trail.life, ULTIMATE_PROJECTILE_TRAIL_LIFE_SECONDS),
+                maxLife: Math.min(trail.maxLife, ULTIMATE_PROJECTILE_TRAIL_LIFE_SECONDS),
+                size: trail.size * 0.82
+              }
+            : trail
+        );
+        if (projectile.source === "ultimate") {
+          movedProjectile = { ...movedProjectile, trailCooldown: ULTIMATE_PROJECTILE_TRAIL_INTERVAL_SECONDS };
+        }
+      }
       let consumed = false;
       if (projectile.owner === "enemy" && projectile.targetId) {
         runtime.convoys = runtime.convoys.map((convoy) => {
-          if (convoy.id !== projectile.targetId || convoy.hull <= 0 || consumed || distance(movedProjectile.position, convoy.position) > 25) return convoy;
+          if (convoy.id !== projectile.targetId || convoy.hull <= 0 || consumed || !projectileIntersectsPosition(projectile, movedProjectile, convoy.position, 25)) return convoy;
           const shielded = convoy.shield > 0;
           const damaged = applyDamage(convoy, projectile.damage, now);
           consumed = true;
@@ -2278,7 +2329,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
 
       if (!consumed && projectile.targetId && projectile.owner !== "player") {
         runtime.enemies = runtime.enemies.map((ship) => {
-          if (ship.id !== projectile.targetId || ship.hull <= 0 || ship.deathTimer !== undefined || consumed || distance(movedProjectile.position, ship.position) > 25) return ship;
+          if (ship.id !== projectile.targetId || ship.hull <= 0 || ship.deathTimer !== undefined || consumed || !projectileIntersectsPosition(projectile, movedProjectile, ship.position, 25)) return ship;
           const shielded = ship.shield > 0;
           let damaged = applyDamage(ship, projectile.damage, now);
           if (projectile.owner === "enemy" && ["trader", "freighter", "courier", "miner"].includes(ship.role)) {
@@ -2315,7 +2366,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
         });
       }
 
-      if (!consumed && projectile.owner === "enemy" && distance(movedProjectile.position, player.position) < 22) {
+      if (!consumed && projectile.owner === "enemy" && projectileIntersectsPosition(projectile, movedProjectile, player.position, 22)) {
         if (ultimateActive) {
           runtime.effects.push({
             id: projectileId("ultimate-guard"),
@@ -2345,7 +2396,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       } else if (!consumed && projectile.owner === "player") {
         runtime.enemies = runtime.enemies.map((ship) => {
           const validTarget = ship.hull > 0 && ship.deathTimer === undefined;
-          if (!validTarget || ship.hull <= 0 || ship.deathTimer !== undefined || consumed || distance(movedProjectile.position, ship.position) > 25) return ship;
+          if (!validTarget || ship.hull <= 0 || ship.deathTimer !== undefined || consumed || !projectileIntersectsPosition(projectile, movedProjectile, ship.position, 25)) return ship;
           const shielded = ship.shield > 0;
           const wasHostile = isHostileToPlayer(ship);
           let damaged = applyDamage(ship, projectile.damage, now);

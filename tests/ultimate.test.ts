@@ -2,6 +2,10 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { FlightEntity, ProjectileEntity } from "../src/types/game";
 import { createShipEntity } from "../src/state/domains/runtimeFactory";
 
+const ULTIMATE_PROJECTILE_LIFE_LIMIT_SECONDS = 3;
+const ULTIMATE_SUSTAINED_FIRE_PROJECTILE_BUDGET = 36;
+const ULTIMATE_SUSTAINED_FIRE_EFFECT_BUDGET = 96;
+
 class MemoryStorage implements Storage {
   private data = new Map<string, string>();
   get length() {
@@ -103,7 +107,7 @@ describe("sparrow ultimate ability", () => {
   it("auto-fires both weapons at long range without spending missiles", async () => {
     const store = await freshStore();
     store.setState((state) => ({
-      runtime: { ...state.runtime, enemies: [pirate()], projectiles: [] },
+      runtime: { ...state.runtime, enemies: [pirate([0, 0, -9000])], projectiles: [] },
       targetId: undefined,
       primaryCooldown: 0,
       secondaryCooldown: 0,
@@ -123,6 +127,58 @@ describe("sparrow ultimate ability", () => {
     expect(playerShots.some((projectile) => projectile.kind === "laser" && projectile.targetId === "ultimate-pirate")).toBe(true);
     expect(playerShots.some((projectile) => projectile.kind === "missile" && projectile.targetId === "ultimate-pirate")).toBe(true);
     expect(store.getState().player.missiles).toBe(2);
-    expect(playerShots.find((projectile) => projectile.kind === "laser")?.life).toBeGreaterThan(10);
+    expect(playerShots.every((projectile) => projectile.life <= ULTIMATE_PROJECTILE_LIFE_LIMIT_SECONDS)).toBe(true);
+  });
+
+  it("keeps sustained ultimate fire below the normal visible object caps", async () => {
+    const store = await freshStore();
+    store.setState((state) => ({
+      runtime: {
+        ...state.runtime,
+        enemies: [pirate([0, 0, -9000], { hull: 1_000_000, maxHull: 1_000_000, shield: 0, maxShield: 0, fireCooldown: 99 })],
+        projectiles: [],
+        effects: []
+      },
+      targetId: undefined,
+      primaryCooldown: 0,
+      secondaryCooldown: 0,
+      player: { ...state.player, missiles: 2, energy: state.player.stats.energy }
+    }));
+
+    store.getState().setInput({ activateUltimate: true });
+    store.getState().tick(0.1);
+
+    for (let frame = 0; frame < 12 * 60; frame += 1) {
+      store.getState().tick(1 / 60);
+    }
+
+    expect(store.getState().runtime.projectiles.length).toBeLessThanOrEqual(ULTIMATE_SUSTAINED_FIRE_PROJECTILE_BUDGET);
+    expect(store.getState().runtime.effects.length).toBeLessThanOrEqual(ULTIMATE_SUSTAINED_FIRE_EFFECT_BUDGET);
+  });
+
+  it("still hits far locked targets with capped ultimate projectile lifetimes", async () => {
+    const store = await freshStore();
+    store.setState((state) => ({
+      runtime: {
+        ...state.runtime,
+        enemies: [pirate([0, 0, -9000], { hull: 240, maxHull: 240, shield: 0, maxShield: 0, fireCooldown: 99 })],
+        projectiles: [],
+        effects: []
+      },
+      targetId: undefined,
+      primaryCooldown: 0,
+      secondaryCooldown: 0,
+      player: { ...state.player, missiles: 2, energy: state.player.stats.energy }
+    }));
+
+    store.getState().setInput({ activateUltimate: true });
+    store.getState().tick(0.1);
+
+    for (let frame = 0; frame < 4 * 60; frame += 1) {
+      store.getState().tick(1 / 60);
+    }
+
+    const target = store.getState().runtime.enemies.find((ship) => ship.id === "ultimate-pirate");
+    expect(target?.hull).toBeLessThan(240);
   });
 });
