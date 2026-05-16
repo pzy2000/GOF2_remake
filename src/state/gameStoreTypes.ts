@@ -32,6 +32,16 @@ import type {
 } from "../types/game";
 import type { EconomyEvent, EconomyServiceStatus } from "../types/economy";
 import type { Locale } from "../i18n";
+import type {
+  CoopMissionSession,
+  MultiplayerAuthRequest,
+  MultiplayerConnectionStatus,
+  MultiplayerServerEvent,
+  MultiplayerSession,
+  MultiplayerTradeOffer,
+  RemotePlayerSnapshot,
+  TradeSession
+} from "../types/multiplayer";
 
 export interface GameStore {
   screen: Screen;
@@ -48,6 +58,14 @@ export interface GameStore {
   economyService: EconomyServiceStatus;
   economyEvents: EconomyEvent[];
   economyPersonalOffers: MissionDefinition[];
+  multiplayerStatus: MultiplayerConnectionStatus;
+  multiplayerServerUrl: string;
+  multiplayerSession?: MultiplayerSession;
+  multiplayerError?: string;
+  remotePlayers: RemotePlayerSnapshot[];
+  tradeSession?: TradeSession;
+  coopMissionSession?: CoopMissionSession;
+  multiplayerEvents: MultiplayerServerEvent[];
   economyNpcWatch?: EconomyNpcWatchState;
   npcInteraction?: NpcInteractionState;
   npcObjective?: NpcObjectiveState;
@@ -86,6 +104,20 @@ export interface GameStore {
   startEconomyStream: () => void;
   stopEconomyStream: () => void;
   resetEconomyBackend: () => Promise<void>;
+  multiplayerRegister: (request: MultiplayerAuthRequest) => Promise<void>;
+  multiplayerLogin: (request: MultiplayerAuthRequest) => Promise<void>;
+  multiplayerResume: () => Promise<void>;
+  multiplayerLogout: () => void;
+  connectMultiplayerEvents: () => void;
+  disconnectMultiplayerEvents: () => void;
+  sendMultiplayerSnapshot: () => void;
+  syncMultiplayerProfile: () => Promise<void>;
+  invitePlayerToMission: (guestPlayerId: string, missionId: string) => Promise<void>;
+  respondToCoopInvite: (sessionId: string, accept: boolean) => Promise<void>;
+  createTradeWithPlayer: (partnerPlayerId: string) => Promise<void>;
+  updateTradeOffer: (offer: MultiplayerTradeOffer) => Promise<void>;
+  confirmTrade: () => Promise<void>;
+  cancelTrade: () => Promise<void>;
   startEconomyNpcWatch: (npcId: string) => void;
   stopEconomyNpcWatch: (reason?: string) => void;
   toggleEconomyNpcWatchCamera: () => void;

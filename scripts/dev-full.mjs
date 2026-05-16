@@ -12,6 +12,8 @@ const npmBin = process.platform === "win32" ? "npm.cmd" : "npm";
 const children = new Set();
 const economyHost = process.env.GOF2_ECONOMY_HOST ?? "127.0.0.1";
 const economyPort = process.env.GOF2_ECONOMY_PORT ?? "19777";
+const multiplayerHost = process.env.GOF2_MULTIPLAYER_HOST ?? "127.0.0.1";
+const multiplayerPort = process.env.GOF2_MULTIPLAYER_PORT ?? "19778";
 const frontendHost = process.env.GOF2_FRONTEND_HOST;
 
 async function checkVoiceClipCoverage() {
@@ -74,6 +76,21 @@ async function waitForEconomyServer() {
   throw new Error(`Economy server did not become ready at ${healthUrl}`);
 }
 
+async function waitForMultiplayerServer() {
+  const healthHost = multiplayerHost === "0.0.0.0" || multiplayerHost === "::" ? "127.0.0.1" : multiplayerHost;
+  const healthUrl = `http://${healthHost}:${multiplayerPort}/health`;
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    try {
+      const response = await fetch(healthUrl);
+      if (response.ok) return;
+    } catch {
+      // Keep polling until the server starts listening.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
+  throw new Error(`Multiplayer server did not become ready at ${healthUrl}`);
+}
+
 function shutdown(code = 0) {
   for (const child of children) {
     if (!child.killed) child.kill("SIGTERM");
@@ -93,11 +110,19 @@ try {
       GOF2_ECONOMY_PORT: economyPort
     }
   });
+  const multiplayer = spawnChild("multiplayer", process.execPath, ["dist-server/multiplayer-server.mjs"], {
+    env: {
+      GOF2_MULTIPLAYER_HOST: multiplayerHost,
+      GOF2_MULTIPLAYER_PORT: multiplayerPort
+    }
+  });
   await waitForEconomyServer();
+  await waitForMultiplayerServer();
   const viteArgs = ["run", "dev"];
   if (frontendHost) viteArgs.push("--", "--host", frontendHost);
   const vite = spawnChild("vite", npmBin, viteArgs);
   server.on("exit", (code) => shutdown(code ?? 1));
+  multiplayer.on("exit", (code) => shutdown(code ?? 1));
   vite.on("exit", (code) => shutdown(code ?? 0));
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));

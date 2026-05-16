@@ -154,6 +154,42 @@ h3 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.multiplayer-login-panel,
+.multiplayer-station-panel,
+.multiplayer-trade-panel {
+  display: grid;
+  gap: 12px;
+  border: 1px solid rgba(116, 224, 141, 0.28);
+  border-radius: 8px;
+  background: rgba(5, 19, 24, 0.72);
+  padding: 12px;
+}
+
+.multiplayer-login-panel span,
+.multiplayer-station-panel span {
+  color: #9bffe8;
+  font-size: 0.72rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.multiplayer-login-form {
+  display: grid;
+  gap: 9px;
+}
+
+.multiplayer-login-form input,
+.multiplayer-dropzone input {
+  width: 100%;
+  min-height: 38px;
+  border: 1px solid rgba(145, 205, 255, 0.28);
+  border-radius: 6px;
+  background: rgba(3, 10, 20, 0.72);
+  color: #e8f4ff;
+  padding: 0 10px;
+  font: inherit;
+}
+
 .save-slots-panel {
   display: grid;
   gap: 10px;
@@ -1595,6 +1631,91 @@ h3 {
 
 .station-guidance-callout small {
   font-size: 0.72rem;
+}
+
+.multiplayer-station-panel header,
+.multiplayer-invite-row,
+.multiplayer-player-row,
+.multiplayer-trade-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.multiplayer-station-panel header p,
+.multiplayer-docked-list p {
+  margin: 0;
+  color: #bcd2e4;
+  font-size: 0.82rem;
+}
+
+.multiplayer-docked-list {
+  display: grid;
+  gap: 8px;
+}
+
+.multiplayer-player-row,
+.multiplayer-invite-row {
+  border: 1px solid rgba(128, 214, 255, 0.16);
+  border-radius: 6px;
+  background: rgba(3, 12, 24, 0.54);
+  padding: 8px;
+}
+
+.multiplayer-player-row small {
+  color: #adc4d8;
+}
+
+.multiplayer-trade-panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.multiplayer-trade-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.multiplayer-dropzone {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 170px;
+  border: 1px dashed rgba(155, 255, 232, 0.35);
+  border-radius: 8px;
+  background: rgba(4, 16, 24, 0.62);
+  padding: 10px;
+}
+
+.multiplayer-dropzone label {
+  display: grid;
+  gap: 4px;
+}
+
+.multiplayer-offer-summary,
+.multiplayer-inventory-drag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.multiplayer-offer-summary span {
+  border: 1px solid rgba(155, 255, 232, 0.22);
+  border-radius: 999px;
+  background: rgba(9, 26, 31, 0.72);
+  padding: 5px 8px;
+  color: #dffcf6;
+  font-size: 0.76rem;
+  text-transform: none;
+}
+
+.multiplayer-target-label {
+  border-color: rgba(116, 224, 141, 0.42);
+  color: #dffcf6;
 }
 
 .station-body {

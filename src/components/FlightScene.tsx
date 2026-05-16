@@ -13,6 +13,7 @@ import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.j
 import { SPARROW_ULTIMATE_MODEL_ID, planetById, planets, shipById, stationById, systemById, useGameStore } from "../state/gameStore";
 import { commodityById, glassWakeProtocol, missionTemplates } from "../data/world";
 import type { AssetQualityProfile, AsteroidEntity, ConvoyEntity, ExplorationSignalDefinition, FlightEntity, GraphicsQuality, LootEntity, MarketState, MaterialMapProfile, NpcInteractionAction, PlanetDefinition, ProjectileEntity, SalvageEntity, StationDefinition, Vec3, VisualEffectEntity } from "../types/game";
+import type { RemotePlayerSnapshot } from "../types/multiplayer";
 import { add, clamp, distance, forwardFromRotation, normalize, scale, sub } from "../systems/math";
 import { getOreColor } from "../systems/difficulty";
 import { getJumpGatePosition } from "../systems/autopilot";
@@ -895,6 +896,30 @@ function PlayerShip({ onModelStatus }: { onModelStatus: (status: ShipModelStatus
       )}
       <UltimateTransformationFx activeUntil={ultimateAbility.activeUntil} lastActivatedAt={ultimateAbility.lastActivatedAt} />
       <PlayerEngineFlames shipId={renderShipId} afterburning={afterburning} speed={speed} />
+    </group>
+  );
+}
+
+function RemotePlayerShip({ player }: { player: RemotePlayerSnapshot }) {
+  const locale = useGameStore((state) => state.locale);
+  const clock = useGameStore((state) => state.runtime.clock);
+  const speed = Math.hypot(...player.velocity);
+  const pulse = 0.5 + Math.sin(clock * 4.2 + player.position[0] * 0.01) * 0.5;
+  return (
+    <group position={toThree(player.position)} rotation={player.rotation}>
+      <group scale={0.92}>
+        <ProceduralPlayerShip shipId={player.shipId} />
+      </group>
+      <PlayerEngineFlames shipId={player.shipId} afterburning={speed > 260} speed={speed} />
+      <Html center distanceFactor={14} position={[0, 36, 0]}>
+        <div className="target-label multiplayer-target-label">
+          {translateDisplayName(player.displayName, locale)} · {localizeGenericName("PILOT", locale)}
+        </div>
+      </Html>
+      <mesh rotation={[Math.PI / 2, 0, 0]}>
+        <ringGeometry args={[34 + pulse * 3, 37 + pulse * 3, 42]} />
+        <meshBasicMaterial color="#74e08d" transparent opacity={0.16 + pulse * 0.12} toneMapped={false} />
+      </mesh>
     </group>
   );
 }
@@ -2485,9 +2510,11 @@ function SceneContent({ onShipModelStatus }: { onShipModelStatus: (status: ShipM
   const screen = useGameStore((state) => state.screen);
   const economyNpcWatch = useGameStore((state) => state.economyNpcWatch);
   const currentSystemId = useGameStore((state) => state.currentSystemId);
+  const remotePlayers = useGameStore((state) => state.remotePlayers);
   const explorationState = useGameStore((state) => state.explorationState);
   const sceneProfile = useGameStore((state) => state.assetManifest.scenePostProfiles[currentSystemId] ?? state.assetManifest.scenePostProfiles.default);
   const system = systemById[currentSystemId];
+  const visibleRemotePlayers = remotePlayers.filter((remote) => remote.currentSystemId === currentSystemId && !remote.currentStationId);
   const ambient = (0.18 + system.risk * 0.06) * sceneProfile.ambientMultiplier;
   const starLightPosition = scale(system.star.direction, 480);
   const fillLightPosition: Vec3 = [-system.star.direction[0] * 260, 90, -system.star.direction[2] * 260];
@@ -2513,6 +2540,9 @@ function SceneContent({ onShipModelStatus }: { onShipModelStatus: (status: ShipM
       <EconomyRouteMarkers />
       {runtime.enemies.map((ship) => (
         economyNpcWatch?.cameraMode === "cockpit" && economyNpcWatch.npcId === ship.id ? null : <NpcShip key={ship.id} ship={ship} />
+      ))}
+      {visibleRemotePlayers.map((remote) => (
+        <RemotePlayerShip key={remote.playerId} player={remote} />
       ))}
       {runtime.convoys.map((convoy) => (
         <ConvoyShip key={convoy.id} convoy={convoy} />

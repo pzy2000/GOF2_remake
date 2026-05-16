@@ -71,6 +71,7 @@ import {
 import { getContrabandLawSummary } from "../systems/combatAi";
 import { hasActiveCivilianDistress } from "../state/domains/combatRuntime";
 import type { AssetManifest, BlueprintPath, CargoHold, CommodityId, EquipmentId, EquipmentSlotType, FactionId, MissionDefinition, ShipDefinition, StationTab } from "../types/game";
+import type { MultiplayerTradeOffer } from "../types/multiplayer";
 import {
   formatCargoContents,
   formatCargoLabel,
@@ -280,6 +281,7 @@ function EquipmentPopover({
             X
           </button>
         ) : null}
+        <MultiplayerStationPanel />
       </div>
       <p>{translateText(equipment.description, locale)}</p>
       <p className="equipment-effect">{translateText(equipment.effect, locale)}</p>
@@ -474,6 +476,178 @@ export function StationScreen() {
         {tab === "Hangar" ? <SaveSlotsPanel mode="manage" /> : null}
       </section>
     </main>
+  );
+}
+
+function emptyTradeOffer(): MultiplayerTradeOffer {
+  return { credits: 0, equipment: {} };
+}
+
+function MultiplayerStationPanel() {
+  const locale = useGameStore((state) => state.locale);
+  const session = useGameStore((state) => state.multiplayerSession);
+  const status = useGameStore((state) => state.multiplayerStatus);
+  const error = useGameStore((state) => state.multiplayerError);
+  const currentStationId = useGameStore((state) => state.currentStationId);
+  const player = useGameStore((state) => state.player);
+  const remotePlayers = useGameStore((state) => state.remotePlayers);
+  const tradeSession = useGameStore((state) => state.tradeSession);
+  const coopMissionSession = useGameStore((state) => state.coopMissionSession);
+  const createTrade = useGameStore((state) => state.createTradeWithPlayer);
+  const updateTradeOffer = useGameStore((state) => state.updateTradeOffer);
+  const confirmTrade = useGameStore((state) => state.confirmTrade);
+  const cancelTrade = useGameStore((state) => state.cancelTrade);
+  const respondToCoopInvite = useGameStore((state) => state.respondToCoopInvite);
+  const [offer, setOffer] = useState<MultiplayerTradeOffer>(emptyTradeOffer);
+  const [creditDraft, setCreditDraft] = useState("0");
+
+  useEffect(() => {
+    if (!session || !tradeSession) {
+      setOffer(emptyTradeOffer());
+      setCreditDraft("0");
+      return;
+    }
+    const currentOffer = tradeSession.offers[session.playerId] ?? emptyTradeOffer();
+    setOffer(currentOffer);
+    setCreditDraft(String(currentOffer.credits));
+  }, [session?.playerId, tradeSession?.id, tradeSession?.updatedAt]);
+
+  if (!session || !currentStationId) return null;
+  const stationPlayers = remotePlayers.filter((remote) => remote.currentStationId === currentStationId);
+  const partnerId = tradeSession?.playerIds.find((id) => id !== session.playerId);
+  const partner = stationPlayers.find((remote) => remote.playerId === partnerId);
+  const myOffer = tradeSession ? tradeSession.offers[session.playerId] ?? emptyTradeOffer() : emptyTradeOffer();
+  const partnerOffer = tradeSession && partnerId ? tradeSession.offers[partnerId] ?? emptyTradeOffer() : emptyTradeOffer();
+  const confirmed = tradeSession?.confirmedBy.includes(session.playerId) ?? false;
+  const partnerConfirmed = partnerId ? tradeSession?.confirmedBy.includes(partnerId) ?? false : false;
+  const pendingInvite = coopMissionSession?.status === "pending" && coopMissionSession.guestPlayerId === session.playerId;
+
+  function commitOffer(next: MultiplayerTradeOffer) {
+    setOffer(next);
+    setCreditDraft(String(next.credits));
+    void updateTradeOffer(next);
+  }
+
+  function addEquipmentToOffer(equipmentId: EquipmentId) {
+    const held = player.equipmentInventory?.[equipmentId] ?? 0;
+    const current = offer.equipment[equipmentId] ?? 0;
+    if (held <= current) return;
+    commitOffer({
+      ...offer,
+      equipment: {
+        ...offer.equipment,
+        [equipmentId]: current + 1
+      }
+    });
+  }
+
+  function removeEquipmentFromOffer(equipmentId: EquipmentId) {
+    const current = offer.equipment[equipmentId] ?? 0;
+    const nextEquipment = { ...offer.equipment };
+    if (current <= 1) delete nextEquipment[equipmentId];
+    else nextEquipment[equipmentId] = current - 1;
+    commitOffer({ ...offer, equipment: nextEquipment });
+  }
+
+  function renderOfferSummary(currentOffer: MultiplayerTradeOffer) {
+    const equipmentEntries = Object.entries(currentOffer.equipment) as [EquipmentId, number | undefined][];
+    return (
+      <div className="multiplayer-offer-summary">
+        <span>{formatCredits(locale, currentOffer.credits, true)}</span>
+        {equipmentEntries.length === 0 ? <span>{translateText("No equipment", locale)}</span> : equipmentEntries.map(([equipmentId, amount]) => (
+          <span key={equipmentId}>{localizeEquipmentName(equipmentId, locale, equipmentById[equipmentId]?.name ?? equipmentId)} x{formatNumber(locale, amount ?? 0)}</span>
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <section className="multiplayer-station-panel" data-testid="multiplayer-station-panel">
+      <header>
+        <div>
+          <span>{translateText("Multiplayer", locale)}</span>
+          <p>{session.displayName} 路 {translateText(status, locale)}{error ? ` 路 ${error}` : ""}</p>
+        </div>
+        <p>{formatNumber(locale, stationPlayers.length)} {translateText("pilot(s) docked here", locale)}</p>
+      </header>
+      {pendingInvite ? (
+        <div className="multiplayer-invite-row">
+          <span>{translateText("Mission invite", locale)}: {translateText(coopMissionSession.mission.title, locale)}</span>
+          <button className="primary" onClick={() => void respondToCoopInvite(coopMissionSession.id, true)}>{translateText("Accept", locale)}</button>
+          <button onClick={() => void respondToCoopInvite(coopMissionSession.id, false)}>{translateText("Decline", locale)}</button>
+        </div>
+      ) : null}
+      <div className="multiplayer-docked-list">
+        {stationPlayers.length === 0 ? <p>{translateText("No other online pilots are docked here.", locale)}</p> : stationPlayers.map((remote) => (
+          <div key={remote.playerId} className="multiplayer-player-row">
+            <span>{remote.displayName}</span>
+            <small>{localizeShipName(remote.shipId, locale, shipById[remote.shipId]?.name ?? remote.shipId)}</small>
+            <button onClick={() => void createTrade(remote.playerId)}>{translateText("Trade", locale)}</button>
+          </div>
+        ))}
+      </div>
+      {tradeSession ? (
+        <div className="multiplayer-trade-panel" data-testid="multiplayer-trade-panel">
+          <header>
+            <h3>{translateText("Station Trade", locale)}{partner ? ` 路 ${partner.displayName}` : ""}</h3>
+            <button onClick={() => void cancelTrade()}>{translateText("Cancel", locale)}</button>
+          </header>
+          <div className="multiplayer-trade-grid">
+            <div
+              className="multiplayer-dropzone"
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => {
+                event.preventDefault();
+                const equipmentId = event.dataTransfer.getData("application/gof2-equipment") as EquipmentId;
+                if (equipmentId) addEquipmentToOffer(equipmentId);
+              }}
+            >
+              <b>{translateText("Your offer", locale)}</b>
+              {renderOfferSummary(myOffer)}
+              <label>
+                <span>{translateText("Credits", locale)}</span>
+                <input
+                  min={0}
+                  max={player.credits}
+                  onBlur={() => commitOffer({ ...offer, credits: Math.max(0, Math.min(player.credits, Number(creditDraft) || 0)) })}
+                  onChange={(event) => setCreditDraft(event.target.value)}
+                  type="number"
+                  value={creditDraft}
+                />
+              </label>
+              <div className="multiplayer-inventory-drag-list">
+                {(Object.entries(player.equipmentInventory ?? {}) as [EquipmentId, number | undefined][])
+                  .filter(([, amount]) => (amount ?? 0) > 0)
+                  .map(([equipmentId, amount]) => (
+                    <button
+                      draggable
+                      key={equipmentId}
+                      onClick={() => addEquipmentToOffer(equipmentId)}
+                      onDragStart={(event) => event.dataTransfer.setData("application/gof2-equipment", equipmentId)}
+                      type="button"
+                    >
+                      {localizeEquipmentName(equipmentId, locale, equipmentById[equipmentId]?.name ?? equipmentId)} x{formatNumber(locale, amount ?? 0)}
+                    </button>
+                  ))}
+              </div>
+              {(Object.entries(offer.equipment) as [EquipmentId, number | undefined][]).map(([equipmentId, amount]) => (
+                <button key={equipmentId} onClick={() => removeEquipmentFromOffer(equipmentId)} type="button">
+                  - {localizeEquipmentName(equipmentId, locale, equipmentById[equipmentId]?.name ?? equipmentId)} x{formatNumber(locale, amount ?? 0)}
+                </button>
+              ))}
+            </div>
+            <div className="multiplayer-dropzone">
+              <b>{translateText("Their offer", locale)}</b>
+              {renderOfferSummary(partnerOffer)}
+            </div>
+          </div>
+          <div className="multiplayer-trade-actions">
+            <span>{translateText("You", locale)}: {translateText(confirmed ? "Agreed" : "Waiting", locale)} 路 {translateText("Partner", locale)}: {translateText(partnerConfirmed ? "Agreed" : "Waiting", locale)}</span>
+            <button className="primary" disabled={confirmed} onClick={() => void confirmTrade()}>{translateText("Agree", locale)}</button>
+          </div>
+        </div>
+      ) : null}
+    </section>
   );
 }
 
@@ -1200,6 +1374,9 @@ function MissionBoardTab() {
   const onboardingState = useGameStore((state) => state.onboardingState);
   const gameClock = useGameStore((state) => state.gameClock);
   const autopilot = useGameStore((state) => state.autopilot);
+  const multiplayerSession = useGameStore((state) => state.multiplayerSession);
+  const remotePlayers = useGameStore((state) => state.remotePlayers);
+  const invitePlayerToMission = useGameStore((state) => state.invitePlayerToMission);
   const acceptMission = useGameStore((state) => state.acceptMission);
   const completeMission = useGameStore((state) => state.completeMission);
   const startJumpToStation = useGameStore((state) => state.startJumpToStation);
@@ -1208,6 +1385,9 @@ function MissionBoardTab() {
   const staticAvailable = getAvailableMissionsForSystem(missionTemplates, currentSystemId, activeMissions, completedMissionIds, failedMissionIds);
   const marketGapAvailable = getAvailableMarketGapMissions({ marketState, systemId: currentSystemId, activeMissions, knownSystemIds: knownSystems, knownPlanetIds, explorationState });
   const available = [...staticAvailable, ...marketGapAvailable];
+  const stationPlayers = multiplayerSession
+    ? remotePlayers.filter((remote) => remote.currentStationId === currentStationId)
+    : [];
   const onboardingView = getOnboardingView({
     onboardingState,
     screen: "station",
@@ -1294,6 +1474,11 @@ function MissionBoardTab() {
                   ) : (
                     <button onClick={() => acceptMission(mission.id)} disabled={!missionAccess.ok} title={missionAccess.ok ? undefined : translateText(missionAccess.message, locale)}>{translateText("Accept", locale)}</button>
                   )}
+                  {active && stationPlayers.map((remote) => (
+                    <button key={`${mission.id}-${remote.playerId}`} onClick={() => void invitePlayerToMission(remote.playerId, mission.id)}>
+                      {translateText("Invite", locale)} {remote.displayName}
+                    </button>
+                  ))}
                 </div>
                 {!active && !missionAccess.ok ? <p className="warning-text">{translateText(missionAccess.message, locale)}</p> : null}
               </article>

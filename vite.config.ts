@@ -12,6 +12,13 @@ function economyProxyTarget(): string {
   return `http://${proxyHost}:${port}`;
 }
 
+function multiplayerProxyTarget(): string {
+  const host = process.env.GOF2_MULTIPLAYER_HOST ?? "127.0.0.1";
+  const proxyHost = host === "0.0.0.0" || host === "::" ? "127.0.0.1" : host;
+  const port = process.env.GOF2_MULTIPLAYER_PORT ?? "19778";
+  return `http://${proxyHost}:${port}`;
+}
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, ".", "VITE_");
 
@@ -23,6 +30,11 @@ export default defineConfig(({ mode }) => {
         "/api/economy": {
           target: economyProxyTarget(),
           changeOrigin: true
+        },
+        "/api/multiplayer": {
+          target: multiplayerProxyTarget(),
+          changeOrigin: true,
+          ws: true
         }
       }
     },

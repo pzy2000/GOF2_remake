@@ -187,6 +187,33 @@ function EconomyBackendRuntime() {
   return null;
 }
 
+function MultiplayerRuntime() {
+  const session = useGameStore((state) => state.multiplayerSession);
+  const connectMultiplayerEvents = useGameStore((state) => state.connectMultiplayerEvents);
+  const disconnectMultiplayerEvents = useGameStore((state) => state.disconnectMultiplayerEvents);
+  const sendMultiplayerSnapshot = useGameStore((state) => state.sendMultiplayerSnapshot);
+  const syncMultiplayerProfile = useGameStore((state) => state.syncMultiplayerProfile);
+  useEffect(() => {
+    if (!session) return undefined;
+    connectMultiplayerEvents();
+    return disconnectMultiplayerEvents;
+  }, [connectMultiplayerEvents, disconnectMultiplayerEvents, session?.token]);
+  useEffect(() => {
+    if (!session) return undefined;
+    sendMultiplayerSnapshot();
+    const timer = window.setInterval(sendMultiplayerSnapshot, 250);
+    return () => window.clearInterval(timer);
+  }, [sendMultiplayerSnapshot, session?.token]);
+  useEffect(() => {
+    if (!session) return undefined;
+    const timer = window.setInterval(() => {
+      void syncMultiplayerProfile();
+    }, 2_000);
+    return () => window.clearInterval(timer);
+  }, [session?.token, syncMultiplayerProfile]);
+  return null;
+}
+
 function AudioRuntime() {
   const screen = useGameStore((state) => state.screen);
   const currentSystemId = useGameStore((state) => state.currentSystemId);
@@ -249,14 +276,15 @@ export default function App() {
       .catch(() => undefined);
   }, [setAssetManifest]);
 
-  if (screen === "menu") return <><I18nRuntime /><AudioRuntime /><EconomyBackendRuntime /><MainMenu /><DebugScenarioPanel /><StoryNotificationOverlay /><DialogueOverlay /></>;
-  if (screen === "settings" || screen === "credits") return <><I18nRuntime /><AudioRuntime /><EconomyBackendRuntime /><SimpleScreen type={screen} /><DebugScenarioPanel /><StoryNotificationOverlay /><DialogueOverlay /></>;
+  if (screen === "menu") return <><I18nRuntime /><AudioRuntime /><EconomyBackendRuntime /><MultiplayerRuntime /><MainMenu /><DebugScenarioPanel /><StoryNotificationOverlay /><DialogueOverlay /></>;
+  if (screen === "settings" || screen === "credits") return <><I18nRuntime /><AudioRuntime /><EconomyBackendRuntime /><MultiplayerRuntime /><SimpleScreen type={screen} /><DebugScenarioPanel /><StoryNotificationOverlay /><DialogueOverlay /></>;
   if (screen === "station") {
     return (
       <>
         <I18nRuntime />
         <AudioRuntime />
         <EconomyBackendRuntime />
+        <MultiplayerRuntime />
         <GameClockTicker />
         <StationScreen />
         <DebugScenarioPanel />
@@ -271,6 +299,7 @@ export default function App() {
       <I18nRuntime />
       <AudioRuntime />
       <EconomyBackendRuntime />
+      <MultiplayerRuntime />
       <GameClockTicker />
       <FlightScene />
       {screen === "economyWatch" ? null : <Hud />}

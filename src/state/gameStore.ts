@@ -18,6 +18,14 @@ import type {
   Vec3
 } from "../types/game";
 import type { EconomyEvent, EconomyNpcInteractionAction, EconomyServiceStatus } from "../types/economy";
+import type {
+  CoopMissionSession,
+  MultiplayerAuthResponse,
+  MultiplayerServerEvent,
+  MultiplayerStoreProfile,
+  MultiplayerTradeOffer,
+  RemotePlayerSnapshot
+} from "../types/multiplayer";
 import type { GameStore, SavePayload, SavePayloadOverrides } from "./gameStoreTypes";
 import { fallbackAssetManifest } from "../systems/assets";
 import { add, clamp, distance, forwardFromRotation, normalize, scale, sub } from "../systems/math";
@@ -159,6 +167,24 @@ import {
   postPlayerTrade
 } from "../systems/economyClient";
 import {
+  cancelTradeSession,
+  completeCoopMission,
+  confirmTradeSession,
+  connectMultiplayerEvents as connectMultiplayerSocket,
+  createCoopMissionInvite,
+  createTradeSession,
+  fetchMultiplayerSnapshot,
+  loginMultiplayerAccount,
+  multiplayerDisplayUrl,
+  postMultiplayerProfile,
+  registerMultiplayerAccount,
+  respondToCoopMissionInvite,
+  restoreMultiplayerSession,
+  saveMultiplayerSession,
+  snapshotFromProfile,
+  updateTradeOffer as postTradeOffer
+} from "../systems/multiplayerClient";
+import {
   addCargoWithinCapacity,
   addMissionRuntimeEntity,
   addOwnedShipId,
@@ -225,6 +251,12 @@ const ULTIMATE_PROJECTILE_TRAIL_LIFE_SECONDS = 0.08;
 
 let closeEconomyStream: (() => void) | undefined;
 let economyRefreshInFlight = false;
+let multiplayerSocket:
+  | {
+      send: (event: { type: "player-snapshot"; snapshot: RemotePlayerSnapshot } | { type: "profile"; profile: MultiplayerStoreProfile }) => void;
+      close: () => void;
+    }
+  | undefined;
 
 function createReadyUltimateAbility() {
   return { chargeSeconds: ULTIMATE_CHARGE_SECONDS };
@@ -304,6 +336,188 @@ function writeStationAutoSave(state: GameStore): Pick<GameStore, "hasSave" | "sa
     saveSlots: readSaveSlots(),
     activeSaveSlotId: "auto"
   };
+}
+
+function multiplayerProfilePayload(state: GameStore): MultiplayerStoreProfile {
+  return {
+    screen: state.screen === "station" ? "station" : "flight",
+    currentSystemId: state.currentSystemId,
+    currentStationId: state.currentStationId,
+    gameClock: state.gameClock,
+    player: state.player,
+    activeMissions: state.activeMissions,
+    completedMissionIds: state.completedMissionIds,
+    failedMissionIds: state.failedMissionIds,
+    marketState: state.marketState,
+    reputation: state.reputation,
+    factionHeat: state.factionHeat,
+    knownSystems: state.knownSystems,
+    knownPlanetIds: state.knownPlanetIds,
+    explorationState: state.explorationState,
+    dialogueState: state.dialogueState,
+    onboardingState: state.onboardingState
+  };
+}
+
+function multiplayerSnapshot(state: GameStore): RemotePlayerSnapshot | undefined {
+  const session = state.multiplayerSession;
+  if (!session) return undefined;
+  return {
+    playerId: session.playerId,
+    username: session.username,
+    displayName: session.displayName,
+    shipId: state.player.shipId,
+    currentSystemId: state.currentSystemId,
+    currentStationId: state.currentStationId,
+    position: state.player.position,
+    velocity: state.player.velocity,
+    rotation: state.player.rotation,
+    hull: state.player.hull,
+    shield: state.player.shield,
+    updatedAt: Date.now()
+  };
+}
+
+function profilePatchFromAuth(result: MultiplayerAuthResponse): Partial<GameStore> {
+  const profile = result.profile;
+  if (!result.session || !profile) {
+    return {
+      multiplayerStatus: "error",
+      multiplayerError: result.message || "Multiplayer login failed."
+    };
+  }
+  const activeMissions = profile.activeMissions.map(hydrateActiveMission);
+  const screen: SaveGameScreen = profile.screen === "station" && profile.currentStationId ? "station" : "flight";
+  return {
+    screen,
+    previousScreen: "menu",
+    stationTab: screen === "station" ? "Market" : "Market",
+    galaxyMapMode: "browse",
+    currentSystemId: profile.currentSystemId,
+    currentStationId: screen === "station" ? profile.currentStationId : undefined,
+    gameClock: profile.gameClock,
+    player: normalizePlayerEquipmentStats(profile.player),
+    activeMissions,
+    completedMissionIds: profile.completedMissionIds,
+    failedMissionIds: profile.failedMissionIds,
+    marketState: profile.marketState,
+    reputation: profile.reputation,
+    factionHeat: profile.factionHeat,
+    knownSystems: profile.knownSystems,
+    knownPlanetIds: profile.knownPlanetIds,
+    explorationState: normalizeExplorationState(profile.explorationState),
+    dialogueState: normalizeDialogueState(profile.dialogueState),
+    onboardingState: normalizeOnboardingState(profile.onboardingState, {
+      completedMissionIds: profile.completedMissionIds,
+      gameClock: profile.gameClock
+    }),
+    activeDialogue: undefined,
+    runtime: createRuntimeForSystem(profile.currentSystemId, activeMissions),
+    economyService: createEconomyServiceStatus(),
+    economyEvents: [],
+    economyPersonalOffers: [],
+    economyNpcWatch: undefined,
+    npcInteraction: undefined,
+    npcObjective: undefined,
+    autopilot: undefined,
+    ultimateAbility: createReadyUltimateAbility(),
+    targetId: undefined,
+    multiplayerStatus: "connected",
+    multiplayerSession: result.session,
+    multiplayerServerUrl: result.session.serverUrl,
+    multiplayerError: undefined,
+    remotePlayers: [],
+    tradeSession: undefined,
+    coopMissionSession: undefined,
+    multiplayerEvents: []
+  };
+}
+
+function upsertRemotePlayer(players: RemotePlayerSnapshot[], snapshot: RemotePlayerSnapshot, selfPlayerId: string | undefined): RemotePlayerSnapshot[] {
+  if (snapshot.playerId === selfPlayerId) return players;
+  return [...players.filter((player) => player.playerId !== snapshot.playerId), snapshot]
+    .sort((a, b) => a.displayName.localeCompare(b.displayName));
+}
+
+function applyCoopSessionPatch(state: GameStore, session: CoopMissionSession): Partial<GameStore> {
+  const playerId = state.multiplayerSession?.playerId;
+  const relevant = playerId === session.hostPlayerId || playerId === session.guestPlayerId;
+  if (!relevant) return {};
+  let activeMissions = state.activeMissions;
+  let runtime = state.runtime;
+  if (playerId === session.guestPlayerId && session.status === "active") {
+    const mission = {
+      ...hydrateActiveMission(session.mission),
+      accepted: true,
+      acceptedAt: state.gameClock
+    };
+    activeMissions = activeMissions.some((active) => active.id === mission.id)
+      ? activeMissions.map((active) => active.id === mission.id ? mission : active)
+      : [...activeMissions, mission];
+    runtime = createRuntimeForSystem(state.currentSystemId, activeMissions);
+  }
+  if (playerId === session.guestPlayerId && (session.status === "completed" || session.status === "canceled")) {
+    activeMissions = activeMissions.filter((mission) => mission.id !== session.missionId);
+    runtime = createRuntimeForSystem(state.currentSystemId, activeMissions);
+  }
+  return {
+    coopMissionSession: session.status === "completed" || session.status === "canceled" ? undefined : session,
+    activeMissions,
+    runtime: {
+      ...runtime,
+      message: session.message ?? runtime.message
+    }
+  };
+}
+
+function multiplayerEventPatch(state: GameStore, event: MultiplayerServerEvent): Partial<GameStore> {
+  const events = [...state.multiplayerEvents, event].slice(-12);
+  if (event.type === "remote-players") {
+    return {
+      multiplayerEvents: events,
+      remotePlayers: event.players.filter((player) => player.playerId !== state.multiplayerSession?.playerId)
+    };
+  }
+  if (event.type === "remote-player") {
+    return {
+      multiplayerEvents: events,
+      remotePlayers: upsertRemotePlayer(state.remotePlayers, event.player, state.multiplayerSession?.playerId)
+    };
+  }
+  if (event.type === "remote-player-left") {
+    return {
+      multiplayerEvents: events,
+      remotePlayers: state.remotePlayers.filter((player) => player.playerId !== event.playerId)
+    };
+  }
+  if (event.type === "trade-updated") {
+    return {
+      multiplayerEvents: events,
+      tradeSession: event.trade.status === "completed" || event.trade.status === "canceled" ? undefined : event.trade,
+      runtime: { ...state.runtime, message: event.trade.message ?? state.runtime.message }
+    };
+  }
+  if (event.type === "coop-updated") {
+    return {
+      multiplayerEvents: events,
+      ...applyCoopSessionPatch(state, event.session)
+    };
+  }
+  if (event.type === "profile-updated" && event.profile.playerId === state.multiplayerSession?.playerId) {
+    return {
+      multiplayerEvents: events,
+      player: normalizePlayerEquipmentStats(event.profile.player),
+      runtime: { ...state.runtime, message: "Multiplayer profile updated." }
+    };
+  }
+  if (event.type === "error") {
+    return {
+      multiplayerEvents: events,
+      multiplayerStatus: "error",
+      multiplayerError: event.message
+    };
+  }
+  return { multiplayerEvents: events };
 }
 
 function createStoryNotification(tone: StoryNotificationTone, title: string, body: string, gameClock: number) {
@@ -1000,6 +1214,14 @@ export const useGameStore = create<GameStore>((set, get) => ({
   economyService: createEconomyServiceStatus(),
   economyEvents: [],
   economyPersonalOffers: [],
+  multiplayerStatus: "offline",
+  multiplayerServerUrl: multiplayerDisplayUrl(),
+  multiplayerSession: undefined,
+  multiplayerError: undefined,
+  remotePlayers: [],
+  tradeSession: undefined,
+  coopMissionSession: undefined,
+  multiplayerEvents: [],
   economyNpcWatch: undefined,
   npcInteraction: undefined,
   npcObjective: undefined,
@@ -1051,6 +1273,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
       economyService: createEconomyServiceStatus(),
       economyEvents: [],
       economyPersonalOffers: [],
+      multiplayerStatus: "offline",
+      multiplayerSession: undefined,
+      multiplayerError: undefined,
+      remotePlayers: [],
+      tradeSession: undefined,
+      coopMissionSession: undefined,
+      multiplayerEvents: [],
       economyNpcWatch: undefined,
       npcInteraction: undefined,
       npcObjective: undefined,
@@ -1109,6 +1338,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
       economyService: { ...createEconomyServiceStatus(), snapshotId: save.economySnapshotId },
       economyEvents: [],
       economyPersonalOffers: [],
+      multiplayerStatus: "offline",
+      multiplayerSession: undefined,
+      multiplayerError: undefined,
+      remotePlayers: [],
+      tradeSession: undefined,
+      coopMissionSession: undefined,
+      multiplayerEvents: [],
       economyNpcWatch: undefined,
       npcInteraction: undefined,
       npcObjective: undefined,
@@ -1313,6 +1549,216 @@ export const useGameStore = create<GameStore>((set, get) => ({
           ...state.runtime,
           message: `Economy reset failed: ${message}`
         }
+      }));
+    }
+  },
+  multiplayerRegister: async (request) => {
+    set({ multiplayerStatus: "connecting", multiplayerError: undefined });
+    try {
+      const result = await registerMultiplayerAccount(request);
+      const patch = profilePatchFromAuth(result);
+      set((state) => ({ ...patch, runtime: { ...((patch.runtime as RuntimeState | undefined) ?? state.runtime), message: result.message } }));
+      get().connectMultiplayerEvents();
+      void get().syncMultiplayerProfile();
+    } catch (error) {
+      set({
+        multiplayerStatus: "error",
+        multiplayerError: error instanceof Error ? error.message : "Multiplayer registration failed."
+      });
+    }
+  },
+  multiplayerLogin: async (request) => {
+    set({ multiplayerStatus: "connecting", multiplayerError: undefined });
+    try {
+      const result = await loginMultiplayerAccount(request);
+      const patch = profilePatchFromAuth(result);
+      set((state) => ({ ...patch, runtime: { ...((patch.runtime as RuntimeState | undefined) ?? state.runtime), message: result.message } }));
+      get().connectMultiplayerEvents();
+      void get().syncMultiplayerProfile();
+    } catch (error) {
+      set({
+        multiplayerStatus: "error",
+        multiplayerError: error instanceof Error ? error.message : "Multiplayer login failed."
+      });
+    }
+  },
+  multiplayerResume: async () => {
+    set({ multiplayerStatus: "connecting", multiplayerError: undefined });
+    try {
+      const result = await restoreMultiplayerSession();
+      const patch = profilePatchFromAuth(result);
+      set((state) => ({ ...patch, runtime: { ...((patch.runtime as RuntimeState | undefined) ?? state.runtime), message: result.message } }));
+      get().connectMultiplayerEvents();
+      const session = get().multiplayerSession;
+      if (session) {
+        const snapshot = await fetchMultiplayerSnapshot(session.token);
+        set((state) => ({
+          remotePlayers: snapshot.remotePlayers,
+          tradeSession: snapshot.tradeSessions[0] ?? state.tradeSession,
+          coopMissionSession: snapshot.coopMissionSessions[0] ?? state.coopMissionSession
+        }));
+      }
+    } catch (error) {
+      set({
+        multiplayerStatus: "error",
+        multiplayerError: error instanceof Error ? error.message : "Multiplayer session restore failed."
+      });
+    }
+  },
+  multiplayerLogout: () => {
+    multiplayerSocket?.close();
+    multiplayerSocket = undefined;
+    saveMultiplayerSession(undefined);
+    set((state) => ({
+      multiplayerStatus: "offline",
+      multiplayerSession: undefined,
+      multiplayerError: undefined,
+      remotePlayers: [],
+      tradeSession: undefined,
+      coopMissionSession: undefined,
+      multiplayerEvents: [],
+      runtime: { ...state.runtime, message: "Multiplayer disconnected." }
+    }));
+  },
+  connectMultiplayerEvents: () => {
+    const session = get().multiplayerSession;
+    if (!session || multiplayerSocket) return;
+    const socket = connectMultiplayerSocket(
+      session,
+      (event) => {
+        set((state) => multiplayerEventPatch(state, event));
+      },
+      (message) => {
+        multiplayerSocket = undefined;
+        set((state) => ({
+          multiplayerStatus: state.multiplayerSession ? "error" : "offline",
+          multiplayerError: state.multiplayerSession ? message : undefined
+        }));
+      }
+    );
+    if (socket) {
+      multiplayerSocket = socket;
+      set({ multiplayerStatus: "connected", multiplayerError: undefined });
+    } else {
+      set({ multiplayerStatus: "error", multiplayerError: "Multiplayer socket unavailable." });
+    }
+  },
+  disconnectMultiplayerEvents: () => {
+    multiplayerSocket?.close();
+    multiplayerSocket = undefined;
+  },
+  sendMultiplayerSnapshot: () => {
+    const snapshot = multiplayerSnapshot(get());
+    if (!snapshot) return;
+    multiplayerSocket?.send({ type: "player-snapshot", snapshot });
+  },
+  syncMultiplayerProfile: async () => {
+    const state = get();
+    const token = state.multiplayerSession?.token;
+    if (!token) return;
+    try {
+      const response = await postMultiplayerProfile(token, multiplayerProfilePayload(state));
+      if (response.profile) {
+        multiplayerSocket?.send({ type: "profile", profile: multiplayerProfilePayload(get()) });
+      }
+      set({ multiplayerStatus: "connected", multiplayerError: undefined });
+    } catch (error) {
+      set({
+        multiplayerStatus: "error",
+        multiplayerError: error instanceof Error ? error.message : "Multiplayer profile sync failed."
+      });
+    }
+  },
+  invitePlayerToMission: async (guestPlayerId, missionId) => {
+    const state = get();
+    const token = state.multiplayerSession?.token;
+    const stationId = state.currentStationId;
+    const mission = state.activeMissions.find((candidate) => candidate.id === missionId);
+    if (!token || !stationId || !mission) return;
+    try {
+      const response = await createCoopMissionInvite(token, guestPlayerId, stationId, mission);
+      set((latest) => ({ ...applyCoopSessionPatch(latest, response.session), runtime: { ...latest.runtime, message: response.message } }));
+    } catch (error) {
+      set((latest) => ({
+        multiplayerError: error instanceof Error ? error.message : "Mission invite failed.",
+        runtime: { ...latest.runtime, message: error instanceof Error ? error.message : "Mission invite failed." }
+      }));
+    }
+  },
+  respondToCoopInvite: async (sessionId, accept) => {
+    const token = get().multiplayerSession?.token;
+    if (!token) return;
+    try {
+      const response = await respondToCoopMissionInvite(token, sessionId, accept);
+      set((latest) => ({ ...applyCoopSessionPatch(latest, response.session), runtime: { ...latest.runtime, message: response.message } }));
+    } catch (error) {
+      set((latest) => ({
+        multiplayerError: error instanceof Error ? error.message : "Mission response failed.",
+        runtime: { ...latest.runtime, message: error instanceof Error ? error.message : "Mission response failed." }
+      }));
+    }
+  },
+  createTradeWithPlayer: async (partnerPlayerId) => {
+    const state = get();
+    const token = state.multiplayerSession?.token;
+    const stationId = state.currentStationId;
+    if (!token || !stationId) return;
+    try {
+      const response = await createTradeSession(token, partnerPlayerId, stationId);
+      set((latest) => ({ tradeSession: response.trade, runtime: { ...latest.runtime, message: response.message } }));
+    } catch (error) {
+      set((latest) => ({
+        multiplayerError: error instanceof Error ? error.message : "Trade failed.",
+        runtime: { ...latest.runtime, message: error instanceof Error ? error.message : "Trade failed." }
+      }));
+    }
+  },
+  updateTradeOffer: async (offer: MultiplayerTradeOffer) => {
+    const state = get();
+    const token = state.multiplayerSession?.token;
+    const tradeId = state.tradeSession?.id;
+    if (!token || !tradeId) return;
+    try {
+      const response = await postTradeOffer(token, tradeId, offer);
+      set((latest) => ({ tradeSession: response.trade, runtime: { ...latest.runtime, message: response.message } }));
+    } catch (error) {
+      set((latest) => ({
+        multiplayerError: error instanceof Error ? error.message : "Trade offer failed.",
+        runtime: { ...latest.runtime, message: error instanceof Error ? error.message : "Trade offer failed." }
+      }));
+    }
+  },
+  confirmTrade: async () => {
+    const state = get();
+    const token = state.multiplayerSession?.token;
+    const tradeId = state.tradeSession?.id;
+    if (!token || !tradeId) return;
+    try {
+      const response = await confirmTradeSession(token, tradeId);
+      set((latest) => ({ tradeSession: response.trade.status === "completed" ? undefined : response.trade, runtime: { ...latest.runtime, message: response.message } }));
+    } catch (error) {
+      set((latest) => ({
+        multiplayerError: error instanceof Error ? error.message : "Trade confirmation failed.",
+        runtime: { ...latest.runtime, message: error instanceof Error ? error.message : "Trade confirmation failed." }
+      }));
+    }
+  },
+  cancelTrade: async () => {
+    const state = get();
+    const token = state.multiplayerSession?.token;
+    const tradeId = state.tradeSession?.id;
+    if (!token || !tradeId) {
+      set({ tradeSession: undefined });
+      return;
+    }
+    try {
+      const response = await cancelTradeSession(token, tradeId);
+      set((latest) => ({ tradeSession: undefined, runtime: { ...latest.runtime, message: response.message } }));
+    } catch (error) {
+      set((latest) => ({
+        tradeSession: undefined,
+        multiplayerError: error instanceof Error ? error.message : "Trade cancel failed.",
+        runtime: { ...latest.runtime, message: error instanceof Error ? error.message : "Trade cancel failed." }
       }));
     }
   },
@@ -3267,6 +3713,24 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const result = buildCompleteMissionPatch(state, missionId);
     if (result.audioEvent) audioSystem.play(result.audioEvent);
     set(result.patch);
+    const coop = state.coopMissionSession;
+    if (
+      coop?.status === "active" &&
+      coop.hostPlayerId === state.multiplayerSession?.playerId &&
+      coop.missionId === missionId &&
+      state.multiplayerSession?.token
+    ) {
+      void completeCoopMission(state.multiplayerSession.token, coop.id)
+        .then((response) => {
+          set((latest) => ({ ...applyCoopSessionPatch(latest, response.session), runtime: { ...latest.runtime, message: response.message } }));
+        })
+        .catch((error) => {
+          set((latest) => ({
+            multiplayerError: error instanceof Error ? error.message : "Co-op completion sync failed.",
+            runtime: { ...latest.runtime, message: error instanceof Error ? error.message : "Co-op completion sync failed." }
+          }));
+        });
+    }
     if (result.dispatchDeliveryRequest && result.shouldPostDispatchDelivery && result.completeMessage) {
       const { dispatchDeliveryRequest, completeMessage } = result;
       void postEconomyDispatchDelivery(dispatchDeliveryRequest)

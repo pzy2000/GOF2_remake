@@ -10,6 +10,7 @@
     "server:dev": "npm run server:build && npm run server:start",
     "server:build": "tsc -p tsconfig.server.json && vite build --config vite.server.config.ts",
     "server:start": "node dist-server/economy-server.mjs",
+    "server:multiplayer:start": "node dist-server/multiplayer-server.mjs",
     "test": "vitest run --environment node --globals",
     "test:e2e": "playwright test",
     "test:e2e:mobile": "playwright test --grep \"mobile and foldable layouts|PWA preview\"",

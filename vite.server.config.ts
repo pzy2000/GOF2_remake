@@ -4,11 +4,15 @@ export default defineConfig({
   build: {
     emptyOutDir: true,
     outDir: "dist-server",
-    ssr: "server/economyServer.ts",
+    ssr: true,
     target: "node20",
     rollupOptions: {
+      input: {
+        "economy-server": "server/economyServer.ts",
+        "multiplayer-server": "server/multiplayerServer.ts"
+      },
       output: {
-        entryFileNames: "economy-server.mjs",
+        entryFileNames: "[name].mjs",
         format: "es"
       }
     }
