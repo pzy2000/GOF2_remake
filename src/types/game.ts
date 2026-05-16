@@ -93,6 +93,7 @@ export type StationTab =
   | "Hangar"
   | "Shipyard"
   | "Mission Board"
+  | "Multiplayer"
   | "Captain's Log"
   | "Blueprint Workshop"
   | "Lounge"

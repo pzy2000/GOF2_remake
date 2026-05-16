@@ -35,6 +35,67 @@ beforeEach(() => {
 });
 
 describe("save store flow", () => {
+  it("keeps offline new game and continue separate from multiplayer sessions", async () => {
+    const store = await freshStore();
+
+    store.setState({
+      multiplayerStatus: "connected",
+      multiplayerSession: {
+        token: "token",
+        playerId: "pilot-1",
+        username: "pilot",
+        displayName: "Pilot",
+        serverUrl: "/api/multiplayer"
+      },
+      remotePlayers: [{
+        playerId: "pilot-2",
+        username: "wing",
+        displayName: "Wing",
+        shipId: "sparrow-mk1",
+        currentSystemId: "helion-reach",
+        position: [0, 0, 0],
+        velocity: [0, 0, 0],
+        rotation: [0, 0, 0],
+        hull: 100,
+        shield: 100,
+        updatedAt: 1
+      }]
+    });
+
+    store.getState().saveGame("auto");
+    store.getState().newGame();
+    expect(store.getState().multiplayerSession).toBeUndefined();
+    expect(store.getState().remotePlayers).toEqual([]);
+
+    store.setState({
+      multiplayerStatus: "connected",
+      multiplayerSession: {
+        token: "token",
+        playerId: "pilot-1",
+        username: "pilot",
+        displayName: "Pilot",
+        serverUrl: "/api/multiplayer"
+      },
+      remotePlayers: [{
+        playerId: "pilot-2",
+        username: "wing",
+        displayName: "Wing",
+        shipId: "sparrow-mk1",
+        currentSystemId: "helion-reach",
+        position: [0, 0, 0],
+        velocity: [0, 0, 0],
+        rotation: [0, 0, 0],
+        hull: 100,
+        shield: 100,
+        updatedAt: 1
+      }]
+    });
+
+    expect(store.getState().loadGame("auto")).toBe(true);
+    expect(store.getState().multiplayerSession).toBeUndefined();
+    expect(store.getState().remotePlayers).toEqual([]);
+  });
+
   it("reloads saves made inside a station back into the station screen", async () => {
     const store = await freshStore();
 

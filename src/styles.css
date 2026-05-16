@@ -1048,6 +1048,37 @@ h3 {
   background: rgba(32, 24, 6, 0.42);
 }
 
+.multiplayer-hud-status {
+  display: grid;
+  gap: 5px;
+  border: 1px solid rgba(116, 224, 141, 0.32);
+  border-radius: 6px;
+  background: rgba(4, 18, 22, 0.48);
+  padding: 9px;
+}
+
+.multiplayer-hud-status.status-error {
+  border-color: rgba(255, 122, 122, 0.42);
+  background: rgba(34, 8, 12, 0.48);
+}
+
+.multiplayer-hud-status span,
+.multiplayer-hud-status b {
+  color: #dffcf6;
+}
+
+.multiplayer-hud-status p {
+  margin: 0;
+  color: #bcd2e4;
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.multiplayer-hud-list {
+  display: grid;
+  gap: 3px;
+}
+
 .story-tracker.tone-boss {
   border-color: rgba(255, 78, 95, 0.48);
   background: rgba(36, 8, 16, 0.5);

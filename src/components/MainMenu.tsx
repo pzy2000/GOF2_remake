@@ -36,14 +36,14 @@ export function MainMenu() {
         <p className="menu-summary">{translateText("Trade, mine, fight pirates, dock at stations, and explore six frontier systems plus PTD Home.", locale)}</p>
         <LanguageSelect compact />
         <div className="menu-actions">
-          <button className="primary" onClick={newGame}>{translateText("New Game", locale)}</button>
-          <button onClick={() => loadGame()} disabled={!hasSave}>{translateText("Continue", locale)}</button>
+          <button className="primary" onClick={newGame}>{translateText("New Offline Game", locale)}</button>
+          <button onClick={() => loadGame()} disabled={!hasSave}>{translateText("Continue Offline", locale)}</button>
           <button onClick={() => setScreen("settings")}>{translateText("Settings", locale)}</button>
           <button onClick={() => setScreen("credits")}>{translateText("Credits", locale)}</button>
         </div>
         <section className="multiplayer-login-panel" data-testid="multiplayer-login-panel">
           <div>
-            <span>{translateText("Multiplayer", locale)}</span>
+            <span>{translateText("Online Profile", locale)}</span>
             <p>{multiplayerSession ? `${translateText("Connected", locale)}: ${multiplayerSession.displayName}` : `${translateText("Server", locale)}: ${multiplayerServerUrl}`}</p>
             {multiplayerError ? <p className="warning-text">{multiplayerError}</p> : null}
           </div>

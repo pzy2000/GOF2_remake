@@ -57,6 +57,7 @@ import { CLEAN_CARRIER_MISSION_ID, getOnboardingView, HELION_START_STATION_ID, M
 import { getDialogueLogEntries } from "../systems/dialogue";
 import { getExplorationChainSummaries, getExplorationObjectiveSummaryForSystem, explorationRewardStationNames } from "../systems/explorationObjectives";
 import { getNextGuidanceRecommendation } from "../systems/playerGuidance";
+import { getMultiplayerPresence } from "../systems/multiplayerPresence";
 import {
   canInstallEquipment,
   canUnlockBlueprint,
@@ -95,7 +96,7 @@ import {
   type Locale
 } from "../i18n";
 
-const tabs: StationTab[] = ["Market", "Economy", "Hangar", "Shipyard", "Mission Board", "Captain's Log", "Blueprint Workshop", "Lounge", "Galaxy Map"];
+const tabs: StationTab[] = ["Market", "Economy", "Hangar", "Shipyard", "Mission Board", "Multiplayer", "Captain's Log", "Blueprint Workshop", "Lounge", "Galaxy Map"];
 const craftable: EquipmentId[] = equipmentList.filter((item) => !!item.craftCost).map((item) => item.id);
 const equipmentSlotOrder: EquipmentSlotType[] = ["primary", "secondary", "utility", "defense", "engineering"];
 const equipmentSlotLabels: Record<EquipmentSlotType, string> = {
@@ -281,7 +282,6 @@ function EquipmentPopover({
             X
           </button>
         ) : null}
-        <MultiplayerStationPanel />
       </div>
       <p>{translateText(equipment.description, locale)}</p>
       <p className="equipment-effect">{translateText(equipment.effect, locale)}</p>
@@ -469,6 +469,7 @@ export function StationScreen() {
         {tab === "Hangar" ? <HangarTab /> : null}
         {tab === "Shipyard" ? <ShipyardTab /> : null}
         {tab === "Mission Board" ? <MissionBoardTab /> : null}
+        {tab === "Multiplayer" ? <MultiplayerStationPanel /> : null}
         {tab === "Captain's Log" ? <CaptainLogTab /> : null}
         {tab === "Blueprint Workshop" ? <BlueprintTab /> : null}
         {tab === "Lounge" ? <LoungeTab /> : null}
@@ -488,6 +489,7 @@ function MultiplayerStationPanel() {
   const session = useGameStore((state) => state.multiplayerSession);
   const status = useGameStore((state) => state.multiplayerStatus);
   const error = useGameStore((state) => state.multiplayerError);
+  const currentSystemId = useGameStore((state) => state.currentSystemId);
   const currentStationId = useGameStore((state) => state.currentStationId);
   const player = useGameStore((state) => state.player);
   const remotePlayers = useGameStore((state) => state.remotePlayers);
@@ -512,8 +514,22 @@ function MultiplayerStationPanel() {
     setCreditDraft(String(currentOffer.credits));
   }, [session?.playerId, tradeSession?.id, tradeSession?.updatedAt]);
 
-  if (!session || !currentStationId) return null;
-  const stationPlayers = remotePlayers.filter((remote) => remote.currentStationId === currentStationId);
+  if (!session) {
+    return (
+      <section className="multiplayer-station-panel" data-testid="multiplayer-station-panel">
+        <header>
+          <div>
+            <span>{translateText("Multiplayer", locale)}</span>
+            <p>{translateText("No online profile active.", locale)}</p>
+          </div>
+        </header>
+        <p>{translateText("Use Login or Resume Online from the main menu to enter your online profile.", locale)}</p>
+      </section>
+    );
+  }
+  if (!currentStationId) return null;
+  const presence = getMultiplayerPresence(session, remotePlayers, currentSystemId, currentStationId);
+  const stationPlayers = presence.stationPlayers;
   const partnerId = tradeSession?.playerIds.find((id) => id !== session.playerId);
   const partner = stationPlayers.find((remote) => remote.playerId === partnerId);
   const myOffer = tradeSession ? tradeSession.offers[session.playerId] ?? emptyTradeOffer() : emptyTradeOffer();
@@ -566,9 +582,9 @@ function MultiplayerStationPanel() {
       <header>
         <div>
           <span>{translateText("Multiplayer", locale)}</span>
-          <p>{session.displayName} 路 {translateText(status, locale)}{error ? ` 路 ${error}` : ""}</p>
+          <p>{session.displayName} / {translateText(status, locale)}{error ? ` / ${error}` : ""}</p>
         </div>
-        <p>{formatNumber(locale, stationPlayers.length)} {translateText("pilot(s) docked here", locale)}</p>
+        <p>{formatNumber(locale, stationPlayers.length)} {translateText("pilot(s) docked here", locale)} / {formatNumber(locale, presence.systemPlayers.length)} {translateText("pilot(s) in system", locale)}</p>
       </header>
       {pendingInvite ? (
         <div className="multiplayer-invite-row">
@@ -589,7 +605,7 @@ function MultiplayerStationPanel() {
       {tradeSession ? (
         <div className="multiplayer-trade-panel" data-testid="multiplayer-trade-panel">
           <header>
-            <h3>{translateText("Station Trade", locale)}{partner ? ` 路 ${partner.displayName}` : ""}</h3>
+            <h3>{translateText("Station Trade", locale)}{partner ? ` / ${partner.displayName}` : ""}</h3>
             <button onClick={() => void cancelTrade()}>{translateText("Cancel", locale)}</button>
           </header>
           <div className="multiplayer-trade-grid">
@@ -642,7 +658,7 @@ function MultiplayerStationPanel() {
             </div>
           </div>
           <div className="multiplayer-trade-actions">
-            <span>{translateText("You", locale)}: {translateText(confirmed ? "Agreed" : "Waiting", locale)} 路 {translateText("Partner", locale)}: {translateText(partnerConfirmed ? "Agreed" : "Waiting", locale)}</span>
+            <span>{translateText("You", locale)}: {translateText(confirmed ? "Agreed" : "Waiting", locale)} / {translateText("Partner", locale)}: {translateText(partnerConfirmed ? "Agreed" : "Waiting", locale)}</span>
             <button className="primary" disabled={confirmed} onClick={() => void confirmTrade()}>{translateText("Agree", locale)}</button>
           </div>
         </div>

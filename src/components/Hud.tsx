@@ -16,6 +16,7 @@ import { getFactionHeatLevelLabel, getFactionHeatRecord, isFactionWanted } from 
 import { getOnboardingView } from "../systems/onboarding";
 import { getNextGuidanceRecommendation } from "../systems/playerGuidance";
 import { getStoryObjectiveSummary } from "../systems/story";
+import { getMultiplayerPresence } from "../systems/multiplayerPresence";
 import { ShortcutButton } from "./ShortcutButton";
 import {
   formatCargoLabel,
@@ -80,6 +81,10 @@ export function Hud() {
   const explorationState = useGameStore((state) => state.explorationState);
   const factionHeat = useGameStore((state) => state.factionHeat);
   const onboardingState = useGameStore((state) => state.onboardingState);
+  const multiplayerSession = useGameStore((state) => state.multiplayerSession);
+  const multiplayerStatus = useGameStore((state) => state.multiplayerStatus);
+  const multiplayerError = useGameStore((state) => state.multiplayerError);
+  const remotePlayers = useGameStore((state) => state.remotePlayers);
   const setOnboardingCollapsed = useGameStore((state) => state.setOnboardingCollapsed);
   const skipOnboarding = useGameStore((state) => state.skipOnboarding);
   const adjustExplorationScanFrequency = useGameStore((state) => state.adjustExplorationScanFrequency);
@@ -175,6 +180,7 @@ export function Hud() {
   const activeDispatchCargo = activeDispatch
     ? (Object.entries(activeDispatch.cargoRequired ?? {}) as [CommodityId, number | undefined][]).find(([, amount]) => (amount ?? 0) > 0)
     : undefined;
+  const multiplayerPresence = getMultiplayerPresence(multiplayerSession, remotePlayers, currentSystem.id, currentStationId);
   return (
     <div className="hud">
       <img className="hud-overlay-art" src={manifest.hudOverlay} alt="" />
@@ -240,6 +246,29 @@ export function Hud() {
         </div>
         {contrabandAmount > 0 ? <p className="hud-left-note">{contrabandLawLabel(locale)}: {translateText(getContrabandLawSummary(currentSystem.id), locale)}</p> : null}
         {scanningPatrol ? <p className="hud-left-note">{patrolScanLabel(locale)} {formatNumber(locale, Math.round((scanningPatrol.scanProgress ?? 0) * 100))}%</p> : null}
+        {multiplayerSession ? (
+          <div className={`multiplayer-hud-status status-${multiplayerStatus}`} data-testid="multiplayer-hud-status">
+            <span>{translateText("Multiplayer", locale)}</span>
+            <b>{translateDisplayName(multiplayerSession.displayName, locale)} / {translateText(multiplayerStatus, locale)}</b>
+            <p>
+              {formatNumber(locale, multiplayerPresence.systemPlayers.length)} {translateText("pilot(s) in system", locale)} /{" "}
+              {formatNumber(locale, multiplayerPresence.visibleFlightPlayers.length)} {translateText("visible pilot(s)", locale)} /{" "}
+              {formatNumber(locale, multiplayerPresence.stationPlayers.length)} {translateText("pilot(s) docked here", locale)}
+            </p>
+            {multiplayerError ? <p className="warning-text">{multiplayerError}</p> : null}
+            {multiplayerPresence.visibleFlightPlayers.length > 0 ? (
+              <div className="multiplayer-hud-list">
+                {multiplayerPresence.visibleFlightPlayers.slice(0, 3).map((remote) => (
+                  <p key={remote.playerId}>
+                    {translateDisplayName(remote.displayName, locale)} / {localizeShipName(remote.shipId, locale)} / {formatDistance(locale, distance(player.position, remote.position))}
+                  </p>
+                ))}
+              </div>
+            ) : (
+              <p>{translateText("No online pilots in this system", locale)}</p>
+            )}
+          </div>
+        ) : null}
         {nearestNavigation ? (
           <p className="hud-left-note">
             {nearestNavigation.kind === "station"
