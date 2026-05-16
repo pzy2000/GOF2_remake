@@ -147,6 +147,48 @@ describe("multiplayer HTTP and WebSocket server", () => {
     bobSocket.close();
   });
 
+  it("uses active online profiles as presence before explicit flight snapshots arrive", async () => {
+    const { baseUrl, wsUrl } = await startServer();
+    const alice = await register(baseUrl, "profile-a");
+    const bob = await register(baseUrl, "profile-b");
+    const aliceSocket = await openSocket(`${wsUrl}/api/multiplayer/events?token=${alice.session!.token}`);
+    const bobSocket = await openSocket(`${wsUrl}/api/multiplayer/events?token=${bob.session!.token}`);
+    await waitForSocketMessage<{ type: string }>(bobSocket, (event) => event.type === "session");
+
+    const remoteEvent = waitForSocketMessage<{ type: string; player?: RemotePlayerSnapshot }>(
+      bobSocket,
+      (event) => event.type === "remote-player" && event.player?.playerId === alice.session!.playerId
+    );
+    await updateProfile(baseUrl, alice.session!.token, {
+      screen: "station",
+      currentSystemId: "kuro-belt",
+      currentStationId: "kuro-deep",
+      player: { ...createInitialPlayer(), position: [9, 0, 33] }
+    });
+    const received = await remoteEvent;
+
+    expect(received.player).toMatchObject({
+      playerId: alice.session!.playerId,
+      currentSystemId: "kuro-belt",
+      currentStationId: "kuro-deep"
+    });
+
+    const snapshot = await fetch(`${baseUrl}/api/multiplayer/snapshot`, {
+      headers: { Authorization: `Bearer ${bob.session!.token}` }
+    });
+    const body = await snapshot.json() as { remotePlayers: RemotePlayerSnapshot[] };
+    expect(body.remotePlayers).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        playerId: alice.session!.playerId,
+        currentSystemId: "kuro-belt",
+        currentStationId: "kuro-deep"
+      })
+    ]));
+
+    aliceSocket.close();
+    bobSocket.close();
+  });
+
   it("commits station trades atomically and rejects non-station trades", async () => {
     const { baseUrl } = await startServer();
     const alice = await register(baseUrl, "trade-a");

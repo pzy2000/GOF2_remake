@@ -258,12 +258,16 @@ function ensureAuthenticated(state: MultiplayerServiceState, request: IncomingMe
   return accountByToken(state, tokenFromRequest(request));
 }
 
-function cleanPublicSnapshot(state: MultiplayerServiceState, selfPlayerId: string): MultiplayerSnapshotResponse {
-  const onlinePlayerIds = new Set(Object.keys(state.snapshots));
+function cleanPublicSnapshot(
+  state: MultiplayerServiceState,
+  selfPlayerId: string,
+  remotePlayers = Object.values(state.snapshots).filter((snapshot) => snapshot.playerId !== selfPlayerId)
+): MultiplayerSnapshotResponse {
+  const onlinePlayerIds = new Set([...Object.keys(state.snapshots), ...remotePlayers.map((snapshot) => snapshot.playerId)]);
   return {
     ok: true,
     message: "Multiplayer snapshot.",
-    remotePlayers: Object.values(state.snapshots).filter((snapshot) => snapshot.playerId !== selfPlayerId),
+    remotePlayers,
     tradeSessions: state.trades.filter((trade) => trade.playerIds.includes(selfPlayerId) && trade.status !== "completed" && trade.status !== "canceled"),
     coopMissionSessions: state.coopMissions.filter((session) =>
       (session.hostPlayerId === selfPlayerId || session.guestPlayerId === selfPlayerId) &&
@@ -271,6 +275,23 @@ function cleanPublicSnapshot(state: MultiplayerServiceState, selfPlayerId: strin
       session.status !== "canceled" &&
       (onlinePlayerIds.has(session.hostPlayerId) || onlinePlayerIds.has(session.guestPlayerId))
     )
+  };
+}
+
+function snapshotFromProfile(profile: MultiplayerPlayerProfile): RemotePlayerSnapshot {
+  return {
+    playerId: profile.playerId,
+    username: profile.username,
+    displayName: profile.displayName,
+    shipId: profile.player.shipId,
+    currentSystemId: profile.currentSystemId,
+    currentStationId: profile.currentStationId,
+    position: profile.player.position,
+    velocity: profile.player.velocity,
+    rotation: profile.player.rotation,
+    hull: profile.player.hull,
+    shield: profile.player.shield,
+    updatedAt: Date.parse(profile.updatedAt) || Date.now()
   };
 }
 
@@ -423,6 +444,19 @@ export function createMultiplayerHttpServer(options: MultiplayerHttpServerOption
     broadcast({ type: "profile-updated", profile: account.profile }, [account.playerId]);
   };
 
+  const activeRemoteSnapshots = (selfPlayerId: string): RemotePlayerSnapshot[] => {
+    const seen = new Set<string>();
+    const snapshots: RemotePlayerSnapshot[] = [];
+    for (const client of clients.values()) {
+      if (client.playerId === selfPlayerId || seen.has(client.playerId)) continue;
+      const account = accountByPlayerId(state, client.playerId);
+      if (!account) continue;
+      seen.add(client.playerId);
+      snapshots.push(state.snapshots[client.playerId] ?? snapshotFromProfile(account.profile));
+    }
+    return snapshots;
+  };
+
   const updateProfile = (account: MultiplayerAccount, patch: MultiplayerStoreProfile): MultiplayerPlayerProfile => {
     account.profile = {
       ...account.profile,
@@ -440,6 +474,11 @@ export function createMultiplayerHttpServer(options: MultiplayerHttpServerOption
       session.updatedAt = Date.now();
       session.message = "Host mission state synchronized.";
       broadcast({ type: "coop-updated", session }, [session.hostPlayerId, session.guestPlayerId]);
+    }
+    if (Array.from(clients.values()).some((client) => client.playerId === account.playerId)) {
+      const snapshot = snapshotFromProfile(account.profile);
+      state.snapshots[account.playerId] = snapshot;
+      broadcast({ type: "remote-player", player: snapshot });
     }
     state.snapshotId += 1;
     maybeSave();
@@ -536,7 +575,7 @@ export function createMultiplayerHttpServer(options: MultiplayerHttpServerOption
           writeJson(response, 401, { ok: false, message: "Session expired." });
           return;
         }
-        writeJson(response, 200, cleanPublicSnapshot(state, account.playerId));
+        writeJson(response, 200, cleanPublicSnapshot(state, account.playerId, activeRemoteSnapshots(account.playerId)));
         return;
       }
 
@@ -767,7 +806,7 @@ export function createMultiplayerHttpServer(options: MultiplayerHttpServerOption
     const client: WsClient = { id: randomUUID(), playerId: account.playerId, socket: tcpSocket };
     clients.set(client.id, client);
     send(client, { type: "session", session: publicSession(account, tokenFromRequest(request, url)!, url.origin), profile: account.profile });
-    send(client, { type: "remote-players", players: Object.values(state.snapshots).filter((snapshot) => snapshot.playerId !== account.playerId) });
+    send(client, { type: "remote-players", players: activeRemoteSnapshots(account.playerId) });
     const cleanupClient = () => {
       if (!clients.delete(client.id)) return;
       if (!Array.from(clients.values()).some((candidate) => candidate.playerId === account.playerId)) {
