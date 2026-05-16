@@ -287,6 +287,9 @@ describe("story mission store flow", () => {
       missionId: "story-probe-in-glass",
       stageId: "probe-core-recovery"
     });
+    store.getState().tick(1);
+    expect(store.getState().activeMissions[0].storyTargetDestroyedIds).toEqual(["glass-echo-drone", "glass-echo-prime"]);
+    expect(store.getState().runtime.enemies.some((ship) => ship.id === "glass-echo-prime" && ship.hull > 0 && ship.deathTimer === undefined)).toBe(false);
 
     const core = store.getState().runtime.salvage.find((salvage) => salvage.id === "glass-wake-probe-core");
     expect(core).toBeDefined();
@@ -314,6 +317,22 @@ describe("story mission store flow", () => {
       tone: "complete",
       title: "First Reversal Logged"
     });
+  });
+
+  it("keeps local co-op story target kills when an older mission sync arrives", async () => {
+    const { missionTemplates } = await import("../src/data/world");
+    const { cloneMission } = await import("../src/systems/missions");
+    const { mergeCoopMissionProgress } = await import("../src/state/gameStore");
+    const { createRuntimeForSystem } = await import("../src/state/domains/runtimeFactory");
+    const template = missionTemplates.find((mission) => mission.id === "story-probe-in-glass")!;
+    const staleHostMission = { ...cloneMission(template), accepted: true, acceptedAt: 0, storyTargetDestroyedIds: ["glass-echo-drone"] };
+    const localGuestMission = { ...cloneMission(template), accepted: true, acceptedAt: 0, storyTargetDestroyedIds: ["glass-echo-drone", "glass-echo-prime"] };
+
+    const merged = mergeCoopMissionProgress(localGuestMission, staleHostMission);
+    const runtime = createRuntimeForSystem("mirr-vale", [merged]);
+
+    expect(merged.storyTargetDestroyedIds).toEqual(["glass-echo-drone", "glass-echo-prime"]);
+    expect(runtime.enemies.some((ship) => ship.id === "glass-echo-prime" && ship.hull > 0 && ship.deathTimer === undefined)).toBe(false);
   });
 
   it("opens the first-run intro dialogue once when a new game starts", async () => {

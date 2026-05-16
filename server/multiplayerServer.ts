@@ -69,6 +69,7 @@ type WsClient = {
   id: string;
   playerId: string;
   socket: Socket;
+  pending: Buffer;
 };
 
 const DEFAULT_PORT = 19778;
@@ -380,10 +381,11 @@ function encodeWsPayload(data: MultiplayerServerEvent): Buffer {
   return Buffer.concat([header, payload]);
 }
 
-function decodeWsMessages(buffer: Buffer): string[] {
+function decodeWsMessages(buffer: Buffer): { messages: string[]; remaining: Buffer } {
   const messages: string[] = [];
   let offset = 0;
   while (offset + 2 <= buffer.length) {
+    const frameStart = offset;
     const first = buffer[offset];
     const opcode = first & 0x0f;
     const second = buffer[offset + 1];
@@ -391,26 +393,42 @@ function decodeWsMessages(buffer: Buffer): string[] {
     let length = second & 0x7f;
     offset += 2;
     if (length === 126) {
-      if (offset + 2 > buffer.length) break;
+      if (offset + 2 > buffer.length) {
+        offset = frameStart;
+        break;
+      }
       length = buffer.readUInt16BE(offset);
       offset += 2;
     } else if (length === 127) {
-      if (offset + 8 > buffer.length) break;
+      if (offset + 8 > buffer.length) {
+        offset = frameStart;
+        break;
+      }
       length = Number(buffer.readBigUInt64BE(offset));
       offset += 8;
     }
+    if (masked && offset + 4 > buffer.length) {
+      offset = frameStart;
+      break;
+    }
     const mask = masked ? buffer.subarray(offset, offset + 4) : undefined;
     if (masked) offset += 4;
-    if (offset + length > buffer.length) break;
+    if (offset + length > buffer.length) {
+      offset = frameStart;
+      break;
+    }
     const payload = Buffer.from(buffer.subarray(offset, offset + length));
     offset += length;
-    if (opcode === 0x8) break;
+    if (opcode === 0x8) {
+      offset = buffer.length;
+      break;
+    }
     if (mask) {
       for (let index = 0; index < payload.length; index += 1) payload[index] ^= mask[index % 4];
     }
     if (opcode === 0x1) messages.push(payload.toString("utf8"));
   }
-  return messages;
+  return { messages, remaining: buffer.subarray(offset) };
 }
 
 export function createMultiplayerHttpServer(options: MultiplayerHttpServerOptions = {}): MultiplayerHttpServer {
@@ -803,7 +821,7 @@ export function createMultiplayerHttpServer(options: MultiplayerHttpServerOption
       "",
       ""
     ].join("\r\n"));
-    const client: WsClient = { id: randomUUID(), playerId: account.playerId, socket: tcpSocket };
+    const client: WsClient = { id: randomUUID(), playerId: account.playerId, socket: tcpSocket, pending: Buffer.alloc(0) };
     clients.set(client.id, client);
     send(client, { type: "session", session: publicSession(account, tokenFromRequest(request, url)!, url.origin), profile: account.profile });
     send(client, { type: "remote-players", players: activeRemoteSnapshots(account.playerId) });
@@ -815,7 +833,10 @@ export function createMultiplayerHttpServer(options: MultiplayerHttpServerOption
       }
     };
     tcpSocket.on("data", (chunk) => {
-      for (const message of decodeWsMessages(Buffer.from(chunk))) {
+      client.pending = Buffer.concat([client.pending, Buffer.from(chunk)]);
+      const decoded = decodeWsMessages(client.pending);
+      client.pending = decoded.remaining;
+      for (const message of decoded.messages) {
         try {
           const event = JSON.parse(message) as { type?: string; snapshot?: RemotePlayerSnapshot; profile?: MultiplayerStoreProfile };
           if (event.type === "player-snapshot" && event.snapshot) {

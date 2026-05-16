@@ -109,6 +109,54 @@ function watchableEconomyFreighter(patch: Partial<FlightEntity> = {}): FlightEnt
   };
 }
 
+function backendFreighterSnapshot(patch: Partial<EconomySnapshot["visibleNpcs"][number]> = {}, snapshotId = 64): EconomySnapshot {
+  return {
+    version: 1,
+    snapshotId,
+    clock: 20,
+    marketState: createInitialMarketState(),
+    status: "connected",
+    recentEvents: [],
+    resourceBelts: [],
+    visibleNpcs: [
+      {
+        id: "econ-watch-freighter",
+        name: "Union Bulk Freighter",
+        serial: "HR-FR-02",
+        role: "freighter",
+        factionId: "free-belt-union",
+        systemId: "helion-reach",
+        homeStationId: "helion-prime",
+        riskPreference: "balanced",
+        lineageId: "econ-watch-freighter",
+        generation: 0,
+        position: [24, 0, 118],
+        velocity: [0, 0, -18],
+        hull: 170,
+        shield: 70,
+        maxHull: 170,
+        maxShield: 70,
+        cargoCapacity: 20,
+        cargo: { "basic-food": 6 },
+        credits: 5000,
+        ledger: { revenue: 0, expenses: 0, losses: 0, completedContracts: 0, failedContracts: 0, minedUnits: 0 },
+        lastTradeAt: 0,
+        statusLabel: "HAULING 路 Basic Food",
+        task: {
+          kind: "hauling",
+          contractId: "HR-FR-02-FREIGHT",
+          commodityId: "basic-food",
+          originStationId: "helion-prime",
+          destinationStationId: "cinder-yard",
+          progress: 0.2,
+          startedAt: 10
+        },
+        ...patch
+      }
+    ]
+  };
+}
+
 function snapshotWithoutVisibleNpcs(snapshotId = 52, recentEvents: EconomySnapshot["recentEvents"] = []): EconomySnapshot {
   return {
     version: 1,
@@ -299,6 +347,72 @@ describe("economy store integration", () => {
     });
     expect(state.runtime.enemies.some((ship) => ship.id === "helion-reach-trader-0")).toBe(false);
     expect(state.runtime.asteroids[0].id).toBe(asteroids[0].id);
+  });
+
+  it("does not revive a locally destroyed economy NPC when a stale backend snapshot still lists it", async () => {
+    const store = await freshStore();
+    const destroyedPosition: FlightEntity["position"] = [320, 4, -220];
+    const supportWing: FlightEntity = {
+      id: "local-patrol-support",
+      name: "Patrol Support Wing",
+      role: "patrol",
+      factionId: "solar-directorate",
+      position: [80, 12, -60],
+      velocity: [0, 0, 0],
+      hull: 0,
+      shield: 0,
+      maxHull: 96,
+      maxShield: 72,
+      lastDamageAt: 1,
+      fireCooldown: 0.2,
+      aiProfileId: "patrol-support",
+      aiState: "attack",
+      aiTargetId: "player",
+      aiTimer: 0,
+      deathTimer: 0.42,
+      supportWing: true
+    };
+    const staleSnapshot = backendFreighterSnapshot({ position: [24, 0, 118], hull: 170, shield: 70 }, 64);
+    const acknowledgedSnapshot = snapshotWithoutVisibleNpcs(65);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(staleSnapshot), { status: 200, headers: { "Content-Type": "application/json" } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(acknowledgedSnapshot), { status: 200, headers: { "Content-Type": "application/json" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    store.setState((state) => ({
+      currentSystemId: "helion-reach",
+      runtime: {
+        ...state.runtime,
+        enemies: [
+          watchableEconomyFreighter({ position: destroyedPosition, hull: 0, shield: 0, deathTimer: 0.42 }),
+          supportWing
+        ]
+      }
+    }));
+
+    await store.getState().refreshEconomySnapshot();
+
+    const staleState = store.getState();
+    expect(staleState.runtime.enemies.find((ship) => ship.id === "econ-watch-freighter")).toMatchObject({
+      hull: 0,
+      shield: 0,
+      deathTimer: 0.42,
+      position: destroyedPosition
+    });
+    expect(staleState.runtime.enemies.find((ship) => ship.id === "local-patrol-support")).toMatchObject({
+      supportWing: true,
+      deathTimer: 0.42
+    });
+
+    await store.getState().refreshEconomySnapshot();
+    expect(store.getState().runtime.enemies.find((ship) => ship.id === "econ-watch-freighter")).toMatchObject({
+      hull: 0,
+      deathTimer: 0.42,
+      position: destroyedPosition
+    });
+
+    store.getState().tick(0.5);
+    expect(store.getState().runtime.enemies.some((ship) => ship.id === "econ-watch-freighter")).toBe(false);
   });
 
   it("keeps local market fallback usable when the backend is offline", async () => {

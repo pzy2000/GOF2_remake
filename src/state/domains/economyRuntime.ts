@@ -11,16 +11,23 @@ export function applyEconomySnapshotPatch(
   options: { watchedNpc?: EconomyNpcEntity; watchedNpcId?: string } = {}
 ): Pick<GameStore, "marketState" | "runtime" | "economyService" | "economyEvents" | "economyPersonalOffers"> {
   const backendNpcIds = new Set(snapshot.visibleNpcs.map((npc) => npc.id));
+  const locallyDestroyedEconomyNpcIds = new Set(
+    state.runtime.enemies
+      .filter((ship) => (ship.economyStatus || ship.id.startsWith("econ-")) && (ship.hull <= 0 || ship.deathTimer !== undefined))
+      .map((ship) => ship.id)
+  );
   const protectedNpcIds = new Set(backendNpcIds);
+  locallyDestroyedEconomyNpcIds.forEach((id) => protectedNpcIds.add(id));
   if (options.watchedNpcId) protectedNpcIds.add(options.watchedNpcId);
   const preservedEnemies = state.runtime.enemies.filter((ship) => {
     if (ship.storyTarget) return true;
     if (ship.economyStatus || ship.id.startsWith("econ-")) return protectedNpcIds.has(ship.id);
     return !isEconomyTrafficRole(ship.role);
   });
-  const watchedShip = options.watchedNpc ? materializeEconomyNpc(options.watchedNpc) : undefined;
+  const watchedShip = options.watchedNpc && !locallyDestroyedEconomyNpcIds.has(options.watchedNpc.id) ? materializeEconomyNpc(options.watchedNpc) : undefined;
   const backendShips = snapshot.visibleNpcs
     .filter((npc) => npc.id !== watchedShip?.id)
+    .filter((npc) => !locallyDestroyedEconomyNpcIds.has(npc.id))
     .map(materializeEconomyNpc);
   const nextBackendIds = new Set([...backendShips.map((ship) => ship.id), ...(watchedShip ? [watchedShip.id] : [])]);
   const resourceBelt = snapshot.resourceBelts.find((belt) => belt.systemId === state.currentSystemId);

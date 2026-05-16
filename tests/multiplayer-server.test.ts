@@ -1,6 +1,8 @@
 import { mkdtempSync, rmSync } from "node:fs";
+import { createConnection, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { randomBytes } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import { missionTemplates } from "../src/data/world";
 import { createInitialPlayer } from "../src/state/domains/runtimeFactory";
@@ -74,6 +76,64 @@ function waitForSocketMessage<T>(socket: WebSocket, predicate: (event: T) => boo
     };
     socket.addEventListener("message", listener);
   });
+}
+
+function openRawSocket(url: string): Promise<Socket> {
+  const parsed = new URL(url);
+  return new Promise((resolve, reject) => {
+    const socket = createConnection(Number(parsed.port), parsed.hostname);
+    socket.once("error", reject);
+    socket.once("connect", () => {
+      const key = randomBytes(16).toString("base64");
+      socket.write([
+        `GET ${parsed.pathname}${parsed.search} HTTP/1.1`,
+        `Host: ${parsed.host}`,
+        "Upgrade: websocket",
+        "Connection: Upgrade",
+        `Sec-WebSocket-Key: ${key}`,
+        "Sec-WebSocket-Version: 13",
+        "",
+        ""
+      ].join("\r\n"));
+    });
+    let handshake = Buffer.alloc(0);
+    const onData = (chunk: Buffer) => {
+      handshake = Buffer.concat([handshake, chunk]);
+      const marker = handshake.indexOf("\r\n\r\n");
+      if (marker < 0) return;
+      socket.off("data", onData);
+      const leftover = handshake.subarray(marker + 4);
+      if (leftover.length > 0) socket.unshift(leftover);
+      resolve(socket);
+    };
+    socket.on("data", onData);
+  });
+}
+
+function encodeMaskedTextFrame(text: string): Buffer {
+  const payload = Buffer.from(text, "utf8");
+  const mask = randomBytes(4);
+  const headerLength = payload.length < 126 ? 2 : payload.length <= 0xffff ? 4 : 10;
+  const frame = Buffer.alloc(headerLength + 4 + payload.length);
+  frame[0] = 0x81;
+  if (payload.length < 126) {
+    frame[1] = 0x80 | payload.length;
+    mask.copy(frame, 2);
+    payload.copy(frame, 6);
+  } else if (payload.length <= 0xffff) {
+    frame[1] = 0x80 | 126;
+    frame.writeUInt16BE(payload.length, 2);
+    mask.copy(frame, 4);
+    payload.copy(frame, 8);
+  } else {
+    frame[1] = 0x80 | 127;
+    frame.writeBigUInt64BE(BigInt(payload.length), 2);
+    mask.copy(frame, 10);
+    payload.copy(frame, 14);
+  }
+  const payloadOffset = headerLength + 4;
+  for (let index = 0; index < payload.length; index += 1) frame[payloadOffset + index] ^= mask[index % 4];
+  return frame;
 }
 
 afterEach(async () => {
@@ -187,6 +247,32 @@ describe("multiplayer HTTP and WebSocket server", () => {
 
     aliceSocket.close();
     bobSocket.close();
+  });
+
+  it("accepts a fragmented WebSocket profile frame without reporting malformed events", async () => {
+    const { wsUrl } = await startServer();
+    const alice = await register(`http://${new URL(wsUrl).host}`, "fragmented-profile");
+    const socket = await openRawSocket(`${wsUrl}/api/multiplayer/events?token=${alice.session!.token}`);
+    const message = JSON.stringify({
+      type: "profile",
+      profile: {
+        ...alice.profile!,
+        activeMissions: missionTemplates.slice(0, 8).map((mission) => ({ ...mission, accepted: true, acceptedAt: 0 }))
+      }
+    });
+    const frame = encodeMaskedTextFrame(message);
+    socket.write(frame.subarray(0, 17));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    socket.write(frame.subarray(17));
+
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      const profile = activeServer!.getState().accounts.find((account) => account.playerId === alice.session!.playerId)?.profile;
+      if ((profile?.activeMissions.length ?? 0) >= 8) break;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    const profile = activeServer!.getState().accounts.find((account) => account.playerId === alice.session!.playerId)?.profile;
+    expect(profile?.activeMissions.length).toBeGreaterThanOrEqual(8);
+    socket.destroy();
   });
 
   it("commits station trades atomically and rejects non-station trades", async () => {

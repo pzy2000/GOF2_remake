@@ -446,8 +446,9 @@ function applyCoopSessionPatch(state: GameStore, session: CoopMissionSession): P
   let activeMissions = state.activeMissions;
   let runtime = state.runtime;
   if (playerId === session.guestPlayerId && session.status === "active") {
+    const localMission = activeMissions.find((active) => active.id === session.missionId);
     const mission = {
-      ...hydrateActiveMission(session.mission),
+      ...mergeCoopMissionProgress(localMission, hydrateActiveMission(session.mission)),
       accepted: true,
       acceptedAt: state.gameClock
     };
@@ -467,6 +468,39 @@ function applyCoopSessionPatch(state: GameStore, session: CoopMissionSession): P
       ...runtime,
       message: session.message ?? runtime.message
     }
+  };
+}
+
+export function mergeCoopMissionProgress(localMission: MissionDefinition | undefined, incomingMission: MissionDefinition): MissionDefinition {
+  if (!localMission) return incomingMission;
+  const storyTargetDestroyedIds = Array.from(new Set([
+    ...(incomingMission.storyTargetDestroyedIds ?? []),
+    ...(localMission.storyTargetDestroyedIds ?? [])
+  ]));
+  const storyEchoLockedTargetIds = Array.from(new Set([
+    ...(incomingMission.storyEchoLockedTargetIds ?? []),
+    ...(localMission.storyEchoLockedTargetIds ?? [])
+  ]));
+  const salvageBase = incomingMission.salvage ?? localMission.salvage;
+  const salvage = salvageBase
+    ? {
+        ...salvageBase,
+        recovered: !!incomingMission.salvage?.recovered || !!localMission.salvage?.recovered
+      }
+    : undefined;
+  const escortBase = incomingMission.escort ?? localMission.escort;
+  const escort = escortBase
+    ? {
+        ...escortBase,
+        arrived: !!incomingMission.escort?.arrived || !!localMission.escort?.arrived
+      }
+    : undefined;
+  return {
+    ...incomingMission,
+    storyTargetDestroyedIds,
+    storyEchoLockedTargetIds,
+    salvage,
+    escort
   };
 }
 
@@ -1657,10 +1691,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const token = state.multiplayerSession?.token;
     if (!token) return;
     try {
-      const response = await postMultiplayerProfile(token, multiplayerProfilePayload(state));
-      if (response.profile) {
-        multiplayerSocket?.send({ type: "profile", profile: multiplayerProfilePayload(get()) });
-      }
+      await postMultiplayerProfile(token, multiplayerProfilePayload(state));
       set({ multiplayerStatus: "connected", multiplayerError: undefined });
     } catch (error) {
       set({
