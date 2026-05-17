@@ -249,6 +249,46 @@ describe("multiplayer HTTP and WebSocket server", () => {
     bobSocket.close();
   });
 
+  it("clears stale docked station data when a pilot syncs a flight profile", async () => {
+    const { baseUrl, wsUrl } = await startServer();
+    const alice = await register(baseUrl, "flight-a");
+    const bob = await register(baseUrl, "flight-b");
+    const aliceSocket = await openSocket(`${wsUrl}/api/multiplayer/events?token=${alice.session!.token}`);
+    const bobSocket = await openSocket(`${wsUrl}/api/multiplayer/events?token=${bob.session!.token}`);
+    await waitForSocketMessage<{ type: string }>(bobSocket, (event) => event.type === "session");
+
+    await updateProfile(baseUrl, alice.session!.token, {
+      screen: "station",
+      currentSystemId: "helion-reach",
+      currentStationId: "helion-prime"
+    });
+    expect(activeServer!.getState().accounts.find((account) => account.playerId === alice.session!.playerId)?.profile.currentStationId)
+      .toBe("helion-prime");
+
+    const remoteEvent = waitForSocketMessage<{ type: string; player?: RemotePlayerSnapshot }>(
+      bobSocket,
+      (event) => event.type === "remote-player" && event.player?.playerId === alice.session!.playerId && event.player.currentStationId === undefined
+    );
+    await updateProfile(baseUrl, alice.session!.token, {
+      screen: "flight",
+      currentSystemId: "helion-reach",
+      currentStationId: undefined,
+      player: { ...createInitialPlayer(), position: [44, 0, -90] }
+    });
+    const received = await remoteEvent;
+
+    expect(received.player).toMatchObject({
+      playerId: alice.session!.playerId,
+      currentSystemId: "helion-reach",
+      position: [44, 0, -90]
+    });
+    expect(received.player?.currentStationId).toBeUndefined();
+    expect(activeServer!.getState().accounts.find((account) => account.playerId === alice.session!.playerId)?.profile.currentStationId)
+      .toBeUndefined();
+    aliceSocket.close();
+    bobSocket.close();
+  });
+
   it("accepts a fragmented WebSocket profile frame without reporting malformed events", async () => {
     const { wsUrl } = await startServer();
     const alice = await register(`http://${new URL(wsUrl).host}`, "fragmented-profile");
@@ -364,5 +404,53 @@ describe("multiplayer HTTP and WebSocket server", () => {
     const guestProfile = activeServer!.getState().accounts.find((account) => account.playerId === guest.session!.playerId)!.profile;
     expect(guestProfile.completedMissionIds).not.toContain(mission.id);
     expect(guestProfile.player.credits).toBe(1500 + session.collaboratorRewardCredits);
+  });
+
+  it("does not rebroadcast unchanged host co-op mission state on routine profile sync", async () => {
+    const { baseUrl } = await startServer();
+    const host = await register(baseUrl, "host-sync");
+    const guest = await register(baseUrl, "guest-sync");
+    const template = missionTemplates.find((candidate) => candidate.id === "story-probe-in-glass")!;
+    const acceptedMission = { ...template, accepted: true, acceptedAt: 0, storyTargetDestroyedIds: [] };
+    await updateProfile(baseUrl, host.session!.token, {
+      currentSystemId: "mirr-vale",
+      currentStationId: "mirr-lattice",
+      activeMissions: [acceptedMission]
+    });
+    await updateProfile(baseUrl, guest.session!.token, {
+      currentSystemId: "mirr-vale",
+      currentStationId: "mirr-lattice"
+    });
+
+    const invite = await fetch(`${baseUrl}/api/multiplayer/mission-invite`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${host.session!.token}` },
+      body: JSON.stringify({ guestPlayerId: guest.session!.playerId, stationId: "mirr-lattice", mission: acceptedMission })
+    });
+    expect(invite.ok).toBe(true);
+    const session = (await invite.json() as { session: { id: string } }).session;
+    await fetch(`${baseUrl}/api/multiplayer/mission-invite/respond`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${guest.session!.token}` },
+      body: JSON.stringify({ sessionId: session.id, accept: true })
+    });
+    const beforeNoopSync = activeServer!.getState().coopMissions[0].updatedAt;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+
+    await updateProfile(baseUrl, host.session!.token, {
+      currentSystemId: "mirr-vale",
+      currentStationId: "mirr-lattice",
+      activeMissions: [acceptedMission]
+    });
+    expect(activeServer!.getState().coopMissions[0].updatedAt).toBe(beforeNoopSync);
+
+    const destroyedTarget = template.storyEncounter!.targets[0].id;
+    await updateProfile(baseUrl, host.session!.token, {
+      currentSystemId: "mirr-vale",
+      currentStationId: "mirr-lattice",
+      activeMissions: [{ ...acceptedMission, storyTargetDestroyedIds: [destroyedTarget] }]
+    });
+    expect(activeServer!.getState().coopMissions[0].updatedAt).toBeGreaterThan(beforeNoopSync);
+    expect(activeServer!.getState().coopMissions[0].mission.storyTargetDestroyedIds).toContain(destroyedTarget);
   });
 });

@@ -11,6 +11,7 @@ import { createInitialExplorationState } from "../src/systems/exploration";
 import { createInitialOnboardingState } from "../src/systems/onboarding";
 import { createInitialPlayer } from "../src/state/domains/runtimeFactory";
 import { getInitialKnownPlanetIds, getInitialKnownSystems } from "../src/systems/navigation";
+import { hasCoopMissionProgressChanged } from "../src/systems/multiplayerMissionSync";
 import { createInitialReputation } from "../src/systems/reputation";
 import type { EquipmentId, MissionDefinition } from "../src/types/game";
 import type {
@@ -476,9 +477,16 @@ export function createMultiplayerHttpServer(options: MultiplayerHttpServerOption
   };
 
   const updateProfile = (account: MultiplayerAccount, patch: MultiplayerStoreProfile): MultiplayerPlayerProfile => {
+    const hasStationPatch = Object.prototype.hasOwnProperty.call(patch, "currentStationId");
+    const nextScreen = patch.currentStationId ? "station" : (patch.screen ?? account.profile.screen);
+    const currentStationId = nextScreen === "station"
+      ? hasStationPatch ? patch.currentStationId : account.profile.currentStationId
+      : undefined;
     account.profile = {
       ...account.profile,
       ...patch,
+      screen: nextScreen,
+      currentStationId,
       playerId: account.playerId,
       username: account.username,
       displayName: account.displayName,
@@ -488,6 +496,7 @@ export function createMultiplayerHttpServer(options: MultiplayerHttpServerOption
       if (session.status !== "active" || session.hostPlayerId !== account.playerId) continue;
       const mission = patch.activeMissions.find((candidate) => candidate.id === session.missionId);
       if (!mission) continue;
+      if (!hasCoopMissionProgressChanged(session.mission, mission)) continue;
       session.mission = mission;
       session.updatedAt = Date.now();
       session.message = "Host mission state synchronized.";

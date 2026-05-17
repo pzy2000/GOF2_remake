@@ -323,6 +323,7 @@ describe("story mission store flow", () => {
     const { missionTemplates } = await import("../src/data/world");
     const { cloneMission } = await import("../src/systems/missions");
     const { mergeCoopMissionProgress } = await import("../src/state/gameStore");
+    const { hasCoopMissionProgressChanged } = await import("../src/systems/multiplayerMissionSync");
     const { createRuntimeForSystem } = await import("../src/state/domains/runtimeFactory");
     const template = missionTemplates.find((mission) => mission.id === "story-probe-in-glass")!;
     const staleHostMission = { ...cloneMission(template), accepted: true, acceptedAt: 0, storyTargetDestroyedIds: ["glass-echo-drone"] };
@@ -332,6 +333,7 @@ describe("story mission store flow", () => {
     const runtime = createRuntimeForSystem("mirr-vale", [merged]);
 
     expect(merged.storyTargetDestroyedIds).toEqual(["glass-echo-drone", "glass-echo-prime"]);
+    expect(hasCoopMissionProgressChanged(localGuestMission, merged)).toBe(false);
     expect(runtime.enemies.some((ship) => ship.id === "glass-echo-prime" && ship.hull > 0 && ship.deathTimer === undefined)).toBe(false);
   });
 

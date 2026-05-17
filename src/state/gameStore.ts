@@ -184,6 +184,7 @@ import {
   snapshotFromProfile,
   updateTradeOffer as postTradeOffer
 } from "../systems/multiplayerClient";
+import { hasCoopMissionProgressChanged } from "../systems/multiplayerMissionSync";
 import {
   addCargoWithinCapacity,
   addMissionRuntimeEntity,
@@ -452,10 +453,13 @@ function applyCoopSessionPatch(state: GameStore, session: CoopMissionSession): P
       accepted: true,
       acceptedAt: state.gameClock
     };
+    const shouldRefreshRuntime = !localMission || hasCoopMissionProgressChanged(localMission, mission);
     activeMissions = activeMissions.some((active) => active.id === mission.id)
       ? activeMissions.map((active) => active.id === mission.id ? mission : active)
       : [...activeMissions, mission];
-    runtime = createRuntimeForSystem(state.currentSystemId, activeMissions);
+    if (shouldRefreshRuntime) {
+      runtime = createRuntimeForSystem(state.currentSystemId, activeMissions);
+    }
   }
   if (playerId === session.guestPlayerId && (session.status === "completed" || session.status === "canceled")) {
     activeMissions = activeMissions.filter((mission) => mission.id !== session.missionId);
