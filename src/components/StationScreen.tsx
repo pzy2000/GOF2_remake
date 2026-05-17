@@ -47,7 +47,7 @@ import {
   getShipPurchaseAccess,
   getStationServiceAccess
 } from "../systems/factionServices";
-import { reputationLabel } from "../systems/reputation";
+import { getFactionRelationshipSummary, reputationLabel } from "../systems/reputation";
 import { GalaxyMap } from "./GalaxyMap";
 import { AtlasIcon } from "./AtlasIcon";
 import { SaveSlotsPanel } from "./SaveSlotsPanel";
@@ -126,6 +126,18 @@ function repairPriceAdjustmentLabel(locale: Locale, multiplier: number): string 
   if (multiplier < 1) return `${translateText("Repair discount", locale)} ${formatNumber(locale, deltaPercent)}%`;
   if (multiplier > 1) return `${translateText("Repair surcharge", locale)} ${formatNumber(locale, deltaPercent)}%`;
   return undefined;
+}
+
+function factionRelationshipSummaryText(factionId: FactionId, locale: Locale): string {
+  const summary = getFactionRelationshipSummary(factionId);
+  const relationParts: string[] = [];
+  if (summary.friends.length > 0) {
+    relationParts.push(`${translateText("Friends", locale)} ${summary.friends.map((id) => localizeFactionName(id, locale, factionNames[id])).join(", ")}`);
+  }
+  if (summary.enemies.length > 0) {
+    relationParts.push(`${translateText("Enemies", locale)} ${summary.enemies.map((id) => localizeFactionName(id, locale, factionNames[id])).join(", ")}`);
+  }
+  return relationParts.length > 0 ? relationParts.join(" · ") : `${translateText("Relations", locale)} ${translateText("Neutral", locale)}`;
 }
 
 type EquipmentPopoverMode = "preview" | "pinned";
@@ -1992,6 +2004,7 @@ function FactionConsequencesPanel() {
                   {rewardMultiplier > 1 ? ` · ${translateText("Mission bonus", locale)} +${formatNumber(locale, Math.round((rewardMultiplier - 1) * 100))}%` : ""}
                   {repairAdjustment ? ` · ${repairAdjustment}` : ""}
                 </small>
+                <small className="faction-relationship-summary">{factionRelationshipSummaryText(factionId, locale)}</small>
                 {record.fineCredits > 0 ? <small>{translateText("Outstanding fine", locale)}: {formatCredits(locale, record.fineCredits)}</small> : null}
                 {showAmnesty ? (
                   <small>{translateText("Amnesty", locale)}: {amnestyOffer.available ? formatCredits(locale, amnestyOffer.costCredits) : translateText(amnestyOffer.message, locale)}</small>

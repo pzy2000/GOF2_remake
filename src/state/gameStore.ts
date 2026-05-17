@@ -60,7 +60,14 @@ import {
 import { getDefaultTargetStation } from "../systems/autopilot";
 import { NPC_INTERACTION_RANGE } from "../systems/npcInteraction";
 import { advanceMarketState, buyCommodity, buyEquipment, createInitialMarketState, getCargoUsed, getOccupiedCargo, sellCommodity, sellEquipment } from "../systems/economy";
-import { createInitialReputation, updateReputation } from "../systems/reputation";
+import {
+  applyReputationDeltas,
+  createInitialReputation,
+  DEFAULT_DRONE_KILL_REPUTATION_CAP,
+  formatReputationDeltaSummary,
+  getFactionKillReputationDeltas,
+  updateReputation
+} from "../systems/reputation";
 import {
   acceptMission as acceptMissionPure,
   canCompleteMission,
@@ -1159,6 +1166,50 @@ function storyTargetMission(activeMissions: MissionDefinition[], ship: FlightEnt
 
 function storyTargetDefinition(activeMissions: MissionDefinition[], ship: FlightEntity) {
   return storyTargetMission(activeMissions, ship)?.storyEncounter?.targets.find((target) => target.id === ship.id);
+}
+
+function shouldApplyFactionKillReputation(ship: FlightEntity): boolean {
+  if (!ship.storyTarget) return true;
+  return ship.role === "pirate" || ship.role === "drone" || ship.role === "relay";
+}
+
+function appendRuntimeMessage(base: string | undefined, addition: string | undefined): string | undefined {
+  if (!addition) return base;
+  return base ? `${base} ${addition}` : addition;
+}
+
+function applyFactionKillReputation({
+  reputation,
+  ship,
+  droneKillReputationUsed
+}: {
+  reputation: ReturnType<typeof createInitialReputation>;
+  ship: FlightEntity;
+  droneKillReputationUsed: Partial<Record<FactionId, number>>;
+}): {
+  reputation: ReturnType<typeof createInitialReputation>;
+  droneKillReputationUsed: Partial<Record<FactionId, number>>;
+  message?: string;
+} {
+  if (!shouldApplyFactionKillReputation(ship)) return { reputation, droneKillReputationUsed };
+  const killReputation = getFactionKillReputationDeltas(ship, {
+    droneReputationCap: DEFAULT_DRONE_KILL_REPUTATION_CAP,
+    droneReputationUsed: droneKillReputationUsed
+  });
+  const applied = applyReputationDeltas(reputation, killReputation.deltas);
+  const nextDroneKillReputationUsed = { ...droneKillReputationUsed };
+  for (const [factionId, usageDelta] of Object.entries(killReputation.droneReputationUsage) as [FactionId, number | undefined][]) {
+    const appliedDelta = applied.appliedDeltas[factionId] ?? 0;
+    if (appliedDelta > 0 && (usageDelta ?? 0) > 0) {
+      nextDroneKillReputationUsed[factionId] = (nextDroneKillReputationUsed[factionId] ?? 0) + Math.min(appliedDelta, usageDelta ?? 0);
+    }
+  }
+  const summary = formatReputationDeltaSummary(applied.appliedDeltas);
+  return {
+    reputation: applied.reputation,
+    droneKillReputationUsed: nextDroneKillReputationUsed,
+    message: summary ? `Standing ${summary}.` : undefined
+  };
 }
 
 function protectEchoLockedStoryTargetDeath(
@@ -2551,6 +2602,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     const pirates = sortPirateTargets(runtime.enemies);
     const graceActive = now < runtime.graceUntil;
     let reputation = state.reputation;
+    let droneKillReputationUsed = { ...(runtime.droneKillReputationUsed ?? {}) };
     let contrabandScanMessage: string | undefined;
     let lawNotification = state.runtime.lawNotification && state.runtime.lawNotification.expiresAt > gameClock
       ? state.runtime.lawNotification
@@ -2768,6 +2820,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     let destroyedBossName: string | undefined;
     let patrolsShouldAttackPlayer = false;
     let playerAggressionMessage: string | undefined;
+    let factionStandingMessage: string | undefined;
     for (const projectile of runtime.projectiles) {
       if (projectile.life <= 0) continue;
       let direction = projectile.direction;
@@ -2937,7 +2990,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
                   now: gameClock
                 });
                 factionHeat = incident.factionHeat;
-                reputation = updateReputation(reputation, ship.factionId, incident.reputationDelta);
+                if (!destroyedByHit) reputation = updateReputation(reputation, ship.factionId, incident.reputationDelta);
                 lawNotification = incident.notification;
                 patrolsShouldAttackPlayer = ship.role !== "smuggler";
                 playerAggressionMessage = incident.notification.body;
@@ -2961,10 +3014,17 @@ export const useGameStore = create<GameStore>((set, get) => ({
               destroyedPirates += 1;
               const bounty = bountyRewardForShip(ship);
               player = { ...player, credits: player.credits + bounty };
-              reputation = updateReputation(reputation, localLawFactionId, ship.boss ? 3 : ship.elite ? 2 : 1);
               lawNotification = createBountyNotification(ship.name, bounty, gameClock);
               playerAggressionMessage = lawNotification.body;
               audioSystem.play("mission-complete");
+            }
+            const killReputation = applyFactionKillReputation({ reputation, ship, droneKillReputationUsed });
+            reputation = killReputation.reputation;
+            droneKillReputationUsed = killReputation.droneKillReputationUsed;
+            if (killReputation.message) {
+              factionStandingMessage = appendRuntimeMessage(factionStandingMessage, killReputation.message);
+              playerAggressionMessage = appendRuntimeMessage(playerAggressionMessage, killReputation.message);
+              if (lawNotification) lawNotification = { ...lawNotification, body: appendRuntimeMessage(lawNotification.body, killReputation.message) ?? lawNotification.body };
             }
             if (ship.boss) destroyedBossName = ship.name;
             if (ship.storyTarget && ship.missionId) destroyedStoryTargets.push({ missionId: ship.missionId, targetId: ship.id, name: ship.name, position: ship.position });
@@ -3080,6 +3140,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       enemies: runtime.enemies.filter((ship) => ship.hull > 0 || (ship.deathTimer ?? 0) > 0),
       loot: [...runtime.loot, ...lootDrops],
       destroyedPirates,
+      droneKillReputationUsed,
       message: playerAggressionMessage ?? echoLockBlockedMessage ?? echoLockMessage ?? npcObjectiveMessage ?? (destroyedBossName ? `${destroyedBossName} destroyed. Boss cargo scattered.` : runtime.message)
     };
 
@@ -3156,6 +3217,9 @@ export const useGameStore = create<GameStore>((set, get) => ({
           audioSystem.play("objective-cue");
         }
       }
+    }
+    if (storyTargetMessage && factionStandingMessage) {
+      storyTargetMessage = appendRuntimeMessage(storyTargetMessage, factionStandingMessage);
     }
     activeMissions = activeMissions.map((mission) => {
       const convoy = runtime.convoys.find((item) => item.missionId === mission.id);
@@ -3271,6 +3335,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
               ? npcObjectiveMessage
             : lawNotification
               ? lawNotification.body
+            : factionStandingMessage
+              ? factionStandingMessage
             : lootDrops.length
               ? "Target destroyed. Cargo canister released."
             : miningActive

@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ConvoyEntity, FlightEntity } from "../src/types/game";
 import { createShipEntity } from "../src/state/domains/runtimeFactory";
+import { missionTemplates } from "../src/data/world";
+import { cloneMission } from "../src/systems/missions";
 
 class MemoryStorage implements Storage {
   private data = new Map<string, string>();
@@ -215,6 +217,173 @@ describe("combat AI store wiring", () => {
     const state = store.getState();
     expect(state.runtime.destroyedPirates).toBe(1);
     expect(state.runtime.loot[0]).toMatchObject({ kind: "commodity", commodityId: "illegal-contraband", amount: 2, rarity: "epic" });
+  });
+
+  it("applies 2v2 standing spillover when the player destroys pirates", async () => {
+    const store = await freshStore();
+    store.setState((state) => ({
+      currentSystemId: "helion-reach",
+      player: { ...state.player, position: [0, 0, 0] },
+      runtime: {
+        ...state.runtime,
+        enemies: [pirate([0, 0, 0])],
+        projectiles: [
+          {
+            id: "test-pirate-spillover-shot",
+            owner: "player",
+            kind: "laser",
+            position: [0, 0, 0],
+            direction: [0, 0, 0],
+            speed: 0,
+            damage: 999,
+            life: 1,
+            targetId: "test-pirate"
+          }
+        ],
+        loot: [],
+        graceUntil: 0
+      }
+    }));
+
+    store.getState().tick(0.05);
+
+    const state = store.getState();
+    expect(state.runtime.destroyedPirates).toBe(1);
+    expect(state.reputation.factions["solar-directorate"]).toBe(9);
+    expect(state.reputation.factions["mirr-collective"]).toBe(1);
+    expect(state.reputation.factions["vossari-clans"]).toBe(-1);
+    expect(state.reputation.factions["independent-pirates"]).toBe(-21);
+    expect(state.runtime.message).toContain("Solar +1");
+    expect(state.runtime.message).toContain("Vossari -1");
+  });
+
+  it("applies opposing-bloc standing changes while preserving legal heat when the player destroys a patrol", async () => {
+    const store = await freshStore();
+    store.setState((state) => ({
+      currentSystemId: "helion-reach",
+      player: { ...state.player, position: [0, 0, 0] },
+      runtime: {
+        ...state.runtime,
+        enemies: [patrol([0, 0, 0])],
+        projectiles: [
+          {
+            id: "test-patrol-spillover-shot",
+            owner: "player",
+            kind: "laser",
+            position: [0, 0, 0],
+            direction: [0, 0, 0],
+            speed: 0,
+            damage: 999,
+            life: 1,
+            targetId: "test-patrol"
+          }
+        ],
+        loot: [],
+        graceUntil: 0
+      }
+    }));
+
+    store.getState().tick(0.05);
+
+    const state = store.getState();
+    expect(state.reputation.factions["solar-directorate"]).toBe(7);
+    expect(state.reputation.factions["mirr-collective"]).toBe(-1);
+    expect(state.reputation.factions["vossari-clans"]).toBe(1);
+    expect(state.reputation.factions["independent-pirates"]).toBe(-19);
+    expect(state.factionHeat.factions["solar-directorate"]?.heat).toBeGreaterThanOrEqual(50);
+    expect(state.factionHeat.factions["solar-directorate"]?.fineCredits).toBeGreaterThanOrEqual(6000);
+    expect(state.runtime.message).toContain("Mirr -1");
+    expect(state.runtime.message).toContain("Pirates +1");
+  });
+
+  it("caps drone kill reputation rewards per runtime visit", async () => {
+    const store = await freshStore();
+    for (let index = 0; index < 4; index += 1) {
+      const drone = createShipEntity(`test-drone-${index}`, "drone", [0, 0, 0], "mirr-vale");
+      store.setState((state) => ({
+        currentSystemId: "mirr-vale",
+        player: { ...state.player, position: [0, 0, 0] },
+        runtime: {
+          ...state.runtime,
+          enemies: [drone],
+          projectiles: [
+            {
+              id: `test-drone-shot-${index}`,
+              owner: "player",
+              kind: "laser",
+              position: [0, 0, 0],
+              direction: [0, 0, 0],
+              speed: 0,
+              damage: 999,
+              life: 1,
+              targetId: drone.id
+            }
+          ],
+          loot: [],
+          graceUntil: 0
+        }
+      }));
+      store.getState().tick(0.05);
+    }
+
+    const state = store.getState();
+    expect(state.reputation.factions["solar-directorate"]).toBe(11);
+    expect(state.reputation.factions["mirr-collective"]).toBe(3);
+    expect(state.reputation.factions["vossari-clans"]).toBe(3);
+    expect(state.reputation.factions["free-belt-union"]).toBe(7);
+    expect(state.reputation.factions["independent-pirates"]).toBe(-20);
+    expect(state.runtime.droneKillReputationUsed).toMatchObject({
+      "solar-directorate": 3,
+      "mirr-collective": 3,
+      "vossari-clans": 3,
+      "free-belt-union": 3
+    });
+  });
+
+  it("does not apply generic spillover to same-faction scripted story guards", async () => {
+    const store = await freshStore();
+    const template = missionTemplates.find((mission) => mission.id === "story-ashen-decoy-manifest")!;
+    const activeMission = { ...cloneMission(template), accepted: true, acceptedAt: 0, storyTargetDestroyedIds: [] };
+    const guard = {
+      ...createShipEntity("false-mercy-guard", "smuggler", [0, 0, 0], "ashen-drift"),
+      name: "False Mercy Guard",
+      factionId: "vossari-clans" as const,
+      missionId: activeMission.id,
+      storyTarget: true,
+      storyTargetKind: "guard" as const
+    } satisfies FlightEntity;
+    store.setState((state) => ({
+      currentSystemId: "ashen-drift",
+      activeMissions: [activeMission],
+      player: { ...state.player, position: [0, 0, 0] },
+      runtime: {
+        ...state.runtime,
+        enemies: [guard],
+        projectiles: [
+          {
+            id: "test-story-guard-shot",
+            owner: "player",
+            kind: "laser",
+            position: [0, 0, 0],
+            direction: [0, 0, 0],
+            speed: 0,
+            damage: 999,
+            life: 1,
+            targetId: guard.id
+          }
+        ],
+        loot: [],
+        graceUntil: 0
+      }
+    }));
+
+    store.getState().tick(0.05);
+
+    const state = store.getState();
+    expect(state.activeMissions[0].storyTargetDestroyedIds).toContain("false-mercy-guard");
+    expect(state.reputation.factions["vossari-clans"]).toBe(0);
+    expect(state.reputation.factions["independent-pirates"]).toBe(-20);
+    expect(state.reputation.factions["solar-directorate"]).toBe(8);
   });
 
   it("spawns a high-risk system boss with a guaranteed equipment drop", async () => {

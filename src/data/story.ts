@@ -24,9 +24,9 @@ export const GLASS_WAKE_ARC_ID = "glass-wake-protocol";
 export const glassWakeProtocol: StoryArcDefinition = {
   id: GLASS_WAKE_ARC_ID,
   title: "Glass Wake Protocol",
-  subtitle: "A missing Mirr probe exposes a drone signal hidden inside trusted trade beacons.",
+  subtitle: "A missing Mirr probe forces Solar and Mirr into a fragile front against Ashen relay markets and Unknown Drones.",
   summary:
-    "Trace the Glass Wake carrier through research arrays, mining belts, patrol routes, pirate relays, Celest Gate, and the Listener Scar before the Unknown Drones turn civilian navigation into a name-bearing trap.",
+    "Trace the Glass Wake carrier through research arrays, mining belts, patrol routes, pirate relays, Celest Gate, and the Listener Scar as Solar and Mirr build an uneasy evidence chain against Vossari brokers, pirate relays, and the Unknown Drones turning civilian navigation into a name-bearing trap.",
   epilogue:
     "The Listener Scar anchor is broken and the captain's ship no longer answers to its stolen name. Glass Wake is not gone; the local listener has been forced to blink, and the larger drone network now knows who taught it pain.",
   chapters: [
@@ -36,11 +36,11 @@ export const glassWakeProtocol: StoryArcDefinition = {
       missionId: "story-clean-carrier",
       title: "01: Clean Carrier",
       lockedTitle: "01: Signal Masked",
-      briefing: "Carry a clean Helion sync key to Mirr Lattice. Helion traffic swears the key has never touched a pirate relay, which makes it the only honest mirror left.",
+      briefing: "Carry a clean Helion sync key to Mirr Lattice. Helion traffic swears the key has never touched a pirate relay, and Solar needs Mirr to prove the lane is being bent before the Vossari markets can call it politics.",
       fieldObjective: "Deliver the clean sync key and watch for a one-time Glass Wake ghost ping after launch.",
       reveal: "The probe answered a lawful-looking trade beacon that was not in any public registry.",
       log:
-        "Mirr Lattice confirmed the Helion key was clean. The missing probe did not drift off course; something answered it with a trusted trade signature and left a wake in the static."
+        "Mirr Lattice confirmed the Helion key was clean, making Solar and Mirr uncomfortable allies. The missing probe did not drift off course; something answered it with a trusted trade signature and left a wake in the static."
     },
     {
       id: "glass-wake-02",
@@ -62,9 +62,9 @@ export const glassWakeProtocol: StoryArcDefinition = {
       lockedTitle: "03: Signal Masked",
       briefing: "Mine voidglass in Kuro Belt to split the carrier from normal comm noise. Mako's miners have already heard a machine counting their drill cycles.",
       fieldObjective: "Mine three voidglass samples and destroy the Kuro Listener Drone harassing the belt.",
-      reveal: "Voidglass proves the wake is not faction encryption or pirate code; it is machine-origin timing.",
+      reveal: "Voidglass proves the wake is not Solar, Mirr, Vossari, or pirate code; it is machine-origin timing.",
       log:
-        "Voidglass split the carrier cleanly while the Listener tried to silence the belt. The wake is not Mirr code, Directorate encryption, or pirate noise. It is colder and older."
+        "Voidglass split the carrier cleanly while the Listener tried to silence the belt. The wake is not Mirr code, Directorate encryption, Vossari brokerage, or pirate noise. It is colder and older."
     },
     {
       id: "glass-wake-04",
@@ -86,9 +86,9 @@ export const glassWakeProtocol: StoryArcDefinition = {
       lockedTitle: "05: Signal Masked",
       briefing: "Carry relief cargo under a decoy manifest into Ashen Freeport. Nyx has made the bait kind enough to be believable and profitable enough to be stolen.",
       fieldObjective: "Draw out the False Mercy Relay outside Ashen Freeport, destroy it and its guard, then complete the decoy delivery.",
-      reveal: "Knife Wing pirates are rebroadcasting the wake, but they are not the source.",
+      reveal: "Knife Wing pirates and Vossari brokers are profiting from the wake, but neither side wrote it.",
       log:
-        "The decoy worked. The False Mercy Relay answered first, and Ashen pirates were only repeating a deeper drone instruction they barely understood."
+        "The decoy worked. The False Mercy Relay answered first, and Ashen pirates were only repeating a deeper drone instruction that Vossari brokers were willing to sell before they understood it."
     },
     {
       id: "glass-wake-06",
@@ -110,9 +110,9 @@ export const glassWakeProtocol: StoryArcDefinition = {
       lockedTitle: "07: Signal Masked",
       briefing: "Carry faction witnesses to Celest Vault so the evidence cannot be buried as a local pirate incident. The delegation is fragile, angry, and finally useful.",
       fieldObjective: "Destroy the Witness Jammer and its silencer drones near Celest Gate before completing passenger delivery.",
-      reveal: "For one vote, Mirr, the Union, and the Directorate agree: the relay must be cut now.",
+      reveal: "For one vote, Solar, Mirr, and the Union agree: the drone relay must be cut before the Vossari-pirate market turns it into leverage.",
       log:
-        "The witnesses reached Celest Vault after the jammer fell silent. For once, Mirr analysts, union miners, and Directorate officers agreed on the same warning: shut the relay down now."
+        "The witnesses reached Celest Vault after the jammer fell silent. For once, Mirr analysts, union miners, and Directorate officers agreed on the same warning: shut the relay down before Ashen brokers and Knife Wing pirates make the drone carrier normal."
     },
     {
       id: "glass-wake-08",
@@ -122,9 +122,9 @@ export const glassWakeProtocol: StoryArcDefinition = {
       lockedTitle: "08: Signal Masked",
       briefing: "Recover the quiet relay core beneath Celest Crown and cut the Glass Wake carrier out of civilian navigation. The relay is quiet because it is listening.",
       fieldObjective: "Destroy the Crown Warden drones and Quiet Crown Relay Core, recover the core, then return to Celest Vault.",
-      reveal: "Unknown Drones were not broadcasting through the lanes; they were listening for who would close them.",
+      reveal: "Unknown Drones were not broadcasting through the lanes; they were listening for which faction front would close them.",
       log:
-        "The Quiet Crown relay went dark. The Glass Wake carrier is no longer riding the public lanes, but the core kept one final trace: Unknown Drones were listening."
+        "The Quiet Crown relay went dark. The Glass Wake carrier is no longer riding the public lanes, but the core kept one final trace: Unknown Drones were listening to everyone, not just one side of the Solar-Mirr and Vossari-pirate conflict."
     },
     {
       id: "glass-wake-09",

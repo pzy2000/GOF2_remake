@@ -438,6 +438,7 @@ export function createRuntimeForSystem(systemId: string, activeMissions: Mission
     graceUntil: STARTER_GRACE_SECONDS,
     message: "Flight systems online.",
     explorationScan: undefined,
+    droneKillReputationUsed: {},
     targetLockState: undefined,
     activeEncounterStage: undefined
   };

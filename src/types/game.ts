@@ -1167,6 +1167,7 @@ export interface RuntimeState {
   };
   storyNotification?: StoryNotification;
   lawNotification?: LawNotification;
+  droneKillReputationUsed?: Partial<Record<FactionId, number>>;
 }
 
 export interface MarketEntry {

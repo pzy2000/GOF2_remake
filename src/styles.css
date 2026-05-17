@@ -1895,6 +1895,10 @@ h3 {
   line-height: 1.35;
 }
 
+.faction-consequence .faction-relationship-summary {
+  color: #d7e7ff;
+}
+
 .faction-consequence-actions {
   display: flex !important;
   flex-wrap: wrap;

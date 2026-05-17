@@ -76,7 +76,7 @@ async function startNewGame(page: Page, options: { keepIntro?: boolean } = {}) {
   await expect(page.getByRole("heading", { name: "GOF2 by pzy" })).toBeVisible();
   await expect(async () => {
     const screen = await page.evaluate(() => (window.__GOF2_E2E__?.getState?.() as { screen?: string } | undefined)?.screen);
-    if (screen !== "flight") await page.getByRole("button", { name: "New Game" }).click();
+    if (screen !== "flight") await page.getByRole("button", { name: /New (Offline )?Game/ }).click();
     await expect(page.locator(".flight-canvas canvas")).toBeVisible({ timeout: 2500 });
   }).toPass({ timeout: 15_000 });
   await expect(page.locator(".flight-canvas canvas")).toBeVisible();
@@ -1981,9 +1981,11 @@ test.describe("browser smoke", () => {
     }));
     expect(loungeScrollMetrics.overflowY).toBe("auto");
     expect(loungeScrollMetrics.scrollHeight).toBeGreaterThan(loungeScrollMetrics.clientHeight);
-    const solarRow = page.locator(".faction-consequence").filter({ hasText: "Solar Directorate" });
+    const solarRow = page.locator(".faction-consequence").filter({ has: page.locator("b", { hasText: "Solar Directorate" }) });
     await expect(solarRow).toContainText("Wanted");
     await expect(solarRow).toContainText("3,000");
+    await expect(solarRow).toContainText("Friends Mirr Collective");
+    await expect(solarRow).toContainText("Enemies Vossari Clans, Independent Pirates, Unknown Drones");
     await solarRow.getByRole("button", { name: "Pay Fine" }).click();
     await expect(solarRow).toContainText("Clear");
     await expect(solarRow).not.toContainText("3,000");
