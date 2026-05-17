@@ -3,6 +3,7 @@ import { createConnection, type Socket } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomBytes } from "node:crypto";
+import { WebSocket as NodeWebSocket } from "ws";
 import { afterEach, describe, expect, it } from "vitest";
 import { missionTemplates } from "../src/data/world";
 import { createInitialPlayer } from "../src/state/domains/runtimeFactory";
@@ -11,6 +12,7 @@ import { createMultiplayerHttpServer, type MultiplayerHttpServer } from "../serv
 
 let activeServer: MultiplayerHttpServer | undefined;
 let activeTempDir: string | undefined;
+const WebSocketClient = (globalThis.WebSocket ?? NodeWebSocket) as typeof WebSocket;
 
 async function startServer() {
   activeTempDir = mkdtempSync(join(tmpdir(), "gof2-multiplayer-"));
@@ -60,7 +62,7 @@ async function updateProfile(baseUrl: string, token: string, patch: Partial<Mult
 
 function openSocket(url: string): Promise<WebSocket> {
   return new Promise((resolve, reject) => {
-    const socket = new WebSocket(url);
+    const socket = new WebSocketClient(url);
     socket.addEventListener("open", () => resolve(socket), { once: true });
     socket.addEventListener("error", () => reject(new Error("socket failed")), { once: true });
   });
