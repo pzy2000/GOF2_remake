@@ -1746,7 +1746,36 @@ h3 {
 
 .multiplayer-target-label {
   border-color: rgba(116, 224, 141, 0.42);
+  background: linear-gradient(180deg, rgba(8, 18, 29, 0.86), rgba(3, 10, 20, 0.74));
+  box-shadow: 0 0 18px rgba(116, 224, 141, 0.16), inset 0 0 14px rgba(116, 224, 141, 0.08);
   color: #dffcf6;
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  max-width: 220px;
+  padding: 6px 10px;
+  line-height: 1.08;
+  white-space: nowrap;
+}
+
+.multiplayer-target-label b,
+.multiplayer-target-label span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.multiplayer-target-label b {
+  color: #f2fff9;
+  font-size: 0.76rem;
+}
+
+.multiplayer-target-label span {
+  color: #9fd9cd;
+  font-size: 0.62rem;
+  font-weight: 800;
 }
 
 .station-body {

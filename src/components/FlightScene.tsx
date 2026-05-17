@@ -44,6 +44,7 @@ import {
   localizeCommodityName,
   localizeGenericName,
   localizePlanetName,
+  localizeShipName,
   localizeStationName,
   localizeSystemName,
   translateDisplayName,
@@ -900,20 +901,24 @@ function PlayerShip({ onModelStatus }: { onModelStatus: (status: ShipModelStatus
   );
 }
 
-function RemotePlayerShip({ player }: { player: RemotePlayerSnapshot }) {
+function RemotePlayerShip({ player: remote }: { player: RemotePlayerSnapshot }) {
   const locale = useGameStore((state) => state.locale);
   const clock = useGameStore((state) => state.runtime.clock);
-  const speed = Math.hypot(...player.velocity);
-  const pulse = 0.5 + Math.sin(clock * 4.2 + player.position[0] * 0.01) * 0.5;
+  const playerPosition = useGameStore((state) => state.player.position);
+  const speed = Math.hypot(...remote.velocity);
+  const pulse = 0.5 + Math.sin(clock * 4.2 + remote.position[0] * 0.01) * 0.5;
+  const range = distance(playerPosition, remote.position);
+  const shipName = localizeShipName(remote.shipId, locale, shipById[remote.shipId]?.name ?? remote.shipId);
   return (
-    <group position={toThree(player.position)} rotation={player.rotation}>
+    <group position={toThree(remote.position)} rotation={remote.rotation}>
       <group scale={0.92}>
-        <ProceduralPlayerShip shipId={player.shipId} />
+        <ProceduralPlayerShip shipId={remote.shipId} />
       </group>
-      <PlayerEngineFlames shipId={player.shipId} afterburning={speed > 260} speed={speed} />
-      <Html center distanceFactor={14} position={[0, 36, 0]}>
-        <div className="target-label multiplayer-target-label">
-          {translateDisplayName(player.displayName, locale)} · {localizeGenericName("PILOT", locale)}
+      <PlayerEngineFlames shipId={remote.shipId} afterburning={speed > 260} speed={speed} />
+      <Html center position={[0, 44, 0]}>
+        <div className="target-label multiplayer-target-label" data-testid={`remote-player-nameplate-${remote.playerId}`}>
+          <b>{translateDisplayName(remote.displayName, locale)}</b>
+          <span>{shipName} · {formatDistance(locale, range)}</span>
         </div>
       </Html>
       <mesh rotation={[Math.PI / 2, 0, 0]}>
