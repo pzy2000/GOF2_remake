@@ -70,4 +70,55 @@ describe("multiplayer store sync", () => {
     expect(merged.missiles).toBe(local.missiles);
     expect(merged.lastDamageAt).toBe(local.lastDamageAt);
   });
+
+  it("keeps chat messages scoped to the current system or station", async () => {
+    const { filterVisibleMultiplayerChatMessages, mergeMultiplayerChatMessages, sanitizeMultiplayerChatText } = await import("../src/systems/multiplayerChat");
+    const messages = mergeMultiplayerChatMessages([], [
+      {
+        id: "global",
+        channel: "global",
+        fromPlayerId: "a",
+        username: "a",
+        displayName: "A",
+        text: "Global hail",
+        createdAt: 1
+      },
+      {
+        id: "local-helion",
+        channel: "local",
+        scopeId: "helion-reach",
+        fromPlayerId: "a",
+        username: "a",
+        displayName: "A",
+        text: "Helion local",
+        createdAt: 2
+      },
+      {
+        id: "station-helion",
+        channel: "station",
+        scopeId: "helion-prime",
+        fromPlayerId: "b",
+        username: "b",
+        displayName: "B",
+        text: "Station hail",
+        createdAt: 3
+      },
+      {
+        id: "local-kuro",
+        channel: "local",
+        scopeId: "kuro-belt",
+        fromPlayerId: "c",
+        username: "c",
+        displayName: "C",
+        text: "Kuro local",
+        createdAt: 4
+      }
+    ]);
+
+    expect(sanitizeMultiplayerChatText("  hello\nthere  ")).toBe("hello there");
+    expect(filterVisibleMultiplayerChatMessages(messages, "helion-reach", "helion-prime").map((message) => message.id))
+      .toEqual(["global", "local-helion", "station-helion"]);
+    expect(filterVisibleMultiplayerChatMessages(messages, "helion-reach").map((message) => message.id))
+      .toEqual(["global", "local-helion"]);
+  });
 });

@@ -7,7 +7,7 @@ import { WebSocket as NodeWebSocket } from "ws";
 import { afterEach, describe, expect, it } from "vitest";
 import { missionTemplates } from "../src/data/world";
 import { createInitialPlayer } from "../src/state/domains/runtimeFactory";
-import type { MultiplayerAuthResponse, MultiplayerPlayerProfile, RemotePlayerSnapshot, TradeSession } from "../src/types/multiplayer";
+import type { MultiplayerAuthResponse, MultiplayerChatMessage, MultiplayerPlayerProfile, RemotePlayerSnapshot, TradeSession } from "../src/types/multiplayer";
 import { createMultiplayerHttpServer, type MultiplayerHttpServer } from "../server/multiplayerServer";
 
 let activeServer: MultiplayerHttpServer | undefined;
@@ -86,6 +86,16 @@ function collectSocketMessages<T extends { type: string }>(socket: WebSocket): T
     messages.push(JSON.parse(String(message.data)) as T);
   });
   return messages;
+}
+
+type ChatSocketEvent = {
+  type: string;
+  message?: MultiplayerChatMessage | string;
+  messages?: MultiplayerChatMessage[];
+};
+
+function chatMessage(event: ChatSocketEvent): MultiplayerChatMessage | undefined {
+  return typeof event.message === "object" ? event.message : undefined;
 }
 
 function openRawSocket(url: string): Promise<Socket> {
@@ -386,6 +396,58 @@ describe("multiplayer HTTP and WebSocket server", () => {
       .toBe(true);
     aliceSocket.close();
   }, 10_000);
+
+  it("routes chat messages by global, local system, and station scopes", async () => {
+    const { baseUrl, wsUrl } = await startServer();
+    const alice = await register(baseUrl, "chat-a");
+    const bob = await register(baseUrl, "chat-b");
+    const cody = await register(baseUrl, "chat-c");
+    const dana = await register(baseUrl, "chat-d");
+    await updateProfile(baseUrl, alice.session!.token, { currentSystemId: "helion-reach", currentStationId: "helion-prime", screen: "station" });
+    await updateProfile(baseUrl, bob.session!.token, { currentSystemId: "helion-reach", currentStationId: "helion-prime", screen: "station" });
+    await updateProfile(baseUrl, cody.session!.token, { currentSystemId: "helion-reach", currentStationId: undefined, screen: "flight" });
+    await updateProfile(baseUrl, dana.session!.token, { currentSystemId: "kuro-belt", currentStationId: undefined, screen: "flight" });
+
+    const aliceSocket = await openSocket(`${wsUrl}/api/multiplayer/events?token=${alice.session!.token}`);
+    const bobSocket = await openSocket(`${wsUrl}/api/multiplayer/events?token=${bob.session!.token}`);
+    const codySocket = await openSocket(`${wsUrl}/api/multiplayer/events?token=${cody.session!.token}`);
+    const danaSocket = await openSocket(`${wsUrl}/api/multiplayer/events?token=${dana.session!.token}`);
+    const aliceMessages = collectSocketMessages<ChatSocketEvent>(aliceSocket);
+    const bobMessages = collectSocketMessages<ChatSocketEvent>(bobSocket);
+    const codyMessages = collectSocketMessages<ChatSocketEvent>(codySocket);
+    const danaMessages = collectSocketMessages<ChatSocketEvent>(danaSocket);
+    await waitForSocketMessage<{ type: string }>(danaSocket, (event) => event.type === "session");
+
+    aliceSocket.send(JSON.stringify({ type: "chat-send", channel: "global", text: "  Hello global  " }));
+    await expect.poll(() => {
+      const event = danaMessages.find((candidate) => candidate.type === "chat-message" && chatMessage(candidate)?.channel === "global");
+      return event ? chatMessage(event)?.text : undefined;
+    }).toBe("Hello global");
+    expect(bobMessages.some((event) => event.type === "chat-message" && chatMessage(event)?.channel === "global")).toBe(true);
+    expect(codyMessages.some((event) => event.type === "chat-message" && chatMessage(event)?.channel === "global")).toBe(true);
+
+    aliceSocket.send(JSON.stringify({ type: "chat-send", channel: "local", text: "Helion local" }));
+    await expect.poll(() => codyMessages.some((event) => event.type === "chat-message" && chatMessage(event)?.text === "Helion local"))
+      .toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(danaMessages.some((event) => event.type === "chat-message" && chatMessage(event)?.text === "Helion local")).toBe(false);
+
+    aliceSocket.send(JSON.stringify({ type: "chat-send", channel: "station", text: "Station only" }));
+    await expect.poll(() => bobMessages.some((event) => event.type === "chat-message" && chatMessage(event)?.text === "Station only"))
+      .toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(codyMessages.some((event) => event.type === "chat-message" && chatMessage(event)?.text === "Station only")).toBe(false);
+    expect(danaMessages.some((event) => event.type === "chat-message" && chatMessage(event)?.text === "Station only")).toBe(false);
+
+    aliceSocket.send(JSON.stringify({ type: "chat-send", channel: "global", text: "rate limit" }));
+    await expect.poll(() => aliceMessages.some((event) => event.type === "error" && event.message === "Chat rate limit reached."))
+      .toBe(true);
+
+    aliceSocket.close();
+    bobSocket.close();
+    codySocket.close();
+    danaSocket.close();
+  });
 
   it("commits station trades atomically and rejects non-station trades", async () => {
     const { baseUrl } = await startServer();

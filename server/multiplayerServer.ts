@@ -12,9 +12,17 @@ import { createInitialOnboardingState } from "../src/systems/onboarding";
 import { createInitialPlayer } from "../src/state/domains/runtimeFactory";
 import { getInitialKnownPlanetIds, getInitialKnownSystems } from "../src/systems/navigation";
 import { hasCoopMissionProgressChanged } from "../src/systems/multiplayerMissionSync";
+import {
+  MULTIPLAYER_CHAT_HISTORY_LIMIT,
+  isMultiplayerChatChannel,
+  isMultiplayerChatMessageVisible,
+  multiplayerChatScopeFor,
+  sanitizeMultiplayerChatText
+} from "../src/systems/multiplayerChat";
 import { createInitialReputation } from "../src/systems/reputation";
 import type { EquipmentId, MissionDefinition } from "../src/types/game";
 import type {
+  MultiplayerChatMessage,
   CoopMissionSession,
   MultiplayerAuthRequest,
   MultiplayerClientEvent,
@@ -56,6 +64,7 @@ export interface MultiplayerServiceState {
   accounts: MultiplayerAccount[];
   trades: TradeSession[];
   coopMissions: CoopMissionSession[];
+  chatMessages: MultiplayerChatMessage[];
   snapshots: Record<string, RemotePlayerSnapshot>;
   snapshotId: number;
 }
@@ -75,6 +84,7 @@ type WsClient = {
   socket: Socket;
   pending: Buffer;
   peerReady: boolean;
+  chatSentAt: number[];
 };
 
 const DEFAULT_PORT = 19778;
@@ -82,6 +92,8 @@ const DEFAULT_STATE_FILE = ".gof2/multiplayer-state.json";
 const PASSWORD_ITERATIONS = 120_000;
 const PASSWORD_KEY_LENGTH = 32;
 const COOP_REWARD_MULTIPLIER = 0.35;
+const CHAT_RATE_LIMIT_WINDOW_MS = 5_000;
+const CHAT_RATE_LIMIT_COUNT = 3;
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -182,6 +194,7 @@ export function normalizeMultiplayerState(raw: Partial<MultiplayerServiceState> 
     accounts,
     trades: raw?.trades ?? [],
     coopMissions: raw?.coopMissions ?? [],
+    chatMessages: (raw?.chatMessages ?? []).slice(-MULTIPLAYER_CHAT_HISTORY_LIMIT),
     snapshots: raw?.snapshots ?? {},
     snapshotId: raw?.snapshotId ?? 0
   };
@@ -274,20 +287,23 @@ function ensureAuthenticated(state: MultiplayerServiceState, request: IncomingMe
 
 function cleanPublicSnapshot(
   state: MultiplayerServiceState,
-  selfPlayerId: string,
-  remotePlayers = Object.values(state.snapshots).filter((snapshot) => snapshot.playerId !== selfPlayerId)
+  account: MultiplayerAccount,
+  remotePlayers = Object.values(state.snapshots).filter((snapshot) => snapshot.playerId !== account.playerId)
 ): MultiplayerSnapshotResponse {
   const onlinePlayerIds = new Set([...Object.keys(state.snapshots), ...remotePlayers.map((snapshot) => snapshot.playerId)]);
   return {
     ok: true,
     message: "Multiplayer snapshot.",
     remotePlayers,
-    tradeSessions: state.trades.filter((trade) => trade.playerIds.includes(selfPlayerId) && trade.status !== "completed" && trade.status !== "canceled"),
+    tradeSessions: state.trades.filter((trade) => trade.playerIds.includes(account.playerId) && trade.status !== "completed" && trade.status !== "canceled"),
     coopMissionSessions: state.coopMissions.filter((session) =>
-      (session.hostPlayerId === selfPlayerId || session.guestPlayerId === selfPlayerId) &&
+      (session.hostPlayerId === account.playerId || session.guestPlayerId === account.playerId) &&
       session.status !== "completed" &&
       session.status !== "canceled" &&
       (onlinePlayerIds.has(session.hostPlayerId) || onlinePlayerIds.has(session.guestPlayerId))
+    ),
+    chatMessages: state.chatMessages.filter((message) =>
+      isMultiplayerChatMessageVisible(message, account.profile.currentSystemId, account.profile.currentStationId)
     )
   };
 }
@@ -513,6 +529,65 @@ export function createMultiplayerHttpServer(options: MultiplayerHttpServerOption
     return snapshots;
   };
 
+  const visibleChatHistory = (account: MultiplayerAccount): MultiplayerChatMessage[] =>
+    state.chatMessages.filter((message) =>
+      isMultiplayerChatMessageVisible(message, account.profile.currentSystemId, account.profile.currentStationId)
+    );
+
+  const sendVisibleChatHistory = (account: MultiplayerAccount) => {
+    for (const client of clients.values()) {
+      if (client.playerId === account.playerId) send(client, { type: "chat-history", messages: visibleChatHistory(account) });
+    }
+  };
+
+  const chatRecipients = (message: MultiplayerChatMessage): WsClient[] =>
+    Array.from(clients.values()).filter((client) => {
+      const recipient = accountByPlayerId(state, client.playerId);
+      return !!recipient && isMultiplayerChatMessageVisible(message, recipient.profile.currentSystemId, recipient.profile.currentStationId);
+    });
+
+  const canSendChat = (client: WsClient): boolean => {
+    const now = Date.now();
+    client.chatSentAt = client.chatSentAt.filter((sentAt) => now - sentAt <= CHAT_RATE_LIMIT_WINDOW_MS);
+    if (client.chatSentAt.length >= CHAT_RATE_LIMIT_COUNT) return false;
+    client.chatSentAt.push(now);
+    return true;
+  };
+
+  const publishChatMessage = (client: WsClient, account: MultiplayerAccount, event: Extract<MultiplayerClientEvent, { type: "chat-send" }>) => {
+    if (!canSendChat(client)) {
+      send(client, { type: "error", message: "Chat rate limit reached." });
+      return;
+    }
+    if (!isMultiplayerChatChannel(event.channel)) {
+      send(client, { type: "error", message: "Unknown chat channel." });
+      return;
+    }
+    const text = sanitizeMultiplayerChatText(event.text);
+    if (!text) {
+      send(client, { type: "error", message: "Chat message is empty." });
+      return;
+    }
+    const scopeId = multiplayerChatScopeFor(event.channel, account.profile.currentSystemId, account.profile.currentStationId);
+    if (event.channel === "station" && !scopeId) {
+      send(client, { type: "error", message: "Dock at a station to use station chat." });
+      return;
+    }
+    const message: MultiplayerChatMessage = {
+      id: randomUUID(),
+      channel: event.channel,
+      scopeId,
+      fromPlayerId: account.playerId,
+      username: account.username,
+      displayName: account.displayName,
+      text,
+      createdAt: Date.now()
+    };
+    state.chatMessages = [...state.chatMessages, message].slice(-MULTIPLAYER_CHAT_HISTORY_LIMIT);
+    maybeSave();
+    for (const recipient of chatRecipients(message)) send(recipient, { type: "chat-message", message });
+  };
+
   const profilePresenceSnapshot = (account: MultiplayerAccount): RemotePlayerSnapshot => {
     const existing = state.snapshots[account.playerId];
     if (!existing) return snapshotFromProfile(account.profile);
@@ -528,6 +603,8 @@ export function createMultiplayerHttpServer(options: MultiplayerHttpServerOption
   };
 
   const updateProfile = (account: MultiplayerAccount, patch: MultiplayerStoreProfile): MultiplayerPlayerProfile => {
+    const previousSystemId = account.profile.currentSystemId;
+    const previousStationId = account.profile.currentStationId;
     const hasStationPatch = Object.prototype.hasOwnProperty.call(patch, "currentStationId");
     const nextScreen = patch.currentStationId ? "station" : (patch.screen ?? account.profile.screen);
     const currentStationId = nextScreen === "station"
@@ -543,6 +620,9 @@ export function createMultiplayerHttpServer(options: MultiplayerHttpServerOption
       displayName: account.displayName,
       updatedAt: nowIso()
     };
+    if (previousSystemId !== account.profile.currentSystemId || previousStationId !== account.profile.currentStationId) {
+      sendVisibleChatHistory(account);
+    }
     for (const session of state.coopMissions) {
       if (session.status !== "active" || session.hostPlayerId !== account.playerId) continue;
       const mission = patch.activeMissions.find((candidate) => candidate.id === session.missionId);
@@ -653,7 +733,7 @@ export function createMultiplayerHttpServer(options: MultiplayerHttpServerOption
           writeJson(response, 401, { ok: false, message: "Session expired." });
           return;
         }
-        writeJson(response, 200, cleanPublicSnapshot(state, account.playerId, activeRemoteSnapshots(account.playerId)));
+        writeJson(response, 200, cleanPublicSnapshot(state, account, activeRemoteSnapshots(account.playerId)));
         return;
       }
 
@@ -881,10 +961,11 @@ export function createMultiplayerHttpServer(options: MultiplayerHttpServerOption
       "",
       ""
     ].join("\r\n"));
-    const client: WsClient = { id: randomUUID(), playerId: account.playerId, socket: tcpSocket, pending: Buffer.alloc(0), peerReady: false };
+    const client: WsClient = { id: randomUUID(), playerId: account.playerId, socket: tcpSocket, pending: Buffer.alloc(0), peerReady: false, chatSentAt: [] };
     clients.set(client.id, client);
     send(client, { type: "session", session: publicSession(account, tokenFromRequest(request, url)!, url.origin), profile: account.profile });
     send(client, { type: "remote-players", players: activeRemoteSnapshots(account.playerId) });
+    send(client, { type: "chat-history", messages: visibleChatHistory(account) });
     const cleanupClient = () => {
       if (!clients.delete(client.id)) return;
       if (client.peerReady && !hasPeerReadyClient(account.playerId)) {
@@ -915,6 +996,8 @@ export function createMultiplayerHttpServer(options: MultiplayerHttpServerOption
               displayName: account.displayName,
               updatedAt: Date.now()
             };
+            const previousSystemId = account.profile.currentSystemId;
+            const previousStationId = account.profile.currentStationId;
             state.snapshots[account.playerId] = snapshot;
             account.profile.currentSystemId = snapshot.currentSystemId;
             account.profile.currentStationId = snapshot.currentStationId;
@@ -928,11 +1011,16 @@ export function createMultiplayerHttpServer(options: MultiplayerHttpServerOption
               shield: snapshot.shield
             };
             account.profile.updatedAt = nowIso();
+            if (previousSystemId !== account.profile.currentSystemId || previousStationId !== account.profile.currentStationId) {
+              sendVisibleChatHistory(account);
+            }
             broadcast({ type: "remote-player", player: snapshot });
             maybeSave();
           } else if (event.type === "profile" && event.profile) {
             updateProfile(account, event.profile);
             broadcastProfile(account);
+          } else if (event.type === "chat-send") {
+            publishChatMessage(client, account, event);
           } else if (event.type === "peer-ready") {
             if (!client.peerReady) {
               client.peerReady = true;

@@ -115,17 +115,32 @@ export interface CoopMissionSession {
   message?: string;
 }
 
+export type MultiplayerChatChannel = "local" | "station" | "global";
+
+export interface MultiplayerChatMessage {
+  id: string;
+  channel: MultiplayerChatChannel;
+  scopeId?: string;
+  fromPlayerId: string;
+  username: string;
+  displayName: string;
+  text: string;
+  createdAt: number;
+}
+
 export interface MultiplayerSnapshotResponse {
   ok: boolean;
   message: string;
   remotePlayers: RemotePlayerSnapshot[];
   tradeSessions: TradeSession[];
   coopMissionSessions: CoopMissionSession[];
+  chatMessages: MultiplayerChatMessage[];
 }
 
 export type MultiplayerClientEvent =
   | { type: "player-snapshot"; snapshot: RemotePlayerSnapshot }
   | { type: "profile"; profile: MultiplayerStoreProfile }
+  | { type: "chat-send"; channel: MultiplayerChatChannel; text: string }
   | { type: "peer-ready" }
   | { type: "peer-signal"; signal: MultiplayerPeerSignal };
 
@@ -140,6 +155,8 @@ export type MultiplayerServerEvent =
   | { type: "peer-signal"; signal: MultiplayerPeerSignal }
   | { type: "trade-updated"; trade: TradeSession }
   | { type: "coop-updated"; session: CoopMissionSession }
+  | { type: "chat-history"; messages: MultiplayerChatMessage[] }
+  | { type: "chat-message"; message: MultiplayerChatMessage }
   | { type: "profile-updated"; profile: MultiplayerPlayerProfile }
   | { type: "error"; message: string };
 

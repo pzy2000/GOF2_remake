@@ -179,7 +179,8 @@ h3 {
 }
 
 .multiplayer-login-form input,
-.multiplayer-dropzone input {
+.multiplayer-dropzone input,
+.multiplayer-chat-form input {
   width: 100%;
   min-height: 38px;
   border: 1px solid rgba(145, 205, 255, 0.28);
@@ -1079,6 +1080,10 @@ h3 {
   gap: 3px;
 }
 
+.multiplayer-hud-status .multiplayer-chat-panel {
+  margin-top: 4px;
+}
+
 .story-tracker.tone-boss {
   border-color: rgba(255, 78, 95, 0.48);
   background: rgba(36, 8, 16, 0.5);
@@ -1681,6 +1686,10 @@ h3 {
   font-size: 0.82rem;
 }
 
+.multiplayer-station-panel {
+  align-content: start;
+}
+
 .multiplayer-docked-list {
   display: grid;
   gap: 8px;
@@ -1696,6 +1705,107 @@ h3 {
 
 .multiplayer-player-row small {
   color: #adc4d8;
+}
+
+.multiplayer-chat-panel {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.multiplayer-chat-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.multiplayer-chat-tabs button {
+  min-height: 30px;
+  padding: 6px 10px;
+  font-size: 0.72rem;
+}
+
+.multiplayer-chat-tabs button.active {
+  border-color: rgba(155, 255, 232, 0.54);
+  background: rgba(12, 42, 48, 0.82);
+}
+
+.multiplayer-chat-log {
+  display: grid;
+  gap: 7px;
+  min-height: 96px;
+  max-height: 240px;
+  overflow-y: auto;
+  padding-right: 4px;
+  scrollbar-gutter: stable;
+}
+
+.multiplayer-chat-panel-hud .multiplayer-chat-log {
+  min-height: 0;
+  max-height: 156px;
+}
+
+.multiplayer-chat-log > p {
+  margin: 0;
+  color: #adc4d8;
+  font-size: 0.78rem;
+}
+
+.multiplayer-chat-message {
+  display: grid;
+  gap: 3px;
+  border-left: 2px solid rgba(155, 255, 232, 0.46);
+  background: rgba(3, 12, 24, 0.44);
+  padding: 6px 8px;
+}
+
+.multiplayer-chat-message.channel-global {
+  border-left-color: rgba(255, 207, 122, 0.62);
+}
+
+.multiplayer-chat-message.channel-station {
+  border-left-color: rgba(128, 214, 255, 0.62);
+}
+
+.multiplayer-chat-message header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.multiplayer-chat-message b,
+.multiplayer-chat-message time {
+  min-width: 0;
+  color: #dffcf6;
+  font-size: 0.72rem;
+}
+
+.multiplayer-chat-message time {
+  color: #8fa9bc;
+  white-space: nowrap;
+}
+
+.multiplayer-chat-message p {
+  margin: 0;
+  color: #e4f2ff;
+  font-size: 0.82rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.multiplayer-chat-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.multiplayer-chat-panel-hud .multiplayer-chat-form {
+  grid-template-columns: 1fr;
+}
+
+.multiplayer-chat-panel-hud .multiplayer-chat-form button {
+  width: 100%;
 }
 
 .multiplayer-trade-panel header {

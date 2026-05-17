@@ -17,6 +17,7 @@ import { getOnboardingView } from "../systems/onboarding";
 import { getNextGuidanceRecommendation } from "../systems/playerGuidance";
 import { getStoryObjectiveSummary } from "../systems/story";
 import { getMultiplayerPresence } from "../systems/multiplayerPresence";
+import { MultiplayerChatPanel } from "./MultiplayerChatPanel";
 import { ShortcutButton } from "./ShortcutButton";
 import {
   formatCargoLabel,
@@ -267,6 +268,7 @@ export function Hud() {
             ) : (
               <p>{translateText("No online pilots in this system", locale)}</p>
             )}
+            <MultiplayerChatPanel channels={["local", "global"]} maxMessages={4} variant="hud" />
           </div>
         ) : null}
         {nearestNavigation ? (

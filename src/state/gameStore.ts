@@ -21,6 +21,7 @@ import type { EconomyEvent, EconomyNpcInteractionAction, EconomyServiceStatus } 
 import type {
   CoopMissionSession,
   MultiplayerAuthResponse,
+  MultiplayerChatChannel,
   MultiplayerServerEvent,
   MultiplayerStoreProfile,
   MultiplayerTradeOffer,
@@ -58,6 +59,7 @@ import {
   getEncounterStageForEvent
 } from "../systems/encounters";
 import { getDefaultTargetStation } from "../systems/autopilot";
+import { mergeMultiplayerChatMessages, sanitizeMultiplayerChatText } from "../systems/multiplayerChat";
 import { NPC_INTERACTION_RANGE } from "../systems/npcInteraction";
 import { advanceMarketState, buyCommodity, buyEquipment, createInitialMarketState, getCargoUsed, getOccupiedCargo, sellCommodity, sellEquipment } from "../systems/economy";
 import {
@@ -435,6 +437,7 @@ function profilePatchFromAuth(result: MultiplayerAuthResponse): Partial<GameStor
     remotePlayers: [],
     tradeSession: undefined,
     coopMissionSession: undefined,
+    multiplayerChatMessages: [],
     multiplayerEvents: []
   };
 }
@@ -568,6 +571,18 @@ export function mergeCoopMissionProgress(localMission: MissionDefinition | undef
 
 function multiplayerEventPatch(state: GameStore, event: MultiplayerServerEvent): Partial<GameStore> {
   const events = [...state.multiplayerEvents, event].slice(-12);
+  if (event.type === "chat-history") {
+    return {
+      multiplayerEvents: events,
+      multiplayerChatMessages: mergeMultiplayerChatMessages(state.multiplayerChatMessages, event.messages)
+    };
+  }
+  if (event.type === "chat-message") {
+    return {
+      multiplayerEvents: events,
+      multiplayerChatMessages: mergeMultiplayerChatMessages(state.multiplayerChatMessages, [event.message])
+    };
+  }
   if (event.type === "remote-players") {
     return {
       multiplayerEvents: events,
@@ -1372,6 +1387,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   remotePlayers: [],
   tradeSession: undefined,
   coopMissionSession: undefined,
+  multiplayerChatMessages: [],
   multiplayerEvents: [],
   economyNpcWatch: undefined,
   npcInteraction: undefined,
@@ -1430,6 +1446,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       remotePlayers: [],
       tradeSession: undefined,
       coopMissionSession: undefined,
+      multiplayerChatMessages: [],
       multiplayerEvents: [],
       economyNpcWatch: undefined,
       npcInteraction: undefined,
@@ -1495,6 +1512,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       remotePlayers: [],
       tradeSession: undefined,
       coopMissionSession: undefined,
+      multiplayerChatMessages: [],
       multiplayerEvents: [],
       economyNpcWatch: undefined,
       npcInteraction: undefined,
@@ -1746,7 +1764,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
         set((state) => ({
           remotePlayers: snapshot.remotePlayers,
           tradeSession: snapshot.tradeSessions[0] ?? state.tradeSession,
-          coopMissionSession: snapshot.coopMissionSessions[0] ?? state.coopMissionSession
+          coopMissionSession: snapshot.coopMissionSessions[0] ?? state.coopMissionSession,
+          multiplayerChatMessages: mergeMultiplayerChatMessages(state.multiplayerChatMessages, snapshot.chatMessages)
         }));
       }
     } catch (error) {
@@ -1768,6 +1787,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       remotePlayers: [],
       tradeSession: undefined,
       coopMissionSession: undefined,
+      multiplayerChatMessages: [],
       multiplayerEvents: [],
       runtime: { ...state.runtime, message: "Multiplayer disconnected." }
     }));
@@ -1939,6 +1959,35 @@ export const useGameStore = create<GameStore>((set, get) => ({
         runtime: { ...latest.runtime, message: error instanceof Error ? error.message : "Trade cancel failed." }
       }));
     }
+  },
+  sendMultiplayerChatMessage: (channel: MultiplayerChatChannel, rawText: string) => {
+    const text = sanitizeMultiplayerChatText(rawText);
+    if (!text) return;
+    const state = get();
+    if (!state.multiplayerSession) {
+      set((latest) => ({
+        multiplayerError: "No online profile active.",
+        runtime: { ...latest.runtime, message: "No online profile active." }
+      }));
+      return;
+    }
+    if (channel === "station" && !state.currentStationId) {
+      set((latest) => ({
+        multiplayerError: "Dock at a station to use station chat.",
+        runtime: { ...latest.runtime, message: "Dock at a station to use station chat." }
+      }));
+      return;
+    }
+    if (!multiplayerSocket) get().connectMultiplayerEvents();
+    if (!multiplayerSocket) {
+      set((latest) => ({
+        multiplayerStatus: "error",
+        multiplayerError: "Multiplayer socket unavailable.",
+        runtime: { ...latest.runtime, message: "Multiplayer socket unavailable." }
+      }));
+      return;
+    }
+    multiplayerSocket.send({ type: "chat-send", channel, text });
   },
   startEconomyNpcWatch: (npcId) => {
     const state = get();

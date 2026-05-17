@@ -49,6 +49,14 @@ export function FlightControls() {
       if (state.npcInteraction) {
         if (handleNpcInteractionShortcut(event)) return;
       }
+      if (event.code === "Enter" && state.multiplayerSession) {
+        const chatInput = document.querySelector<HTMLInputElement>("[data-testid='multiplayer-chat-input-hud']");
+        if (chatInput && !chatInput.disabled) {
+          event.preventDefault();
+          chatInput.focus();
+          return;
+        }
+      }
       const scanActive = state.screen === "flight" && !!state.runtime.explorationScan;
       if (scanActive && (event.code === "ArrowLeft" || event.code === "ArrowRight")) {
         event.preventDefault();
@@ -112,6 +120,7 @@ export function FlightControls() {
     };
     const onMouseDown = (event: MouseEvent) => {
       if (useGameStore.getState().screen !== "flight") return;
+      if (shouldIgnoreGlobalShortcut(event.target)) return;
       if (event.button === 0 && isTouchControlTarget(event.target, ".touch-afterburner")) {
         setInput({ afterburner: true });
         return;
@@ -121,6 +130,7 @@ export function FlightControls() {
     };
     const onMouseUp = (event: MouseEvent) => {
       if (useGameStore.getState().screen !== "flight") return;
+      if (shouldIgnoreGlobalShortcut(event.target)) return;
       if (event.button === 0 && isTouchControlTarget(event.target, ".touch-afterburner")) {
         setInput({ afterburner: false });
         return;

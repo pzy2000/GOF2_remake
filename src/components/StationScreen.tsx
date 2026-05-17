@@ -50,6 +50,7 @@ import {
 import { getFactionRelationshipSummary, reputationLabel } from "../systems/reputation";
 import { GalaxyMap } from "./GalaxyMap";
 import { AtlasIcon } from "./AtlasIcon";
+import { MultiplayerChatPanel } from "./MultiplayerChatPanel";
 import { SaveSlotsPanel } from "./SaveSlotsPanel";
 import { getCommodityIcon, getEquipmentIcon, getFactionIcon } from "../data/iconAtlas";
 import { getStoryObjectiveSummary, getStoryProgress, storyStatusLabel } from "../systems/story";
@@ -614,6 +615,7 @@ function MultiplayerStationPanel() {
           </div>
         ))}
       </div>
+      <MultiplayerChatPanel channels={["station", "local", "global"]} variant="station" />
       {tradeSession ? (
         <div className="multiplayer-trade-panel" data-testid="multiplayer-trade-panel">
           <header>

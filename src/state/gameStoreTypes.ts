@@ -33,6 +33,8 @@ import type {
 import type { EconomyEvent, EconomyServiceStatus } from "../types/economy";
 import type { Locale } from "../i18n";
 import type {
+  MultiplayerChatChannel,
+  MultiplayerChatMessage,
   CoopMissionSession,
   MultiplayerAuthRequest,
   MultiplayerConnectionStatus,
@@ -67,6 +69,7 @@ export interface GameStore {
   remotePlayers: RemotePlayerSnapshot[];
   tradeSession?: TradeSession;
   coopMissionSession?: CoopMissionSession;
+  multiplayerChatMessages: MultiplayerChatMessage[];
   multiplayerEvents: MultiplayerServerEvent[];
   economyNpcWatch?: EconomyNpcWatchState;
   npcInteraction?: NpcInteractionState;
@@ -121,6 +124,7 @@ export interface GameStore {
   updateTradeOffer: (offer: MultiplayerTradeOffer) => Promise<void>;
   confirmTrade: () => Promise<void>;
   cancelTrade: () => Promise<void>;
+  sendMultiplayerChatMessage: (channel: MultiplayerChatChannel, text: string) => void;
   startEconomyNpcWatch: (npcId: string) => void;
   stopEconomyNpcWatch: (reason?: string) => void;
   toggleEconomyNpcWatchCamera: () => void;
