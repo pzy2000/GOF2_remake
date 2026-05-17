@@ -181,14 +181,16 @@ import {
   createCoopMissionInvite,
   createTradeSession,
   fetchMultiplayerSnapshot,
+  getMultiplayerSettings,
   loginMultiplayerAccount,
   multiplayerDisplayUrl,
   postMultiplayerProfile,
   registerMultiplayerAccount,
   respondToCoopMissionInvite,
   restoreMultiplayerSession,
+  saveMultiplayerNetworkMode,
   saveMultiplayerSession,
-  snapshotFromProfile,
+  type MultiplayerTransportConnection,
   updateTradeOffer as postTradeOffer
 } from "../systems/multiplayerClient";
 import { hasCoopMissionProgressChanged } from "../systems/multiplayerMissionSync";
@@ -259,12 +261,8 @@ const ULTIMATE_PROJECTILE_TRAIL_LIFE_SECONDS = 0.08;
 
 let closeEconomyStream: (() => void) | undefined;
 let economyRefreshInFlight = false;
-let multiplayerSocket:
-  | {
-      send: (event: { type: "player-snapshot"; snapshot: RemotePlayerSnapshot } | { type: "profile"; profile: MultiplayerStoreProfile }) => void;
-      close: () => void;
-    }
-  | undefined;
+let multiplayerSocket: MultiplayerTransportConnection | undefined;
+let multiplayerSocketSessionToken: string | undefined;
 
 function createReadyUltimateAbility() {
   return { chargeSeconds: ULTIMATE_CHARGE_SECONDS };
@@ -441,10 +439,63 @@ function profilePatchFromAuth(result: MultiplayerAuthResponse): Partial<GameStor
   };
 }
 
-function upsertRemotePlayer(players: RemotePlayerSnapshot[], snapshot: RemotePlayerSnapshot, selfPlayerId: string | undefined): RemotePlayerSnapshot[] {
+export function mergeMultiplayerProfilePlayer(local: GameStore["player"], incoming: GameStore["player"]): GameStore["player"] {
+  return normalizePlayerEquipmentStats({
+    ...incoming,
+    position: local.position,
+    velocity: local.velocity,
+    rotation: local.rotation,
+    throttle: local.throttle,
+    hull: local.hull,
+    shield: local.shield,
+    energy: local.energy,
+    missiles: local.missiles,
+    lastDamageAt: local.lastDamageAt
+  });
+}
+
+function mergeRemoteSnapshot(
+  existing: RemotePlayerSnapshot | undefined,
+  incoming: RemotePlayerSnapshot,
+  preserveRealtime: boolean
+): RemotePlayerSnapshot {
+  if (!existing || !preserveRealtime) return incoming;
+  return {
+    ...incoming,
+    position: existing.position,
+    velocity: existing.velocity,
+    rotation: existing.rotation,
+    hull: existing.hull,
+    shield: existing.shield,
+    updatedAt: Math.max(existing.updatedAt, incoming.updatedAt)
+  };
+}
+
+function upsertRemotePlayer(
+  players: RemotePlayerSnapshot[],
+  snapshot: RemotePlayerSnapshot,
+  selfPlayerId: string | undefined,
+  preserveRealtime = false
+): RemotePlayerSnapshot[] {
   if (snapshot.playerId === selfPlayerId) return players;
-  return [...players.filter((player) => player.playerId !== snapshot.playerId), snapshot]
+  const existing = players.find((player) => player.playerId === snapshot.playerId);
+  return [
+    ...players.filter((player) => player.playerId !== snapshot.playerId),
+    mergeRemoteSnapshot(existing, snapshot, preserveRealtime)
+  ]
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
+}
+
+function mergeRemotePlayers(
+  currentPlayers: RemotePlayerSnapshot[],
+  incomingPlayers: RemotePlayerSnapshot[],
+  selfPlayerId: string | undefined,
+  preserveRealtime = false
+): RemotePlayerSnapshot[] {
+  return incomingPlayers.reduce(
+    (players, snapshot) => upsertRemotePlayer(players, snapshot, selfPlayerId, preserveRealtime),
+    preserveRealtime ? currentPlayers : []
+  );
 }
 
 function applyCoopSessionPatch(state: GameStore, session: CoopMissionSession): Partial<GameStore> {
@@ -520,13 +571,23 @@ function multiplayerEventPatch(state: GameStore, event: MultiplayerServerEvent):
   if (event.type === "remote-players") {
     return {
       multiplayerEvents: events,
-      remotePlayers: event.players.filter((player) => player.playerId !== state.multiplayerSession?.playerId)
+      remotePlayers: mergeRemotePlayers(
+        state.remotePlayers,
+        event.players,
+        state.multiplayerSession?.playerId,
+        state.multiplayerNetworkMode === "peer-to-peer"
+      )
     };
   }
   if (event.type === "remote-player") {
     return {
       multiplayerEvents: events,
-      remotePlayers: upsertRemotePlayer(state.remotePlayers, event.player, state.multiplayerSession?.playerId)
+      remotePlayers: upsertRemotePlayer(
+        state.remotePlayers,
+        event.player,
+        state.multiplayerSession?.playerId,
+        state.multiplayerNetworkMode === "peer-to-peer" && event.source !== "peer"
+      )
     };
   }
   if (event.type === "remote-player-left") {
@@ -551,7 +612,7 @@ function multiplayerEventPatch(state: GameStore, event: MultiplayerServerEvent):
   if (event.type === "profile-updated" && event.profile.playerId === state.multiplayerSession?.playerId) {
     return {
       multiplayerEvents: events,
-      player: normalizePlayerEquipmentStats(event.profile.player),
+      player: mergeMultiplayerProfilePlayer(state.player, event.profile.player),
       runtime: { ...state.runtime, message: "Multiplayer profile updated." }
     };
   }
@@ -1304,6 +1365,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   economyEvents: [],
   economyPersonalOffers: [],
   multiplayerStatus: "offline",
+  multiplayerNetworkMode: getMultiplayerSettings().networkMode,
   multiplayerServerUrl: multiplayerDisplayUrl(),
   multiplayerSession: undefined,
   multiplayerError: undefined,
@@ -1697,6 +1759,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   multiplayerLogout: () => {
     multiplayerSocket?.close();
     multiplayerSocket = undefined;
+    multiplayerSocketSessionToken = undefined;
     saveMultiplayerSession(undefined);
     set((state) => ({
       multiplayerStatus: "offline",
@@ -1709,9 +1772,27 @@ export const useGameStore = create<GameStore>((set, get) => ({
       runtime: { ...state.runtime, message: "Multiplayer disconnected." }
     }));
   },
+  setMultiplayerNetworkMode: (networkMode) => {
+    const settings = saveMultiplayerNetworkMode(networkMode);
+    multiplayerSocket?.close();
+    multiplayerSocket = undefined;
+    multiplayerSocketSessionToken = undefined;
+    set((state) => ({
+      multiplayerNetworkMode: settings.networkMode,
+      multiplayerStatus: state.multiplayerSession ? "connecting" : state.multiplayerStatus,
+      multiplayerError: undefined,
+      remotePlayers: []
+    }));
+    if (get().multiplayerSession) get().connectMultiplayerEvents();
+  },
   connectMultiplayerEvents: () => {
     const session = get().multiplayerSession;
-    if (!session || multiplayerSocket) return;
+    if (!session) return;
+    if (multiplayerSocket && multiplayerSocketSessionToken === session.token) return;
+    multiplayerSocket?.close();
+    multiplayerSocket = undefined;
+    multiplayerSocketSessionToken = undefined;
+    const networkMode = get().multiplayerNetworkMode;
     const socket = connectMultiplayerSocket(
       session,
       (event) => {
@@ -1719,24 +1800,31 @@ export const useGameStore = create<GameStore>((set, get) => ({
       },
       (message) => {
         multiplayerSocket = undefined;
+        multiplayerSocketSessionToken = undefined;
         set((state) => ({
           multiplayerStatus: state.multiplayerSession ? "error" : "offline",
           multiplayerError: state.multiplayerSession ? message : undefined
         }));
-      }
+      },
+      { networkMode }
     );
     if (socket) {
       multiplayerSocket = socket;
+      multiplayerSocketSessionToken = session.token;
       set({ multiplayerStatus: "connected", multiplayerError: undefined });
     } else {
       set({ multiplayerStatus: "error", multiplayerError: "Multiplayer socket unavailable." });
     }
   },
   disconnectMultiplayerEvents: () => {
+    if (get().multiplayerSession) return;
     multiplayerSocket?.close();
     multiplayerSocket = undefined;
+    multiplayerSocketSessionToken = undefined;
   },
   sendMultiplayerSnapshot: () => {
+    const state = get();
+    if (!multiplayerSocket && state.multiplayerSession && state.multiplayerNetworkMode === "client-server") get().connectMultiplayerEvents();
     const snapshot = multiplayerSnapshot(get());
     if (!snapshot) return;
     multiplayerSocket?.send({ type: "player-snapshot", snapshot });
@@ -1747,7 +1835,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
     if (!token) return;
     try {
       await postMultiplayerProfile(token, multiplayerProfilePayload(state));
-      set({ multiplayerStatus: "connected", multiplayerError: undefined });
+      set((latest) =>
+        latest.multiplayerNetworkMode === "peer-to-peer" && latest.multiplayerStatus === "error"
+          ? {}
+          : { multiplayerStatus: "connected", multiplayerError: undefined }
+      );
     } catch (error) {
       set({
         multiplayerStatus: "error",

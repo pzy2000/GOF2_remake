@@ -36,6 +36,7 @@ import type {
   CoopMissionSession,
   MultiplayerAuthRequest,
   MultiplayerConnectionStatus,
+  MultiplayerNetworkMode,
   MultiplayerServerEvent,
   MultiplayerSession,
   MultiplayerTradeOffer,
@@ -59,6 +60,7 @@ export interface GameStore {
   economyEvents: EconomyEvent[];
   economyPersonalOffers: MissionDefinition[];
   multiplayerStatus: MultiplayerConnectionStatus;
+  multiplayerNetworkMode: MultiplayerNetworkMode;
   multiplayerServerUrl: string;
   multiplayerSession?: MultiplayerSession;
   multiplayerError?: string;
@@ -108,6 +110,7 @@ export interface GameStore {
   multiplayerLogin: (request: MultiplayerAuthRequest) => Promise<void>;
   multiplayerResume: () => Promise<void>;
   multiplayerLogout: () => void;
+  setMultiplayerNetworkMode: (mode: MultiplayerNetworkMode) => void;
   connectMultiplayerEvents: () => void;
   disconnectMultiplayerEvents: () => void;
   sendMultiplayerSnapshot: () => void;

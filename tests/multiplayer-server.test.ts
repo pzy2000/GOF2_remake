@@ -80,6 +80,14 @@ function waitForSocketMessage<T>(socket: WebSocket, predicate: (event: T) => boo
   });
 }
 
+function collectSocketMessages<T extends { type: string }>(socket: WebSocket): T[] {
+  const messages: T[] = [];
+  socket.addEventListener("message", (message) => {
+    messages.push(JSON.parse(String(message.data)) as T);
+  });
+  return messages;
+}
+
 function openRawSocket(url: string): Promise<Socket> {
   const parsed = new URL(url);
   return new Promise((resolve, reject) => {
@@ -251,7 +259,7 @@ describe("multiplayer HTTP and WebSocket server", () => {
     bobSocket.close();
   });
 
-  it("clears stale docked station data when a pilot syncs a flight profile", async () => {
+  it("clears stale docked station data without overwriting the latest movement snapshot", async () => {
     const { baseUrl, wsUrl } = await startServer();
     const alice = await register(baseUrl, "flight-a");
     const bob = await register(baseUrl, "flight-b");
@@ -266,6 +274,22 @@ describe("multiplayer HTTP and WebSocket server", () => {
     });
     expect(activeServer!.getState().accounts.find((account) => account.playerId === alice.session!.playerId)?.profile.currentStationId)
       .toBe("helion-prime");
+
+    const freshSnapshot: RemotePlayerSnapshot = {
+      playerId: alice.session!.playerId,
+      username: "alice",
+      displayName: "ALICE",
+      shipId: "sparrow-mk1",
+      currentSystemId: "helion-reach",
+      currentStationId: "helion-prime",
+      position: [120, 4, -240],
+      velocity: [4, 0, -2],
+      rotation: [0, 0.8, 0],
+      hull: 77,
+      shield: 66,
+      updatedAt: Date.now()
+    };
+    aliceSocket.send(JSON.stringify({ type: "player-snapshot", snapshot: freshSnapshot }));
 
     const remoteEvent = waitForSocketMessage<{ type: string; player?: RemotePlayerSnapshot }>(
       bobSocket,
@@ -282,9 +306,10 @@ describe("multiplayer HTTP and WebSocket server", () => {
     expect(received.player).toMatchObject({
       playerId: alice.session!.playerId,
       currentSystemId: "helion-reach",
-      position: [44, 0, -90]
+      position: [120, 4, -240]
     });
     expect(received.player?.currentStationId).toBeUndefined();
+    expect(activeServer!.getState().snapshots[alice.session!.playerId].position).toEqual([120, 4, -240]);
     expect(activeServer!.getState().accounts.find((account) => account.playerId === alice.session!.playerId)?.profile.currentStationId)
       .toBeUndefined();
     aliceSocket.close();
@@ -316,6 +341,51 @@ describe("multiplayer HTTP and WebSocket server", () => {
     expect(profile?.activeMissions.length).toBeGreaterThanOrEqual(8);
     socket.destroy();
   });
+
+  it("routes P2P signaling only between ready peers and announces peer cleanup", async () => {
+    const { baseUrl, wsUrl } = await startServer();
+    const alice = await register(baseUrl, "p2p-a");
+    const bob = await register(baseUrl, "p2p-b");
+    const aliceSocket = await openSocket(`${wsUrl}/api/multiplayer/events?token=${alice.session!.token}`);
+    const bobSocket = await openSocket(`${wsUrl}/api/multiplayer/events?token=${bob.session!.token}`);
+    const aliceMessages = collectSocketMessages<{ type: string; peer?: { playerId: string }; playerId?: string; signal?: { fromPlayerId?: string; toPlayerId: string; signalType: string } }>(aliceSocket);
+    const bobMessages = collectSocketMessages<{ type: string; peers?: Array<{ playerId: string }> }>(bobSocket);
+
+    aliceSocket.send(JSON.stringify({ type: "peer-ready" }));
+    await expect.poll(() => aliceMessages.map((event) => event.type)).toContain("peer-roster");
+
+    bobSocket.send(JSON.stringify({ type: "peer-ready" }));
+    await expect.poll(() => bobMessages.some((event) => event.type === "peer-roster" && !!event.peers?.some((peer) => peer.playerId === alice.session!.playerId)))
+      .toBe(true);
+    await expect.poll(() => aliceMessages.some((event) => event.type === "peer-joined" && event.peer?.playerId === bob.session!.playerId))
+      .toBe(true);
+
+    bobSocket.send(JSON.stringify({
+      type: "peer-signal",
+      signal: {
+        toPlayerId: alice.session!.playerId,
+        signalType: "ice",
+        candidate: { candidate: "candidate:0 1 udp 1 127.0.0.1 9 typ host", sdpMid: "0", sdpMLineIndex: 0 }
+      }
+    }));
+    await expect.poll(() => aliceMessages.find((event) => event.type === "peer-signal" && event.signal?.fromPlayerId === bob.session!.playerId)?.signal)
+      .toMatchObject({
+        fromPlayerId: bob.session!.playerId,
+        toPlayerId: alice.session!.playerId,
+        signalType: "ice"
+      });
+    const signal = aliceMessages.find((event) => event.type === "peer-signal" && event.signal?.fromPlayerId === bob.session!.playerId);
+    expect(signal!.signal).toMatchObject({
+      fromPlayerId: bob.session!.playerId,
+      toPlayerId: alice.session!.playerId,
+      signalType: "ice"
+    });
+
+    bobSocket.close();
+    await expect.poll(() => aliceMessages.some((event) => event.type === "peer-left" && event.playerId === bob.session!.playerId))
+      .toBe(true);
+    aliceSocket.close();
+  }, 10_000);
 
   it("commits station trades atomically and rejects non-station trades", async () => {
     const { baseUrl } = await startServer();

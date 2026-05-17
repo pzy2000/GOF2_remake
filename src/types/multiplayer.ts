@@ -7,6 +7,11 @@ import type {
 } from "./game";
 
 export type MultiplayerConnectionStatus = "offline" | "connecting" | "connected" | "error";
+export type MultiplayerNetworkMode = "client-server" | "peer-to-peer";
+
+export interface MultiplayerSettings {
+  networkMode: MultiplayerNetworkMode;
+}
 
 export interface MultiplayerSession {
   token: string;
@@ -57,6 +62,23 @@ export interface RemotePlayerSnapshot {
   updatedAt: number;
 }
 
+export interface MultiplayerPeerInfo {
+  playerId: string;
+  username: string;
+  displayName: string;
+}
+
+export type MultiplayerPeerSignalType = "offer" | "answer" | "ice";
+
+export interface MultiplayerPeerSignal {
+  toPlayerId: string;
+  fromPlayerId?: string;
+  fromPeer?: MultiplayerPeerInfo;
+  signalType: MultiplayerPeerSignalType;
+  description?: RTCSessionDescriptionInit;
+  candidate?: RTCIceCandidateInit;
+}
+
 export type MultiplayerTradeStatus = "pending" | "confirmed" | "completed" | "canceled";
 
 export type MultiplayerTradeOffer = {
@@ -103,13 +125,19 @@ export interface MultiplayerSnapshotResponse {
 
 export type MultiplayerClientEvent =
   | { type: "player-snapshot"; snapshot: RemotePlayerSnapshot }
-  | { type: "profile"; profile: MultiplayerStoreProfile };
+  | { type: "profile"; profile: MultiplayerStoreProfile }
+  | { type: "peer-ready" }
+  | { type: "peer-signal"; signal: MultiplayerPeerSignal };
 
 export type MultiplayerServerEvent =
   | { type: "session"; session: MultiplayerSession; profile: MultiplayerPlayerProfile }
   | { type: "remote-players"; players: RemotePlayerSnapshot[] }
-  | { type: "remote-player"; player: RemotePlayerSnapshot }
+  | { type: "remote-player"; player: RemotePlayerSnapshot; source?: "server" | "peer" }
   | { type: "remote-player-left"; playerId: string }
+  | { type: "peer-roster"; peers: MultiplayerPeerInfo[] }
+  | { type: "peer-joined"; peer: MultiplayerPeerInfo }
+  | { type: "peer-left"; playerId: string }
+  | { type: "peer-signal"; signal: MultiplayerPeerSignal }
   | { type: "trade-updated"; trade: TradeSession }
   | { type: "coop-updated"; session: CoopMissionSession }
   | { type: "profile-updated"; profile: MultiplayerPlayerProfile }

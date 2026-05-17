@@ -3,10 +3,14 @@ import type {
   MultiplayerAuthRequest,
   MultiplayerAuthResponse,
   MultiplayerClientEvent,
+  MultiplayerNetworkMode,
+  MultiplayerPeerInfo,
+  MultiplayerPeerSignal,
   MultiplayerPlayerProfile,
   MultiplayerProfileResponse,
   MultiplayerServerEvent,
   MultiplayerSession,
+  MultiplayerSettings,
   MultiplayerSnapshotResponse,
   MultiplayerStoreProfile,
   MultiplayerTradeOffer,
@@ -19,6 +23,21 @@ const HTTPS_HTTP_BLOCK_REASON = "Multiplayer disabled: HTTPS pages cannot call a
 const DEFAULT_LOCAL_MULTIPLAYER_PORT = 19778;
 const REQUEST_TIMEOUT_MS = 1_800;
 const MULTIPLAYER_SESSION_STORAGE_KEY = "gof2-multiplayer-session";
+export const MULTIPLAYER_SETTINGS_KEY = "gof2-by-pzy-multiplayer-settings";
+
+const DEFAULT_MULTIPLAYER_SETTINGS: MultiplayerSettings = {
+  networkMode: "client-server"
+};
+
+const DEFAULT_P2P_ICE_SERVERS: RTCIceServer[] = [
+  { urls: "stun:stun.l.google.com:19302" },
+  { urls: "stun:global.stun.twilio.com:3478" }
+];
+
+export const multiplayerNetworkModeLabels: Record<MultiplayerNetworkMode, string> = {
+  "client-server": "Client/server",
+  "peer-to-peer": "P2P movement"
+};
 
 export interface MultiplayerServiceConfigInput {
   envUrl?: string;
@@ -37,6 +56,63 @@ export interface MultiplayerServiceConfig {
 
 function normalizeConfiguredUrl(url: string): string {
   return url.trim().replace(/\/$/, "");
+}
+
+function storage(): Storage | undefined {
+  return typeof localStorage === "undefined" ? undefined : localStorage;
+}
+
+function isMultiplayerNetworkMode(value: unknown): value is MultiplayerNetworkMode {
+  return value === "client-server" || value === "peer-to-peer";
+}
+
+export function getMultiplayerSettings(store: Storage | undefined = storage()): MultiplayerSettings {
+  const raw = store?.getItem(MULTIPLAYER_SETTINGS_KEY);
+  if (!raw) return DEFAULT_MULTIPLAYER_SETTINGS;
+  try {
+    const parsed = JSON.parse(raw) as Partial<MultiplayerSettings>;
+    return {
+      networkMode: isMultiplayerNetworkMode(parsed.networkMode)
+        ? parsed.networkMode
+        : DEFAULT_MULTIPLAYER_SETTINGS.networkMode
+    };
+  } catch {
+    return DEFAULT_MULTIPLAYER_SETTINGS;
+  }
+}
+
+export function saveMultiplayerNetworkMode(
+  networkMode: MultiplayerNetworkMode,
+  store: Storage | undefined = storage()
+): MultiplayerSettings {
+  const next: MultiplayerSettings = {
+    networkMode: isMultiplayerNetworkMode(networkMode) ? networkMode : DEFAULT_MULTIPLAYER_SETTINGS.networkMode
+  };
+  store?.setItem(MULTIPLAYER_SETTINGS_KEY, JSON.stringify(next));
+  return next;
+}
+
+function normalizeIceServer(value: unknown): RTCIceServer | undefined {
+  if (typeof value === "string" && value.trim()) return { urls: value.trim() };
+  if (!value || typeof value !== "object") return undefined;
+  const candidate = value as Partial<RTCIceServer>;
+  if (typeof candidate.urls === "string" || Array.isArray(candidate.urls)) return candidate as RTCIceServer;
+  return undefined;
+}
+
+function configuredIceServers(): RTCIceServer[] {
+  const raw = import.meta.env.VITE_MULTIPLAYER_ICE_SERVERS as string | undefined;
+  if (!raw?.trim()) return DEFAULT_P2P_ICE_SERVERS;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    const servers = Array.isArray(parsed)
+      ? parsed.map(normalizeIceServer).filter((server): server is RTCIceServer => !!server)
+      : [normalizeIceServer(parsed)].filter((server): server is RTCIceServer => !!server);
+    return servers.length > 0 ? servers : DEFAULT_P2P_ICE_SERVERS;
+  } catch {
+    const servers = raw.split(",").map((entry) => normalizeIceServer(entry)).filter((server): server is RTCIceServer => !!server);
+    return servers.length > 0 ? servers : DEFAULT_P2P_ICE_SERVERS;
+  }
 }
 
 export function resolveMultiplayerServiceConfig({
@@ -87,7 +163,7 @@ export function resolveMultiplayerServiceConfig({
 }
 
 export const MULTIPLAYER_SERVICE_CONFIG = resolveMultiplayerServiceConfig({
-  envUrl: import.meta.env.VITE_MULTIPLAYER_API_URL as string | undefined,
+  envUrl: (import.meta.env.VITE_MULTIPLAYER_API_URL as string | undefined) || devMultiplayerApiUrl(),
   production: import.meta.env.PROD,
   pageProtocol: typeof window === "undefined" ? undefined : window.location.protocol,
   pageHostname: typeof window === "undefined" ? undefined : window.location.hostname,
@@ -118,6 +194,15 @@ function socketUrl(path: string): string {
   if (base.startsWith("http://")) return `${base.replace(/^http:\/\//, "ws://")}${path}`;
   const origin = typeof window === "undefined" ? "ws://127.0.0.1" : window.location.origin.replace(/^http/, "ws");
   return `${origin}${path}`;
+}
+
+function devMultiplayerApiUrl(): string | undefined {
+  if (!import.meta.env.DEV || typeof window === "undefined") return undefined;
+  try {
+    return window.localStorage.getItem("gof2-e2e-multiplayer-api-url") ?? undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 async function requestJson<T>(path: string, init?: RequestInit & { token?: string }): Promise<T> {
@@ -270,27 +355,255 @@ export function completeCoopMission(token: string, sessionId: string): Promise<{
   });
 }
 
+export interface MultiplayerTransportConnection {
+  send: (event: MultiplayerClientEvent) => void;
+  close: () => void;
+}
+
+export interface MultiplayerTransportOptions {
+  networkMode?: MultiplayerNetworkMode;
+}
+
+type PeerConnectionEntry = {
+  info: MultiplayerPeerInfo;
+  connection: RTCPeerConnection;
+  channel?: RTCDataChannel;
+  pendingCandidates: RTCIceCandidateInit[];
+};
+
+function createPeerMovementTransport(
+  session: MultiplayerSession,
+  socket: WebSocket,
+  onEvent: (event: MultiplayerServerEvent) => void,
+  onError: (message: string) => void
+) {
+  const peers = new Map<string, PeerConnectionEntry>();
+  const iceServers = configuredIceServers();
+  let lastSnapshot: RemotePlayerSnapshot | undefined;
+
+  function sendSocketEvent(event: MultiplayerClientEvent): void {
+    if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(event));
+  }
+
+  function closePeer(playerId: string): void {
+    const peer = peers.get(playerId);
+    if (!peer) return;
+    peer.channel?.close();
+    peer.connection.close();
+    peers.delete(playerId);
+  }
+
+  function attachChannel(peer: PeerConnectionEntry, channel: RTCDataChannel): void {
+    peer.channel = channel;
+    channel.binaryType = "arraybuffer";
+    channel.addEventListener("open", () => {
+      if (lastSnapshot && channel.readyState === "open") channel.send(JSON.stringify(lastSnapshot));
+    });
+    channel.addEventListener("message", (event) => {
+      try {
+        const incoming = JSON.parse(String(event.data)) as RemotePlayerSnapshot;
+        onEvent({
+          type: "remote-player",
+          source: "peer",
+          player: {
+            ...incoming,
+            playerId: peer.info.playerId,
+            username: peer.info.username,
+            displayName: peer.info.displayName,
+            updatedAt: Date.now()
+          }
+        });
+      } catch {
+        onError(`Malformed P2P movement packet from ${peer.info.displayName}.`);
+      }
+    });
+    channel.addEventListener("error", () => onError(`P2P movement channel failed for ${peer.info.displayName}.`));
+  }
+
+  function signalPeer(signal: Omit<MultiplayerPeerSignal, "fromPlayerId" | "fromPeer">): void {
+    sendSocketEvent({ type: "peer-signal", signal });
+  }
+
+  async function sendOffer(peer: PeerConnectionEntry): Promise<void> {
+    const offer = await peer.connection.createOffer();
+    await peer.connection.setLocalDescription(offer);
+    const description = peer.connection.localDescription;
+    if (!description) return;
+    signalPeer({
+      toPlayerId: peer.info.playerId,
+      signalType: "offer",
+      description: description.toJSON()
+    });
+  }
+
+  async function flushCandidates(peer: PeerConnectionEntry): Promise<void> {
+    if (!peer.connection.remoteDescription) return;
+    const candidates = peer.pendingCandidates.splice(0);
+    for (const candidate of candidates) await peer.connection.addIceCandidate(new RTCIceCandidate(candidate));
+  }
+
+  function ensurePeer(info: MultiplayerPeerInfo): PeerConnectionEntry | undefined {
+    if (info.playerId === session.playerId) return undefined;
+    const existing = peers.get(info.playerId);
+    if (existing) return existing;
+    if (typeof RTCPeerConnection === "undefined") {
+      onError("P2P movement requires WebRTC support in this browser.");
+      return undefined;
+    }
+
+    const connection = new RTCPeerConnection({ iceServers });
+    const peer: PeerConnectionEntry = {
+      info,
+      connection,
+      pendingCandidates: []
+    };
+    peers.set(info.playerId, peer);
+
+    connection.addEventListener("icecandidate", (event) => {
+      if (!event.candidate) return;
+      signalPeer({
+        toPlayerId: info.playerId,
+        signalType: "ice",
+        candidate: event.candidate.toJSON()
+      });
+    });
+    connection.addEventListener("connectionstatechange", () => {
+      if (connection.connectionState === "failed") {
+        onError(`P2P connection failed for ${info.displayName}.`);
+      }
+      if (connection.connectionState === "closed") closePeer(info.playerId);
+    });
+    connection.addEventListener("iceconnectionstatechange", () => {
+      if (connection.iceConnectionState === "failed") onError(`P2P ICE negotiation failed for ${info.displayName}.`);
+    });
+    connection.addEventListener("datachannel", (event) => attachChannel(peer, event.channel));
+
+    if (session.playerId < info.playerId) {
+      attachChannel(peer, connection.createDataChannel("movement", { ordered: false, maxRetransmits: 0 }));
+      void sendOffer(peer).catch((error) => onError(error instanceof Error ? error.message : "P2P offer failed."));
+    }
+    return peer;
+  }
+
+  async function handleSignal(signal: MultiplayerPeerSignal): Promise<void> {
+    const fromPlayerId = signal.fromPlayerId;
+    if (!fromPlayerId || fromPlayerId === session.playerId) return;
+    const peerInfo = signal.fromPeer ?? peers.get(fromPlayerId)?.info;
+    if (!peerInfo) return;
+    const peer = ensurePeer(peerInfo);
+    if (!peer) return;
+    if (signal.signalType === "offer" && signal.description) {
+      await peer.connection.setRemoteDescription(new RTCSessionDescription(signal.description));
+      await flushCandidates(peer);
+      const answer = await peer.connection.createAnswer();
+      await peer.connection.setLocalDescription(answer);
+      const description = peer.connection.localDescription;
+      if (description) {
+        signalPeer({
+          toPlayerId: fromPlayerId,
+          signalType: "answer",
+          description: description.toJSON()
+        });
+      }
+      return;
+    }
+    if (signal.signalType === "answer" && signal.description) {
+      await peer.connection.setRemoteDescription(new RTCSessionDescription(signal.description));
+      await flushCandidates(peer);
+      return;
+    }
+    if (signal.signalType === "ice" && signal.candidate) {
+      if (!peer.connection.remoteDescription) {
+        peer.pendingCandidates.push(signal.candidate);
+        return;
+      }
+      await peer.connection.addIceCandidate(new RTCIceCandidate(signal.candidate));
+    }
+  }
+
+  return {
+    handleServerEvent(event: MultiplayerServerEvent): boolean {
+      if (event.type === "peer-roster") {
+        onEvent(event);
+        event.peers.forEach((peer) => ensurePeer(peer));
+        return true;
+      }
+      if (event.type === "peer-joined") {
+        onEvent(event);
+        ensurePeer(event.peer);
+        return true;
+      }
+      if (event.type === "peer-left") {
+        onEvent(event);
+        closePeer(event.playerId);
+        onEvent({ type: "remote-player-left", playerId: event.playerId });
+        return true;
+      }
+      if (event.type === "peer-signal") {
+        onEvent(event);
+        void handleSignal(event.signal).catch((error) => onError(error instanceof Error ? error.message : "P2P signal failed."));
+        return true;
+      }
+      return false;
+    },
+    broadcastSnapshot(snapshot: RemotePlayerSnapshot): void {
+      lastSnapshot = snapshot;
+      const payload = JSON.stringify(snapshot);
+      for (const peer of peers.values()) {
+        if (peer.channel?.readyState === "open") {
+          peer.channel.send(payload);
+        }
+      }
+    },
+    close(): void {
+      for (const playerId of [...peers.keys()]) closePeer(playerId);
+    }
+  };
+}
+
 export function connectMultiplayerEvents(
   session: MultiplayerSession,
   onEvent: (event: MultiplayerServerEvent) => void,
-  onError: (message: string) => void
-): { send: (event: MultiplayerClientEvent) => void; close: () => void } | undefined {
+  onError: (message: string) => void,
+  options: MultiplayerTransportOptions = {}
+): MultiplayerTransportConnection | undefined {
   if (!MULTIPLAYER_SERVICE_CONFIG.enabled || typeof WebSocket === "undefined") return undefined;
   const socket = new WebSocket(socketUrl(`/api/multiplayer/events?token=${encodeURIComponent(session.token)}`));
+  const networkMode = options.networkMode ?? DEFAULT_MULTIPLAYER_SETTINGS.networkMode;
+  const peerTransport = networkMode === "peer-to-peer"
+    ? createPeerMovementTransport(session, socket, onEvent, onError)
+    : undefined;
+  let closedByClient = false;
+  socket.addEventListener("open", () => {
+    if (networkMode === "peer-to-peer") socket.send(JSON.stringify({ type: "peer-ready" } satisfies MultiplayerClientEvent));
+  });
   socket.addEventListener("message", (event) => {
     try {
-      onEvent(JSON.parse(String(event.data)) as MultiplayerServerEvent);
+      const parsed = JSON.parse(String(event.data)) as MultiplayerServerEvent;
+      if (peerTransport?.handleServerEvent(parsed)) return;
+      onEvent(parsed);
     } catch {
       onError("Malformed multiplayer event.");
     }
   });
   socket.addEventListener("error", () => onError("Multiplayer socket error."));
-  socket.addEventListener("close", () => onError("Multiplayer socket closed."));
+  socket.addEventListener("close", () => {
+    peerTransport?.close();
+    if (!closedByClient) onError("Multiplayer socket closed.");
+  });
   return {
     send: (event) => {
+      if (event.type === "player-snapshot" && peerTransport) {
+        peerTransport.broadcastSnapshot(event.snapshot);
+        return;
+      }
       if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(event));
     },
-    close: () => socket.close()
+    close: () => {
+      closedByClient = true;
+      peerTransport?.close();
+      socket.close();
+    }
   };
 }
 

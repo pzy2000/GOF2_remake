@@ -15,6 +15,7 @@ import { audioSystem, getAudioSettings, saveAudioSettings } from "./systems/audi
 import { voiceSystem } from "./systems/voice";
 import { loadAssetManifest } from "./systems/assets";
 import { graphicsQualityLabels, graphicsQualityProfiles } from "./systems/graphics";
+import { multiplayerNetworkModeLabels } from "./systems/multiplayerClient";
 import { resolveMusicCue } from "./systems/music";
 import { stationById, useGameStore } from "./state/gameStore";
 import "./styles.css";
@@ -68,6 +69,8 @@ function SimpleScreen({ type }: { type: "settings" | "credits" }) {
   const assetCredits = useGameStore((state) => state.assetManifest.assetCredits);
   const graphicsSettings = useGameStore((state) => state.graphicsSettings);
   const setGraphicsQuality = useGameStore((state) => state.setGraphicsQuality);
+  const multiplayerNetworkMode = useGameStore((state) => state.multiplayerNetworkMode);
+  const setMultiplayerNetworkMode = useGameStore((state) => state.setMultiplayerNetworkMode);
   const [audioSettings, setAudioSettings] = useState(getAudioSettings);
   const updateAudio = (patch: Partial<typeof audioSettings>) => {
     setAudioSettings(saveAudioSettings({ ...audioSettings, ...patch }));
@@ -95,6 +98,21 @@ function SimpleScreen({ type }: { type: "settings" | "credits" }) {
                       onClick={() => setGraphicsQuality(quality)}
                     >
                       {graphicsQualityLabels[quality]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div className="settings-row graphics-quality-row">
+                <span>Multiplayer Network</span>
+                <div className="segmented-control" role="group" aria-label="Multiplayer network mode">
+                  {(["client-server", "peer-to-peer"] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      className={multiplayerNetworkMode === mode ? "active" : ""}
+                      type="button"
+                      onClick={() => setMultiplayerNetworkMode(mode)}
+                    >
+                      {multiplayerNetworkModeLabels[mode]}
                     </button>
                   ))}
                 </div>

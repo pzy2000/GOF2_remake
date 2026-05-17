@@ -17,6 +17,9 @@ import type { EquipmentId, MissionDefinition } from "../src/types/game";
 import type {
   CoopMissionSession,
   MultiplayerAuthRequest,
+  MultiplayerClientEvent,
+  MultiplayerPeerInfo,
+  MultiplayerPeerSignal,
   MultiplayerPlayerProfile,
   MultiplayerServerEvent,
   MultiplayerSession,
@@ -71,6 +74,7 @@ type WsClient = {
   playerId: string;
   socket: Socket;
   pending: Buffer;
+  peerReady: boolean;
 };
 
 const DEFAULT_PORT = 19778;
@@ -94,6 +98,14 @@ function publicSession(account: MultiplayerAccount, token: string, serverUrl: st
     username: account.username,
     displayName: account.displayName,
     serverUrl
+  };
+}
+
+function peerInfo(account: MultiplayerAccount): MultiplayerPeerInfo {
+  return {
+    playerId: account.playerId,
+    username: account.username,
+    displayName: account.displayName
   };
 }
 
@@ -382,8 +394,9 @@ function encodeWsPayload(data: MultiplayerServerEvent): Buffer {
   return Buffer.concat([header, payload]);
 }
 
-function decodeWsMessages(buffer: Buffer): { messages: string[]; remaining: Buffer } {
+function decodeWsMessages(buffer: Buffer): { messages: string[]; remaining: Buffer; closed: boolean } {
   const messages: string[] = [];
+  let closed = false;
   let offset = 0;
   while (offset + 2 <= buffer.length) {
     const frameStart = offset;
@@ -421,6 +434,7 @@ function decodeWsMessages(buffer: Buffer): { messages: string[]; remaining: Buff
     const payload = Buffer.from(buffer.subarray(offset, offset + length));
     offset += length;
     if (opcode === 0x8) {
+      closed = true;
       offset = buffer.length;
       break;
     }
@@ -429,7 +443,7 @@ function decodeWsMessages(buffer: Buffer): { messages: string[]; remaining: Buff
     }
     if (opcode === 0x1) messages.push(payload.toString("utf8"));
   }
-  return { messages, remaining: buffer.subarray(offset) };
+  return { messages, remaining: buffer.subarray(offset), closed };
 }
 
 export function createMultiplayerHttpServer(options: MultiplayerHttpServerOptions = {}): MultiplayerHttpServer {
@@ -463,6 +477,29 @@ export function createMultiplayerHttpServer(options: MultiplayerHttpServerOption
     broadcast({ type: "profile-updated", profile: account.profile }, [account.playerId]);
   };
 
+  const hasPeerReadyClient = (playerId: string): boolean =>
+    Array.from(clients.values()).some((client) => client.playerId === playerId && client.peerReady);
+
+  const activePeerInfos = (selfPlayerId: string): MultiplayerPeerInfo[] => {
+    const seen = new Set<string>();
+    const peers: MultiplayerPeerInfo[] = [];
+    for (const client of clients.values()) {
+      if (!client.peerReady || client.playerId === selfPlayerId || seen.has(client.playerId)) continue;
+      const account = accountByPlayerId(state, client.playerId);
+      if (!account) continue;
+      seen.add(client.playerId);
+      peers.push(peerInfo(account));
+    }
+    return peers;
+  };
+
+  const broadcastPeerEvent = (event: MultiplayerServerEvent, excludedPlayerId?: string) => {
+    for (const client of clients.values()) {
+      if (!client.peerReady || client.playerId === excludedPlayerId) continue;
+      send(client, event);
+    }
+  };
+
   const activeRemoteSnapshots = (selfPlayerId: string): RemotePlayerSnapshot[] => {
     const seen = new Set<string>();
     const snapshots: RemotePlayerSnapshot[] = [];
@@ -474,6 +511,20 @@ export function createMultiplayerHttpServer(options: MultiplayerHttpServerOption
       snapshots.push(state.snapshots[client.playerId] ?? snapshotFromProfile(account.profile));
     }
     return snapshots;
+  };
+
+  const profilePresenceSnapshot = (account: MultiplayerAccount): RemotePlayerSnapshot => {
+    const existing = state.snapshots[account.playerId];
+    if (!existing) return snapshotFromProfile(account.profile);
+    return {
+      ...existing,
+      username: account.username,
+      displayName: account.displayName,
+      shipId: account.profile.player.shipId,
+      currentSystemId: account.profile.currentSystemId,
+      currentStationId: account.profile.currentStationId,
+      updatedAt: Date.now()
+    };
   };
 
   const updateProfile = (account: MultiplayerAccount, patch: MultiplayerStoreProfile): MultiplayerPlayerProfile => {
@@ -502,8 +553,8 @@ export function createMultiplayerHttpServer(options: MultiplayerHttpServerOption
       session.message = "Host mission state synchronized.";
       broadcast({ type: "coop-updated", session }, [session.hostPlayerId, session.guestPlayerId]);
     }
-    if (Array.from(clients.values()).some((client) => client.playerId === account.playerId)) {
-      const snapshot = snapshotFromProfile(account.profile);
+    if (Array.from(clients.values()).some((client) => client.playerId === account.playerId) && !hasPeerReadyClient(account.playerId)) {
+      const snapshot = profilePresenceSnapshot(account);
       state.snapshots[account.playerId] = snapshot;
       broadcast({ type: "remote-player", player: snapshot });
     }
@@ -806,7 +857,7 @@ export function createMultiplayerHttpServer(options: MultiplayerHttpServerOption
     }
   });
 
-  server.on("upgrade", (request, socket) => {
+  server.on("upgrade", (request, socket, head) => {
     const tcpSocket = socket as Socket;
     const url = getUrl(request);
     if (url.pathname !== "/api/multiplayer/events") {
@@ -830,24 +881,32 @@ export function createMultiplayerHttpServer(options: MultiplayerHttpServerOption
       "",
       ""
     ].join("\r\n"));
-    const client: WsClient = { id: randomUUID(), playerId: account.playerId, socket: tcpSocket, pending: Buffer.alloc(0) };
+    const client: WsClient = { id: randomUUID(), playerId: account.playerId, socket: tcpSocket, pending: Buffer.alloc(0), peerReady: false };
     clients.set(client.id, client);
     send(client, { type: "session", session: publicSession(account, tokenFromRequest(request, url)!, url.origin), profile: account.profile });
     send(client, { type: "remote-players", players: activeRemoteSnapshots(account.playerId) });
     const cleanupClient = () => {
       if (!clients.delete(client.id)) return;
+      if (client.peerReady && !hasPeerReadyClient(account.playerId)) {
+        broadcastPeerEvent({ type: "peer-left", playerId: account.playerId }, account.playerId);
+      }
       if (!Array.from(clients.values()).some((candidate) => candidate.playerId === account.playerId)) {
         delete state.snapshots[account.playerId];
         broadcast({ type: "remote-player-left", playerId: account.playerId });
       }
     };
-    tcpSocket.on("data", (chunk) => {
+    const handleData = (chunk: Buffer) => {
       client.pending = Buffer.concat([client.pending, Buffer.from(chunk)]);
       const decoded = decodeWsMessages(client.pending);
       client.pending = decoded.remaining;
+      if (decoded.closed) {
+        tcpSocket.end();
+        cleanupClient();
+        return;
+      }
       for (const message of decoded.messages) {
         try {
-          const event = JSON.parse(message) as { type?: string; snapshot?: RemotePlayerSnapshot; profile?: MultiplayerStoreProfile };
+          const event = JSON.parse(message) as MultiplayerClientEvent;
           if (event.type === "player-snapshot" && event.snapshot) {
             const snapshot: RemotePlayerSnapshot = {
               ...event.snapshot,
@@ -874,12 +933,30 @@ export function createMultiplayerHttpServer(options: MultiplayerHttpServerOption
           } else if (event.type === "profile" && event.profile) {
             updateProfile(account, event.profile);
             broadcastProfile(account);
+          } else if (event.type === "peer-ready") {
+            if (!client.peerReady) {
+              client.peerReady = true;
+              send(client, { type: "peer-roster", peers: activePeerInfos(account.playerId) });
+              broadcastPeerEvent({ type: "peer-joined", peer: peerInfo(account) }, account.playerId);
+            }
+          } else if (event.type === "peer-signal" && event.signal.toPlayerId) {
+            const signal: MultiplayerPeerSignal = {
+              ...event.signal,
+              fromPlayerId: account.playerId,
+              fromPeer: peerInfo(account)
+            };
+            const recipients = Array.from(clients.values())
+              .filter((candidate) => candidate.peerReady && candidate.playerId === event.signal.toPlayerId);
+            for (const recipient of recipients) send(recipient, { type: "peer-signal", signal });
+            if (recipients.length === 0) send(client, { type: "error", message: "P2P peer is not connected." });
           }
         } catch {
           send(client, { type: "error", message: "Malformed multiplayer event." });
         }
       }
-    });
+    };
+    tcpSocket.on("data", handleData);
+    if (head.length > 0) handleData(head);
     tcpSocket.on("close", cleanupClient);
     tcpSocket.on("end", cleanupClient);
     tcpSocket.on("error", cleanupClient);

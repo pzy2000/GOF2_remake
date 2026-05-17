@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  getMultiplayerSettings,
+  MULTIPLAYER_SETTINGS_KEY,
+  saveMultiplayerNetworkMode
+} from "../src/systems/multiplayerClient";
+import {
   MULTIPLAYER_CREDENTIALS_STORAGE_KEY,
   readMultiplayerCredentials,
   saveMultiplayerCredentials
@@ -50,5 +55,23 @@ describe("multiplayer credentials", () => {
       password: "",
       displayName: ""
     });
+  });
+});
+
+describe("multiplayer settings", () => {
+  it("persists the selected network mode", () => {
+    const storage = new MemoryStorage();
+
+    saveMultiplayerNetworkMode("peer-to-peer", storage);
+
+    expect(storage.getItem(MULTIPLAYER_SETTINGS_KEY)).toBe("{\"networkMode\":\"peer-to-peer\"}");
+    expect(getMultiplayerSettings(storage)).toEqual({ networkMode: "peer-to-peer" });
+  });
+
+  it("falls back to client-server when saved network mode is invalid", () => {
+    const storage = new MemoryStorage();
+    storage.setItem(MULTIPLAYER_SETTINGS_KEY, "{\"networkMode\":\"raw-udp\"}");
+
+    expect(getMultiplayerSettings(storage)).toEqual({ networkMode: "client-server" });
   });
 });
