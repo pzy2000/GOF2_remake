@@ -38,6 +38,7 @@
     "@vitejs/plugin-react": "^4.3.4",
     "msedge-tts": "^2.0.5",
     "patch-package": "^8.0.1",
+    "rollup": "npm:@rollup/wasm-node@^4.60.2",
     "typescript": "~5.7.2",
     "vite": "^6.0.7",
     "vitest": "^2.1.8",
