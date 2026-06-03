@@ -4236,6 +4236,23 @@ if (typeof window !== "undefined" && import.meta.env.DEV) {
         getState: () => useGameStore.getState(),
         setState: useGameStore.setState,
         applyDebugScenario: (scenarioId: string) => useGameStore.getState().applyDebugScenario(scenarioId),
+        getReadiness: () => {
+          const state = useGameStore.getState();
+          const canvas = document.querySelector("canvas");
+          const rect = canvas?.getBoundingClientRect();
+          return {
+            storeReady: true,
+            screenMounted: !!document.querySelector('[data-warptest-scene], .station-screen, .galaxy-map, .menu-screen'),
+            currentScreen: state.screen,
+            canvasPresent: !!canvas,
+            canvasSize: { width: rect?.width ?? 0, height: rect?.height ?? 0 },
+            sceneContainerPresent: !!document.querySelector('[data-warptest-scene="gof2-flight"]'),
+            renderHeartbeat: window.__GOF2_RENDER_HEARTBEAT__ ?? null,
+            renderFrame: window.__GOF2_RENDER_HEARTBEAT_FRAME__ ?? null,
+            assetManifestReady: Object.keys(state.assetManifest ?? {}).length > 0,
+            runtimeMessage: state.runtime?.message ?? null
+          };
+        },
         getMetadata: () => gate,
         __warptestGate: gate
       }

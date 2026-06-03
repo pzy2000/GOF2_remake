@@ -1248,7 +1248,10 @@ declare global {
       setState: (partial: unknown, replace?: boolean) => void;
       applyDebugScenario?: (scenarioId: string) => void;
       getMetadata?: () => unknown;
+      getReadiness?: () => unknown;
       __warptestGate?: unknown;
     };
+    __GOF2_RENDER_HEARTBEAT__?: number;
+    __GOF2_RENDER_HEARTBEAT_FRAME__?: number;
   }
 }

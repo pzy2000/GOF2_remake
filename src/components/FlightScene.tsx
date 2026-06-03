@@ -2991,6 +2991,15 @@ function EconomyWatchOverlay() {
   );
 }
 
+function WarpTestRenderHeartbeat() {
+  useFrame(() => {
+    if (!import.meta.env.DEV || typeof window === "undefined") return;
+    window.__GOF2_RENDER_HEARTBEAT__ = performance.now();
+    window.__GOF2_RENDER_HEARTBEAT_FRAME__ = (window.__GOF2_RENDER_HEARTBEAT_FRAME__ ?? 0) + 1;
+  });
+  return null;
+}
+
 export function FlightScene() {
   const canvasRef = useRef<HTMLDivElement | null>(null);
   const screen = useGameStore((state) => state.screen);
@@ -3016,6 +3025,7 @@ export function FlightScene() {
     <div
       ref={canvasRef}
       className="flight-canvas"
+      data-warptest-scene="gof2-flight"
       onClick={() => {
         canvasRef.current?.requestPointerLock?.();
       }}
@@ -3035,6 +3045,7 @@ export function FlightScene() {
         shadows={graphicsSettings.shadows && graphicsSettings.shadowDetail !== "low"}
       >
         <Suspense fallback={null}>
+          <WarpTestRenderHeartbeat />
           <FlightSimulationTicker />
           <CameraRig />
           <PostProcessingRig />
