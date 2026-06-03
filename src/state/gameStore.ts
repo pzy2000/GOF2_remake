@@ -4206,14 +4206,41 @@ export const useGameStore = create<GameStore>((set, get) => ({
   }
 }));
 
+function getE2EHookGate() {
+  const gate = "import.meta.env.DEV && (?warptest=1 || localStorage.gof2-e2e-hook=enabled)";
+  const mode = import.meta.env.MODE ?? "unknown";
+  if (typeof window === "undefined") {
+    return { enabled: false, enabledBy: "server", gate, mode };
+  }
+  const params = new URLSearchParams(window.location.search);
+  const queryEnabled = params.get("warptest") === "1" || params.get("gof2E2E") === "1";
+  let storageEnabled = false;
+  try {
+    storageEnabled = window.localStorage.getItem("gof2-e2e-hook") === "enabled";
+  } catch {
+    storageEnabled = false;
+  }
+  return {
+    enabled: queryEnabled || storageEnabled,
+    enabledBy: queryEnabled ? "query" : storageEnabled ? "localStorage" : "none",
+    gate,
+    mode
+  };
+}
+
 if (typeof window !== "undefined" && import.meta.env.DEV) {
-  Object.assign(window, {
-    __GOF2_E2E__: {
-      getState: () => useGameStore.getState(),
-      setState: useGameStore.setState,
-      applyDebugScenario: (scenarioId: string) => useGameStore.getState().applyDebugScenario(scenarioId)
-    }
-  });
+  const gate = getE2EHookGate();
+  if (gate.enabled) {
+    Object.assign(window, {
+      __GOF2_E2E__: {
+        getState: () => useGameStore.getState(),
+        setState: useGameStore.setState,
+        applyDebugScenario: (scenarioId: string) => useGameStore.getState().applyDebugScenario(scenarioId),
+        getMetadata: () => gate,
+        __warptestGate: gate
+      }
+    });
+  }
 }
 
 export { cloneMissionTemplates, commodities, planetById, planets, shipById, ships, stationById, stations, systemById, systems };

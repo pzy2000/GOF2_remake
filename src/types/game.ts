@@ -1247,6 +1247,8 @@ declare global {
       getState: () => unknown;
       setState: (partial: unknown, replace?: boolean) => void;
       applyDebugScenario?: (scenarioId: string) => void;
+      getMetadata?: () => unknown;
+      __warptestGate?: unknown;
     };
   }
 }
