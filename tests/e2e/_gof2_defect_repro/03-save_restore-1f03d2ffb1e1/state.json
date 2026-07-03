@@ -1,0 +1,151 @@
+{
+  "benchmark": "GOF2_remake",
+  "task_id": "gof2-playable-flight",
+  "injection_mode": "save_restore",
+  "operator_id": "field_value",
+  "defect_type": "console_error",
+  "detail": "THREE.LineSegmentsGeometry.computeBoundingSphere(): Computed radius is NaN. The instanced position data is likely to have NaN values. LineGeometry",
+  "target": {
+    "kind": "fuzz_save_restore",
+    "save": {
+      "version": 3,
+      "savedAt": "2026-07-02T09:31:27.543Z",
+      "screen": "flight",
+      "currentSystemId": "helion-reach",
+      "gameClock": 0.9680999999046329,
+      "player": {
+        "shipId": "sparrow-mk1",
+        "stats": {
+          "hull": 100,
+          "shield": 80,
+          "energy": 100,
+          "speed": 170,
+          "handling": 1.35,
+          "cargoCapacity": 18,
+          "primarySlots": 1,
+          "secondarySlots": 1,
+          "utilitySlots": 1,
+          "defenseSlots": 1,
+          "engineeringSlots": 1
+        },
+        "hull": 100,
+        "shield": 80,
+        "energy": 100,
+        "credits": 1500,
+        "cargo": {
+          "basic-food": 3,
+          "drinking-water": 2
+        },
+        "equipment": [
+          "pulse-laser",
+          "homing-missile",
+          "mining-beam"
+        ],
+        "equipmentInventory": {},
+        "unlockedBlueprintIds": [
+          "pulse-laser",
+          "homing-missile",
+          "shield-booster",
+          "armor-plating",
+          "mining-beam",
+          "scanner",
+          "cargo-expansion"
+        ],
+        "missiles": 6,
+        "ownedShips": [
+          "sparrow-mk1"
+        ],
+        "ownedShipRecords": [],
+        "position": [
+          9.223372036854776e+18,
+          -9.223372036854776e+18,
+          1.7976931348623157e+308
+        ],
+        "velocity": [
+          0,
+          0,
+          -40.838254223279755
+        ],
+        "rotation": [
+          0,
+          0,
+          0
+        ],
+        "throttle": 0.25,
+        "lastDamageAt": -999
+      },
+      "activeMissions": [],
+      "completedMissionIds": [],
+      "failedMissionIds": [],
+      "reputation": {
+        "factions": {
+          "solar-directorate": -1.7976931348623157e+308,
+          "ptd-company": 100,
+          "vossari-clans": 0,
+          "mirr-collective": 0,
+          "free-belt-union": 4,
+          "independent-pirates": -20,
+          "unknown-drones": -5
+        }
+      },
+      "factionHeat": {
+        "factions": {}
+      },
+      "knownSystems": [
+        "helion-reach",
+        "kuro-belt",
+        "vantara",
+        "mirr-vale",
+        "ptd-home"
+      ],
+      "knownPlanetIds": [
+        "helion-prime-world",
+        "kuro-anvil",
+        "vantara-command",
+        "mirr-glass",
+        "ptd-home-world"
+      ],
+      "explorationState": {
+        "discoveredSignalIds": [],
+        "completedSignalIds": [],
+        "revealedStationIds": [],
+        "eventLogIds": []
+      },
+      "dialogueState": {
+        "seenSceneIds": [
+          "dialogue-story-glass-wake-intro"
+        ]
+      },
+      "onboardingState": {
+        "enabled": -1.7976931348623157e+308,
+        "collapsed": false,
+        "completedStepIds": [],
+        "claimedRewardStepIds": [],
+        "startedAtGameTime": 0
+      }
+    },
+    "base": {
+      "kind": "flight",
+      "screen": "flight",
+      "system_id": "helion-reach"
+    }
+  },
+  "console_errors": [
+    "THREE.LineSegmentsGeometry.computeBoundingSphere(): Computed radius is NaN. The instanced position data is likely to have NaN values. LineGeometry"
+  ],
+  "oracle_spec": "specs/gof2/playable-flight.yaml",
+  "git_commit": "32537347e54752a6dd0619afd9ef305642fbee2a",
+  "screenshot_name": "fuzz-field_value-3-7.png",
+  "fingerprint": "1f03d2ffb1e169fe",
+  "repro": {
+    "family": "load",
+    "local_storage": {
+      "gof2-e2e-hook": "enabled",
+      "gof2-e2e-disable-economy-backend": "true",
+      "gof2-by-pzy-save-slot:auto": "{\"version\": 3, \"savedAt\": \"2026-07-02T09:31:27.543Z\", \"screen\": \"flight\", \"currentSystemId\": \"helion-reach\", \"gameClock\": 0.9680999999046329, \"player\": {\"shipId\": \"sparrow-mk1\", \"stats\": {\"hull\": 100, \"shield\": 80, \"energy\": 100, \"speed\": 170, \"handling\": 1.35, \"cargoCapacity\": 18, \"primarySlots\": 1, \"secondarySlots\": 1, \"utilitySlots\": 1, \"defenseSlots\": 1, \"engineeringSlots\": 1}, \"hull\": 100, \"shield\": 80, \"energy\": 100, \"credits\": 1500, \"cargo\": {\"basic-food\": 3, \"drinking-water\": 2}, \"equipment\": [\"pulse-laser\", \"homing-missile\", \"mining-beam\"], \"equipmentInventory\": {}, \"unlockedBlueprintIds\": [\"pulse-laser\", \"homing-missile\", \"shield-booster\", \"armor-plating\", \"mining-beam\", \"scanner\", \"cargo-expansion\"], \"missiles\": 6, \"ownedShips\": [\"sparrow-mk1\"], \"ownedShipRecords\": [], \"position\": [9.223372036854776e+18, -9.223372036854776e+18, 1.7976931348623157e+308], \"velocity\": [0, 0, -40.838254223279755], \"rotation\": [0, 0, 0], \"throttle\": 0.25, \"lastDamageAt\": -999}, \"activeMissions\": [], \"completedMissionIds\": [], \"failedMissionIds\": [], \"reputation\": {\"factions\": {\"solar-directorate\": -1.7976931348623157e+308, \"ptd-company\": 100, \"vossari-clans\": 0, \"mirr-collective\": 0, \"free-belt-union\": 4, \"independent-pirates\": -20, \"unknown-drones\": -5}}, \"factionHeat\": {\"factions\": {}}, \"knownSystems\": [\"helion-reach\", \"kuro-belt\", \"vantara\", \"mirr-vale\", \"ptd-home\"], \"knownPlanetIds\": [\"helion-prime-world\", \"kuro-anvil\", \"vantara-command\", \"mirr-glass\", \"ptd-home-world\"], \"explorationState\": {\"discoveredSignalIds\": [], \"completedSignalIds\": [], \"revealedStationIds\": [], \"eventLogIds\": []}, \"dialogueState\": {\"seenSceneIds\": [\"dialogue-story-glass-wake-intro\"]}, \"onboardingState\": {\"enabled\": -1.7976931348623157e+308, \"collapsed\": false, \"completedStepIds\": [], \"claimedRewardStepIds\": [], \"startedAtGameTime\": 0}}",
+      "gof2-by-pzy-save-index": "{\"version\": 3, \"slots\": {\"auto\": {\"id\": \"auto\", \"label\": \"auto\", \"exists\": true, \"savedAt\": \"2026-07-02T09:31:27.543Z\", \"screen\": \"flight\", \"currentSystemId\": \"helion-reach\", \"currentStationId\": null, \"credits\": 1500, \"gameClock\": 0.9680999999046329, \"version\": 3}}, \"lastPlayedSlotId\": \"auto\"}"
+    },
+    "clear_keys": [],
+    "load_slot": "auto"
+  }
+}
