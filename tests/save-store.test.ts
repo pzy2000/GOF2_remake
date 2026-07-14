@@ -35,6 +35,24 @@ beforeEach(() => {
 });
 
 describe("save store flow", () => {
+  it("rejects an unrecoverable stored player without mutating the live game", async () => {
+    const store = await freshStore();
+    const before = store.getState();
+    localStorage.setItem("gof2-by-pzy-save-slot:manual-1", JSON.stringify({
+      version: 3,
+      savedAt: "2026-07-14T00:00:00.000Z",
+      screen: "flight",
+      currentSystemId: "helion-reach",
+      gameClock: 50,
+      player: null
+    }));
+
+    expect(store.getState().loadGame("manual-1")).toBe(false);
+    expect(store.getState().screen).toBe(before.screen);
+    expect(store.getState().currentSystemId).toBe(before.currentSystemId);
+    expect(store.getState().player).toEqual(before.player);
+  });
+
   it("keeps offline new game and continue separate from multiplayer sessions", async () => {
     const store = await freshStore();
 
