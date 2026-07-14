@@ -45,7 +45,7 @@ import {
   getMiningProgressIncrement,
   getOreColor
 } from "../systems/difficulty";
-import { integrateVelocity } from "../systems/flight";
+import { integrateVelocity, sanitizePlayerFlightState } from "../systems/flight";
 import { defaultFlightTuning, isAfterburnerAvailable } from "../systems/flightTuning";
 import {
   createStoryBeatEffects,
@@ -2348,8 +2348,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
     return { dx, dy };
   },
   tick: (delta) => {
-    const state = get();
+    let state = get();
     if (state.screen !== "flight" && state.screen !== "economyWatch") return;
+    const sanitizedPlayer = sanitizePlayerFlightState(state.player, shipById[state.player.shipId]?.stats);
+    if (sanitizedPlayer !== state.player) {
+      state = { ...state, player: sanitizedPlayer };
+      set({ player: sanitizedPlayer });
+    }
     const now = state.runtime.clock + delta;
     const gameClock = state.gameClock + delta;
     const marketState = state.economyService.status === "connected" ? state.marketState : advanceMarketState(state.marketState, delta);
