@@ -1,7 +1,7 @@
 import { Canvas, useFrame, useLoader, useThree } from "@react-three/fiber";
 import { Html, Line, Stars, useGLTF } from "@react-three/drei";
 import { Component, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
+import type { ComponentProps, CSSProperties, PointerEvent as ReactPointerEvent, ReactNode } from "react";
 import * as THREE from "three";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
@@ -15,6 +15,7 @@ import { commodityById, glassWakeProtocol, missionTemplates } from "../data/worl
 import type { AssetQualityProfile, AsteroidEntity, ConvoyEntity, ExplorationSignalDefinition, FlightEntity, GraphicsQuality, LootEntity, MarketState, MaterialMapProfile, NpcInteractionAction, PlanetDefinition, ProjectileEntity, SalvageEntity, StationDefinition, Vec3, VisualEffectEntity } from "../types/game";
 import type { RemotePlayerSnapshot } from "../types/multiplayer";
 import { add, clamp, distance, forwardFromRotation, normalize, scale, sub } from "../systems/math";
+import { isFiniteFlightNumber, isFiniteFlightVec3, sanitizeFlightVec3 } from "../systems/flight";
 import { getOreColor } from "../systems/difficulty";
 import { getJumpGatePosition } from "../systems/autopilot";
 import { getNavigationTargetCue, getNearestNavigationTarget } from "../systems/navigation";
@@ -52,8 +53,36 @@ import {
   type Locale
 } from "../i18n";
 
-function toThree(position: Vec3): [number, number, number] {
-  return [position[0], position[1], position[2]];
+function toThree(position: unknown): [number, number, number] {
+  return sanitizeFlightVec3(position);
+}
+
+function toSafeLinePoint(point: unknown): [number, number, number] | null {
+  if (point instanceof THREE.Vector3) {
+    const tuple: Vec3 = [point.x, point.y, point.z];
+    return isFiniteFlightVec3(tuple) ? tuple : null;
+  }
+  if (point instanceof THREE.Vector2) {
+    return isFiniteFlightNumber(point.x) && isFiniteFlightNumber(point.y) ? [point.x, point.y, 0] : null;
+  }
+  if (isFiniteFlightVec3(point)) return toThree(point);
+  if (Array.isArray(point) && point.length === 2 && isFiniteFlightNumber(point[0]) && isFiniteFlightNumber(point[1])) {
+    return [point[0], point[1], 0];
+  }
+  return null;
+}
+
+function SafeLine({ points, lineWidth, opacity, ...props }: ComponentProps<typeof Line>) {
+  if (!Array.isArray(points) || points.length < 2) return null;
+  if (lineWidth !== undefined && !isFiniteFlightNumber(lineWidth)) return null;
+  if (opacity !== undefined && !isFiniteFlightNumber(opacity)) return null;
+  const safePoints: Array<[number, number, number]> = [];
+  for (const point of points) {
+    const safePoint = toSafeLinePoint(point);
+    if (!safePoint) return null;
+    safePoints.push(safePoint);
+  }
+  return <Line {...props} points={safePoints} lineWidth={lineWidth} opacity={opacity} />;
 }
 
 type ShipModelStatus = {
@@ -369,12 +398,12 @@ function CameraRig() {
       const lookDirection = directionFromAngles(lookYaw, lookPitch);
       if (economyNpcWatch.cameraMode === "cockpit") {
         const targetPosition = add(add(watchedNpc.position, scale(forward, 20)), [0, 8, 0]);
-        camera.position.lerp(new THREE.Vector3(...targetPosition), 0.18);
-        camera.lookAt(new THREE.Vector3(...add(targetPosition, scale(lookDirection, 160))));
+        camera.position.lerp(new THREE.Vector3(...toThree(targetPosition)), 0.18);
+        camera.lookAt(new THREE.Vector3(...toThree(add(targetPosition, scale(lookDirection, 160)))));
       } else {
         const targetPosition = add(add(watchedNpc.position, scale(lookDirection, -118)), [0, 42, 0]);
-        camera.position.lerp(new THREE.Vector3(...targetPosition), 0.1);
-        camera.lookAt(new THREE.Vector3(...add(watchedNpc.position, scale(forward, 90))));
+        camera.position.lerp(new THREE.Vector3(...toThree(targetPosition)), 0.1);
+        camera.lookAt(new THREE.Vector3(...toThree(add(watchedNpc.position, scale(forward, 90)))));
       }
       return;
     }
@@ -394,12 +423,12 @@ function CameraRig() {
       Math.cos(runtime.clock * 37.7) * (shakeScale * 0.7 + impulseScale * 0.45),
       Math.sin(runtime.clock * 29.3) * (shakeScale * 0.35 + impulseScale * 0.25)
     ];
-    camera.position.lerp(new THREE.Vector3(...add(targetPosition, shake)), defaultFlightTuning.camera.lerp);
+    camera.position.lerp(new THREE.Vector3(...toThree(add(targetPosition, shake))), defaultFlightTuning.camera.lerp);
     if (camera instanceof THREE.PerspectiveCamera) {
       camera.fov += (resolveCameraFov(speed, afterburning) + killImpulse * 1.8 - camera.fov) * 0.08;
       camera.updateProjectionMatrix();
     }
-    camera.lookAt(new THREE.Vector3(...add(player.position, scale(forward, defaultFlightTuning.camera.lookAhead))));
+    camera.lookAt(new THREE.Vector3(...toThree(add(player.position, scale(forward, defaultFlightTuning.camera.lookAhead)))));
   });
   return null;
 }
@@ -765,7 +794,7 @@ function UltimateTransformationFx({ activeUntil, lastActivatedAt }: { activeUnti
             );
           })}
           {[-1, 1].map((side) => (
-            <Line key={side} points={[[side * 74, -40, 28], [side * 16, 12, -8], [side * 8, 28, -2]]} color="#e9fdff" lineWidth={2.4} transparent opacity={(1 - transformProgress) * 0.72} />
+            <SafeLine key={side} points={[[side * 74, -40, 28], [side * 16, 12, -8], [side * 8, 28, -2]]} color="#e9fdff" lineWidth={2.4} transparent opacity={(1 - transformProgress) * 0.72} />
           ))}
         </>
       ) : null}
@@ -782,7 +811,7 @@ function UltimateTransformationFx({ activeUntil, lastActivatedAt }: { activeUnti
         <meshBasicMaterial color="#ffffff" transparent opacity={0.38 + pulse * 0.22} blending={THREE.AdditiveBlending} depthWrite={false} toneMapped={false} />
       </mesh>
       {[-1, 1].map((side) => (
-        <Line key={`aura-wing-${side}`} points={[[side * 14, 6, 8], [side * 38, 2, 28], [side * 64, -4, 46]]} color="#83ecff" lineWidth={3.4} transparent opacity={0.24 + pulse * 0.18} />
+        <SafeLine key={`aura-wing-${side}`} points={[[side * 14, 6, 8], [side * 38, 2, 28], [side * 64, -4, 46]]} color="#83ecff" lineWidth={3.4} transparent opacity={0.24 + pulse * 0.18} />
       ))}
       <pointLight color="#7df7ff" intensity={2.4 + pulse * 2.2 + (transforming ? 4 * (1 - transformProgress) : 0)} distance={260} />
     </group>
@@ -885,7 +914,7 @@ function PlayerShip({ onModelStatus }: { onModelStatus: (status: ShipModelStatus
   }, [locale, onModelStatus, shipName]);
 
   return (
-    <group position={toThree(player.position)} rotation={player.rotation}>
+    <group position={toThree(player.position)} rotation={toThree(player.rotation)}>
       {modelUrl ? (
         <ShipModelBoundary key={renderShipId} fallback={fallback} onFallback={markFallback}>
           <Suspense fallback={fallback}>
@@ -910,7 +939,7 @@ function RemotePlayerShip({ player: remote }: { player: RemotePlayerSnapshot }) 
   const range = distance(playerPosition, remote.position);
   const shipName = localizeShipName(remote.shipId, locale, shipById[remote.shipId]?.name ?? remote.shipId);
   return (
-    <group position={toThree(remote.position)} rotation={remote.rotation}>
+    <group position={toThree(remote.position)} rotation={toThree(remote.rotation)}>
       <group scale={0.92}>
         <ProceduralPlayerShip shipId={remote.shipId} />
       </group>
@@ -1103,8 +1132,8 @@ function RelayNpcCore({ ship }: { ship: FlightEntity }) {
           <meshBasicMaterial color={index === 1 ? "#ff9bd5" : "#6ee7ff"} transparent opacity={(0.24 + pulse * 0.18) * opacity} toneMapped={false} />
         </mesh>
       ))}
-      <Line points={[[-62, 0, 0], [0, 0, 0], [62, 0, 0]]} color="#9bffe8" lineWidth={1.3} transparent opacity={0.34 + pulse * 0.32} />
-      <Line points={[[0, -48, 0], [0, 0, 0], [0, 48, 0]]} color="#ff9bd5" lineWidth={1.1} transparent opacity={0.26 + pulse * 0.26} />
+      <SafeLine points={[[-62, 0, 0], [0, 0, 0], [62, 0, 0]]} color="#9bffe8" lineWidth={1.3} transparent opacity={0.34 + pulse * 0.32} />
+      <SafeLine points={[[0, -48, 0], [0, 0, 0], [0, 48, 0]]} color="#ff9bd5" lineWidth={1.1} transparent opacity={0.26 + pulse * 0.26} />
       <pointLight color="#9b7bff" intensity={1.3 + pulse * 1.4} distance={230} />
       <Html center distanceFactor={13} className="target-label story-target-label story-relay-label">
         {localizeGenericName(ship.storyTargetKind === "jammer" ? "JAMMER" : "RELAY", locale)} · {Math.round(ship.hull)}/{ship.maxHull}
@@ -1250,7 +1279,7 @@ function NpcShip({ ship }: { ship: FlightEntity }) {
   return (
     <>
       {miningTarget ? (
-        <Line points={[ship.position, miningTarget.position]} color={ship.economyCommodityId ? getOreColor(ship.economyCommodityId) : "#ffd166"} lineWidth={2.4} transparent opacity={0.72} />
+        <SafeLine points={[ship.position, miningTarget.position]} color={ship.economyCommodityId ? getOreColor(ship.economyCommodityId) : "#ffd166"} lineWidth={2.4} transparent opacity={0.72} />
       ) : null}
       <group position={toThree(ship.position)} rotation={[0, yaw, 0]} scale={ship.deathTimer !== undefined ? 0.82 : ship.boss ? 1.28 : 1}>
         <NpcRoleHull body={body} clock={clock} flashing={flashing} opacity={ship.deathTimer !== undefined ? 0.45 : 1} role={ship.role} ship={ship} />
@@ -1405,7 +1434,7 @@ function ExplorationSignalMarker({ signal }: { signal: ExplorationSignalDefiniti
         <torusGeometry args={[58 + pulse * 10, 1.8, 8, 54]} />
         <meshBasicMaterial color={color} transparent opacity={0.24 + pulse * 0.3} toneMapped={false} />
       </mesh>
-      <Line points={[[-48, 0, 0], [0, 0, 0], [48, 0, 0]]} color={color} lineWidth={1.2} transparent opacity={0.28 + pulse * 0.32} />
+      <SafeLine points={[[-48, 0, 0], [0, 0, 0], [48, 0, 0]]} color={color} lineWidth={1.2} transparent opacity={0.28 + pulse * 0.32} />
       <pointLight color={color} intensity={0.7 + pulse * 0.8} distance={220} />
       <Html center distanceFactor={11} className="target-label exploration-label">
         <b>{scanning ? localizeGenericName("SCANNING", locale) : discovered ? translateText(signal.title, locale).toUpperCase() : translateText(signal.maskedTitle, locale).toUpperCase()}</b>
@@ -1561,7 +1590,7 @@ function JumpGateModel() {
         <sphereGeometry args={[18 + pulse * 6 + spool * 16, 28, 16]} />
         <meshBasicMaterial color={spool > 0.82 ? "#ffffff" : "#73f0ff"} transparent opacity={0.32 + spool * 0.42} toneMapped={false} />
       </mesh>
-      <Line points={[[-170, 0, 160], [0, 0, 0], [170, 0, 160]]} color="#62d9ff" lineWidth={1.4 + spool * 2.2} transparent opacity={0.18 + spool * 0.42} />
+      <SafeLine points={[[-170, 0, 160], [0, 0, 0], [170, 0, 160]]} color="#62d9ff" lineWidth={1.4 + spool * 2.2} transparent opacity={0.18 + spool * 0.42} />
       <pointLight color="#64e4ff" intensity={1 + spool * 4} distance={420} />
       <Html center distanceFactor={13} className="target-label">
         {localizeGenericName("JUMP GATE", locale)}
@@ -1592,8 +1621,8 @@ function StationGeometry({ station }: { station: StationDefinition }) {
             <torusGeometry args={[118 * profile.ringScale, 1.2, 8, profile.nearSegments]} />
             <meshBasicMaterial color={profile.accentColor} transparent opacity={0.26 + profile.emissiveIntensity * 0.12} toneMapped={false} />
           </mesh>
-          <Line points={[[-165 * profile.ringScale, 0, 116], [0, 0, 24], [165 * profile.ringScale, 0, 116]]} color={profile.trafficColor} lineWidth={1.2} transparent opacity={0.18 + Math.sin(clock * 2.6) * 0.04} />
-          <Line points={[[0, -135, -104], [0, 0, -18], [0, 135, -104]]} color={profile.trafficColor} lineWidth={1} transparent opacity={0.14 + Math.cos(clock * 2.2) * 0.04} />
+          <SafeLine points={[[-165 * profile.ringScale, 0, 116], [0, 0, 24], [165 * profile.ringScale, 0, 116]]} color={profile.trafficColor} lineWidth={1.2} transparent opacity={0.18 + Math.sin(clock * 2.6) * 0.04} />
+          <SafeLine points={[[0, -135, -104], [0, 0, -18], [0, 135, -104]]} color={profile.trafficColor} lineWidth={1} transparent opacity={0.14 + Math.cos(clock * 2.2) * 0.04} />
           <pointLight color={profile.accentColor} intensity={1.35 + profile.emissiveIntensity * 2.2} distance={420} />
           <Html center distanceFactor={13} className="target-label station-tech-label" position={[0, 102, 0]}>
             {stationTechLabel(station.techLevel, locale)} 路 {localizeStationName(station.id, locale, station.name)}
@@ -1801,8 +1830,8 @@ function ProceduralStationGeometry({ station }: { station: StationDefinition }) 
         <torusGeometry args={[106 * profile.ringScale, 1.2, 8, segments]} />
         <meshBasicMaterial color={profile.accentColor} transparent opacity={0.24 + profile.emissiveIntensity * 0.12} toneMapped={false} />
       </mesh>
-      <Line points={[[-150 * profile.ringScale, 0, 110], [0, 0, 24], [150 * profile.ringScale, 0, 110]]} color={profile.trafficColor} lineWidth={1.1} transparent opacity={0.16 + Math.sin(clock * 2.6) * 0.04} />
-      <Line points={[[0, -120, -96], [0, 0, -18], [0, 120, -96]]} color={profile.trafficColor} lineWidth={0.9} transparent opacity={0.12 + Math.cos(clock * 2.2) * 0.04} />
+      <SafeLine points={[[-150 * profile.ringScale, 0, 110], [0, 0, 24], [150 * profile.ringScale, 0, 110]]} color={profile.trafficColor} lineWidth={1.1} transparent opacity={0.16 + Math.sin(clock * 2.6) * 0.04} />
+      <SafeLine points={[[0, -120, -96], [0, 0, -18], [0, 120, -96]]} color={profile.trafficColor} lineWidth={0.9} transparent opacity={0.12 + Math.cos(clock * 2.2) * 0.04} />
       <pointLight color={profile.accentColor} intensity={0.95 + profile.emissiveIntensity} distance={280} />
       <Html center distanceFactor={13} className="target-label station-tech-label" position={[0, 92, 0]}>
         {stationTechLabel(station.techLevel, locale)} · {localizeStationName(station.id, locale, station.name)}
@@ -1847,8 +1876,8 @@ function Projectile({ projectile }: { projectile: ProjectileEntity }) {
   const headScale = projectile.kind === "missile" ? [1.2, 1.2, 2.2] as const : [1, 1, 1.5] as const;
   return (
     <group>
-      <Line points={[tail, projectile.position]} color={color} lineWidth={projectile.kind === "missile" ? 4.2 : 2.4} transparent opacity={0.62} />
-      <Line points={[tail, projectile.position]} color={core} lineWidth={projectile.kind === "missile" ? 1.3 : 0.8} transparent opacity={0.42} />
+      <SafeLine points={[tail, projectile.position]} color={color} lineWidth={projectile.kind === "missile" ? 4.2 : 2.4} transparent opacity={0.62} />
+      <SafeLine points={[tail, projectile.position]} color={core} lineWidth={projectile.kind === "missile" ? 1.3 : 0.8} transparent opacity={0.42} />
       <mesh position={toThree(projectile.position)} scale={headScale}>
         <sphereGeometry args={[projectile.kind === "missile" ? 4 : 2.4, 12, 8]} />
         <meshBasicMaterial color={color} toneMapped={false} />
@@ -1904,7 +1933,7 @@ function WormholeTunnel() {
   const rings = useMemo(() => Array.from({ length: 16 }, (_, index) => index), []);
   if (autopilot?.phase !== "wormhole") return null;
   return (
-    <group position={toThree(player.position)} rotation={player.rotation}>
+    <group position={toThree(player.position)} rotation={toThree(player.rotation)}>
       {rings.map((index) => {
         const z = -90 - index * 58 - ((clock * 260) % 58);
         const radius = 42 + index * 9 + Math.sin(clock * 12 + index) * 7;
@@ -1917,7 +1946,7 @@ function WormholeTunnel() {
         );
       })}
       {[-1, 1].map((side) => (
-        <Line key={side} points={[[side * 28, 0, 20], [side * 120, 35, -720]]} color="#dff8ff" lineWidth={2} transparent opacity={0.38} />
+        <SafeLine key={side} points={[[side * 28, 0, 20], [side * 120, 35, -720]]} color="#dff8ff" lineWidth={2} transparent opacity={0.38} />
       ))}
       <pointLight color="#7ddcff" intensity={4.8} distance={560} />
     </group>
@@ -2062,8 +2091,8 @@ function VisualEffect({ effect }: { effect: VisualEffectEntity }) {
     const rings = effect.kind === "dock-corridor" ? [0.28, 0.48, 0.68, 0.88] : [0.35, 0.68, 0.92];
     return (
       <group>
-        <Line points={[effect.position, effect.endPosition]} color={effect.color} lineWidth={simpleTrail ? effect.size : effect.kind === "dock-corridor" ? 2.4 : 3.2} transparent opacity={alpha * (effect.kind === "projectile-trail" ? 0.48 : 0.64)} />
-        <Line points={[effect.position, effect.endPosition]} color={effect.secondaryColor ?? "#ffffff"} lineWidth={simpleTrail ? Math.max(0.8, effect.size * 0.32) : 0.9} transparent opacity={alpha * 0.34} />
+        <SafeLine points={[effect.position, effect.endPosition]} color={effect.color} lineWidth={simpleTrail ? effect.size : effect.kind === "dock-corridor" ? 2.4 : 3.2} transparent opacity={alpha * (effect.kind === "projectile-trail" ? 0.48 : 0.64)} />
+        <SafeLine points={[effect.position, effect.endPosition]} color={effect.secondaryColor ?? "#ffffff"} lineWidth={simpleTrail ? Math.max(0.8, effect.size * 0.32) : 0.9} transparent opacity={alpha * 0.34} />
         {simpleTrail ? null : rings.map((progress) => {
           const position = add(effect.position, scale(vector, progress));
           const size = effect.size * (effect.kind === "dock-corridor" ? 0.58 + progress * 0.42 : 0.45 + progress * 0.36);
@@ -2092,9 +2121,9 @@ function VisualEffect({ effect }: { effect: VisualEffectEntity }) {
     const jitterB = add(effect.endPosition, [Math.cos(effect.life * 47) * 5, Math.sin(effect.life * 29) * 6, Math.cos(effect.life * 37) * 5]);
     return (
       <group>
-        <Line points={[effect.position, effect.endPosition]} color={effect.color} lineWidth={4} transparent opacity={0.42 + alpha * 0.48} />
-        <Line points={[effect.position, jitterA]} color={effect.secondaryColor ?? "#eaffff"} lineWidth={1.6} transparent opacity={alpha * 0.55} />
-        <Line points={[effect.position, jitterB]} color={effect.color} lineWidth={1.2} transparent opacity={alpha * 0.45} />
+        <SafeLine points={[effect.position, effect.endPosition]} color={effect.color} lineWidth={4} transparent opacity={0.42 + alpha * 0.48} />
+        <SafeLine points={[effect.position, jitterA]} color={effect.secondaryColor ?? "#eaffff"} lineWidth={1.6} transparent opacity={alpha * 0.55} />
+        <SafeLine points={[effect.position, jitterB]} color={effect.color} lineWidth={1.2} transparent opacity={alpha * 0.45} />
         <mesh position={toThree(effect.endPosition)}>
           <sphereGeometry args={[7 + alpha * 5, 12, 8]} />
           <meshBasicMaterial color={effect.color} transparent opacity={0.22 + alpha * 0.38} toneMapped={false} />
@@ -2198,7 +2227,7 @@ function TargetLock() {
   const lockLabel = lockState.isMissileReady ? "MISSILE READY" : `LOCK ${Math.round(lockState.strength * 100)}%`;
   return (
     <>
-    <Line points={[player.position, lockState.leadPosition]} color={lockColor} lineWidth={0.8 + lockState.strength * 1.4} transparent opacity={0.12 + lockState.strength * 0.22} />
+    <SafeLine points={[player.position, lockState.leadPosition]} color={lockColor} lineWidth={0.8 + lockState.strength * 1.4} transparent opacity={0.12 + lockState.strength * 0.22} />
     <group position={toThree(target.position)}>
       <mesh scale={pulse}>
         <torusGeometry args={[target.boss ? 36 : 26, 1.4 + lockState.strength * 0.8, 6, 4]} />
@@ -2261,7 +2290,7 @@ function WaypointMarker() {
   const lineOpacity = cue.inRange ? 0.58 + pulse * 0.18 : 0.28 + pulse * 0.12;
   return (
     <group>
-      <Line points={[lineStart, target.position]} color={tone.color} lineWidth={cue.inRange ? 2.6 : 1.4} transparent opacity={lineOpacity} />
+      <SafeLine points={[lineStart, target.position]} color={tone.color} lineWidth={cue.inRange ? 2.6 : 1.4} transparent opacity={lineOpacity} />
       <group position={toThree(target.position)}>
         <mesh rotation={[Math.PI / 2, 0, clock * 0.45]}>
           <torusGeometry args={[ringRadius, cue.inRange ? 2.6 : 1.6, 8, 56]} />
@@ -2320,8 +2349,8 @@ function StoryObjectiveMarker() {
   const dist = Math.round(Math.hypot(player.position[0] - targetPosition[0], player.position[1] - targetPosition[1], player.position[2] - targetPosition[2]));
   return (
     <group>
-      <Line points={[lineStart, targetPosition]} color="#ff9bd5" lineWidth={2.2} transparent opacity={0.28 + pulse * 0.24} />
-      <Line points={[lineStart, targetPosition]} color="#9bffe8" lineWidth={0.9} transparent opacity={0.18 + pulse * 0.18} />
+      <SafeLine points={[lineStart, targetPosition]} color="#ff9bd5" lineWidth={2.2} transparent opacity={0.28 + pulse * 0.24} />
+      <SafeLine points={[lineStart, targetPosition]} color="#9bffe8" lineWidth={0.9} transparent opacity={0.18 + pulse * 0.18} />
       <group position={toThree(targetPosition)}>
         <mesh rotation={[Math.PI / 2, 0, clock * 0.5]}>
           <torusGeometry args={[72 + pulse * 13, 2.2, 8, 60]} />
@@ -2372,7 +2401,7 @@ function EconomyRouteMarkers() {
         const midpoint = scale(add(ship.position, route.targetPosition), 0.5);
         return (
           <group key={`econ-route-${ship.id}`}>
-            <Line points={[ship.position, route.targetPosition]} color={color} lineWidth={1.2} transparent opacity={0.18 + pulse * 0.16} />
+            <SafeLine points={[ship.position, route.targetPosition]} color={color} lineWidth={1.2} transparent opacity={0.18 + pulse * 0.16} />
             <group position={toThree(route.targetPosition)}>
               <mesh rotation={[Math.PI / 2, 0, runtime.clock * 0.35]}>
                 <torusGeometry args={[route.targetKind === "asteroid" ? 42 : 58, 1.1, 8, 48]} />
