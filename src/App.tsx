@@ -10,6 +10,7 @@ import { I18nRuntime } from "./components/I18nRuntime";
 import { LanguageSelect } from "./components/LanguageSelect";
 import { StoryNotificationOverlay } from "./components/StoryNotificationOverlay";
 import { DebugScenarioPanel } from "./components/DebugScenarioPanel";
+import { GameRecovery } from "./components/GameRecovery";
 import { ShortcutButton } from "./components/ShortcutButton";
 import { audioSystem, getAudioSettings, saveAudioSettings } from "./systems/audio";
 import { voiceSystem } from "./systems/voice";
@@ -17,8 +18,40 @@ import { loadAssetManifest } from "./systems/assets";
 import { graphicsQualityLabels, graphicsQualityProfiles } from "./systems/graphics";
 import { multiplayerNetworkModeLabels } from "./systems/multiplayerClient";
 import { resolveMusicCue } from "./systems/music";
-import { stationById, useGameStore } from "./state/gameStore";
+import { stationById, systemById, useGameStore } from "./state/gameStore";
+import type { Screen } from "./types/game";
 import "./styles.css";
+
+const knownScreens = new Set<Screen>([
+  "menu",
+  "flight",
+  "economyWatch",
+  "station",
+  "pause",
+  "galaxyMap",
+  "settings",
+  "credits",
+  "gameOver"
+]);
+
+function hasOwnEntry(record: Record<string, unknown>, id: unknown): id is string {
+  return typeof id === "string" && id.length > 0 && Object.prototype.hasOwnProperty.call(record, id);
+}
+
+function hasValidGameRoute(screen: unknown, currentSystemId: unknown, currentStationId: unknown): boolean {
+  if (!knownScreens.has(screen as Screen)) return false;
+  if (screen === "menu" || screen === "settings" || screen === "credits") return true;
+  if (!hasOwnEntry(systemById, currentSystemId)) return false;
+
+  if (screen === "station") {
+    if (!hasOwnEntry(stationById, currentStationId)) return false;
+    return stationById[currentStationId].systemId === currentSystemId;
+  }
+
+  if (currentStationId === undefined) return true;
+  if (!hasOwnEntry(stationById, currentStationId)) return false;
+  return stationById[currentStationId].systemId === currentSystemId;
+}
 
 function PauseMenu() {
   const setScreen = useGameStore((state) => state.setScreen);
@@ -284,6 +317,8 @@ function AudioRuntime() {
 
 export default function App() {
   const screen = useGameStore((state) => state.screen);
+  const currentSystemId = useGameStore((state) => state.currentSystemId);
+  const currentStationId = useGameStore((state) => state.currentStationId);
   const setAssetManifest = useGameStore((state) => state.setAssetManifest);
   useEffect(() => {
     loadAssetManifest()
@@ -293,6 +328,10 @@ export default function App() {
       })
       .catch(() => undefined);
   }, [setAssetManifest]);
+
+  if (!hasValidGameRoute(screen, currentSystemId, currentStationId)) {
+    return <GameRecovery reason="invalid-route" />;
+  }
 
   if (screen === "menu") return <><I18nRuntime /><AudioRuntime /><EconomyBackendRuntime /><MultiplayerRuntime /><MainMenu /><DebugScenarioPanel /><StoryNotificationOverlay /><DialogueOverlay /></>;
   if (screen === "settings" || screen === "credits") return <><I18nRuntime /><AudioRuntime /><EconomyBackendRuntime /><MultiplayerRuntime /><SimpleScreen type={screen} /><DebugScenarioPanel /><StoryNotificationOverlay /><DialogueOverlay /></>;

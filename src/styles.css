@@ -1385,6 +1385,22 @@ h3 {
   position: fixed;
 }
 
+.recovery-screen {
+  z-index: 1000;
+  background:
+    radial-gradient(circle at 50% 30%, rgba(40, 104, 148, 0.2), transparent 44%),
+    rgba(2, 7, 15, 0.96);
+}
+
+.recovery-panel p:not(.eyebrow) {
+  color: #bcd2e4;
+  line-height: 1.6;
+}
+
+.recovery-panel button {
+  justify-self: start;
+}
+
 .credits-list {
   display: grid;
   gap: 8px;
