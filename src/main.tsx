@@ -1,11 +1,14 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import { GameErrorBoundary } from "./components/GameRecovery";
 import { registerPwa } from "./systems/pwa";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <App />
+    <GameErrorBoundary>
+      <App />
+    </GameErrorBoundary>
   </React.StrictMode>
 );
 
