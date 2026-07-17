@@ -51,18 +51,25 @@ if [[ "$services_ready" != "1" ]]; then
   exit 1
 fi
 
-# Clear an error window that may have been queued during the size transition
-# before hide_error_dialogs took effect. Launcher is not part of the app under
-# test and Android will recreate it when Home is next requested.
-window_dump="$(adb shell dumpsys window windows)"
-if [[ "$window_dump" == *"Application Not Responding: com.android.launcher3"* ]]; then
-  adb shell am force-stop com.android.launcher3
-fi
-
+# Clear a system error window that may have been queued before
+# hide_error_dialogs took effect. API 36 cold boots have produced both
+# Launcher and System UI startup ANRs on GitHub runners. Selecting Wait lets
+# these persistent system processes finish warming up without killing the
+# application under test (which has not been installed yet).
+display_width="${physical_size%x*}"
+display_height="${physical_size#*x}"
 for _ in $(seq 1 30); do
   window_dump="$(adb shell dumpsys window windows)"
   if [[ "$window_dump" != *"Application Not Responding:"* ]]; then
     break
+  fi
+
+  if [[ "$window_dump" == *"Application Not Responding: com.android.systemui"* ||
+        "$window_dump" == *"Application Not Responding: com.android.launcher3"* ]]; then
+    # The Wait row is stable at roughly 22% across and 58% down in both target
+    # resolutions. Reassert the setting first so no later system dialog appears.
+    adb shell settings put global hide_error_dialogs 1
+    adb shell input tap "$((display_width * 22 / 100))" "$((display_height * 58 / 100))" || true
   fi
   sleep 1
 done
