@@ -2741,9 +2741,10 @@ function EconomyWatchOverlay() {
   );
 }
 
-function WarpTestRenderHeartbeat() {
+function RenderHeartbeat() {
   useFrame(() => {
-    if (!import.meta.env.DEV || typeof window === "undefined") return;
+    const enabled = import.meta.env.DEV || import.meta.env.VITE_APP_PLATFORM === "android";
+    if (!enabled || typeof window === "undefined") return;
     window.__GOF2_RENDER_HEARTBEAT__ = performance.now();
     window.__GOF2_RENDER_HEARTBEAT_FRAME__ = (window.__GOF2_RENDER_HEARTBEAT_FRAME__ ?? 0) + 1;
   });
@@ -2794,7 +2795,7 @@ export function FlightScene() {
         }}
         shadows={graphicsSettings.shadows && graphicsSettings.shadowDetail !== "low"}
       >
-        <WarpTestRenderHeartbeat />
+        <RenderHeartbeat />
         <Suspense fallback={null}>
           <FlightSimulationTicker />
           <CameraRig />
