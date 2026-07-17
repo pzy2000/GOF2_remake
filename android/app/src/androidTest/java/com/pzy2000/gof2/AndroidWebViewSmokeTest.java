@@ -65,6 +65,11 @@ public class AndroidWebViewSmokeTest {
                 orientation.get() == ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE ||
                 orientation.get() == ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE);
 
+        String dialogueSelector = "[data-testid='space-dialogue-overlay'], [data-testid='dialogue-overlay']";
+        waitForJavaScript("!!document.querySelector(\"" + dialogueSelector + "\")", 10_000);
+        UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).pressBack();
+        waitForJavaScript("!document.querySelector(\"" + dialogueSelector + "\")", 10_000);
+
         UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).pressBack();
         waitForJavaScript("document.body.innerText.includes('Resume')", 10_000);
         UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).pressBack();
