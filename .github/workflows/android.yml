@@ -98,9 +98,9 @@ jobs:
 
       - name: Enable KVM group permissions
         run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
+          test -e /dev/kvm
+          sudo chmod 0666 /dev/kvm
+          ls -l /dev/kvm
           test -r /dev/kvm
           test -w /dev/kvm
 
@@ -155,9 +155,9 @@ jobs:
         uses: gradle/actions/setup-gradle@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d # v4
       - name: Enable KVM group permissions
         run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
+          test -e /dev/kvm
+          sudo chmod 0666 /dev/kvm
+          ls -l /dev/kvm
           test -r /dev/kvm
           test -w /dev/kvm
       - name: Build debug APK
@@ -212,9 +212,9 @@ jobs:
         uses: gradle/actions/setup-gradle@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d # v4
       - name: Enable KVM group permissions
         run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
+          test -e /dev/kvm
+          sudo chmod 0666 /dev/kvm
+          ls -l /dev/kvm
           test -r /dev/kvm
           test -w /dev/kvm
       - name: Require and decode signing material
