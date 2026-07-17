@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">GOF2 by pzy</string>
+    <string name="title_activity_main">GOF2 by pzy</string>
+    <string name="package_name">com.pzy2000.gof2</string>
+    <string name="custom_url_scheme">com.pzy2000.gof2</string>
+</resources>

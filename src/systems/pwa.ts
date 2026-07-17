@@ -1,3 +1,5 @@
+import { Capacitor } from "@capacitor/core";
+
 const PWA_QUERY_FLAG = "pwa";
 const PWA_DEV_STORAGE_FLAG = "gof2-pwa-dev";
 
@@ -6,9 +8,11 @@ export interface PwaEnableOptions {
   search?: string;
   forced?: boolean;
   storedPreference?: string | null;
+  nativePlatform?: boolean;
 }
 
-export function shouldEnablePwa({ production, search = "", forced = false, storedPreference }: PwaEnableOptions): boolean {
+export function shouldEnablePwa({ production, search = "", forced = false, storedPreference, nativePlatform = false }: PwaEnableOptions): boolean {
+  if (nativePlatform) return false;
   if (production || forced || storedPreference === "true") return true;
   return new URLSearchParams(search).has(PWA_QUERY_FLAG);
 }
@@ -29,10 +33,12 @@ export function collectSameOriginResourceUrls(entries: PerformanceResourceTiming
 
 export async function registerPwa(): Promise<ServiceWorkerRegistration | undefined> {
   if (!("serviceWorker" in navigator)) return undefined;
+  const nativePlatform = Capacitor.isNativePlatform() || import.meta.env.VITE_APP_PLATFORM === "android";
   const enabled = shouldEnablePwa({
     production: import.meta.env.PROD,
     search: window.location.search,
-    storedPreference: localStorage.getItem(PWA_DEV_STORAGE_FLAG)
+    storedPreference: localStorage.getItem(PWA_DEV_STORAGE_FLAG),
+    nativePlatform
   });
   if (!enabled) {
     if (import.meta.env.DEV) await unregisterLocalServiceWorkers();

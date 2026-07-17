@@ -53,7 +53,7 @@ async function resetApp(page: Page) {
   await page.addInitScript(() => {
     localStorage.setItem("gof2-e2e-disable-economy-backend", "true");
   });
-  await page.goto("/");
+  await page.goto("/?gof2E2E=1");
   await page.evaluate(() => {
     localStorage.clear();
     localStorage.setItem("gof2-e2e-disable-economy-backend", "true");

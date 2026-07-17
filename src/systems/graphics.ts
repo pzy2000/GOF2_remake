@@ -72,14 +72,19 @@ function isGraphicsQuality(value: unknown): value is GraphicsQuality {
   return value === "low" || value === "medium" || value === "high" || value === "ultra";
 }
 
+export function defaultGraphicsQuality(platform = import.meta.env.VITE_APP_PLATFORM): GraphicsQuality {
+  return platform === "android" ? "medium" : "high";
+}
+
 export function getGraphicsSettings(): GraphicsSettings {
   const raw = storage()?.getItem(GRAPHICS_SETTINGS_KEY);
-  if (!raw) return graphicsQualityProfiles.high;
+  const fallback = graphicsQualityProfiles[defaultGraphicsQuality()];
+  if (!raw) return fallback;
   try {
     const parsed = JSON.parse(raw) as { quality?: unknown };
-    return isGraphicsQuality(parsed.quality) ? graphicsQualityProfiles[parsed.quality] : graphicsQualityProfiles.high;
+    return isGraphicsQuality(parsed.quality) ? graphicsQualityProfiles[parsed.quality] : fallback;
   } catch {
-    return graphicsQualityProfiles.high;
+    return fallback;
   }
 }
 

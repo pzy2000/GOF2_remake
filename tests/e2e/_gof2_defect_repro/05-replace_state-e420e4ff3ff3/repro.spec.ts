@@ -25,7 +25,7 @@ test(`GOF2 defect [${fixture.injection_mode}] ${fixture.fingerprint ?? ""}`.trim
     for (const [k, v] of Object.entries(ls.values ?? {})) localStorage.setItem(k as string, v as string);
   }, { values: recipe.local_storage, clear: recipe.clear_keys });
 
-  await page.goto("/?warptest=1");
+  await page.goto("/?gof2E2E=1");
   await page.waitForFunction(() => typeof (window as any).__GOF2_E2E__?.getState === "function", null, { timeout: 30000 });
 
   if (recipe.family === "load") {

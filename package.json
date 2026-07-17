@@ -7,6 +7,10 @@
     "dev": "vite",
     "dev:full": "node scripts/dev-full.mjs",
     "build": "tsc -b && vite build",
+    "build:android": "tsc -b && vite build --mode android",
+    "android:sync": "npm run build:android && cap sync android",
+    "android:check": "npm run android:sync && ./android/gradlew -p android lintDebug testDebugUnitTest",
+    "android:apk": "npm run android:sync && ./android/gradlew -p android assembleDebug",
     "server:dev": "npm run server:build && npm run server:start",
     "server:build": "tsc -p tsconfig.server.json && vite build --config vite.server.config.ts",
     "server:start": "node dist-server/economy-server.mjs",
@@ -14,6 +18,7 @@
     "test": "vitest run --environment node --globals",
     "test:e2e": "playwright test",
     "test:e2e:mobile": "playwright test --grep \"mobile and foldable layouts|PWA preview\"",
+    "test:e2e:android": "playwright test --grep \"Android target layouts\"",
     "test:e2e:mobile:screenshots": "GOF2_UPDATE_MOBILE_MATRIX=1 playwright test --grep \"mobile and foldable layouts\"",
     "test:watch": "vitest",
     "generate:voices": "node scripts/generate-voice-lines.mjs",
@@ -21,6 +26,10 @@
     "postinstall": "patch-package"
   },
   "dependencies": {
+    "@capacitor/android": "8.4.2",
+    "@capacitor/app": "8.1.1",
+    "@capacitor/core": "8.4.2",
+    "@capacitor/screen-orientation": "8.0.1",
     "@react-three/drei": "^9.122.0",
     "@react-three/fiber": "^8.17.10",
     "react": "^18.3.1",
@@ -29,6 +38,7 @@
     "zustand": "^5.0.2"
   },
   "devDependencies": {
+    "@capacitor/cli": "8.4.2",
     "@playwright/test": "^1.59.1",
     "@types/node": "^25.6.0",
     "@types/react": "^18.3.18",

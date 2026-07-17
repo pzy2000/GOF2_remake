@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useGameStore } from "../state/gameStore";
 import { translateText } from "../i18n";
 import { readMultiplayerCredentials, saveMultiplayerCredentials } from "../systems/multiplayerCredentials";
+import { isMultiplayerServiceEnabled } from "../systems/multiplayerClient";
 import { LanguageSelect } from "./LanguageSelect";
 import { SaveSlotsPanel } from "./SaveSlotsPanel";
 
@@ -25,6 +26,7 @@ export function MainMenu() {
   const [displayName, setDisplayName] = useState(savedCredentials.displayName);
   const [password, setPassword] = useState(savedCredentials.password);
   const busy = multiplayerStatus === "connecting";
+  const multiplayerEnabled = isMultiplayerServiceEnabled();
   const authRequest = {
     username,
     password,
@@ -51,7 +53,7 @@ export function MainMenu() {
           <button onClick={() => setScreen("settings")}>{translateText("Settings", locale)}</button>
           <button onClick={() => setScreen("credits")}>{translateText("Credits", locale)}</button>
         </div>
-        <section className="multiplayer-login-panel" data-testid="multiplayer-login-panel">
+        {multiplayerEnabled ? <section className="multiplayer-login-panel" data-testid="multiplayer-login-panel">
           <div>
             <span>{translateText("Online Profile", locale)}</span>
             <p>{multiplayerSession ? `${translateText("Connected", locale)}: ${multiplayerSession.displayName}` : `${translateText("Server", locale)}: ${multiplayerServerUrl}`}</p>
@@ -97,7 +99,7 @@ export function MainMenu() {
               </div>
             </form>
           )}
-        </section>
+        </section> : <p className="offline-build-note">Android v1 is an offline single-player build.</p>}
         <SaveSlotsPanel mode="load" />
       </section>
     </main>

@@ -42,7 +42,7 @@ async function resetMultiplayerPage(page: Page, networkMode: "client-server" | "
     localStorage.setItem("gof2-by-pzy-multiplayer-settings", JSON.stringify({ networkMode: mode }));
     localStorage.setItem("gof2-e2e-multiplayer-api-url", apiUrl);
   }, { mode: networkMode, apiUrl: multiplayerBaseUrl });
-  await page.goto("/");
+  await page.goto("/?gof2E2E=1");
   await page.evaluate(({ mode, apiUrl }) => {
     localStorage.clear();
     localStorage.setItem("gof2-e2e-disable-economy-backend", "true");

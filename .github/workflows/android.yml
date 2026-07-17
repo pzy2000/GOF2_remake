@@ -1,0 +1,261 @@
+name: Android CI and Release
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+
+env:
+  # Capacitor 8.4's generated Android modules compile with Java 21.
+  JAVA_VERSION: "21"
+  NODE_VERSION: "22.x"
+
+jobs:
+  gradle:
+    name: Lint, JVM tests, and debug APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Set up JDK
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Configure Gradle
+        uses: gradle/actions/setup-gradle@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d # v4
+
+      - name: Build web assets and sync Capacitor
+        run: |
+          npm ci
+          npm run android:sync
+
+      - name: Run Android static and JVM checks
+        run: ./android/gradlew -p android --stacktrace lintDebug testDebugUnitTest assembleDebug
+
+      - name: Upload debug APK and Gradle reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: android-debug-and-reports
+          path: |
+            android/app/build/outputs/apk/debug/*.apk
+            android/app/build/reports/lint-results-debug.html
+            android/app/build/reports/tests
+            android/app/build/test-results
+          if-no-files-found: warn
+
+  api36:
+    name: API 36 at both 420 dpi target resolutions
+    needs: gradle
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - physical_size: 2748x1172
+            artifact_suffix: outer
+          - physical_size: 2480x2200
+            artifact_suffix: unfolded
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Set up JDK
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Configure Gradle
+        uses: gradle/actions/setup-gradle@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d # v4
+
+      - name: Sync Android project
+        run: |
+          npm ci
+          npm run android:sync
+
+      - name: Instrumented WebView smoke and lifecycle tests
+        uses: reactivecircus/android-emulator-runner@4c44018e59b437e86cdfc41da381398f93ed8808 # v2
+        with:
+          api-level: 36
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            adb shell wm size ${{ matrix.physical_size }}
+            adb shell wm density 420
+            adb shell settings put system accelerometer_rotation 0
+            adb shell settings put system user_rotation 1
+            ./android/gradlew -p android --stacktrace :app:connectedDebugAndroidTest
+            mkdir -p android-artifacts
+            adb exec-out screencap -p > android-artifacts/${{ matrix.artifact_suffix }}.png
+            adb logcat -d > android-artifacts/${{ matrix.artifact_suffix }}-logcat.txt
+            ! grep -E "FATAL EXCEPTION|ANR in com\.pzy2000\.gof2|RenderThread.*SIG|GPU.*crash" android-artifacts/${{ matrix.artifact_suffix }}-logcat.txt
+
+      - name: Upload emulator evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: api36-${{ matrix.artifact_suffix }}-evidence
+          path: |
+            android-artifacts
+            android/app/build/outputs/androidTest-results
+            android/app/build/reports/androidTests
+          if-no-files-found: warn
+
+  api26:
+    name: API 26 compatibility launch
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: gradle
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Set up JDK
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - name: Configure Gradle
+        uses: gradle/actions/setup-gradle@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d # v4
+      - name: Build debug APK
+        run: |
+          npm ci
+          npm run android:sync
+          ./android/gradlew -p android assembleDebug
+      - name: Launch on API 26
+        uses: reactivecircus/android-emulator-runner@4c44018e59b437e86cdfc41da381398f93ed8808 # v2
+        with:
+          api-level: 26
+          arch: x86_64
+          profile: pixel_2
+          disable-animations: true
+          script: |
+            adb install -r android/app/build/outputs/apk/debug/app-debug.apk
+            adb shell am start -W -n com.pzy2000.gof2/.MainActivity
+            adb shell pidof com.pzy2000.gof2
+            mkdir -p android-artifacts
+            adb exec-out screencap -p > android-artifacts/api26-launch.png
+            adb logcat -d > android-artifacts/api26-logcat.txt
+            ! grep -E "FATAL EXCEPTION|ANR in com\.pzy2000\.gof2" android-artifacts/api26-logcat.txt
+      - name: Upload API 26 evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: api26-launch-evidence
+          path: android-artifacts
+          if-no-files-found: warn
+
+  release:
+    name: Signed release APK and AAB
+    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    needs:
+      - gradle
+      - api36
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+      - name: Set up JDK
+        uses: actions/setup-java@03ad4de0992f5dab5e18fcb136590ce7c4a0ac95 # v5
+        with:
+          distribution: temurin
+          java-version: ${{ env.JAVA_VERSION }}
+      - name: Configure Gradle
+        uses: gradle/actions/setup-gradle@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d # v4
+      - name: Require and decode signing material
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          test -n "$ANDROID_KEYSTORE_BASE64"
+          test -n "$ANDROID_KEYSTORE_PASSWORD"
+          test -n "$ANDROID_KEY_ALIAS"
+          test -n "$ANDROID_KEY_PASSWORD"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/gof2-release.jks"
+      - name: Build signed release
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/gof2-release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          GOF2_VERSION_CODE: ${{ github.run_number }}
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            export GOF2_VERSION_NAME="${GITHUB_REF_NAME#v}"
+          else
+            export GOF2_VERSION_NAME="$(node -p "require('./package.json').version")"
+          fi
+          npm ci
+          npm run android:sync
+          ./android/gradlew -p android --stacktrace assembleRelease bundleRelease
+          mkdir -p release-artifacts
+          cp android/app/build/outputs/apk/release/app-release.apk "release-artifacts/gof2-${GOF2_VERSION_NAME}-release.apk"
+          cp android/app/build/outputs/bundle/release/app-release.aab "release-artifacts/gof2-${GOF2_VERSION_NAME}-release.aab"
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose --print-certs "release-artifacts/gof2-${GOF2_VERSION_NAME}-release.apk"
+          curl --fail --location --silent --show-error https://github.com/google/bundletool/releases/download/1.18.3/bundletool-all-1.18.3.jar -o "$RUNNER_TEMP/bundletool.jar"
+          echo "a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29  $RUNNER_TEMP/bundletool.jar" | sha256sum --check
+          java -jar "$RUNNER_TEMP/bundletool.jar" validate --bundle "release-artifacts/gof2-${GOF2_VERSION_NAME}-release.aab"
+          (cd release-artifacts && sha256sum gof2-* > SHA256SUMS)
+      - name: Install and cold-start signed release APK
+        uses: reactivecircus/android-emulator-runner@4c44018e59b437e86cdfc41da381398f93ed8808 # v2
+        with:
+          api-level: 36
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: |
+            release_apk="$(find release-artifacts -name 'gof2-*-release.apk' -print -quit)"
+            test -n "$release_apk"
+            adb install "$release_apk"
+            adb shell am start -W -n com.pzy2000.gof2/.MainActivity
+            adb shell pidof com.pzy2000.gof2
+            adb exec-out screencap -p > release-artifacts/release-install.png
+            adb logcat -d > release-artifacts/release-logcat.txt
+            ! grep -E "FATAL EXCEPTION|ANR in com\.pzy2000\.gof2" release-artifacts/release-logcat.txt
+      - name: Upload signed release bundle
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: gof2-android-release
+          path: release-artifacts
+          if-no-files-found: error

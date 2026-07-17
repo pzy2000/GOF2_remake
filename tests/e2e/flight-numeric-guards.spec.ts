@@ -7,7 +7,7 @@ async function startFlight(page: Page) {
     localStorage.setItem("gof2-e2e-hook", "enabled");
     localStorage.setItem("gof2-e2e-disable-economy-backend", "true");
   });
-  await page.goto("/?warptest=1");
+  await page.goto("/?gof2E2E=1");
   await page.waitForFunction(() => typeof window.__GOF2_E2E__?.getState === "function");
   await page.evaluate(() => {
     const state = window.__GOF2_E2E__!.getState() as {

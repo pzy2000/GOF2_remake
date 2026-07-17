@@ -173,6 +173,28 @@ h3 {
   text-transform: uppercase;
 }
 
+.offline-build-note {
+  border-left: 3px solid rgba(155, 255, 232, 0.72);
+  color: #bcefe6;
+  padding: 8px 12px;
+}
+
+.native-exit-hint {
+  position: fixed;
+  left: 50%;
+  bottom: calc(24px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+  z-index: 2000;
+  transform: translateX(-50%);
+  border: 1px solid rgba(128, 214, 255, 0.48);
+  border-radius: 999px;
+  background: rgba(2, 7, 19, 0.94);
+  color: #dff6ff;
+  padding: 10px 18px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.42);
+  pointer-events: none;
+  white-space: nowrap;
+}
+
 .multiplayer-login-form {
   display: grid;
   gap: 9px;
@@ -4425,9 +4447,11 @@ button.equipment-trigger {
 
 @media (pointer: coarse), (max-width: 900px) {
   :root {
-    --mobile-edge: max(10px, env(safe-area-inset-left));
-    --mobile-top: max(10px, env(safe-area-inset-top));
-    --mobile-bottom: max(10px, env(safe-area-inset-bottom));
+    --mobile-left: max(10px, var(--safe-area-inset-left, env(safe-area-inset-left, 0px)));
+    --mobile-right: max(10px, var(--safe-area-inset-right, env(safe-area-inset-right, 0px)));
+    --mobile-top: max(10px, var(--safe-area-inset-top, env(safe-area-inset-top, 0px)));
+    --mobile-bottom: max(10px, var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+    --mobile-edge: max(var(--mobile-left), var(--mobile-right));
   }
 
   html,
@@ -4438,7 +4462,7 @@ button.equipment-trigger {
   }
 
   button {
-    min-height: 44px;
+    min-height: 48px;
     padding-inline: 12px;
   }
 
@@ -4456,12 +4480,16 @@ button.equipment-trigger {
   .menu-screen,
   .static-screen,
   .modal-screen {
-    min-height: 100dvh;
-    padding: calc(var(--mobile-top) + 8px) calc(var(--mobile-edge) + 4px) calc(var(--mobile-bottom) + 8px);
+    height: 100dvh;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: calc(var(--mobile-top) + 8px) calc(var(--mobile-right) + 4px) calc(var(--mobile-bottom) + 8px) calc(var(--mobile-left) + 4px);
   }
 
   .menu-screen {
-    align-items: end;
+    align-items: start;
     background-position: center;
   }
 
@@ -4565,12 +4593,12 @@ button.equipment-trigger {
   }
 
   .touch-throttle-pad {
-    left: calc(var(--mobile-edge) + 8px);
+    left: calc(var(--mobile-left) + 8px);
     bottom: calc(var(--mobile-bottom) + 20px);
   }
 
   .touch-look-pad {
-    right: calc(var(--mobile-edge) + 8px);
+    right: calc(var(--mobile-right) + 8px);
     bottom: calc(var(--mobile-bottom) + 20px);
   }
 
@@ -4585,7 +4613,7 @@ button.equipment-trigger {
 
   .touch-action-cluster button {
     min-width: 52px;
-    min-height: 44px;
+    min-height: 48px;
     padding: 0 10px;
     border-color: rgba(128, 214, 255, 0.42);
     background: rgba(3, 10, 20, 0.7);
@@ -4624,12 +4652,12 @@ button.equipment-trigger {
   }
 
   .touch-action-cluster-left {
-    left: calc(var(--mobile-edge) + 144px);
+    left: calc(var(--mobile-left) + 144px);
     bottom: calc(var(--mobile-bottom) + 28px);
   }
 
   .touch-action-cluster-right {
-    right: calc(var(--mobile-edge) + 144px);
+    right: calc(var(--mobile-right) + 144px);
     bottom: calc(var(--mobile-bottom) + 28px);
     justify-content: flex-end;
   }
@@ -4669,13 +4697,13 @@ button.equipment-trigger {
 
   .hud-top-left {
     top: calc(var(--mobile-top) + 8px);
-    left: calc(var(--mobile-edge) + 8px);
+    left: calc(var(--mobile-left) + 8px);
     width: min(280px, 42vw);
   }
 
   .hud-top-right {
     top: calc(var(--mobile-top) + 8px);
-    right: calc(var(--mobile-edge) + 8px);
+    right: calc(var(--mobile-right) + 8px);
     width: min(320px, 43vw);
     max-height: min(40dvh, 230px);
     overflow: hidden;
@@ -4739,7 +4767,7 @@ button.equipment-trigger {
 
   .space-dialogue-overlay {
     top: calc(var(--mobile-top) + 132px);
-    width: calc(100vw - var(--mobile-edge) * 2 - 24px);
+    width: calc(100vw - var(--mobile-left) - var(--mobile-right) - 24px);
   }
 
   .space-dialogue-card {
@@ -4756,7 +4784,7 @@ button.equipment-trigger {
   }
 
   .economy-watch-overlay {
-    inset: calc(var(--mobile-top) + 8px) calc(var(--mobile-edge) + 8px) auto;
+    inset: calc(var(--mobile-top) + 8px) calc(var(--mobile-right) + 8px) auto calc(var(--mobile-left) + 8px);
     width: auto;
     max-height: calc(100dvh - var(--mobile-top) - var(--mobile-bottom) - 20px);
   }
@@ -4775,7 +4803,7 @@ button.equipment-trigger {
     overflow: hidden;
     border: 0;
     border-radius: 0;
-    padding: calc(var(--mobile-top) + 12px) calc(var(--mobile-edge) + 12px) calc(var(--mobile-bottom) + 12px);
+    padding: calc(var(--mobile-top) + 12px) calc(var(--mobile-right) + 12px) calc(var(--mobile-bottom) + 12px) calc(var(--mobile-left) + 12px);
   }
 
   .galaxy-header {
@@ -4810,7 +4838,7 @@ button.equipment-trigger {
   .galaxy-layout {
     grid-template-columns: 1fr;
     grid-template-rows: minmax(250px, 42dvh) minmax(0, 1fr);
-    height: calc(100dvh - var(--mobile-top) - var(--mobile-bottom) - 104px);
+    height: auto;
     min-height: 0;
   }
 
@@ -4864,7 +4892,7 @@ button.equipment-trigger {
     height: 100dvh;
     min-height: 100dvh;
     overflow: hidden;
-    padding: calc(var(--mobile-top) + 12px) calc(var(--mobile-edge) + 12px) calc(var(--mobile-bottom) + 12px);
+    padding: calc(var(--mobile-top) + 12px) calc(var(--mobile-right) + 12px) calc(var(--mobile-bottom) + 12px) calc(var(--mobile-left) + 12px);
     grid-template-rows: auto auto minmax(0, 1fr);
   }
 
@@ -5129,7 +5157,7 @@ button.equipment-trigger {
 
 @media (pointer: coarse) and (orientation: landscape) and (max-height: 520px) {
   .station-screen {
-    padding: calc(var(--mobile-top) + 8px) calc(var(--mobile-edge) + 10px) calc(var(--mobile-bottom) + 8px);
+    padding: calc(var(--mobile-top) + 8px) calc(var(--mobile-right) + 10px) calc(var(--mobile-bottom) + 8px) calc(var(--mobile-left) + 10px);
   }
 
   .station-header,
@@ -5182,11 +5210,11 @@ button.equipment-trigger {
   }
 
   .touch-action-cluster-left {
-    left: calc(var(--mobile-edge) + 128px);
+    left: calc(var(--mobile-left) + 128px);
   }
 
   .touch-action-cluster-right {
-    right: calc(var(--mobile-edge) + 128px);
+    right: calc(var(--mobile-right) + 128px);
   }
 
   .touch-action-cluster {
@@ -5195,7 +5223,7 @@ button.equipment-trigger {
 
   .touch-action-cluster button {
     min-width: 48px;
-    min-height: 44px;
+    min-height: 48px;
   }
 
   .dock-hint {
@@ -5208,11 +5236,11 @@ button.equipment-trigger {
   }
 }
 
-@media (max-width: 900px) and (orientation: landscape), (min-width: 760px) and (min-height: 700px) {
+@media (pointer: coarse) and (orientation: landscape) and (min-width: 760px), (max-width: 900px) and (orientation: landscape), (min-width: 760px) and (min-height: 700px) {
   .galaxy-layout {
-    grid-template-columns: minmax(0, 1fr) minmax(300px, 340px);
+    grid-template-columns: minmax(0, 1fr) minmax(280px, 34vw);
     grid-template-rows: minmax(0, 1fr);
-    height: calc(100dvh - var(--mobile-top) - var(--mobile-bottom) - 104px);
+    height: auto;
   }
 
   .galaxy-details {
@@ -5245,7 +5273,7 @@ button.equipment-trigger {
   .hud-left-stack {
     display: grid;
     top: calc(var(--mobile-top) + 238px);
-    left: calc(var(--mobile-edge) + 8px);
+    left: calc(var(--mobile-left) + 8px);
     width: min(330px, 40vw);
   }
 
@@ -5260,14 +5288,14 @@ button.equipment-trigger {
 
   .hud-bottom-left {
     display: grid;
-    left: calc(var(--mobile-edge) + 8px);
-    bottom: calc(var(--mobile-bottom) + 166px);
+    left: calc(var(--mobile-left) + 8px);
+    bottom: calc(var(--mobile-bottom) + 198px);
     width: min(330px, 40vw);
   }
 
   .hud-bottom-right {
-    right: calc(var(--mobile-edge) + 8px);
-    bottom: calc(var(--mobile-bottom) + 166px);
+    right: calc(var(--mobile-right) + 8px);
+    bottom: calc(var(--mobile-bottom) + 198px);
     width: min(330px, 40vw);
     transform: none;
   }
@@ -5279,7 +5307,7 @@ button.equipment-trigger {
 
   .galaxy-layout {
     grid-template-columns: minmax(0, 1fr) minmax(300px, 340px);
-    height: min(720px, calc(100dvh - var(--mobile-top) - var(--mobile-bottom) - 108px));
+    height: auto;
   }
 
   .galaxy-details {

@@ -59,6 +59,7 @@ import { getDialogueLogEntries } from "../systems/dialogue";
 import { getExplorationChainSummaries, getExplorationObjectiveSummaryForSystem, explorationRewardStationNames } from "../systems/explorationObjectives";
 import { getNextGuidanceRecommendation } from "../systems/playerGuidance";
 import { getMultiplayerPresence } from "../systems/multiplayerPresence";
+import { isMultiplayerServiceEnabled } from "../systems/multiplayerClient";
 import {
   canInstallEquipment,
   canUnlockBlueprint,
@@ -97,7 +98,8 @@ import {
   type Locale
 } from "../i18n";
 
-const tabs: StationTab[] = ["Market", "Economy", "Hangar", "Shipyard", "Mission Board", "Multiplayer", "Captain's Log", "Blueprint Workshop", "Lounge", "Galaxy Map"];
+const tabs = ["Market", "Economy", "Hangar", "Shipyard", "Mission Board", "Multiplayer", "Captain's Log", "Blueprint Workshop", "Lounge", "Galaxy Map"]
+  .filter((tab) => tab !== "Multiplayer" || isMultiplayerServiceEnabled()) as StationTab[];
 const craftable: EquipmentId[] = equipmentList.filter((item) => !!item.craftCost).map((item) => item.id);
 const equipmentSlotOrder: EquipmentSlotType[] = ["primary", "secondary", "utility", "defense", "engineering"];
 const equipmentSlotLabels: Record<EquipmentSlotType, string> = {

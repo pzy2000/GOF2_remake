@@ -122,6 +122,14 @@ export function resolveMultiplayerServiceConfig({
   pageHostname,
   staticDisabled = false
 }: MultiplayerServiceConfigInput): MultiplayerServiceConfig {
+  if (staticDisabled) {
+    return {
+      enabled: false,
+      requestBaseUrl: "",
+      displayUrl: "multiplayer disabled",
+      disabledReason: STATIC_MULTIPLAYER_REASON
+    };
+  }
   const configuredUrl = envUrl?.trim() ? normalizeConfiguredUrl(envUrl) : undefined;
   if (configuredUrl) {
     if (pageProtocol === "https:" && configuredUrl.startsWith("http:")) {
@@ -138,7 +146,7 @@ export function resolveMultiplayerServiceConfig({
       displayUrl: configuredUrl
     };
   }
-  if (staticDisabled || (production && pageProtocol === "https:")) {
+  if (production && pageProtocol === "https:") {
     return {
       enabled: false,
       requestBaseUrl: "",

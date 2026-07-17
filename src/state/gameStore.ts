@@ -29,6 +29,7 @@ import type {
 } from "../types/multiplayer";
 import type { GameStore, SavePayload, SavePayloadOverrides } from "./gameStoreTypes";
 import { fallbackAssetManifest } from "../systems/assets";
+import { shouldExposeE2EHook } from "../systems/e2eGate";
 import { add, clamp, distance, forwardFromRotation, normalize, scale, sub } from "../systems/math";
 import { applyDamage, regenerateShield } from "../systems/combat";
 import {
@@ -2342,6 +2343,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   setStationTab: (stationTab) => set({ stationTab, galaxyMapMode: stationTab === "Galaxy Map" ? "station-route" : get().galaxyMapMode }),
   openGalaxyMap: (galaxyMapMode) => set((state) => ({ previousScreen: state.screen, screen: "galaxyMap", galaxyMapMode })),
   setInput: (patch) => set((state) => ({ input: { ...state.input, ...patch } })),
+  resetInput: () => set({ input: emptyFlightInput() }),
   consumeMouse: () => {
     const { mouseDX: dx, mouseDY: dy } = get().input;
     set((state) => ({ input: { ...state.input, mouseDX: 0, mouseDY: 0 } }));
@@ -4226,20 +4228,30 @@ function getE2EHookGate() {
     storageEnabled = false;
   }
   return {
-    enabled: queryEnabled || storageEnabled,
+    enabled: shouldExposeE2EHook({
+      development: import.meta.env.DEV,
+      queryEnabled,
+      storageEnabled
+    }),
     enabledBy: queryEnabled ? "query" : storageEnabled ? "localStorage" : "none",
     gate,
     mode
   };
 }
 
-if (typeof window !== "undefined" && import.meta.env.DEV) {
+if (typeof window !== "undefined") {
   const gate = getE2EHookGate();
   if (gate.enabled) {
     Object.assign(window, {
       __GOF2_E2E__: {
         getState: () => useGameStore.getState(),
-        setState: useGameStore.setState,
+        setState: (patch: Partial<GameStore>, replace?: boolean) => {
+          if (replace) {
+            useGameStore.setState({ ...useGameStore.getState(), ...patch });
+            return;
+          }
+          useGameStore.setState(patch);
+        },
         applyDebugScenario: (scenarioId: string) => useGameStore.getState().applyDebugScenario(scenarioId),
         getReadiness: () => {
           const state = useGameStore.getState();

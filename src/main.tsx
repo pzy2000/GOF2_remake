@@ -2,11 +2,13 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { GameErrorBoundary } from "./components/GameRecovery";
+import { NativeRuntime } from "./components/NativeRuntime";
 import { registerPwa } from "./systems/pwa";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <GameErrorBoundary>
+      <NativeRuntime />
       <App />
     </GameErrorBoundary>
   </React.StrictMode>

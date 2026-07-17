@@ -23,6 +23,18 @@ describe("economy service configuration", () => {
     });
   });
 
+  it("keeps static fallback authoritative even when an API URL is present", () => {
+    expect(resolveEconomyServiceConfig({
+      envUrl: "https://economy.example.com",
+      production: true,
+      pageProtocol: "https:",
+      staticFallback: true
+    })).toMatchObject({
+      enabled: false,
+      displayUrl: "static economy fallback"
+    });
+  });
+
   it("uses the local economy backend for HTTP production builds without an API URL", () => {
     expect(resolveEconomyServiceConfig({
       production: true,

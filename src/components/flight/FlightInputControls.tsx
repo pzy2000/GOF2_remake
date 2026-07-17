@@ -1,5 +1,5 @@
 import { useFrame } from "@react-three/fiber";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { CSSProperties, MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent } from "react";
 import { stationById, useGameStore } from "../../state/gameStore";
 import { getOnboardingView } from "../../systems/onboarding";
@@ -121,20 +121,14 @@ export function FlightControls() {
     const onMouseDown = (event: MouseEvent) => {
       if (useGameStore.getState().screen !== "flight") return;
       if (shouldIgnoreGlobalShortcut(event.target)) return;
-      if (event.button === 0 && isTouchControlTarget(event.target, ".touch-afterburner")) {
-        setInput({ afterburner: true });
-        return;
-      }
+      if (isTouchControlTarget(event.target, ".touch-flight-controls")) return;
       if (event.button === 0) setInput({ firePrimary: true });
       if (event.button === 2) setInput({ fireSecondary: true });
     };
     const onMouseUp = (event: MouseEvent) => {
       if (useGameStore.getState().screen !== "flight") return;
       if (shouldIgnoreGlobalShortcut(event.target)) return;
-      if (event.button === 0 && isTouchControlTarget(event.target, ".touch-afterburner")) {
-        setInput({ afterburner: false });
-        return;
-      }
+      if (isTouchControlTarget(event.target, ".touch-flight-controls")) return;
       if (event.button === 0) setInput({ firePrimary: false });
       if (event.button === 2) setInput({ fireSecondary: false });
     };
@@ -292,29 +286,40 @@ export function TouchFlightControls() {
   const locale = useGameStore((state) => state.locale);
   const autopilot = useGameStore((state) => state.autopilot);
   const setInput = useGameStore((state) => state.setInput);
+  const resetInput = useGameStore((state) => state.resetInput);
   const throttlePointerId = useRef<number | null>(null);
   const lookPointer = useRef<{ pointerId: number; x: number; y: number } | null>(null);
   const [throttlePad, setThrottlePad] = useState<TouchPadState>({ x: 0, y: 0 });
   const [lookPad, setLookPad] = useState<TouchPadState>({ x: 0, y: 0 });
   const isFlight = screen === "flight";
 
-  useEffect(() => {
-    if (isFlight) return undefined;
+  const resetTouchState = useCallback(() => {
     throttlePointerId.current = null;
     lookPointer.current = null;
     setThrottlePad({ x: 0, y: 0 });
     setLookPad({ x: 0, y: 0 });
-    setInput({
-      throttleUp: false,
-      throttleDown: false,
-      rollLeft: false,
-      rollRight: false,
-      afterburner: false,
-      firePrimary: false,
-      fireSecondary: false
-    });
-    return undefined;
-  }, [isFlight, setInput]);
+    resetInput();
+  }, [resetInput]);
+
+  useEffect(() => {
+    if (!isFlight) resetTouchState();
+  }, [isFlight, resetTouchState]);
+
+  useEffect(() => {
+    const resetWhenHidden = () => {
+      if (document.visibilityState === "hidden") resetTouchState();
+    };
+    window.addEventListener("blur", resetTouchState);
+    window.addEventListener("pagehide", resetTouchState);
+    window.addEventListener("resize", resetTouchState);
+    document.addEventListener("visibilitychange", resetWhenHidden);
+    return () => {
+      window.removeEventListener("blur", resetTouchState);
+      window.removeEventListener("pagehide", resetTouchState);
+      window.removeEventListener("resize", resetTouchState);
+      document.removeEventListener("visibilitychange", resetWhenHidden);
+    };
+  }, [resetTouchState]);
 
   if (!isFlight) return null;
 
@@ -410,16 +415,7 @@ export function TouchFlightControls() {
         setHeld(false);
       },
       onPointerCancel: () => setHeld(false),
-      onPointerLeave: () => setHeld(false),
-      onMouseDown: (event: ReactMouseEvent<HTMLButtonElement>) => {
-        event.preventDefault();
-        setHeld(true);
-      },
-      onMouseUp: (event: ReactMouseEvent<HTMLButtonElement>) => {
-        event.preventDefault();
-        setHeld(false);
-      },
-      onMouseLeave: () => setHeld(false)
+      onLostPointerCapture: () => setHeld(false)
     };
   }
 
@@ -441,6 +437,7 @@ export function TouchFlightControls() {
         onPointerMove={handleThrottlePointerMove}
         onPointerUp={handleThrottlePointerUp}
         onPointerCancel={resetThrottlePad}
+        onLostPointerCapture={resetThrottlePad}
       >
         <span />
       </div>
@@ -452,6 +449,7 @@ export function TouchFlightControls() {
         onPointerMove={handleLookPointerMove}
         onPointerUp={handleLookPointerUp}
         onPointerCancel={handleLookPointerUp}
+        onLostPointerCapture={handleLookPointerUp}
       >
         <span />
       </div>

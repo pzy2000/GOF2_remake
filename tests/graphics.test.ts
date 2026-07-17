@@ -34,6 +34,13 @@ afterEach(() => {
 });
 
 describe("graphics settings", () => {
+  it("selects medium only for a first-launch Android distribution", async () => {
+    const { module } = await freshGraphics();
+    expect(module.defaultGraphicsQuality("android")).toBe("medium");
+    expect(module.defaultGraphicsQuality("web")).toBe("high");
+    expect(module.defaultGraphicsQuality(undefined)).toBe("high");
+  });
+
   it("defaults to high quality and persists selected presets", async () => {
     const { storage, module } = await freshGraphics();
 

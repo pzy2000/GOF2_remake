@@ -9,6 +9,7 @@ describe("PWA helpers", () => {
     expect(shouldEnablePwa({ production: false, search: "?pwa=1" })).toBe(true);
     expect(shouldEnablePwa({ production: false, storedPreference: "true" })).toBe(true);
     expect(shouldEnablePwa({ production: false, search: "?debug=1" })).toBe(false);
+    expect(shouldEnablePwa({ production: true, nativePlatform: true })).toBe(false);
   });
 
   it("collects unique same-origin resources for service worker caching", () => {
@@ -28,7 +29,7 @@ describe("PWA helpers", () => {
   it("keeps range responses out of Cache.put", () => {
     const serviceWorker = readFileSync(resolve(process.cwd(), "public/service-worker.js"), "utf8");
 
-    expect(serviceWorker).toContain('const CACHE_VERSION = "gof2-pwa-v2"');
+    expect(serviceWorker).toContain('const CACHE_VERSION = "gof2-pwa-v4"');
     expect(serviceWorker).toContain("isVoiceAssetRequest");
     expect(serviceWorker).toContain('/assets/voice/');
     expect(serviceWorker).toContain('request.headers.has("range")');

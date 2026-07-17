@@ -4,14 +4,14 @@ async function startFlight(page: Page) {
   await page.addInitScript(() => {
     localStorage.setItem("gof2-e2e-disable-economy-backend", "true");
   });
-  await page.goto("/");
+  await page.goto("/?gof2E2E=1");
   await page.evaluate(() => {
     localStorage.clear();
     localStorage.setItem("gof2-e2e-disable-economy-backend", "true");
   });
   await page.reload();
   await page.waitForFunction(() => !!window.__GOF2_E2E__);
-  await page.getByRole("button", { name: "New Game" }).click();
+  await page.getByRole("button", { name: /New (Offline )?Game/ }).click();
   await expect(page.locator(".flight-canvas canvas")).toBeVisible();
   await page.evaluate(() => {
     const state = window.__GOF2_E2E__!.getState() as { activeDialogue?: unknown; closeDialogue: () => void; stopEconomyStream: () => void };

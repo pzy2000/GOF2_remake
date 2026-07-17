@@ -1,4 +1,4 @@
-const CACHE_VERSION = "gof2-pwa-v2";
+const CACHE_VERSION = "gof2-pwa-v4";
 const APP_CACHE = `${CACHE_VERSION}:app`;
 const ASSET_CACHE = `${CACHE_VERSION}:assets`;
 
@@ -131,7 +131,9 @@ async function cacheRequest(cacheName, request) {
 }
 
 async function cacheFirst(request) {
-  const cached = await caches.match(request);
+  // Vite dev modules gain timestamp query strings after HMR. The cached module
+  // is still the correct offline fallback when the HTML requests its clean URL.
+  const cached = (await caches.match(request)) || (await caches.match(request, { ignoreSearch: true, ignoreVary: true }));
   if (cached) return cached;
   return cacheRequest(ASSET_CACHE, request);
 }

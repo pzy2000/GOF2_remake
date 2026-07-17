@@ -67,6 +67,10 @@ npm run test:e2e:mobile:screenshots
 
 The screenshot command refreshes optional matrix captures in `docs/mobile-matrix/`; normal tests only assert layout and touch behavior.
 
+## Android
+
+The committed Capacitor project builds the offline single-player Android app entirely from the command line or GitHub Actions; Android Studio is optional. See [docs/ANDROID.md](docs/ANDROID.md) for debug APK commands, signing Secrets, emulator coverage, and the real-device acceptance checklist.
+
 ## Controls
 
 - W/S: throttle up/down

@@ -43,6 +43,14 @@ export function resolveEconomyServiceConfig({
   pageHostname,
   staticFallback = false
 }: EconomyServiceConfigInput): EconomyServiceConfig {
+  if (staticFallback) {
+    return {
+      enabled: false,
+      requestBaseUrl: "",
+      displayUrl: STATIC_FALLBACK_URL,
+      disabledReason: STATIC_FALLBACK_REASON
+    };
+  }
   const configuredUrl = envUrl?.trim() ? normalizeConfiguredUrl(envUrl) : undefined;
   if (configuredUrl) {
     if (pageProtocol === "https:" && configuredUrl.startsWith("http:")) {
@@ -59,7 +67,7 @@ export function resolveEconomyServiceConfig({
       displayUrl: configuredUrl
     };
   }
-  if (staticFallback || (production && pageProtocol === "https:")) {
+  if (production && pageProtocol === "https:") {
     return {
       enabled: false,
       requestBaseUrl: "",

@@ -138,6 +138,7 @@ export interface GameStore {
   setStationTab: (tab: StationTab) => void;
   openGalaxyMap: (mode: GalaxyMapMode) => void;
   setInput: (patch: Partial<FlightInput>) => void;
+  resetInput: () => void;
   consumeMouse: () => { dx: number; dy: number };
   tick: (delta: number) => void;
   advanceGameClock: (delta: number) => void;

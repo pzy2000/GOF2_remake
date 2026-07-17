@@ -63,7 +63,7 @@ async function resetApp(page: Page) {
   await page.addInitScript(() => {
     localStorage.setItem("gof2-e2e-disable-economy-backend", "true");
   });
-  await page.goto("/");
+  await page.goto("/?gof2E2E=1");
   await page.evaluate(() => {
     localStorage.clear();
     localStorage.setItem("gof2-e2e-disable-economy-backend", "true");
@@ -82,7 +82,7 @@ async function startNewGame(page: Page, options: { keepIntro?: boolean } = {}) {
   await expect(page.locator(".flight-canvas canvas")).toBeVisible();
   await expect(page.locator(".hud-top-left")).toContainText("Helion Reach");
   await expect(page.locator(".dock-hint")).toBeVisible();
-  await expect(page.locator(".station-tech-label").first()).toContainText("TECH");
+  await expect(page.getByText(/^TECH 2 [·路] Helion Prime Exchange$/).first()).toBeVisible();
   if (!options.keepIntro) {
     await page.evaluate(() => {
       const state = window.__GOF2_E2E__!.getState() as { activeDialogue?: unknown; closeDialogue: () => void };
@@ -721,12 +721,12 @@ test.describe("browser smoke", () => {
     await installSpeechSynthesisStub(page);
     await resetApp(page);
     await page.getByLabel("Select language").selectOption("zh-CN");
-    await expect(page.getByRole("button", { name: "新游戏" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "新离线游戏" })).toBeVisible();
 
     await page.reload();
     await page.waitForFunction(() => !!window.__GOF2_E2E__);
-    await expect(page.getByRole("button", { name: "新游戏" })).toBeVisible();
-    await page.getByRole("button", { name: "新游戏" }).click();
+    await expect(page.getByRole("button", { name: "新离线游戏" })).toBeVisible();
+    await page.getByRole("button", { name: "新离线游戏" }).click();
     await expect(page.locator(".hud-top-left")).toContainText("船体");
     await expect(page.locator(".hud-bottom-right")).toContainText("通讯");
     const flightDialogue = page.getByTestId("space-dialogue-overlay");
@@ -1701,6 +1701,7 @@ test.describe("browser smoke", () => {
   });
 
   test("smokes the Glass Wake 01-02 intro, boss, salvage, and debrief path", async ({ page }) => {
+    await installSpeechSynthesisStub(page);
     await resetApp(page);
     await startNewGame(page, { keepIntro: true });
 
