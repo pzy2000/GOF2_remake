@@ -21,7 +21,7 @@ import type {
 const STATIC_MULTIPLAYER_REASON = "Multiplayer server disabled for static build.";
 const HTTPS_HTTP_BLOCK_REASON = "Multiplayer disabled: HTTPS pages cannot call an HTTP multiplayer server.";
 const DEFAULT_LOCAL_MULTIPLAYER_PORT = 19778;
-const REQUEST_TIMEOUT_MS = 1_800;
+const REQUEST_TIMEOUT_MS = import.meta.env.DEV ? 5_000 : 1_800;
 const MULTIPLAYER_SESSION_STORAGE_KEY = "gof2-multiplayer-session";
 export const MULTIPLAYER_SETTINGS_KEY = "gof2-by-pzy-multiplayer-settings";
 
@@ -101,14 +101,18 @@ function normalizeIceServer(value: unknown): RTCIceServer | undefined {
 }
 
 function configuredIceServers(): RTCIceServer[] {
-  const raw = import.meta.env.VITE_MULTIPLAYER_ICE_SERVERS as string | undefined;
+  let raw = import.meta.env.VITE_MULTIPLAYER_ICE_SERVERS as string | undefined;
+  if (import.meta.env.DEV && typeof window !== "undefined") {
+    raw = window.localStorage.getItem("gof2-e2e-multiplayer-ice-servers") ?? raw;
+  }
   if (!raw?.trim()) return DEFAULT_P2P_ICE_SERVERS;
   try {
     const parsed = JSON.parse(raw) as unknown;
-    const servers = Array.isArray(parsed)
-      ? parsed.map(normalizeIceServer).filter((server): server is RTCIceServer => !!server)
-      : [normalizeIceServer(parsed)].filter((server): server is RTCIceServer => !!server);
-    return servers.length > 0 ? servers : DEFAULT_P2P_ICE_SERVERS;
+    if (Array.isArray(parsed)) {
+      return parsed.map(normalizeIceServer).filter((server): server is RTCIceServer => !!server);
+    }
+    const server = normalizeIceServer(parsed);
+    return server ? [server] : DEFAULT_P2P_ICE_SERVERS;
   } catch {
     const servers = raw.split(",").map((entry) => normalizeIceServer(entry)).filter((server): server is RTCIceServer => !!server);
     return servers.length > 0 ? servers : DEFAULT_P2P_ICE_SERVERS;

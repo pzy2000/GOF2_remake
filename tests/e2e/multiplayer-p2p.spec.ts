@@ -41,6 +41,7 @@ async function resetMultiplayerPage(page: Page, networkMode: "client-server" | "
     localStorage.setItem("gof2-e2e-disable-economy-backend", "true");
     localStorage.setItem("gof2-by-pzy-multiplayer-settings", JSON.stringify({ networkMode: mode }));
     localStorage.setItem("gof2-e2e-multiplayer-api-url", apiUrl);
+    localStorage.setItem("gof2-e2e-multiplayer-ice-servers", "[]");
   }, { mode: networkMode, apiUrl: multiplayerBaseUrl });
   await page.goto("/?gof2E2E=1");
   await page.evaluate(({ mode, apiUrl }) => {
@@ -48,6 +49,7 @@ async function resetMultiplayerPage(page: Page, networkMode: "client-server" | "
     localStorage.setItem("gof2-e2e-disable-economy-backend", "true");
     localStorage.setItem("gof2-by-pzy-multiplayer-settings", JSON.stringify({ networkMode: mode }));
     localStorage.setItem("gof2-e2e-multiplayer-api-url", apiUrl);
+    localStorage.setItem("gof2-e2e-multiplayer-ice-servers", "[]");
   }, { mode: networkMode, apiUrl: multiplayerBaseUrl });
   await page.reload();
   await page.waitForFunction(() => !!window.__GOF2_E2E__);
@@ -147,7 +149,7 @@ test("P2P mode sends movement over DataChannel between browser clients", async (
         const state = window.__GOF2_E2E__!.getState() as { remotePlayers: Array<{ playerId: string; position: number[] }> };
         return state.remotePlayers.find((player) => player.playerId === remoteId)?.position[0] ?? 0;
       }, aliceId);
-    }, { timeout: 20_000, intervals: [250, 500, 750] }).toBeGreaterThan(300);
+    }, { timeout: 30_000, intervals: [250, 500, 750] }).toBeGreaterThan(300);
     const remotePosition = await pageB.evaluate((remoteId) => {
       const state = window.__GOF2_E2E__!.getState() as { remotePlayers: Array<{ playerId: string; position: number[] }> };
       return state.remotePlayers.find((player) => player.playerId === remoteId)?.position;

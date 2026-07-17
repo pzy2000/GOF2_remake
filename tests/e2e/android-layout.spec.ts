@@ -4,11 +4,15 @@ type Viewport = { width: number; height: number };
 
 async function resetAndroidLayoutApp(page: Page, viewport: Viewport) {
   await page.setViewportSize(viewport);
-  await page.addInitScript(() => localStorage.setItem("gof2-e2e-disable-economy-backend", "true"));
+  await page.addInitScript(() => {
+    localStorage.setItem("gof2-e2e-disable-economy-backend", "true");
+    localStorage.setItem("gof2-by-pzy-graphics-settings", JSON.stringify({ quality: "low" }));
+  });
   await page.goto("/?gof2E2E=1");
   await page.evaluate(() => {
     localStorage.clear();
     localStorage.setItem("gof2-e2e-disable-economy-backend", "true");
+    localStorage.setItem("gof2-by-pzy-graphics-settings", JSON.stringify({ quality: "low" }));
     document.documentElement.style.setProperty("--safe-area-inset-left", "24px");
     document.documentElement.style.setProperty("--safe-area-inset-right", "32px");
     document.documentElement.style.setProperty("--safe-area-inset-top", "18px");

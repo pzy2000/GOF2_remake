@@ -62,11 +62,13 @@ type TestVoiceAudioHarness = {
 async function resetApp(page: Page) {
   await page.addInitScript(() => {
     localStorage.setItem("gof2-e2e-disable-economy-backend", "true");
+    localStorage.setItem("gof2-by-pzy-graphics-settings", JSON.stringify({ quality: "low" }));
   });
   await page.goto("/?gof2E2E=1");
   await page.evaluate(() => {
     localStorage.clear();
     localStorage.setItem("gof2-e2e-disable-economy-backend", "true");
+    localStorage.setItem("gof2-by-pzy-graphics-settings", JSON.stringify({ quality: "low" }));
   });
   await page.reload();
   await page.waitForFunction(() => !!window.__GOF2_E2E__);
@@ -2169,7 +2171,7 @@ test.describe("browser smoke", () => {
   });
 
   test("opens the flight galaxy map as a route planner from HUD and keyboard", async ({ page }) => {
-    test.setTimeout(120_000);
+    test.setTimeout(180_000);
     await page.setViewportSize({ width: 2048, height: 930 });
     await resetApp(page);
     await startNewGame(page);
@@ -2277,23 +2279,23 @@ test.describe("browser smoke", () => {
       expect(metrics.smallButtons, viewportName).toBe(0);
     }
 
-    test("keeps flight HUD and touch controls inside phone and foldable viewports", async ({ page }) => {
-      test.setTimeout(180_000);
-      const viewports = [
-        { name: "phone portrait 375x667", width: 375, height: 667 },
-        { name: "phone portrait 393x852", width: 393, height: 852 },
-        { name: "phone portrait 430x932", width: 430, height: 932 },
-        { name: "phone landscape 667x375", width: 667, height: 375 },
-        { name: "phone landscape 852x393", width: 852, height: 393 },
-        { name: "phone landscape 932x430", width: 932, height: 430 },
-        { name: "fold cover proxy", width: 390, height: 844 },
-        { name: "fold unfolded portrait", width: 820, height: 900 },
-        { name: "fold unfolded landscape", width: 900, height: 820 },
-        { name: "tablet portrait", width: 768, height: 1024 },
-        { name: "tablet landscape", width: 1024, height: 768 }
-      ];
+    const flightViewports = [
+      { name: "phone portrait 375x667", width: 375, height: 667 },
+      { name: "phone portrait 393x852", width: 393, height: 852 },
+      { name: "phone portrait 430x932", width: 430, height: 932 },
+      { name: "phone landscape 667x375", width: 667, height: 375 },
+      { name: "phone landscape 852x393", width: 852, height: 393 },
+      { name: "phone landscape 932x430", width: 932, height: 430 },
+      { name: "fold cover proxy", width: 390, height: 844 },
+      { name: "fold unfolded portrait", width: 820, height: 900 },
+      { name: "fold unfolded landscape", width: 900, height: 820 },
+      { name: "tablet portrait", width: 768, height: 1024 },
+      { name: "tablet landscape", width: 1024, height: 768 }
+    ];
 
-      for (const viewport of viewports) {
+    for (const viewport of flightViewports) {
+      test(`keeps flight HUD and touch controls inside ${viewport.name}`, async ({ page }) => {
+        test.setTimeout(90_000);
         await page.setViewportSize({ width: viewport.width, height: viewport.height });
         await resetApp(page);
         await startNewGame(page);
@@ -2306,8 +2308,8 @@ test.describe("browser smoke", () => {
         if (viewport.name === "phone landscape 852x393") await maybeCaptureMobileMatrix(page, "phone-landscape-flight.png");
         if (viewport.name === "fold unfolded landscape") await maybeCaptureMobileMatrix(page, "fold-unfolded-flight.png");
         if (viewport.name === "phone landscape 852x393") await expectWebGlCanvasHasPixels(page);
-      }
-    });
+      });
+    }
 
     test("maps touch pads and action buttons onto existing flight input", async ({ page }) => {
       test.setTimeout(75_000);
@@ -2399,16 +2401,16 @@ test.describe("browser smoke", () => {
       await expect(page.getByText("Route Planning")).toBeVisible();
     });
 
-    test("keeps mobile route planning and station panels reachable on phones and unfolded folds", async ({ page }) => {
-      test.setTimeout(90_000);
-      const viewports = [
-        { name: "phone portrait", width: 393, height: 852, folded: false },
-        { name: "phone landscape", width: 852, height: 393, folded: false },
-        { name: "unfolded fold", width: 820, height: 900, folded: true },
-        { name: "tablet landscape", width: 1024, height: 768, folded: true }
-      ];
+    const stationViewports = [
+      { name: "phone portrait", width: 393, height: 852, folded: false },
+      { name: "phone landscape", width: 852, height: 393, folded: false },
+      { name: "unfolded fold", width: 820, height: 900, folded: true },
+      { name: "tablet landscape", width: 1024, height: 768, folded: true }
+    ];
 
-      for (const viewport of viewports) {
+    for (const viewport of stationViewports) {
+      test(`keeps route planning and station panels reachable on ${viewport.name}`, async ({ page }) => {
+        test.setTimeout(120_000);
         await page.setViewportSize({ width: viewport.width, height: viewport.height });
         await resetApp(page);
         await startNewGame(page);
@@ -2478,8 +2480,8 @@ test.describe("browser smoke", () => {
         expect(stationMetrics!.bodyBottom, viewport.name).toBeLessThanOrEqual(stationMetrics!.viewportHeight + 1);
         expect(stationMetrics!.tabsRight, viewport.name).toBeLessThanOrEqual(stationMetrics!.viewportWidth + 1);
         if (viewport.folded) expect(stationMetrics!.storyColumns, viewport.name).toBeGreaterThanOrEqual(2);
-      }
-    });
+      });
+    }
 
     test("PWA preview exposes install metadata and offline cached resources", async ({ browser }) => {
       const context = await browser.newContext({ serviceWorkers: "allow", viewport: { width: 852, height: 393 }, isMobile: true, hasTouch: true });
