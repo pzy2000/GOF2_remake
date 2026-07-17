@@ -42,6 +42,12 @@ if [[ "$services_ready" != "1" ]]; then
   exit 1
 fi
 
+# A fresh emulator shows a system-owned immersive-mode confirmation the first
+# time the game hides navigation bars. That overlay consumes Back before the
+# application can receive it, so normalize the device like Android's own CTS.
+adb shell settings put secure immersive_mode_confirmations confirmed
+test "$(adb shell settings get secure immersive_mode_confirmations | tr -d '\r')" = "confirmed"
+
 adb logcat -c || true
 ./android/gradlew -p android --stacktrace :app:connectedDebugAndroidTest
 
