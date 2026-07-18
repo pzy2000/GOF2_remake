@@ -100,12 +100,26 @@ public class AndroidWebViewSmokeTest {
             waitForJavaScript("!document.querySelector(\"" + dialogueSelector + "\")", 10_000);
         }
 
-        waitForJavaScript(
+        // Seed a station save through the production save path. The release build
+        // deliberately exposes no test store hook, and emulator frame pacing is
+        // too variable to pilot the initial 830 m approach deterministically.
+        assertTrue(evaluateBoolean(
+                "(() => { window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyS', ctrlKey: true })); return true; })()"));
+        waitForJavaScript("!!localStorage.getItem('gof2-by-pzy-save-slot:auto')", 10_000);
+        assertTrue(evaluateBoolean(
                 "(() => { " +
-                "if ([...document.querySelectorAll('button')].some(button => button.textContent.includes('Launch'))) return true; " +
-                "window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyF' })); " +
-                "return false; })()",
-                35_000);
+                "const key = 'gof2-by-pzy-save-slot:auto'; " +
+                "const save = JSON.parse(localStorage.getItem(key)); " +
+                "save.screen = 'station'; " +
+                "save.previousScreen = 'flight'; " +
+                "save.currentStationId = 'helion-prime'; " +
+                "localStorage.setItem(key, JSON.stringify(save)); " +
+                "return true; })()"));
+
+        UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).pressBack();
+        waitForJavaScript("[...document.querySelectorAll('button')].some(button => button.textContent.includes('Reload Latest'))", 10_000);
+        clickButtonContaining("Reload Latest");
+        waitForJavaScript("[...document.querySelectorAll('button')].some(button => button.textContent.includes('Launch'))", 10_000);
         waitForJavaScript("!document.querySelector('.flight-canvas canvas')", 10_000);
         scenario.onActivity(activity -> activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT));
         waitForJavaScript("window.innerHeight > window.innerWidth", 15_000);
