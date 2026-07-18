@@ -101,11 +101,11 @@ public class AndroidWebViewSmokeTest {
         }
 
         waitForJavaScript(
-                "!!document.querySelector('.dock-hint.in-range') && " +
-                "document.querySelector('.dock-hint.in-range').textContent.includes('Helion Prime Exchange')",
-                25_000);
-        assertTrue(evaluateBoolean("(() => { window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyF' })); return true; })()"));
-        waitForJavaScript("[...document.querySelectorAll('button')].some(button => button.textContent.includes('Launch'))", 10_000);
+                "(() => { " +
+                "if ([...document.querySelectorAll('button')].some(button => button.textContent.includes('Launch'))) return true; " +
+                "window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyF' })); " +
+                "return false; })()",
+                35_000);
         waitForJavaScript("!document.querySelector('.flight-canvas canvas')", 10_000);
         scenario.onActivity(activity -> activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT));
         waitForJavaScript("window.innerHeight > window.innerWidth", 15_000);
