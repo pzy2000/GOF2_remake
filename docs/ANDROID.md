@@ -22,23 +22,23 @@ Android builds use `.env.android`: root asset paths, local economy fallback, mul
 
 `.github/workflows/android.yml` runs:
 
-- Capacitor sync, Android lint, JVM tests, and a debug APK on pull requests and `main`.
+- Capacitor sync, Android lint, JVM tests, and a debug APK on pull requests and every pushed branch.
 - API 36 instrumentation separately at `2748x1172` and `2480x2200`, both at 420 dpi, with screenshots, logcat, and XML/HTML test reports.
 - An API 26 compatibility launch on `main`.
-- Signed APK/AAB assembly and validation for `v*` tags or manual release runs.
+- Signed APK/AAB assembly and validation for every push, `v*` tag, or manual release run, followed by automatic publication to GitHub Releases.
 
 The browser suite also tests the corresponding CSS viewports (`1047x446` and `945x838`), reverse rotation, safe-area insets, target size, HUD/control overlap, multi-touch cancellation, route-planner reachability, and outer-to-inner resize without replacing the WebGL canvas or losing save state.
 
 ## Release signing
 
-Configure these repository Secrets before running a tag/manual release:
+Configure these repository Secrets before pushing a commit that should publish an Android release:
 
 - `ANDROID_KEYSTORE_BASE64`
 - `ANDROID_KEYSTORE_PASSWORD`
 - `ANDROID_KEY_ALIAS`
 - `ANDROID_KEY_PASSWORD`
 
-The workflow decodes the keystore only under the runner temporary directory. `versionName` comes from a `v*` tag (or `package.json` for a manual run), while `versionCode` uses `github.run_number`. Artifacts are named `gof2-<version>-release.apk`, `gof2-<version>-release.aab`, and `SHA256SUMS`; the workflow runs `apksigner verify` and `bundletool validate`. It does not upload to Google Play.
+The workflow decodes the keystore only under the runner temporary directory. A `v*` tag is published as a normal release using that tag's version. Branch pushes and manual runs use `<package-version>-build.<run-number>` and are published as uniquely tagged prereleases, so rerunning the same workflow updates that release instead of creating a duplicate. `versionCode` uses `github.run_number`. Artifacts are named `gof2-<version>-release.apk`, `gof2-<version>-release.aab`, and `SHA256SUMS`; the workflow runs `apksigner verify` and `bundletool validate` before uploading them to GitHub Releases. It does not upload to Google Play.
 
 ## Real-device checklist
 

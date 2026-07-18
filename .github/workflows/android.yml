@@ -4,8 +4,7 @@ on:
   pull_request:
   push:
     branches:
-      - main
-      - "codex/**"
+      - "**"
     tags:
       - "v*"
   workflow_dispatch:
@@ -15,7 +14,8 @@ permissions:
 
 concurrency:
   group: android-${{ github.ref }}
-  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+  # Every pushed commit should finish publishing its own APK release.
+  cancel-in-progress: false
 
 env:
   # Capacitor 8.4's generated Android modules compile with Java 21.
@@ -189,12 +189,14 @@ jobs:
           if-no-files-found: warn
 
   release:
-    name: Signed release APK and AAB
-    if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    name: Signed APK/AAB and GitHub Release
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     needs:
       - gradle
       - api36
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Check out repository
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
@@ -210,6 +212,28 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
       - name: Configure Gradle
         uses: gradle/actions/setup-gradle@0b6dd653ba04f4f93bf581ec31e66cbd7dcb644d # v4
+      - name: Determine release version
+        id: release
+        shell: bash
+        run: |
+          package_version="$(node -p "require('./package.json').version")"
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version_name="${GITHUB_REF_NAME#v}"
+            release_tag="$GITHUB_REF_NAME"
+            release_title="GOF2 $GITHUB_REF_NAME"
+            prerelease="false"
+          else
+            version_name="${package_version}-build.${GITHUB_RUN_NUMBER}"
+            release_tag="android-v${package_version}-build.${GITHUB_RUN_NUMBER}"
+            release_title="GOF2 Android ${version_name}"
+            prerelease="true"
+          fi
+          {
+            echo "version_name=$version_name"
+            echo "release_tag=$release_tag"
+            echo "release_title=$release_title"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
       - name: Enable KVM group permissions
         run: |
           test -e /dev/kvm
@@ -236,12 +260,8 @@ jobs:
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
           GOF2_VERSION_CODE: ${{ github.run_number }}
+          GOF2_VERSION_NAME: ${{ steps.release.outputs.version_name }}
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            export GOF2_VERSION_NAME="${GITHUB_REF_NAME#v}"
-          else
-            export GOF2_VERSION_NAME="$(node -p "require('./package.json').version")"
-          fi
           npm ci
           npm run android:sync
           ./android/gradlew -p android --stacktrace assembleRelease bundleRelease
@@ -276,3 +296,40 @@ jobs:
           name: gof2-android-release
           path: release-artifacts
           if-no-files-found: error
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.release.outputs.release_tag }}
+          RELEASE_TITLE: ${{ steps.release.outputs.release_title }}
+          IS_PRERELEASE: ${{ steps.release.outputs.prerelease }}
+        shell: bash
+        run: |
+          cat > "$RUNNER_TEMP/release-notes.md" <<EOF
+          Automated signed Android build for commit \`$GITHUB_SHA\` from \`$GITHUB_REF_NAME\`.
+
+          - APK: installable Android package
+          - AAB: Google Play bundle
+          - SHA256SUMS: checksums for both packages
+          EOF
+
+          if gh release view "$RELEASE_TAG" >/dev/null 2>&1; then
+            gh release upload "$RELEASE_TAG" \
+              release-artifacts/*.apk \
+              release-artifacts/*.aab \
+              release-artifacts/SHA256SUMS \
+              --clobber
+          else
+            prerelease_args=()
+            if [[ "$IS_PRERELEASE" == "true" ]]; then
+              prerelease_args+=(--prerelease --latest=false)
+            fi
+            gh release create "$RELEASE_TAG" \
+              release-artifacts/*.apk \
+              release-artifacts/*.aab \
+              release-artifacts/SHA256SUMS \
+              --target "$GITHUB_SHA" \
+              --title "$RELEASE_TITLE" \
+              --notes-file "$RUNNER_TEMP/release-notes.md" \
+              "${prerelease_args[@]}"
+          fi
+          gh release view "$RELEASE_TAG" --json url,tagName,isPrerelease

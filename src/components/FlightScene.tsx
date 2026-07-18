@@ -26,6 +26,7 @@ import { getStoryObjectiveSummary } from "../systems/story";
 import { getEconomyFlightRouteCue } from "../systems/economyRoutes";
 import { getMarketEntry, getTradeHints } from "../systems/economy";
 import { getPlayerRuntimeEffects } from "../systems/equipment";
+import { disposePostProcessingComposer } from "../systems/postProcessing";
 import { hasActiveCivilianDistress } from "../state/domains/combatRuntime";
 import { defaultFlightTuning, resolveCameraFov, resolveCameraOffset } from "../systems/flightTuning";
 import { npcRoleIdentityProfiles, stationArchetypeIdentityProfiles } from "../systems/sceneIdentity";
@@ -2210,12 +2211,14 @@ function PostProcessingComposer({ bloomMultiplier, depthOfField, postFxDetail, s
       composer.addPass(new OutputPass());
       composerRef.current = composer;
     } catch {
-      composer?.dispose();
+      disposePostProcessingComposer(composer);
+      composer = null;
       composerRef.current = null;
     }
     return () => {
       composerRef.current = null;
-      composer?.dispose();
+      disposePostProcessingComposer(composer);
+      composer = null;
     };
   }, [
     bloomMultiplier,
