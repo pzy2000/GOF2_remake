@@ -88,6 +88,48 @@ public class AndroidWebViewSmokeTest {
         assertTrue(evaluateBoolean("document.documentElement.scrollWidth <= window.innerWidth + 1"));
     }
 
+    @Test
+    public void releasesPreviousFlightContextBeforeStationRelaunch() throws Exception {
+        clickButtonContaining("New Offline Game");
+        waitForJavaScript("!!document.querySelector('.flight-canvas canvas')", 25_000);
+        waitForJavaScript("Number(window.__GOF2_RENDER_HEARTBEAT_FRAME__ || 0) > 2", 25_000);
+
+        String dialogueSelector = "[data-testid='space-dialogue-overlay'], [data-testid='dialogue-overlay']";
+        if (evaluateBoolean("!!document.querySelector(\"" + dialogueSelector + "\")")) {
+            UiDevice.getInstance(InstrumentationRegistry.getInstrumentation()).pressBack();
+            waitForJavaScript("!document.querySelector(\"" + dialogueSelector + "\")", 10_000);
+        }
+
+        assertTrue(evaluateBoolean("(() => { window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyF' })); return true; })()"));
+        waitForJavaScript("[...document.querySelectorAll('button')].some(button => button.textContent.includes('Launch'))", 10_000);
+        waitForJavaScript("!document.querySelector('.flight-canvas canvas')", 10_000);
+        scenario.onActivity(activity -> activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT));
+        waitForJavaScript("window.innerHeight > window.innerWidth", 15_000);
+        int beforeLaunch = evaluateInteger("Number(window.__GOF2_RENDER_HEARTBEAT_FRAME__ || 0)");
+        SystemClock.sleep(500);
+        assertTrue("station must stop the previous render loop",
+                evaluateInteger("Number(window.__GOF2_RENDER_HEARTBEAT_FRAME__ || 0)") == beforeLaunch);
+
+        clickButtonContaining("Launch");
+        waitForJavaScript(
+                "!!document.querySelector('[data-testid=game-recovery]') || " +
+                "(window.innerWidth > window.innerHeight && Number(window.__GOF2_RENDER_HEARTBEAT_FRAME__ || 0) >= " + (beforeLaunch + 3) + ")",
+                25_000);
+
+        assertFalse("station relaunch must not enter recovery mode",
+                evaluateBoolean("!!document.querySelector('[data-testid=game-recovery]')"));
+        assertTrue(evaluateBoolean("!!document.querySelector('.flight-canvas canvas')"));
+        assertTrue(evaluateInteger("Number(window.__GOF2_RENDER_HEARTBEAT_FRAME__ || 0)") >= beforeLaunch + 3);
+        assertTrue("station relaunch must restore landscape flight", evaluateBoolean("window.innerWidth > window.innerHeight"));
+
+        AtomicReference<Integer> orientation = new AtomicReference<>(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+        scenario.onActivity(activity -> orientation.set(activity.getRequestedOrientation()));
+        assertTrue("station relaunch must request a landscape orientation",
+                orientation.get() == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE ||
+                orientation.get() == ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE ||
+                orientation.get() == ActivityInfo.SCREEN_ORIENTATION_USER_LANDSCAPE);
+    }
+
     private void clickButtonContaining(String label) throws Exception {
         String escaped = label.replace("'", "\\'");
         String script = "(() => { const b=[...document.querySelectorAll('button')].find(x => x.textContent.includes('" + escaped + "')); if (!b) return false; b.click(); return true; })()";

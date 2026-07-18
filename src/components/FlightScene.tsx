@@ -1,6 +1,6 @@
 import { Canvas, useFrame, useLoader, useThree } from "@react-three/fiber";
 import { Html, Line, Stars, useGLTF } from "@react-three/drei";
-import { Component, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Component, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ComponentProps, ReactNode } from "react";
 import * as THREE from "three";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
@@ -27,6 +27,7 @@ import { getEconomyFlightRouteCue } from "../systems/economyRoutes";
 import { getMarketEntry, getTradeHints } from "../systems/economy";
 import { getPlayerRuntimeEffects } from "../systems/equipment";
 import { disposePostProcessingComposer } from "../systems/postProcessing";
+import { isWebGlContextCreationError, releaseWebGlRendererContext } from "../systems/webGlLifecycle";
 import { hasActiveCivilianDistress } from "../state/domains/combatRuntime";
 import { defaultFlightTuning, resolveCameraFov, resolveCameraOffset } from "../systems/flightTuning";
 import { npcRoleIdentityProfiles, stationArchetypeIdentityProfiles } from "../systems/sceneIdentity";
@@ -332,6 +333,40 @@ class ShipModelBoundary extends Component<{ children: ReactNode; fallback: React
 
   render() {
     return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
+
+const WEBGL_CONTEXT_RETRY_DELAY_MS = 650;
+
+class FlightCanvasBoundary extends Component<
+  { children: ReactNode; onContextCreationFailure: () => void },
+  { error?: Error; retries: number }
+> {
+  state: { error?: Error; retries: number } = { retries: 0 };
+  private retryTimer: number | undefined;
+
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+
+  componentDidCatch(error: Error) {
+    if (!isWebGlContextCreationError(error) || this.state.retries >= 1) return;
+    this.props.onContextCreationFailure();
+    this.retryTimer = window.setTimeout(() => {
+      this.retryTimer = undefined;
+      this.setState((state) => ({ error: undefined, retries: state.retries + 1 }));
+    }, WEBGL_CONTEXT_RETRY_DELAY_MS);
+  }
+
+  componentWillUnmount() {
+    if (this.retryTimer !== undefined) window.clearTimeout(this.retryTimer);
+  }
+
+  render() {
+    const { error, retries } = this.state;
+    if (!error) return this.props.children;
+    if (!isWebGlContextCreationError(error) || retries >= 1) throw error;
+    return <div className="flight-renderer-retry" data-testid="flight-renderer-retry" role="status">Recovering flight renderer...</div>;
   }
 }
 
@@ -2756,6 +2791,7 @@ function RenderHeartbeat() {
 
 export function FlightScene() {
   const canvasRef = useRef<HTMLDivElement | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const screen = useGameStore((state) => state.screen);
   const currentSystemId = useGameStore((state) => state.currentSystemId);
   const player = useGameStore((state) => state.player);
@@ -2774,6 +2810,12 @@ export function FlightScene() {
   const navigationCue = getNavigationTargetCue(navigationTarget);
   const locale = useGameStore((state) => state.locale);
   const graphicsSettings = useGameStore((state) => state.graphicsSettings);
+  const setGraphicsQuality = useGameStore((state) => state.setGraphicsQuality);
+  const recoverContextCreation = useCallback(() => setGraphicsQuality("low"), [setGraphicsQuality]);
+  useLayoutEffect(() => () => {
+    releaseWebGlRendererContext(rendererRef.current);
+    rendererRef.current = null;
+  }, []);
   const hint = getLocalizedNavigationHintText(navigationTarget, locale);
   return (
     <div
@@ -2786,26 +2828,29 @@ export function FlightScene() {
     >
       <FlightInputControls />
       <TouchFlightInputControls />
-      <Canvas
-        camera={{ position: [0, 36, 210], fov: 68, near: 0.1, far: 5200 }}
-        dpr={graphicsSettings.dprRange}
-        gl={{ antialias: graphicsSettings.quality !== "low", alpha: false, powerPreference: "high-performance" }}
-        onCreated={({ gl, scene }) => {
-          gl.toneMapping = THREE.ACESFilmicToneMapping;
-          gl.toneMappingExposure = 0.76;
-          gl.shadowMap.type = graphicsSettings.shadowDetail === "ultra" ? THREE.PCFSoftShadowMap : THREE.BasicShadowMap;
-          scene.fog = new THREE.FogExp2("#030712", 0.00013);
-        }}
-        shadows={graphicsSettings.shadows && graphicsSettings.shadowDetail !== "low"}
-      >
-        <RenderHeartbeat />
-        <Suspense fallback={null}>
-          <FlightSimulationTicker />
-          <CameraRig />
-          <PostProcessingRig />
-          <SceneContent onShipModelStatus={updateShipModelStatus} />
-        </Suspense>
-      </Canvas>
+      <FlightCanvasBoundary onContextCreationFailure={recoverContextCreation}>
+        <Canvas
+          camera={{ position: [0, 36, 210], fov: 68, near: 0.1, far: 5200 }}
+          dpr={graphicsSettings.dprRange}
+          gl={{ antialias: graphicsSettings.quality !== "low", alpha: false, powerPreference: "high-performance" }}
+          onCreated={({ gl, scene }) => {
+            rendererRef.current = gl;
+            gl.toneMapping = THREE.ACESFilmicToneMapping;
+            gl.toneMappingExposure = 0.76;
+            gl.shadowMap.type = graphicsSettings.shadowDetail === "ultra" ? THREE.PCFSoftShadowMap : THREE.BasicShadowMap;
+            scene.fog = new THREE.FogExp2("#030712", 0.00013);
+          }}
+          shadows={graphicsSettings.shadows && graphicsSettings.shadowDetail !== "low"}
+        >
+          <RenderHeartbeat />
+          <Suspense fallback={null}>
+            <FlightSimulationTicker />
+            <CameraRig />
+            <PostProcessingRig />
+            <SceneContent onShipModelStatus={updateShipModelStatus} />
+          </Suspense>
+        </Canvas>
+      </FlightCanvasBoundary>
       <FlightIntensityOverlay />
       {shipModelStatus ? <div className={`ship-model-status ${shipModelStatus.kind}`}>{shipModelStatus.text}</div> : null}
       {screen === "economyWatch" ? <EconomyWatchOverlay /> : null}

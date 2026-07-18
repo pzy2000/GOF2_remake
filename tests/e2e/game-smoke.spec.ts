@@ -74,6 +74,62 @@ async function resetApp(page: Page) {
   await page.waitForFunction(() => !!window.__GOF2_E2E__);
 }
 
+async function installSingleWebGlContextBudget(page: Page) {
+  await page.addInitScript(() => {
+    const budget = { active: 0, created: 0, lost: 0, strict: false, failNextCreation: false };
+    const trackedContexts = new WeakSet<object>();
+    const lostContexts = new WeakSet<object>();
+    const wrappedExtensions = new WeakSet<object>();
+    let blockedCanvas: HTMLCanvasElement | undefined;
+    const canvasPrototype = HTMLCanvasElement.prototype as unknown as {
+      getContext: (...args: unknown[]) => unknown;
+    };
+    const originalGetContext = canvasPrototype.getContext;
+
+    Object.defineProperty(window, "__GOF2_WEBGL_CONTEXT_BUDGET__", {
+      configurable: true,
+      value: budget
+    });
+
+    canvasPrototype.getContext = function(this: HTMLCanvasElement, ...args: unknown[]) {
+      const contextType = args[0];
+      const webGl = contextType === "webgl" || contextType === "webgl2" || contextType === "experimental-webgl";
+      if (webGl && budget.failNextCreation) {
+        budget.failNextCreation = false;
+        blockedCanvas = this;
+      }
+      if (webGl && blockedCanvas === this) return null;
+      if (webGl && budget.strict && budget.active >= 1) return null;
+
+      const context = Reflect.apply(originalGetContext, this, args) as (WebGLRenderingContext | WebGL2RenderingContext | null);
+      if (!webGl || !context || trackedContexts.has(context)) return context;
+
+      trackedContexts.add(context);
+      budget.active += 1;
+      budget.created += 1;
+      const originalGetExtension = context.getExtension.bind(context);
+      context.getExtension = ((name: string) => {
+        const extension = originalGetExtension(name);
+        if (name !== "WEBGL_lose_context" || !extension || wrappedExtensions.has(extension)) return extension;
+
+        wrappedExtensions.add(extension);
+        const loseContextExtension = extension as WEBGL_lose_context;
+        const originalLoseContext = loseContextExtension.loseContext.bind(loseContextExtension);
+        loseContextExtension.loseContext = () => {
+          if (!lostContexts.has(context)) {
+            lostContexts.add(context);
+            budget.active = Math.max(0, budget.active - 1);
+            budget.lost += 1;
+          }
+          originalLoseContext();
+        };
+        return extension;
+      }) as typeof context.getExtension;
+      return context;
+    };
+  });
+}
+
 async function startNewGame(page: Page, options: { keepIntro?: boolean } = {}) {
   await expect(page.getByRole("heading", { name: "GOF2 by pzy" })).toBeVisible();
   await expect(async () => {
@@ -1703,6 +1759,9 @@ test.describe("browser smoke", () => {
   });
 
   test("smokes the Glass Wake 01-02 intro, boss, salvage, and debrief path", async ({ page }) => {
+    const pageErrors: string[] = [];
+    page.on("pageerror", (error) => pageErrors.push(error.stack ?? error.message));
+    await installSingleWebGlContextBudget(page);
     await installSpeechSynthesisStub(page);
     await resetApp(page);
     await startNewGame(page, { keepIntro: true });
@@ -1843,6 +1902,148 @@ test.describe("browser smoke", () => {
     });
     await expect(dialogue).toContainText("Probe in the Glass Debrief");
     await expect(page.getByTestId("dialogue-cinematic-glass-echo-reversal")).toBeVisible();
+    await dialogue.getByRole("button", { name: "Skip" }).click();
+    await expect(dialogue).toHaveCount(0);
+
+    await page.reload();
+    await page.waitForFunction(() => !!window.__GOF2_E2E__);
+    await expect(page.getByRole("heading", { name: "GOF2 by pzy" })).toBeVisible();
+    await page.evaluate(() => {
+      const state = window.__GOF2_E2E__!.getState() as {
+        loadGame: (slotId: "auto") => boolean;
+        setGraphicsQuality: (quality: "medium") => void;
+        setLocale: (locale: "zh-CN") => void;
+        stopEconomyStream: () => void;
+      };
+      state.stopEconomyStream();
+      if (!state.loadGame("auto")) throw new Error("Glass Wake autosave did not load");
+      state.setGraphicsQuality("medium");
+      state.setLocale("zh-CN");
+    });
+    await expect(page.getByRole("heading", { name: "米尔晶格站" })).toBeVisible();
+
+    const renderFrameBeforeLaunch = await page.evaluate(() => window.__GOF2_RENDER_HEARTBEAT_FRAME__ ?? 0);
+    await page.getByRole("button", { name: "发射" }).click();
+    await expect(page.locator(".flight-canvas canvas")).toBeVisible();
+    await expect(page.getByTestId("game-recovery")).toHaveCount(0);
+    await expect.poll(() => page.evaluate(() => window.__GOF2_RENDER_HEARTBEAT_FRAME__ ?? 0)).toBeGreaterThan(renderFrameBeforeLaunch);
+    await expect.poll(() => page.evaluate(() => {
+      const budget = (window as typeof window & {
+        __GOF2_WEBGL_CONTEXT_BUDGET__: { active: number; created: number; lost: number };
+      }).__GOF2_WEBGL_CONTEXT_BUDGET__;
+      return [budget.active, budget.created, budget.lost];
+    })).toEqual([1, 1, 0]);
+    expect(pageErrors).toEqual([]);
+  });
+
+  test("releases the previous WebGL context before launching Glass Wake 03 from a station", async ({ page }) => {
+    const pageErrors: string[] = [];
+    page.on("pageerror", (error) => pageErrors.push(error.stack ?? error.message));
+    await installSingleWebGlContextBudget(page);
+    await resetApp(page);
+    await startNewGame(page);
+
+    await expect.poll(() => page.evaluate(() => {
+      const budget = (window as typeof window & {
+        __GOF2_WEBGL_CONTEXT_BUDGET__: { active: number; created: number; lost: number };
+      }).__GOF2_WEBGL_CONTEXT_BUDGET__;
+      return [budget.active, budget.created, budget.lost];
+    })).toEqual([1, 1, 0]);
+
+    const renderFrameAfterDock = await page.evaluate(async () => {
+      const e2e = window.__GOF2_E2E__!;
+      const state = e2e.getState() as {
+        dockAt: (stationId: string) => void;
+        jumpToSystem: (systemId: string) => void;
+        setGraphicsQuality: (quality: "medium") => void;
+      };
+      state.setGraphicsQuality("medium");
+      e2e.setState({
+        completedMissionIds: ["story-clean-carrier", "story-probe-in-glass"],
+        activeMissions: [],
+        failedMissionIds: []
+      });
+      state.jumpToSystem("mirr-vale");
+      const budget = (window as typeof window & {
+        __GOF2_WEBGL_CONTEXT_BUDGET__: { active: number; created: number; lost: number; strict: boolean };
+      }).__GOF2_WEBGL_CONTEXT_BUDGET__;
+      budget.strict = true;
+      state.dockAt("mirr-lattice");
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      if (budget.active !== 0 || budget.created !== 1 || budget.lost !== 1) {
+        throw new Error(`Flight context was not released at station entry: ${JSON.stringify(budget)}`);
+      }
+      const frame = window.__GOF2_RENDER_HEARTBEAT_FRAME__ ?? 0;
+      const launch = [...document.querySelectorAll("button")].find((button) => button.textContent?.includes("Launch"));
+      if (!launch) throw new Error("Station launch button was not rendered");
+      launch.click();
+      return frame;
+    });
+
+    await expect(page.locator(".flight-canvas canvas")).toBeVisible();
+    await expect.poll(() => page.evaluate(() => window.__GOF2_RENDER_HEARTBEAT_FRAME__ ?? 0)).toBeGreaterThan(renderFrameAfterDock);
+    await expect.poll(() => page.evaluate(() => {
+      const budget = (window as typeof window & {
+        __GOF2_WEBGL_CONTEXT_BUDGET__: { active: number; created: number; lost: number };
+      }).__GOF2_WEBGL_CONTEXT_BUDGET__;
+      return [budget.active, budget.created, budget.lost];
+    })).toEqual([1, 2, 1]);
+    await page.waitForTimeout(100);
+    await expect(page.getByTestId("game-recovery")).toHaveCount(0);
+    expect(pageErrors).toEqual([]);
+  });
+
+  test("retries a transient WebGL context creation failure when leaving a station", async ({ page }) => {
+    const pageErrors: string[] = [];
+    page.on("pageerror", (error) => pageErrors.push(error.stack ?? error.message));
+    await installSingleWebGlContextBudget(page);
+    await resetApp(page);
+    await startNewGame(page);
+
+    const renderFrameAfterDock = await page.evaluate(async () => {
+      const e2e = window.__GOF2_E2E__!;
+      const state = e2e.getState() as {
+        dockAt: (stationId: string) => void;
+        jumpToSystem: (systemId: string) => void;
+        setGraphicsQuality: (quality: "medium") => void;
+      };
+      state.setGraphicsQuality("medium");
+      e2e.setState({
+        completedMissionIds: ["story-clean-carrier", "story-probe-in-glass"],
+        activeMissions: [],
+        failedMissionIds: []
+      });
+      state.jumpToSystem("mirr-vale");
+      state.dockAt("mirr-lattice");
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      return window.__GOF2_RENDER_HEARTBEAT_FRAME__ ?? 0;
+    });
+    await expect(page.getByRole("heading", { name: "Mirr Lattice" })).toBeVisible();
+    await page.waitForTimeout(700);
+    await page.evaluate(() => {
+      const budget = (window as typeof window & {
+        __GOF2_WEBGL_CONTEXT_BUDGET__: { active: number; failNextCreation: boolean };
+      }).__GOF2_WEBGL_CONTEXT_BUDGET__;
+      if (budget.active !== 0) throw new Error(`Old WebGL context is still active: ${budget.active}`);
+      budget.failNextCreation = true;
+    });
+
+    await page.getByRole("button", { name: "Launch" }).click();
+    await expect(page.getByTestId("flight-renderer-retry")).toBeVisible();
+    await expect.poll(() => page.evaluate(() => window.__GOF2_RENDER_HEARTBEAT_FRAME__ ?? 0), { timeout: 10_000 }).toBeGreaterThan(renderFrameAfterDock);
+    await expect(page.locator(".flight-canvas canvas")).toBeVisible();
+    await expect(page.getByTestId("game-recovery")).toHaveCount(0);
+    await expect.poll(() => page.evaluate(() => {
+      const budget = (window as typeof window & {
+        __GOF2_WEBGL_CONTEXT_BUDGET__: { active: number; created: number; lost: number };
+      }).__GOF2_WEBGL_CONTEXT_BUDGET__;
+      return [budget.active, budget.created, budget.lost];
+    })).toEqual([1, 2, 1]);
+    await expect.poll(() => page.evaluate(() => (window.__GOF2_E2E__!.getState() as {
+      graphicsSettings: { quality: string };
+    }).graphicsSettings.quality)).toBe("low");
+    expect(pageErrors).toHaveLength(1);
+    expect(pageErrors[0]).toContain("Error creating WebGL context");
   });
 
   test("runs glass-wake-hero direct encounter stages", async ({ page }) => {

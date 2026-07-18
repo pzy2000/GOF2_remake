@@ -92,7 +92,7 @@ adb logcat -c || true
 capture_evidence
 trap - EXIT
 
-if grep -E "FATAL EXCEPTION|ANR in com\.pzy2000\.gof2|RenderThread.*SIG|GPU.*crash" "$logcat_path"; then
+if grep -E "FATAL EXCEPTION|ANR in com\.pzy2000\.gof2|RenderThread.*SIG|GPU.*crash|GOF2 recovered from an unexpected render error" "$logcat_path"; then
   echo "Android runtime crash signature detected in logcat." >&2
   exit 1
 fi
