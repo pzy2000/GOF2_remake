@@ -129,16 +129,19 @@ public class AndroidWebViewSmokeTest {
                 evaluateInteger("Number(window.__GOF2_RENDER_HEARTBEAT_FRAME__ || 0)") == beforeLaunch);
 
         clickButtonContaining("Launch");
+        // Android 16 may letterbox or defer the physical rotation on large-screen
+        // configurations. Verify the flight actually resumes here, then verify the
+        // requested landscape policy below instead of coupling liveness to viewport shape.
         waitForJavaScript(
                 "!!document.querySelector('[data-testid=game-recovery]') || " +
-                "(window.innerWidth > window.innerHeight && Number(window.__GOF2_RENDER_HEARTBEAT_FRAME__ || 0) >= " + (beforeLaunch + 3) + ")",
+                "(!!document.querySelector('.flight-canvas canvas') && " +
+                "Number(window.__GOF2_RENDER_HEARTBEAT_FRAME__ || 0) >= " + (beforeLaunch + 3) + ")",
                 25_000);
 
         assertFalse("station relaunch must not enter recovery mode",
                 evaluateBoolean("!!document.querySelector('[data-testid=game-recovery]')"));
         assertTrue(evaluateBoolean("!!document.querySelector('.flight-canvas canvas')"));
         assertTrue(evaluateInteger("Number(window.__GOF2_RENDER_HEARTBEAT_FRAME__ || 0)") >= beforeLaunch + 3);
-        assertTrue("station relaunch must restore landscape flight", evaluateBoolean("window.innerWidth > window.innerHeight"));
 
         AtomicReference<Integer> orientation = new AtomicReference<>(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
         scenario.onActivity(activity -> orientation.set(activity.getRequestedOrientation()));
