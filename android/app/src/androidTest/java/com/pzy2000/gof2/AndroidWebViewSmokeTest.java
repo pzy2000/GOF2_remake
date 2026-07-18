@@ -100,6 +100,10 @@ public class AndroidWebViewSmokeTest {
             waitForJavaScript("!document.querySelector(\"" + dialogueSelector + "\")", 10_000);
         }
 
+        waitForJavaScript(
+                "!!document.querySelector('.dock-hint.in-range') && " +
+                "document.querySelector('.dock-hint.in-range').textContent.includes('Helion Prime Exchange')",
+                25_000);
         assertTrue(evaluateBoolean("(() => { window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyF' })); return true; })()"));
         waitForJavaScript("[...document.querySelectorAll('button')].some(button => button.textContent.includes('Launch'))", 10_000);
         waitForJavaScript("!document.querySelector('.flight-canvas canvas')", 10_000);
