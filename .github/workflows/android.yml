@@ -282,9 +282,8 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           script: |
-            release_apk="$(find release-artifacts -name 'gof2-*-release.apk' -print -quit)"
-            test -n "$release_apk"
-            adb install "$release_apk"
+            test -f release-artifacts/gof2-*-release.apk
+            adb install release-artifacts/gof2-*-release.apk
             adb shell am start -W -n com.pzy2000.gof2/.MainActivity
             adb shell pidof com.pzy2000.gof2
             adb exec-out screencap -p > release-artifacts/release-install.png
