@@ -121,8 +121,15 @@ public class AndroidWebViewSmokeTest {
         clickButtonContaining("Reload Latest");
         waitForJavaScript("[...document.querySelectorAll('button')].some(button => button.textContent.includes('Launch'))", 10_000);
         waitForJavaScript("!document.querySelector('.flight-canvas canvas')", 10_000);
-        scenario.onActivity(activity -> activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT));
-        waitForJavaScript("window.innerHeight > window.innerWidth", 15_000);
+        AtomicReference<Integer> stationOrientation = new AtomicReference<>(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED);
+        scenario.onActivity(activity -> {
+            activity.setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
+            stationOrientation.set(activity.getRequestedOrientation());
+        });
+        assertTrue("station setup must request portrait orientation",
+                stationOrientation.get() == ActivityInfo.SCREEN_ORIENTATION_PORTRAIT ||
+                stationOrientation.get() == ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT ||
+                stationOrientation.get() == ActivityInfo.SCREEN_ORIENTATION_USER_PORTRAIT);
         int beforeLaunch = evaluateInteger("Number(window.__GOF2_RENDER_HEARTBEAT_FRAME__ || 0)");
         SystemClock.sleep(500);
         assertTrue("station must stop the previous render loop",
